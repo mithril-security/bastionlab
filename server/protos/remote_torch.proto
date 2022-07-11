@@ -1,0 +1,55 @@
+syntax = "proto3";
+package remote_torch;
+
+message Reference {
+    string identifier = 1;
+}
+
+message ReferenceMode {
+    Reference artifact = 1;
+    string access_group = 2;
+    bool read = 3;
+    bool write = 4;
+    bool execute = 5;
+}
+
+message Users {
+    string access_group = 1;
+    repeated string users = 2;
+}
+
+message Chunk {
+    bytes data = 1;
+    int32 length = 2;
+}
+
+message Empty {}
+
+message TrainConfig {
+    Reference model = 1;
+    Reference dataset = 2;
+    int32 batch_size = 3;
+    int32 epochs = 4;
+    float learning_rate = 5;
+}
+
+message PredictConfig {
+    Reference model = 1;
+    Reference dataset = 2;
+    int32 batch_size = 3;
+}
+
+message Accuracy { float value = 1; }
+
+service ReferenceProtocol {
+    rpc SendData (stream Chunk) returns (Reference) {}
+    rpc SendModel (stream Chunk) returns (Reference) {}
+    rpc Fetch (Reference) returns (stream Chunk) {}
+    rpc Delete (Reference) returns (Empty) {}
+    rpc Mode (ReferenceMode) returns (Empty) {}
+    rpc GroupAdd (Users) returns (Empty) {}
+    rpc GroupDel (Users) returns (Empty) {}
+    rpc Train (TrainConfig) returns (Reference) {}
+    rpc Predict (PredictConfig) returns (Reference) {}
+    rpc Test (PredictConfig) returns (Accuracy) {}
+}

@@ -1,0 +1,26 @@
+[package]
+name = "server"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tonic = "0.5.2"
+prost = {version = "0.8", default-features = false, features = ["prost-derive"]}
+tokio = { version = "1.19.2", features = ["macros", "rt-multi-thread"] }
+futures-core = "0.3.21"
+futures = "0.3.21"
+tch = "0.8.0"
+tokio-stream = "0.1"
+
+[dependencies.uuid]
+version = "1.1.2"
+features = [
+    "v4",                # Lets you generate random UUIDs
+    "fast-rng",          # Use a faster (but still sufficiently random) RNG
+    "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs
+]
+
+[build-dependencies]
+tonic-build = "0.5"
