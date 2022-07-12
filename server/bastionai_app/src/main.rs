@@ -1,24 +1,61 @@
 use remote_torch::*;
 use tonic::{transport::Server, Request, Response, Status};
-use crate::reference_protocol_server::ReferenceProtocol;
+use crate::reference_protocol_server::{ReferenceProtocol, ReferenceProtocolServer};
 use uuid::Uuid;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use server::file_system::*;
 use tch::*;
+use http::Uri;
+use std::net::SocketAddr;
+use std::net::ToSocketAddrs;
+use anyhow::{Context, Result};
+use std::sync::Arc;
+use std::collections::HashMap;
+
 
 pub mod remote_torch {
     tonic::include_proto!("remote_torch");
 }
 
-#[derive(Debug, Default)]
-pub struct MyReferenceProtocol {}
+
+struct Permission {
+    owner: bool,
+    user: bool,
+}
+
+struct Meta {
+    size: usize,
+    chunk_size: usize,
+    nb_chunks: usize
+}
+
+pub struct Artifact<T> {
+    permission: Permission,
+    data: Vec<Vec<T>>,
+    meta: Meta,
+}
+
+pub type ModuleType= Arc<HashMap<String,Artifact<TrainableCModule>>>;
+pub type TensorType = Arc<HashMap<String,Artifact<Tensor>>>;
+
+unsafe impl<T> Sync for Artifact<T>{}
+
+#[derive(Default)]
+pub(crate) struct MyReferenceProtocol {
+    modules: ModuleType,
+    tensors: TensorType,
+}
 
 
-/*
-    Write a function that takes bytes and returns tch.Module
-    Write a function that takes bytes and returns tch.Tensor
-*/
+impl MyReferenceProtocol {
+    pub fn new(modules: ModuleType, tensors: TensorType) -> Self {
+        Self{
+            modules,
+            tensors
+        }
+    }
+}
 
 fn as_u32_le(array: &[u8]) -> u32 {
     ((array[0] as u32) <<  0) +
@@ -32,43 +69,102 @@ fn bytes_to_module(mut data: &[u8]) -> Result<tch::TrainableCModule, TchError> {
     Ok(module)
 }
 
-// fn bytes_to_tensor(mut data: &[u8]) -> Result<Tensor, TchError> {
-//     let tensors = Tensor::load_from_stream(data.to_vec().)?;
-// }
+fn bytes_to_tensor(data: &[u8]) -> Result<Tensor, TchError> {
+    let tensor = Tensor::of_slice(data);
+    Ok(tensor)
+}
+
+pub fn store_artifacts<'a, T>(
+    artifacts: Vec<T>,
+    path: &'a str,
+    chunk_size: usize,
+    single_mode: bool,
+    mut data_store: &mut HashMap<String,Artifact<T>>
+) -> Result<(), &'a str>
+where
+    T: Clone + Copy,
+{
+    let mut batch: Vec<T> = Vec::new();
+    let mut index: usize = 0;
+    let mut data: Vec<Vec<T>> = Vec::new();
+    let permission = Permission {owner: true, user: true };
+
+    if single_mode {
+        let artifacts_list: Vec<T> = artifacts.clone().into_iter().map(|x| x).collect();
+
+        if artifacts_list.len() != 1 {
+            return Err("Error");
+        }
+
+        let meta = Meta { size: artifacts.len(), chunk_size, nb_chunks: 1 };
+        data_store.insert(path.to_string(), Artifact {meta, permission, data: vec![artifacts]});
+    } else {    
+        for &artifact in &artifacts {
+            if batch.len() < chunk_size {
+                batch.push(artifact);
+            } else {
+                index += 1;
+                data.push(batch);
+                batch = vec![artifact];
+            }
+        }
+        let meta = Meta { size: artifacts.len(), chunk_size, nb_chunks: 1 };
+        
+        data_store.insert(path.to_string(), Artifact{meta, permission, data});
+        /* Spot for torch.save() */
+    }
+    Ok(())
+}
 
 #[tonic::async_trait]
 impl ReferenceProtocol for MyReferenceProtocol {
     async fn send_data(&self, request: Request<tonic::Streaming<Chunk>>) -> Result<Response<Reference>, Status> {
-        let identifier: String = format!("data/{}", Uuid::new_v4());
-        
         let mut stream = request.into_inner();
         let mut data_bytes: Vec<u8> = Vec::new();
-        let mut data_length: u32 = 0;
+        let mut tensors: Vec<Tensor> = Vec::new();
         while let Some(data_stream) = stream.next().await {
             let mut data_proto = data_stream?;
-            if data_length == 0 {
-                data_length = data_proto.length as u32;
-            }
+
             data_bytes.append(&mut data_proto.data);
         }
-        // store_artifacts(artifacts: Vec::new(), )
-        let mut _item: usize = 0;
 
+        println!("Tensors Length: {}", data_bytes.len());
+        
         while data_bytes.len() > 0 {
-            let _value:usize = as_u32_le(&data_bytes[0..3]) as usize;
-            data_bytes = data_bytes.clone().into_iter().skip(4).collect();
-
-            bytes_to_module(&data_bytes.clone().into_iter().take(_value).collect::<Vec<u8>>()[..]);
-            data_bytes = data_bytes.clone().into_iter().skip(_value).collect();
-
-            _item += _value;
+            let len:usize = as_u32_le(&data_bytes.drain(..4).collect::<Vec<u8>>()[..]) as usize;
+            tensors.push(bytes_to_tensor(&data_bytes.drain(..len).collect::<Vec<u8>>()).unwrap());
         }
+
+        println!("Tensors: {}", tensors.len());
         Ok(Response::new(Reference{
             identifier: String::from("id")
         }))
     }
 
     async fn send_model(&self, request: Request<tonic::Streaming<Chunk>>) -> Result<Response<Reference>, Status> {
+        let mut stream = request.into_inner();
+        let mut data_bytes: Vec<u8> = Vec::new();
+        let mut module: Vec<TrainableCModule> = Vec::new();
+        let identifier: Uuid = Uuid::new_v4();
+        while let Some(data_stream) = stream.next().await {
+            let mut data_proto = data_stream?;
+
+            data_bytes.append(&mut data_proto.data);
+        }
+
+        println!("Module Length: {}", data_bytes.len());
+        
+        while data_bytes.len() > 0 {
+            let len:usize = as_u32_le(&data_bytes.drain(..4).collect::<Vec<u8>>()[..]) as usize;
+            println!("Length --> {}", len);
+            module.push(bytes_to_module(&data_bytes.drain(..len).collect::<Vec<u8>>()).unwrap());
+        }
+
+        println!("Module: {:?}", &module);
+
+        let chunk_size: usize = 64*1024;
+
+        store_artifacts::<TrainableCModule>(module,&identifier.to_string(), chunk_size, true, &mut self.modules);
         Ok(Response::new(Reference{
             identifier: String::from("id")
         }))
@@ -81,6 +177,7 @@ impl ReferenceProtocol for MyReferenceProtocol {
     }
 
     async fn delete(&self, request: Request<Reference>) -> Result<Response<Empty>, Status> {
+
         Ok(Response::new(Empty{}))
     }
 
@@ -111,6 +208,27 @@ impl ReferenceProtocol for MyReferenceProtocol {
 
 }
 
-fn main() {
-    println!("Hello, world!");
+fn uri_to_socket(uri: &Uri) -> Result<SocketAddr> {
+    uri.authority()
+        .context("No authority")?
+        .as_str()
+        .to_socket_addrs()?
+        .next()
+        .context("Uri could not be converted to socket")
+}
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>>{
+    let addr: Uri = "[::1]:50052".parse::<Uri>()?;
+
+    let protocol = MyReferenceProtocol::new(Arc::new(HashMap::new()), Arc::new(HashMap::new()));
+
+    println!("BastionAI listening on {:?}", addr);
+    Server::builder()
+    .add_service(ReferenceProtocolServer::new(protocol))
+    .serve(uri_to_socket(&addr)?)
+    .await?;
+
+
+    Ok(())
+
 }

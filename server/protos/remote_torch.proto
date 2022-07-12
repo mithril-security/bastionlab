@@ -20,7 +20,6 @@ message Users {
 
 message Chunk {
     bytes data = 1;
-    int32 length = 2;
 }
 
 message Empty {}
