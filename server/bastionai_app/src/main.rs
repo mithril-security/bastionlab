@@ -4,7 +4,6 @@ use crate::reference_protocol_server::{ReferenceProtocol, ReferenceProtocolServe
 use uuid::Uuid;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
-use server::file_system::*;
 use tch::*;
 use http::Uri;
 use std::net::SocketAddr;
@@ -12,48 +11,22 @@ use std::net::ToSocketAddrs;
 use anyhow::{Context, Result};
 use std::sync::Arc;
 use std::collections::HashMap;
+use std::sync::RwLock;
+use data_store::DataStore;
 
 
 pub mod remote_torch {
     tonic::include_proto!("remote_torch");
 }
 
-
-struct Permission {
-    owner: bool,
-    user: bool,
-}
-
-struct Meta {
-    size: usize,
-    chunk_size: usize,
-    nb_chunks: usize
-}
-
-pub struct Artifact<T> {
-    permission: Permission,
-    data: Vec<Vec<T>>,
-    meta: Meta,
-}
-
-pub type ModuleType= Arc<HashMap<String,Artifact<TrainableCModule>>>;
-pub type TensorType = Arc<HashMap<String,Artifact<Tensor>>>;
-
-unsafe impl<T> Sync for Artifact<T>{}
-
-#[derive(Default)]
 pub(crate) struct MyReferenceProtocol {
-    modules: ModuleType,
-    tensors: TensorType,
+    data_store: Arc<DataStore>
 }
 
 
 impl MyReferenceProtocol {
-    pub fn new(modules: ModuleType, tensors: TensorType) -> Self {
-        Self{
-            modules,
-            tensors
-        }
+    pub fn new(data_store: Arc<DataStore>) -> Self {
+        Self{data_store}
     }
 }
 
@@ -74,54 +47,14 @@ fn bytes_to_tensor(data: &[u8]) -> Result<Tensor, TchError> {
     Ok(tensor)
 }
 
-pub fn store_artifacts<'a, T>(
-    artifacts: Vec<T>,
-    path: &'a str,
-    chunk_size: usize,
-    single_mode: bool,
-    mut data_store: &mut HashMap<String,Artifact<T>>
-) -> Result<(), &'a str>
-where
-    T: Clone + Copy,
-{
-    let mut batch: Vec<T> = Vec::new();
-    let mut index: usize = 0;
-    let mut data: Vec<Vec<T>> = Vec::new();
-    let permission = Permission {owner: true, user: true };
-
-    if single_mode {
-        let artifacts_list: Vec<T> = artifacts.clone().into_iter().map(|x| x).collect();
-
-        if artifacts_list.len() != 1 {
-            return Err("Error");
-        }
-
-        let meta = Meta { size: artifacts.len(), chunk_size, nb_chunks: 1 };
-        data_store.insert(path.to_string(), Artifact {meta, permission, data: vec![artifacts]});
-    } else {    
-        for &artifact in &artifacts {
-            if batch.len() < chunk_size {
-                batch.push(artifact);
-            } else {
-                index += 1;
-                data.push(batch);
-                batch = vec![artifact];
-            }
-        }
-        let meta = Meta { size: artifacts.len(), chunk_size, nb_chunks: 1 };
-        
-        data_store.insert(path.to_string(), Artifact{meta, permission, data});
-        /* Spot for torch.save() */
-    }
-    Ok(())
-}
-
 #[tonic::async_trait]
 impl ReferenceProtocol for MyReferenceProtocol {
     async fn send_data(&self, request: Request<tonic::Streaming<Chunk>>) -> Result<Response<Reference>, Status> {
         let mut stream = request.into_inner();
         let mut data_bytes: Vec<u8> = Vec::new();
         let mut tensors: Vec<Tensor> = Vec::new();
+        let mut tensors_bytes: Vec<Vec<u8>> = Vec::new();
+
         while let Some(data_stream) = stream.next().await {
             let mut data_proto = data_stream?;
 
@@ -132,12 +65,18 @@ impl ReferenceProtocol for MyReferenceProtocol {
         
         while data_bytes.len() > 0 {
             let len:usize = as_u32_le(&data_bytes.drain(..4).collect::<Vec<u8>>()[..]) as usize;
-            tensors.push(bytes_to_tensor(&data_bytes.drain(..len).collect::<Vec<u8>>()).unwrap());
+            let bytes = &data_bytes.drain(..len).collect::<Vec<u8>>();
+            tensors_bytes.push(bytes.clone());
+            tensors.push(bytes_to_tensor(&bytes[..]).unwrap());
         }
 
         println!("Tensors: {}", tensors.len());
+
+        let flat_byte_list = tensors_bytes.into_iter().flatten().collect::<Vec<u8>>();
+        let identifier = self.data_store.add_batch_artifact(Uuid::new_v4(), tensors, &flat_byte_list[..]).unwrap();
+
         Ok(Response::new(Reference{
-            identifier: String::from("id")
+            identifier
         }))
     }
 
@@ -145,28 +84,32 @@ impl ReferenceProtocol for MyReferenceProtocol {
         let mut stream = request.into_inner();
         let mut data_bytes: Vec<u8> = Vec::new();
         let mut module: Vec<TrainableCModule> = Vec::new();
-        let identifier: Uuid = Uuid::new_v4();
-        while let Some(data_stream) = stream.next().await {
+        let mut module_bytes: Vec<Vec<u8>> = Vec::new();
+
+         while let Some(data_stream) = stream.next().await {
             let mut data_proto = data_stream?;
 
             data_bytes.append(&mut data_proto.data);
         }
-
-        println!("Module Length: {}", data_bytes.len());
         
         while data_bytes.len() > 0 {
             let len:usize = as_u32_le(&data_bytes.drain(..4).collect::<Vec<u8>>()[..]) as usize;
             println!("Length --> {}", len);
-            module.push(bytes_to_module(&data_bytes.drain(..len).collect::<Vec<u8>>()).unwrap());
+            let bytes= &data_bytes.drain(..len).collect::<Vec<u8>>();
+            module_bytes.push(bytes.clone());
+            module.push(bytes_to_module(bytes).unwrap());
+            
         }
 
-        println!("Module: {:?}", &module);
+        let mut d = module.drain(..);
+        let first = d.next().unwrap();
 
-        let chunk_size: usize = 64*1024;
+        let flat_byte_list = module_bytes.into_iter().flatten().collect::<Vec<u8>>();
 
-        store_artifacts::<TrainableCModule>(module,&identifier.to_string(), chunk_size, true, &mut self.modules);
+        let identifier = self.data_store.add_module_artifact(Uuid::new_v4(), first, &flat_byte_list[..]).unwrap();
+
         Ok(Response::new(Reference{
-            identifier: String::from("id")
+            identifier: identifier
         }))
     }
 
@@ -220,7 +163,7 @@ fn uri_to_socket(uri: &Uri) -> Result<SocketAddr> {
 async fn main() -> Result<(), Box<dyn std::error::Error>>{
     let addr: Uri = "[::1]:50052".parse::<Uri>()?;
 
-    let protocol = MyReferenceProtocol::new(Arc::new(HashMap::new()), Arc::new(HashMap::new()));
+    let protocol = MyReferenceProtocol::new(Arc::new(DataStore::new()));
 
     println!("BastionAI listening on {:?}", addr);
     Server::builder()
