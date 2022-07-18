@@ -1,13 +1,13 @@
 use anyhow::{anyhow, Result};
 use ring::digest;
 use std::collections::{hash_map::Entry, HashMap};
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 use tch::{Tensor, TrainableCModule};
 use uuid::Uuid;
 pub type ModuleType = HashMap<Uuid, Artifact<TrainableCModule>>;
 pub type BatchType = HashMap<Uuid, Artifact<Batch>>;
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 struct Permission {
     owner: bool, // The only permission
     user: bool,
@@ -24,10 +24,16 @@ pub struct Batch {
     tensors: Vec<Tensor>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct Artifact<T> {
     permission: Permission,
     data: T,
+}
+
+impl<T> Artifact<T> {
+    pub fn get_data(self) -> T {
+        self.data
+    }
 }
 
 unsafe impl<T> Sync for Artifact<T> {}
@@ -69,67 +75,104 @@ impl DataStore {
         artifacts_bytes: &[u8],
     ) -> Option<Uuid> {
         let mut modules = self.inner_modules.write().unwrap();
-        let id = Uuid::new_v4();
         let module_hash = digest::digest(&digest::SHA256, artifacts_bytes)
             .as_ref()
             .to_vec();
 
-        {
-            let module_id = match modules.module_hash_and_id.entry(module_hash) {
-                Entry::Occupied(entry) => *entry.into_mut(),
-                Entry::Vacant(entry) => {
-                    entry.insert(id);
-                    id
-                }
-            };
+        let module_id = match modules.module_hash_and_id.entry(module_hash) {
+            Entry::Occupied(entry) => *entry.into_mut(),
+            Entry::Vacant(entry) => {
+                let id = Uuid::new_v4();
+                entry.insert(id);
+                id
+            }
+        };
 
-            let _ = match modules.module_by_id.entry(module_id) {
-                Entry::Occupied(_) => return None,
-                Entry::Vacant(entry) => entry.insert(Artifact {
-                    permission: Permission {
-                        owner: true,
-                        user: true,
-                    },
-                    data: artifacts,
-                }),
-            };
-        }
+        match modules.module_by_id.entry(module_id) {
+            Entry::Occupied(_) => return None,
+            Entry::Vacant(entry) => entry.insert(Artifact {
+                permission: Permission {
+                    owner: true,
+                    user: true,
+                },
+                data: artifacts,
+            }),
+        };
 
-        Some(id)
+        Some(module_id)
     }
 
     pub fn add_batch_artifact(
         &self,
         artifacts: Vec<Tensor>,
         artifacts_bytes: &[u8],
-    ) -> Option<String> {
+    ) -> Option<Uuid> {
         let mut batches = self.inner_batches.write().unwrap();
-        let id = Uuid::new_v4();
         let batch_hash = digest::digest(&digest::SHA256, artifacts_bytes)
             .as_ref()
             .to_vec();
 
-        {
-            let batch_id = match batches.batch_by_hash_and_id.entry(batch_hash) {
-                Entry::Occupied(entry) => *entry.into_mut(),
-                Entry::Vacant(entry) => {
-                    entry.insert(id);
-                    id
-                }
-            };
+        let batch_id = match batches.batch_by_hash_and_id.entry(batch_hash) {
+            Entry::Occupied(entry) => *entry.into_mut(),
+            Entry::Vacant(entry) => {
+                let id = Uuid::new_v4();
+                entry.insert(id);
+                id
+            }
+        };
 
-            let _ = match batches.batch_by_id.entry(batch_id) {
-                Entry::Occupied(_) => return None,
-                Entry::Vacant(entry) => entry.insert(Artifact {
-                    permission: Permission {
-                        owner: true,
-                        user: true,
-                    },
-                    data: Batch { tensors: artifacts },
-                }),
-            };
+        match batches.batch_by_id.entry(batch_id) {
+            Entry::Occupied(_) => return None,
+            Entry::Vacant(entry) => entry.insert(Artifact {
+                permission: Permission {
+                    owner: true,
+                    user: true,
+                },
+                data: Batch { tensors: artifacts },
+            }),
+        };
+
+        Some(batch_id)
+    }
+
+    pub fn delete_batch(&self, identifier: Uuid) -> Option<bool> {
+        let mut batches = self.inner_batches.write().unwrap();
+        let res = match batches.batch_by_id.remove(&identifier) {
+            Some(_) => Some(identifier),
+            None => None,
+        };
+
+        match res {
+            Some(v) => {
+                batches.batch_by_hash_and_id.retain(|_, x| *x != v);
+                Some(true)
+            }
+            None => None,
         }
+    }
 
-        Some(id.to_string())
+    pub fn delete_model(&self, identifier: Uuid) -> Option<bool> {
+        let mut modules = self.inner_modules.write().unwrap();
+        let res = match modules.module_by_id.remove(&identifier) {
+            Some(_) => Some(identifier),
+            None => None,
+        };
+
+        match res {
+            Some(v) => {
+                modules.module_hash_and_id.retain(|_, x| *x != v);
+                Some(true)
+            }
+            None => None,
+        }
+    }
+
+    pub fn get_model_with_identifier(&self, identifier: Uuid) -> Option<TrainableCModule> {
+        let modules = self.inner_modules.read().unwrap();
+
+        match modules.module_by_id.get(&identifier) {
+            Some(module) => Some(module.get_data()),
+            None => None,
+        }
     }
 }

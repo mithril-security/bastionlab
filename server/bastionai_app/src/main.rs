@@ -1,7 +1,6 @@
 use remote_torch::*;
 use tonic::{transport::Server, Request, Response, Status};
 use crate::reference_protocol_server::{ReferenceProtocol, ReferenceProtocolServer};
-use uuid::Uuid;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tch::*;
@@ -10,10 +9,8 @@ use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
 use anyhow::{Context, Result};
 use std::sync::Arc;
-use std::collections::HashMap;
-use std::sync::RwLock;
-use data_store::DataStore;
-
+use data_store::{DataStore, Artifact};
+use uuid::Uuid;
 
 pub mod remote_torch {
     tonic::include_proto!("remote_torch");
@@ -70,28 +67,28 @@ impl ReferenceProtocol for MyReferenceProtocol {
 
         while let Some(data_stream) = stream.next().await {
             let mut data_proto = data_stream?;
-
             data_bytes.append(&mut data_proto.data);
         }
 
         let (tensors, tensors_bytes) = transform_bytes(data_bytes, bytes_to_tensor);
 
+        println!("Tensors: {}", tensors.len());
+        println!("Tensors Bytes: {}", tensors_bytes.len());
+        println!("Tensors: {:#?}", tensors);
         let flat_byte_list = tensors_bytes.into_iter().flatten().collect::<Vec<u8>>();
         match self.data_store.add_batch_artifact(tensors, &flat_byte_list[..]) {
-
             Some(v) => Ok(Response::new(Reference{
                 identifier: v.to_string()
             })),
             None => {return Err(Status::internal("Batch already uploaded!".to_string()))}
         }
-
     }
 
     async fn send_model(&self, request: Request<tonic::Streaming<Chunk>>) -> Result<Response<Reference>, Status> {
         let mut stream = request.into_inner();
         let mut data_bytes: Vec<u8> = Vec::new();
 
-         while let Some(data_stream) = stream.next().await {
+        while let Some(data_stream) = stream.next().await {
             let mut data_proto = data_stream?;
             data_bytes.append(&mut data_proto.data);
         }
@@ -103,8 +100,8 @@ impl ReferenceProtocol for MyReferenceProtocol {
 
         let flat_byte_list = module_bytes.into_iter().flatten().collect::<Vec<u8>>();
 
-        match self.data_store.add_module_artifact( first, &flat_byte_list[..]) {
-            Some(v) =>   Ok(Response::new(Reference{
+        match self.data_store.add_module_artifact(first, &flat_byte_list[..]) {
+            Some(v) => Ok(Response::new(Reference{
                 identifier: v.to_string()
             })),
             None => {return Err(Status::internal("Model already uploaded!".to_string()))}
@@ -114,13 +111,38 @@ impl ReferenceProtocol for MyReferenceProtocol {
     type FetchStream = ReceiverStream<Result<Chunk, Status>>;
 
     async fn fetch(&self, request: Request<Reference>) -> Result<Response<Self::FetchStream>, Status> {
+        let identifier = request.into_inner().identifier;
+        let res = self.data_store.get_model_with_identifier(Uuid::parse_str(&identifier).unwrap());
+
+        match res {
+            Some(v) => {
+                let artifact =v;
+           
+                println!("{:?}", artifact.as_ref().unwrap().get_data());
+                Some(v)
+            },
+            None => None
+        };
         unimplemented!()
     }
 
-    async fn delete(&self, request: Request<Reference>) -> Result<Response<Empty>, Status> {
+    async fn delete_model(&self, request: Request<Reference>) -> Result<Response<Empty>, Status> {
+        let identifier = request.into_inner().identifier;
 
-        Ok(Response::new(Empty{}))
+        match self.data_store.delete_model(Uuid::parse_str(&identifier).unwrap()) {
+            Some(_) => Ok(Response::new(Empty {})),
+            None => {return Err(Status::internal("Failed to delete model!".to_string()))}
+        }   
     }
+
+    async fn delete_batch(&self, request: Request<Reference>) -> Result<Response<Empty>, Status> {
+        let identifier = request.into_inner().identifier;
+
+        match self.data_store.delete_batch(Uuid::parse_str(&identifier).unwrap()) {
+            Some(_) => Ok(Response::new(Empty {})),
+            None => {return Err(Status::internal("Failed to delete model!".to_string()))}
+        }       }
+
 
     async fn train(&self, request: Request<TrainConfig>) -> Result<Response<Reference>, Status> {
         Ok(Response::new(Reference {identifier: String::from("1")}))
