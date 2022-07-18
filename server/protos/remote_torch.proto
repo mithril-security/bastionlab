@@ -45,9 +45,6 @@ service ReferenceProtocol {
     rpc SendModel (stream Chunk) returns (Reference) {}
     rpc Fetch (Reference) returns (stream Chunk) {}
     rpc Delete (Reference) returns (Empty) {}
-    rpc Mode (ReferenceMode) returns (Empty) {}
-    rpc GroupAdd (Users) returns (Empty) {}
-    rpc GroupDel (Users) returns (Empty) {}
     rpc Train (TrainConfig) returns (Reference) {}
     rpc Predict (PredictConfig) returns (Reference) {}
     rpc Test (PredictConfig) returns (Accuracy) {}

@@ -47,13 +47,26 @@ fn bytes_to_tensor(data: &[u8]) -> Result<Tensor, TchError> {
     Ok(tensor)
 }
 
+fn transform_bytes<T>(mut data: Vec<u8>, func: impl Fn( &[u8]) -> Result<T, TchError>) -> (Vec<T>, Vec<Vec<u8>>) {
+    let mut transformed: Vec<T> = Vec::new();
+    let mut ret_bytes: Vec<Vec<u8>> = Vec::new();
+
+    while data.len() > 0 {
+        let len:usize = as_u32_le(&data.drain(..4).collect::<Vec<u8>>()[..]) as usize;
+        let bytes = &data.drain(..len).collect::<Vec<u8>>();
+        ret_bytes.push(bytes.clone());
+        transformed.push(func(&bytes[..]).unwrap());
+    }
+
+    (transformed, ret_bytes)
+}
+
 #[tonic::async_trait]
 impl ReferenceProtocol for MyReferenceProtocol {
     async fn send_data(&self, request: Request<tonic::Streaming<Chunk>>) -> Result<Response<Reference>, Status> {
         let mut stream = request.into_inner();
         let mut data_bytes: Vec<u8> = Vec::new();
-        let mut tensors: Vec<Tensor> = Vec::new();
-        let mut tensors_bytes: Vec<Vec<u8>> = Vec::new();
+
 
         while let Some(data_stream) = stream.next().await {
             let mut data_proto = data_stream?;
@@ -61,56 +74,41 @@ impl ReferenceProtocol for MyReferenceProtocol {
             data_bytes.append(&mut data_proto.data);
         }
 
-        println!("Tensors Length: {}", data_bytes.len());
-        
-        while data_bytes.len() > 0 {
-            let len:usize = as_u32_le(&data_bytes.drain(..4).collect::<Vec<u8>>()[..]) as usize;
-            let bytes = &data_bytes.drain(..len).collect::<Vec<u8>>();
-            tensors_bytes.push(bytes.clone());
-            tensors.push(bytes_to_tensor(&bytes[..]).unwrap());
-        }
-
-        println!("Tensors: {}", tensors.len());
+        let (tensors, tensors_bytes) = transform_bytes(data_bytes, bytes_to_tensor);
 
         let flat_byte_list = tensors_bytes.into_iter().flatten().collect::<Vec<u8>>();
-        let identifier = self.data_store.add_batch_artifact(Uuid::new_v4(), tensors, &flat_byte_list[..]).unwrap();
+        match self.data_store.add_batch_artifact(tensors, &flat_byte_list[..]) {
 
-        Ok(Response::new(Reference{
-            identifier
-        }))
+            Some(v) => Ok(Response::new(Reference{
+                identifier: v.to_string()
+            })),
+            None => {return Err(Status::internal("Batch already uploaded!".to_string()))}
+        }
+
     }
 
     async fn send_model(&self, request: Request<tonic::Streaming<Chunk>>) -> Result<Response<Reference>, Status> {
         let mut stream = request.into_inner();
         let mut data_bytes: Vec<u8> = Vec::new();
-        let mut module: Vec<TrainableCModule> = Vec::new();
-        let mut module_bytes: Vec<Vec<u8>> = Vec::new();
 
          while let Some(data_stream) = stream.next().await {
             let mut data_proto = data_stream?;
-
             data_bytes.append(&mut data_proto.data);
         }
         
-        while data_bytes.len() > 0 {
-            let len:usize = as_u32_le(&data_bytes.drain(..4).collect::<Vec<u8>>()[..]) as usize;
-            println!("Length --> {}", len);
-            let bytes= &data_bytes.drain(..len).collect::<Vec<u8>>();
-            module_bytes.push(bytes.clone());
-            module.push(bytes_to_module(bytes).unwrap());
-            
-        }
+        let (mut modules, module_bytes) = transform_bytes(data_bytes, bytes_to_module);
 
-        let mut d = module.drain(..);
+        let mut d = modules.drain(..);
         let first = d.next().unwrap();
 
         let flat_byte_list = module_bytes.into_iter().flatten().collect::<Vec<u8>>();
 
-        let identifier = self.data_store.add_module_artifact(Uuid::new_v4(), first, &flat_byte_list[..]).unwrap();
-
-        Ok(Response::new(Reference{
-            identifier: identifier
-        }))
+        match self.data_store.add_module_artifact( first, &flat_byte_list[..]) {
+            Some(v) =>   Ok(Response::new(Reference{
+                identifier: v.to_string()
+            })),
+            None => {return Err(Status::internal("Model already uploaded!".to_string()))}
+        }
     }
 
     type FetchStream = ReceiverStream<Result<Chunk, Status>>;
@@ -121,18 +119,6 @@ impl ReferenceProtocol for MyReferenceProtocol {
 
     async fn delete(&self, request: Request<Reference>) -> Result<Response<Empty>, Status> {
 
-        Ok(Response::new(Empty{}))
-    }
-
-    async fn mode(&self, request: Request<ReferenceMode>) -> Result<Response<Empty>, Status> {
-        Ok(Response::new(Empty{}))
-    }
-
-    async fn group_add(&self, request: Request<Users>) -> Result<Response<Empty>, Status> {
-        Ok(Response::new(Empty{}))
-    }
-
-    async fn group_del(&self, request: Request<Users>) -> Result<Response<Empty>, Status> {
         Ok(Response::new(Empty{}))
     }
 
