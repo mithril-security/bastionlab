@@ -1,8 +1,12 @@
 [package]
-name = "remote_torch"
+name = "private_learning"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+tch = "0.8.0"
+torch-sys = "0.8.0"
+libc = "0.2.126"
+
