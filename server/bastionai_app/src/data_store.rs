@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 use ring::digest;
+
 use std::collections::{hash_map::Entry, HashMap};
 use std::sync::{Arc, RwLock};
 use tch::{Tensor, TrainableCModule};
@@ -11,28 +12,27 @@ pub type BatchType = HashMap<Uuid, Artifact<Batch>>;
 struct Permission {
     owner: bool, // The only permission
     user: bool,
-    /* owner_id, replace with all elements */
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Meta {
-    size: usize,
-    chunk_size: usize,
-    nb_chunks: usize,
+    signed_sig: Vec<u8>,
+    pub description: String,
 }
 pub struct Batch {
     tensors: Vec<Tensor>,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug)]
 pub struct Artifact<T> {
     permission: Permission,
     data: T,
+    meta: Meta,
 }
 
 impl<T> Artifact<T> {
-    pub fn get_data(self) -> T {
-        self.data
+    pub fn get_data(&self) -> &T {
+        &self.data
     }
 }
 
@@ -52,7 +52,6 @@ struct InnerBatch {
 pub struct DataStore {
     inner_modules: RwLock<InnerModules>,
     inner_batches: RwLock<InnerBatch>,
-    /* Hashmap<user_id (username), pubKey> */
 }
 
 impl DataStore {
@@ -73,6 +72,7 @@ impl DataStore {
         &self,
         artifacts: TrainableCModule,
         artifacts_bytes: &[u8],
+        description: &str,
     ) -> Option<Uuid> {
         let mut modules = self.inner_modules.write().unwrap();
         let module_hash = digest::digest(&digest::SHA256, artifacts_bytes)
@@ -96,6 +96,10 @@ impl DataStore {
                     user: true,
                 },
                 data: artifacts,
+                meta: Meta {
+                    signed_sig: vec![],
+                    description: description.to_string(),
+                },
             }),
         };
 
@@ -106,6 +110,7 @@ impl DataStore {
         &self,
         artifacts: Vec<Tensor>,
         artifacts_bytes: &[u8],
+        description: &str,
     ) -> Option<Uuid> {
         let mut batches = self.inner_batches.write().unwrap();
         let batch_hash = digest::digest(&digest::SHA256, artifacts_bytes)
@@ -129,6 +134,10 @@ impl DataStore {
                     user: true,
                 },
                 data: Batch { tensors: artifacts },
+                meta: Meta {
+                    signed_sig: vec![],
+                    description: description.to_string(),
+                },
             }),
         };
 
@@ -167,12 +176,37 @@ impl DataStore {
         }
     }
 
-    pub fn get_model_with_identifier(&self, identifier: Uuid) -> Option<TrainableCModule> {
+    pub fn get_model_with_identifier<U>(
+        &self,
+        identifier: Uuid,
+        func: impl Fn(&Artifact<TrainableCModule>) -> U,
+    ) -> Option<U> {
         let modules = self.inner_modules.read().unwrap();
-
         match modules.module_by_id.get(&identifier) {
-            Some(module) => Some(module.get_data()),
+            Some(v) => Some(func(v)),
             None => None,
         }
+    }
+
+    pub fn get_available_models(&self) -> Vec<(String, String)> {
+        let modules = self.inner_modules.read().unwrap();
+
+        let res = modules
+            .module_by_id
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.meta.description.clone()))
+            .collect::<Vec<(String, String)>>();
+        res
+    }
+
+    pub fn get_available_datasets(&self) -> Vec<(String, String)> {
+        let batches = self.inner_batches.read().unwrap();
+
+        let res = batches
+            .batch_by_id
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.meta.description.clone()))
+            .collect::<Vec<(String, String)>>();
+        res
     }
 }

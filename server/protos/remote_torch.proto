@@ -20,6 +20,7 @@ message Users {
 
 message Chunk {
     bytes data = 1;
+    string description = 2;
 }
 
 message Empty {}
@@ -38,6 +39,14 @@ message PredictConfig {
     int32 batch_size = 3;
 }
 
+message AvailableObject {
+    string reference = 1;
+    string description = 2;
+}
+message AvailableObjects {
+    repeated AvailableObject available_objects = 1;
+}  
+
 message Accuracy { float value = 1; }
 
 service ReferenceProtocol {
@@ -46,6 +55,8 @@ service ReferenceProtocol {
     rpc Fetch (Reference) returns (stream Chunk) {}
     rpc DeleteModel (Reference) returns (Empty) {}
     rpc DeleteBatch (Reference) returns (Empty) {}
+    rpc GetAvailableModels(Empty) returns (AvailableObjects) {}
+    rpc GetAvailableDataSets(Empty) returns (AvailableObjects) {}
     rpc Train (TrainConfig) returns (Reference) {}
     rpc Predict (PredictConfig) returns (Reference) {}
     rpc Test (PredictConfig) returns (Accuracy) {}

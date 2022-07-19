@@ -9,7 +9,7 @@ use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
 use anyhow::{Context, Result};
 use std::sync::Arc;
-use data_store::{DataStore, Artifact};
+use data_store::DataStore;
 use uuid::Uuid;
 
 pub mod remote_torch {
@@ -44,7 +44,7 @@ fn bytes_to_tensor(data: &[u8]) -> Result<Tensor, TchError> {
     Ok(tensor)
 }
 
-fn transform_bytes<T>(mut data: Vec<u8>, func: impl Fn( &[u8]) -> Result<T, TchError>) -> (Vec<T>, Vec<Vec<u8>>) {
+fn transform_bytes<T>(mut data: Vec<u8>, func: impl Fn(&[u8]) -> Result<T, TchError>) -> (Vec<T>, Vec<Vec<u8>>) {
     let mut transformed: Vec<T> = Vec::new();
     let mut ret_bytes: Vec<Vec<u8>> = Vec::new();
 
@@ -58,16 +58,26 @@ fn transform_bytes<T>(mut data: Vec<u8>, func: impl Fn( &[u8]) -> Result<T, TchE
     (transformed, ret_bytes)
 }
 
+fn get_available_objects(objects: Vec<(String, String)>) -> Vec<AvailableObject> {
+    let res:Vec<AvailableObject> = objects.into_iter()
+    .map(|(k,v)|{AvailableObject{reference: k.to_string(), description: v.to_string()}})
+    .collect::<Vec<AvailableObject>>();
+    res
+}
+
 #[tonic::async_trait]
 impl ReferenceProtocol for MyReferenceProtocol {
     async fn send_data(&self, request: Request<tonic::Streaming<Chunk>>) -> Result<Response<Reference>, Status> {
         let mut stream = request.into_inner();
         let mut data_bytes: Vec<u8> = Vec::new();
-
+        let mut description: String = String::default();
 
         while let Some(data_stream) = stream.next().await {
             let mut data_proto = data_stream?;
             data_bytes.append(&mut data_proto.data);
+            if description == String::default() {
+                description = data_proto.description;
+            }
         }
 
         let (tensors, tensors_bytes) = transform_bytes(data_bytes, bytes_to_tensor);
@@ -76,7 +86,7 @@ impl ReferenceProtocol for MyReferenceProtocol {
         println!("Tensors Bytes: {}", tensors_bytes.len());
         println!("Tensors: {:#?}", tensors);
         let flat_byte_list = tensors_bytes.into_iter().flatten().collect::<Vec<u8>>();
-        match self.data_store.add_batch_artifact(tensors, &flat_byte_list[..]) {
+        match self.data_store.add_batch_artifact(tensors, &flat_byte_list[..], description.as_str()) {
             Some(v) => Ok(Response::new(Reference{
                 identifier: v.to_string()
             })),
@@ -87,10 +97,14 @@ impl ReferenceProtocol for MyReferenceProtocol {
     async fn send_model(&self, request: Request<tonic::Streaming<Chunk>>) -> Result<Response<Reference>, Status> {
         let mut stream = request.into_inner();
         let mut data_bytes: Vec<u8> = Vec::new();
+        let mut description: String = "".to_string();
 
         while let Some(data_stream) = stream.next().await {
             let mut data_proto = data_stream?;
             data_bytes.append(&mut data_proto.data);
+            if description == "".to_string() {
+                description = data_proto.description;
+            }
         }
         
         let (mut modules, module_bytes) = transform_bytes(data_bytes, bytes_to_module);
@@ -100,7 +114,7 @@ impl ReferenceProtocol for MyReferenceProtocol {
 
         let flat_byte_list = module_bytes.into_iter().flatten().collect::<Vec<u8>>();
 
-        match self.data_store.add_module_artifact(first, &flat_byte_list[..]) {
+        match self.data_store.add_module_artifact(first, &flat_byte_list[..], description.as_str()) {
             Some(v) => Ok(Response::new(Reference{
                 identifier: v.to_string()
             })),
@@ -112,17 +126,18 @@ impl ReferenceProtocol for MyReferenceProtocol {
 
     async fn fetch(&self, request: Request<Reference>) -> Result<Response<Self::FetchStream>, Status> {
         let identifier = request.into_inner().identifier;
-        let res = self.data_store.get_model_with_identifier(Uuid::parse_str(&identifier).unwrap());
 
+        let res = self.data_store.get_model_with_identifier(Uuid::parse_str(&identifier).unwrap(),  |artifact| {
+            println!("Artifact: {:?}", artifact.get_data());
+        });
+        
         match res {
             Some(v) => {
-                let artifact =v;
-           
-                println!("{:?}", artifact.as_ref().unwrap().get_data());
-                Some(v)
+                println!("Module: {:?}", v);
             },
-            None => None
-        };
+            None => {return Err(Status::internal("Model not uploaded!".to_string()))}
+        }
+
         unimplemented!()
     }
 
@@ -156,6 +171,16 @@ impl ReferenceProtocol for MyReferenceProtocol {
         Ok(Response::new(Accuracy::default()))
     }
 
+    async fn get_available_models(&self, _request:Request<Empty>) -> Result<Response<AvailableObjects>, Status> {
+        let res = get_available_objects(self.data_store.get_available_models());
+        Ok(Response::new(AvailableObjects{available_models: res}))
+    }
+
+
+    async fn get_available_data_sets(&self, _request:Request<Empty>) -> Result<Response<AvailableObjects>, Status> {
+        let res = get_available_objects(self.data_store.get_available_datasets());
+        Ok(Response::new(AvailableObjects{available_models:res }))
+    }
 
 }
 
