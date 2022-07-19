@@ -25,8 +25,8 @@ class DummyDataset(Dataset):
 class DummyModel(Module):
     def __init__(self) -> None:
         super().__init__()
-        self.fc1 = Linear(784, 1568)
-        self.fc2 = Linear(1568, 10)
+        self.fc1 = Linear(10, 20)
+        self.fc2 = Linear(20, 10)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = x.view(-1, 784)

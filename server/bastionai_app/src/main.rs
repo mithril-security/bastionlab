@@ -8,9 +8,10 @@ use http::Uri;
 use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
 use anyhow::{Context, Result};
-use std::sync::Arc;
+use std::sync::{Arc};
 use data_store::DataStore;
 use uuid::Uuid;
+use tokio::sync::mpsc;
 
 pub mod remote_torch {
     tonic::include_proto!("remote_torch");
@@ -95,10 +96,13 @@ impl ReferenceProtocol for MyReferenceProtocol {
     }
 
     async fn send_model(&self, request: Request<tonic::Streaming<Chunk>>) -> Result<Response<Reference>, Status> {
+
         let mut stream = request.into_inner();
         let mut data_bytes: Vec<u8> = Vec::new();
         let mut description: String = "".to_string();
 
+        println!("Uploading model...");
+        
         while let Some(data_stream) = stream.next().await {
             let mut data_proto = data_stream?;
             data_bytes.append(&mut data_proto.data);
@@ -106,7 +110,7 @@ impl ReferenceProtocol for MyReferenceProtocol {
                 description = data_proto.description;
             }
         }
-        
+        println!("Length: {}", data_bytes.len());
         let (mut modules, module_bytes) = transform_bytes(data_bytes, bytes_to_module);
 
         let mut d = modules.drain(..);
@@ -115,9 +119,11 @@ impl ReferenceProtocol for MyReferenceProtocol {
         let flat_byte_list = module_bytes.into_iter().flatten().collect::<Vec<u8>>();
 
         match self.data_store.add_module_artifact(first, &flat_byte_list[..], description.as_str()) {
-            Some(v) => Ok(Response::new(Reference{
+            Some(v) => {
+                println!("Model upload done!");
+                Ok(Response::new(Reference{
                 identifier: v.to_string()
-            })),
+            }))},
             None => {return Err(Status::internal("Model already uploaded!".to_string()))}
         }
     }
@@ -126,19 +132,40 @@ impl ReferenceProtocol for MyReferenceProtocol {
 
     async fn fetch(&self, request: Request<Reference>) -> Result<Response<Self::FetchStream>, Status> {
         let identifier = request.into_inner().identifier;
-
-        let res = self.data_store.get_model_with_identifier(Uuid::parse_str(&identifier).unwrap(),  |artifact| {
+        let res = self.data_store.get_model_with_identifier(Uuid::parse_str(&identifier).unwrap(),  move |artifact| {
             println!("Artifact: {:?}", artifact.get_data());
+            let tensors = artifact.get_data().method_is::<IValue>("trainable_parameters", &[]).unwrap();
+
+            match tensors {
+                IValue::TensorList(v) => {
+                    Some(v)
+                }
+                _ => None
+            }
         });
         
+        let (tx, rx) = mpsc::channel(4);
         match res {
             Some(v) => {
-                println!("Module: {:?}", v);
+                
+                let zeros = |size: usize| -> Vec<u8> {
+                    std::iter::repeat(0).take(size).collect()
+                };
+                
+                for tensor in v.unwrap() {
+                    let capacity = tensor.numel() * tensor.f_kind().unwrap().elt_size_in_bytes();
+                    let mut data: Vec<u8> = zeros(capacity);
+
+                    tensor.copy_data_u8(&mut data[..], tensor.numel());
+                    tx.send(Ok(Chunk{data, description: "".to_string()})).await.unwrap()
+                }
+
+                
             },
             None => {return Err(Status::internal("Model not uploaded!".to_string()))}
         }
 
-        unimplemented!()
+        Ok(Response::new(ReceiverStream::new(rx)))
     }
 
     async fn delete_model(&self, request: Request<Reference>) -> Result<Response<Empty>, Status> {
@@ -173,13 +200,13 @@ impl ReferenceProtocol for MyReferenceProtocol {
 
     async fn get_available_models(&self, _request:Request<Empty>) -> Result<Response<AvailableObjects>, Status> {
         let res = get_available_objects(self.data_store.get_available_models());
-        Ok(Response::new(AvailableObjects{available_models: res}))
+        Ok(Response::new(AvailableObjects{available_objects: res}))
     }
 
 
     async fn get_available_data_sets(&self, _request:Request<Empty>) -> Result<Response<AvailableObjects>, Status> {
         let res = get_available_objects(self.data_store.get_available_datasets());
-        Ok(Response::new(AvailableObjects{available_models:res }))
+        Ok(Response::new(AvailableObjects{available_objects:res }))
     }
 
 }
@@ -194,7 +221,7 @@ fn uri_to_socket(uri: &Uri) -> Result<SocketAddr> {
 }
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>>{
-    let addr: Uri = "[::1]:50052".parse::<Uri>()?;
+    let addr: Uri = "[::1]:50051".parse::<Uri>()?;
 
     let protocol = MyReferenceProtocol::new(Arc::new(DataStore::new()));
 

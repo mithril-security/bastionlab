@@ -1,10 +1,10 @@
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Iterator
 from torch.nn import Module
 from torch.utils.data import Dataset
 from utils import serialize_model, serialize_dataset
 from pb.remote_torch_pb2_grpc import ReferenceProtocolStub
-from pb.remote_torch_pb2 import Reference
+from pb.remote_torch_pb2 import Chunk, Reference
 import grpc
 
 
@@ -22,6 +22,9 @@ class Client:
 
     def send_dataset(self, dataset: Dataset) -> Reference:
         return self.stub.SendData(serialize_dataset(dataset))
+
+    def fetch(self, ref: Reference) -> Iterator[Chunk]:
+        return self.stub.Fetch(ref)
 
 
 @dataclass
@@ -43,4 +46,6 @@ if __name__ == '__main__':
     model = DummyModel()
 
     with Connection("localhost", 50051) as client:
-        client.send_model(model)
+        ref = client.send_model(model)
+        print(ref)
+        # client.fetch(Reference(identifier=ref))
