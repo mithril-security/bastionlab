@@ -39,6 +39,16 @@ class ReferenceProtocolStub(object):
                 request_serializer=remote__torch__pb2.Reference.SerializeToString,
                 response_deserializer=remote__torch__pb2.Empty.FromString,
                 )
+        self.GetAvailableModels = channel.unary_unary(
+                '/remote_torch.ReferenceProtocol/GetAvailableModels',
+                request_serializer=remote__torch__pb2.Empty.SerializeToString,
+                response_deserializer=remote__torch__pb2.AvailableObjects.FromString,
+                )
+        self.GetAvailableDataSets = channel.unary_unary(
+                '/remote_torch.ReferenceProtocol/GetAvailableDataSets',
+                request_serializer=remote__torch__pb2.Empty.SerializeToString,
+                response_deserializer=remote__torch__pb2.AvailableObjects.FromString,
+                )
         self.Train = channel.unary_unary(
                 '/remote_torch.ReferenceProtocol/Train',
                 request_serializer=remote__torch__pb2.TrainConfig.SerializeToString,
@@ -89,6 +99,18 @@ class ReferenceProtocolServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetAvailableModels(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetAvailableDataSets(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def Train(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -134,6 +156,16 @@ def add_ReferenceProtocolServicer_to_server(servicer, server):
                     servicer.DeleteBatch,
                     request_deserializer=remote__torch__pb2.Reference.FromString,
                     response_serializer=remote__torch__pb2.Empty.SerializeToString,
+            ),
+            'GetAvailableModels': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetAvailableModels,
+                    request_deserializer=remote__torch__pb2.Empty.FromString,
+                    response_serializer=remote__torch__pb2.AvailableObjects.SerializeToString,
+            ),
+            'GetAvailableDataSets': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetAvailableDataSets,
+                    request_deserializer=remote__torch__pb2.Empty.FromString,
+                    response_serializer=remote__torch__pb2.AvailableObjects.SerializeToString,
             ),
             'Train': grpc.unary_unary_rpc_method_handler(
                     servicer.Train,
@@ -242,6 +274,40 @@ class ReferenceProtocol(object):
         return grpc.experimental.unary_unary(request, target, '/remote_torch.ReferenceProtocol/DeleteBatch',
             remote__torch__pb2.Reference.SerializeToString,
             remote__torch__pb2.Empty.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def GetAvailableModels(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/remote_torch.ReferenceProtocol/GetAvailableModels',
+            remote__torch__pb2.Empty.SerializeToString,
+            remote__torch__pb2.AvailableObjects.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def GetAvailableDataSets(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/remote_torch.ReferenceProtocol/GetAvailableDataSets',
+            remote__torch__pb2.Empty.SerializeToString,
+            remote__torch__pb2.AvailableObjects.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 

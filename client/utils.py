@@ -2,7 +2,7 @@ import torch
 from torch.utils.data import Dataset
 from torch.nn import Module
 import io
-from remote_torch_pb2 import Chunk
+from pb.remote_torch_pb2 import Chunk
 from typing import Iterator, Callable
 from private_module import trainable_parameters
 
