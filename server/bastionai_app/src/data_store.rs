@@ -188,25 +188,24 @@ impl DataStore {
         }
     }
 
-    pub fn get_available_models(&self) -> Vec<(String, String)> {
-        let modules = self.inner_modules.read().unwrap();
-
-        let res = modules
-            .module_by_id
+    fn get_available_objects<T>(
+        &self,
+        source: &HashMap<Uuid, Artifact<T>>,
+    ) -> Vec<(String, String)> {
+        let res = source
             .iter()
             .map(|(k, v)| (k.to_string(), v.meta.description.clone()))
             .collect::<Vec<(String, String)>>();
         res
     }
 
+    pub fn get_available_models(&self) -> Vec<(String, String)> {
+        let modules = self.inner_modules.read().unwrap();
+        self.get_available_objects(&modules.module_by_id)
+    }
+
     pub fn get_available_datasets(&self) -> Vec<(String, String)> {
         let batches = self.inner_batches.read().unwrap();
-
-        let res = batches
-            .batch_by_id
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.meta.description.clone()))
-            .collect::<Vec<(String, String)>>();
-        res
+        self.get_available_objects(&batches.batch_by_id)
     }
 }
