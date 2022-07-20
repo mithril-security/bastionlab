@@ -91,10 +91,12 @@ impl ReferenceProtocol for MyReferenceProtocol {
         }
     }
 
-    type FetchStream = ReceiverStream<Result<Chunk, Status>>;
+    type FetchModelStream = ReceiverStream<Result<Chunk, Status>>;
+    type FetchDataSetStream = ReceiverStream<Result<Chunk, Status>>;
 
-    async fn fetch(&self, request: Request<Reference>) -> Result<Response<Self::FetchStream>, Status> {
+    async fn fetch_model(&self, request: Request<Reference>) -> Result<Response<Self::FetchModelStream>, Status> {
         let identifier = request.into_inner().identifier;
+        let (tx, rx) = mpsc::channel(32);
         let res = self.data_store.get_model_with_identifier(Uuid::parse_str(&identifier).unwrap(), |artifact| {
             let tensors = artifact.get_data().method_is::<IValue>("trainable_parameters", &[]).unwrap();
 
@@ -106,17 +108,50 @@ impl ReferenceProtocol for MyReferenceProtocol {
             }
         });
         
-        let (tx, rx) = mpsc::channel(4);
         match res {
             Some(v) => {
-                for tensor in v.unwrap() {
-                    tx.send(Ok(Chunk{data: serialize_tensor(tensor), description: "".to_string()})).await.unwrap()
-                }
+                println!("Module: ");
+                tokio::spawn(
+                    async move {
+                        for tensor in v.unwrap() {
+                            let serialized =  serialize_tensor(tensor.as_ref());
+                            tx.send(Ok(Chunk{data: serialized, description: "".to_string()})).await.unwrap()
+                        }
+                    }
+                );
                 
             },
             None => {return Err(Status::internal("Model not available!".to_string()))}
         }
 
+        Ok(Response::new(ReceiverStream::new(rx)))
+    }
+
+    async fn fetch_data_set(&self, request: Request<Reference>) -> Result<Response<Self::FetchDataSetStream>, Status> {
+        let identifier = request.into_inner().identifier;
+        let (tx, rx) = mpsc::channel(32);
+        let res = self.data_store.get_dataset_with_identifier(Uuid::parse_str(&identifier).unwrap(), |artifact| {
+            let tensors = artifact.get_data().get_tensors();
+            let mut tensors_bytes: Vec<Vec<u8>> = Vec::new();
+
+            for tensor in tensors {
+                tensors_bytes.push(serialize_tensor(tensor));
+            }
+            Some(tensors_bytes)
+        });
+
+        match res {
+            Some(v) => {
+                tokio::spawn(
+                    async move {
+                        for bytes in v.as_ref().unwrap() {
+                            tx.send(Ok(Chunk{data: bytes.clone(), description: "".to_string()})).await.unwrap()
+                        }
+                    }
+                );
+            },
+            None => {return Err(Status::internal("Model not available!".to_string()))}
+        }
         Ok(Response::new(ReceiverStream::new(rx)))
     }
 

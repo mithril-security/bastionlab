@@ -73,7 +73,7 @@ fn zeros(size: usize) -> Vec<u8> {
     std::iter::repeat(0).take(size).collect()
 }
 
-pub fn serialize_tensor(tensor: Tensor) -> Vec<u8> {
+pub fn serialize_tensor(tensor: &Tensor) -> Vec<u8> {
     let capacity = tensor.numel() * tensor.f_kind().unwrap().elt_size_in_bytes();
     let mut data: Vec<u8> = zeros(capacity);
     tensor.copy_data_u8(&mut data[..], tensor.numel());

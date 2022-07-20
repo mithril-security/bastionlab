@@ -19,8 +19,15 @@ struct Meta {
     pub description: String,
 }
 #[allow(dead_code)]
+#[derive(Debug)]
 pub struct Batch {
     tensors: Vec<Tensor>,
+}
+
+impl Batch {
+    pub fn get_tensors<'a>(&'a self) -> &'a Vec<Tensor> {
+        &self.tensors
+    }
 }
 
 #[derive(Debug)]
@@ -39,6 +46,7 @@ impl<T> Artifact<T> {
 
 unsafe impl<T> Sync for Artifact<T> {}
 unsafe impl Sync for DataStore {}
+unsafe impl Send for DataStore {}
 
 struct InnerModules {
     module_by_id: ModuleType,
@@ -182,6 +190,18 @@ impl DataStore {
     ) -> Option<U> {
         let modules = self.inner_modules.read().unwrap();
         match modules.module_by_id.get(&identifier) {
+            Some(v) => Some(func(v)),
+            None => None,
+        }
+    }
+
+    pub fn get_dataset_with_identifier<U>(
+        &self,
+        identifier: Uuid,
+        func: impl Fn(&Artifact<Batch>) -> U,
+    ) -> Option<U> {
+        let batches = self.inner_batches.read().unwrap();
+        match batches.batch_by_id.get(&identifier) {
             Some(v) => Some(func(v)),
             None => None,
         }

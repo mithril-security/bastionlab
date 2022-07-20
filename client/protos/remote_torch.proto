@@ -52,7 +52,8 @@ message Accuracy { float value = 1; }
 service ReferenceProtocol {
     rpc SendData (stream Chunk) returns (Reference) {}
     rpc SendModel (stream Chunk) returns (Reference) {}
-    rpc Fetch (Reference) returns (stream Chunk) {}
+    rpc FetchModel (Reference) returns (stream Chunk) {}
+    rpc FetchDataSet (Reference) returns (stream Chunk) {}
     rpc DeleteModel (Reference) returns (Empty) {}
     rpc DeleteBatch (Reference) returns (Empty) {}
     rpc GetAvailableModels(Empty) returns (AvailableObjects) {}
