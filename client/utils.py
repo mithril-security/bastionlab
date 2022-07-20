@@ -6,15 +6,18 @@ from pb.remote_torch_pb2 import Chunk
 from typing import Iterator, Callable
 from private_module import trainable_parameters
 
+
 def chunk_bounds(size, chunk_size):
     start = 0
     while start < size:
         yield (start, min(start + chunk_size, size))
         start += chunk_size
 
+
 def chunks(arr, chunk_size):
     for a, b in chunk_bounds(len(arr), chunk_size):
         yield arr[a:b]
+
 
 def tensor_to_bytes(tensor):
     buff = io.BytesIO()
@@ -22,12 +25,14 @@ def tensor_to_bytes(tensor):
     buff.seek(0)
     return buff.read()
 
+
 def bytes_to_tensor(bs):
     buff = io.BytesIO()
     buff.write(bs)
     buff.seek(0)
     tensor = torch.load(buff)
     return tensor
+
 
 def stream_artifacts(artifacts, chunk_size, serialization_fn=torch.save):
     eoi = False
@@ -55,6 +60,7 @@ def stream_artifacts(artifacts, chunk_size, serialization_fn=torch.save):
             tail = buff.read(position - chunk_size)
             buff.seek(0)
             buff.write(tail)
+
 
 def unstream_artifacts(stream, deserialization_fn=torch.load):
     buff = io.BytesIO()
@@ -84,23 +90,28 @@ def unstream_artifacts(stream, deserialization_fn=torch.load):
             buff.seek(0)
             buff.write(tail)
 
+
 def serialize_dataset(dataset: Dataset, chunk_size=1000) -> Iterator[Chunk]:
     return (Chunk(data=x) for x in stream_artifacts(iter(dataset), chunk_size))
 
-def serialize_model(model: Module, chunk_size=1000) -> Iterator[Chunk]:
-    ts = torch.jit.script(model) # type: ignore
-    return (Chunk(data=x) for x in stream_artifacts(iter([ts]), chunk_size, torch.jit.save)) # type: ignore
+
+def serialize_model(model: Module, description, chunk_size=1000) -> Iterator[Chunk]:
+    ts = torch.jit.script(model)  # type: ignore
+    # type: ignore
+    return (Chunk(data=x, description=description) for x in stream_artifacts(iter([ts]), chunk_size, torch.jit.save))
+
 
 def remote_module(cls: Callable) -> Callable:
     init = cls.__init__
+
     def new_init(_self, *args, **kwargs):
-        init(_self, *args, **kwargs) # type: ignore
+        init(_self, *args, **kwargs)  # type: ignore
         _self._trainable_parameters = []
         for _, p in trainable_parameters(_self):
             _self._trainable_parameters.append(p)
     cls.__init__ = new_init
 
-    @torch.jit.export # type: ignore
+    @torch.jit.export  # type: ignore
     def module_trainable_parameters(_self):
         return _self._trainable_parameters
     cls.trainable_parameters = module_trainable_parameters

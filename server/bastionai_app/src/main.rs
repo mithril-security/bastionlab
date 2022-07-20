@@ -133,7 +133,6 @@ impl ReferenceProtocol for MyReferenceProtocol {
     async fn fetch(&self, request: Request<Reference>) -> Result<Response<Self::FetchStream>, Status> {
         let identifier = request.into_inner().identifier;
         let res = self.data_store.get_model_with_identifier(Uuid::parse_str(&identifier).unwrap(),  move |artifact| {
-            println!("Artifact: {:?}", artifact.get_data());
             let tensors = artifact.get_data().method_is::<IValue>("trainable_parameters", &[]).unwrap();
 
             match tensors {
@@ -147,7 +146,6 @@ impl ReferenceProtocol for MyReferenceProtocol {
         let (tx, rx) = mpsc::channel(4);
         match res {
             Some(v) => {
-                
                 let zeros = |size: usize| -> Vec<u8> {
                     std::iter::repeat(0).take(size).collect()
                 };
@@ -159,7 +157,6 @@ impl ReferenceProtocol for MyReferenceProtocol {
                     tensor.copy_data_u8(&mut data[..], tensor.numel());
                     tx.send(Ok(Chunk{data, description: "".to_string()})).await.unwrap()
                 }
-
                 
             },
             None => {return Err(Status::internal("Model not uploaded!".to_string()))}
