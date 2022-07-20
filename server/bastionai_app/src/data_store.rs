@@ -1,13 +1,13 @@
-use anyhow::{anyhow, Result};
 use ring::digest;
 
 use std::collections::{hash_map::Entry, HashMap};
-use std::sync::{Arc, RwLock};
+use std::sync::RwLock;
 use tch::{Tensor, TrainableCModule};
 use uuid::Uuid;
 pub type ModuleType = HashMap<Uuid, Artifact<TrainableCModule>>;
 pub type BatchType = HashMap<Uuid, Artifact<Batch>>;
 
+#[allow(dead_code)]
 #[derive(Debug, Copy, Clone)]
 struct Permission {
     owner: bool, // The only permission
@@ -16,14 +16,15 @@ struct Permission {
 
 #[derive(Debug, Clone)]
 struct Meta {
-    signed_sig: Vec<u8>,
     pub description: String,
 }
+#[allow(dead_code)]
 pub struct Batch {
     tensors: Vec<Tensor>,
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct Artifact<T> {
     permission: Permission,
     data: T,
@@ -97,7 +98,6 @@ impl DataStore {
                 },
                 data: artifacts,
                 meta: Meta {
-                    signed_sig: vec![],
                     description: description.to_string(),
                 },
             }),
@@ -135,7 +135,6 @@ impl DataStore {
                 },
                 data: Batch { tensors: artifacts },
                 meta: Meta {
-                    signed_sig: vec![],
                     description: description.to_string(),
                 },
             }),
