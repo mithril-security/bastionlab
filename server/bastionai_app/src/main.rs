@@ -36,6 +36,8 @@ impl ReferenceProtocol for MyReferenceProtocol {
         let mut data_bytes: Vec<u8> = Vec::new();
         let mut description: String = String::default();
 
+        println!("Uploading dataset...");
+
         while let Some(data_stream) = stream.next().await {
             let mut data_proto = data_stream?;
             data_bytes.append(&mut data_proto.data);
@@ -46,14 +48,14 @@ impl ReferenceProtocol for MyReferenceProtocol {
 
         let (tensors, tensors_bytes) = transform_bytes(data_bytes, bytes_to_tensor);
 
-        println!("Tensors: {}", tensors.len());
-        println!("Tensors Bytes: {}", tensors_bytes.len());
-        println!("Tensors: {:#?}", tensors);
         let flat_byte_list = tensors_bytes.into_iter().flatten().collect::<Vec<u8>>();
         match self.data_store.add_batch_artifact(tensors, &flat_byte_list[..], description.as_str()) {
-            Some(v) => Ok(Response::new(Reference{
+            Some(v) => {
+                println!("Dataset upload done!");
+
+                Ok(Response::new(Reference{
                 identifier: v.to_string()
-            })),
+            }))},
             None => {return Err(Status::internal("Batch already uploaded!".to_string()))}
         }
     }
@@ -62,18 +64,17 @@ impl ReferenceProtocol for MyReferenceProtocol {
 
         let mut stream = request.into_inner();
         let mut data_bytes: Vec<u8> = Vec::new();
-        let mut description: String = "".to_string();
+        let mut description: String = String::default();
 
         println!("Uploading model...");
         
         while let Some(data_stream) = stream.next().await {
             let mut data_proto = data_stream?;
             data_bytes.append(&mut data_proto.data);
-            if description == "".to_string() {
+            if description ==  String::default() {
                 description = data_proto.description;
             }
         }
-        println!("Length: {}", data_bytes.len());
         let (mut modules, module_bytes) = transform_bytes(data_bytes, bytes_to_module);
 
         let mut d = modules.drain(..);
@@ -110,7 +111,6 @@ impl ReferenceProtocol for MyReferenceProtocol {
         
         match res {
             Some(v) => {
-                println!("Module: ");
                 tokio::spawn(
                     async move {
                         for tensor in v.unwrap() {
@@ -132,6 +132,7 @@ impl ReferenceProtocol for MyReferenceProtocol {
         let (tx, rx) = mpsc::channel(32);
         let res = self.data_store.get_dataset_with_identifier(Uuid::parse_str(&identifier).unwrap(), |artifact| {
             let tensors = artifact.get_data().get_tensors();
+            println!("Dataset Length: {}", tensors.len());
             let mut tensors_bytes: Vec<Vec<u8>> = Vec::new();
 
             for tensor in tensors {

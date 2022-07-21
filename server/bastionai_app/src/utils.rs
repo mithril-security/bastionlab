@@ -74,11 +74,14 @@ fn zeros(size: usize) -> Vec<u8> {
 }
 
 pub fn serialize_tensor(tensor: &Tensor) -> Vec<u8> {
-    let capacity = tensor.numel() * tensor.f_kind().unwrap().elt_size_in_bytes();
+    let kind_size = tensor.f_kind().unwrap().elt_size_in_bytes();
+    let capacity = tensor.numel() * kind_size;
     let mut data: Vec<u8> = zeros(capacity);
     tensor.copy_data_u8(&mut data[..], tensor.numel());
-    let mut capacity_bytes = from_u32_le(capacity as u32);
-    capacity_bytes.append(&mut data);
 
-    capacity_bytes
+    let mut output = from_u32_le(kind_size as u32);
+    output.append(&mut from_u32_le(capacity as u32));
+    output.append(&mut data);
+
+    output
 }
