@@ -127,9 +127,9 @@ def remote_module(cls: Callable) -> Callable:
 
     def new_init(_self, *args, **kwargs):
         init(_self, *args, **kwargs)  # type: ignore
-        _self._trainable_parameters = []
-        for _, p in trainable_parameters(_self):
-            _self._trainable_parameters.append(p)
+        _self._trainable_parameters = {}
+        for n, p in trainable_parameters(_self):
+            _self._trainable_parameters[n] = p
     cls.__init__ = new_init
 
     @torch.jit.export  # type: ignore
