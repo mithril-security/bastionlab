@@ -46,12 +46,11 @@ impl RemoteTorch for BastionAIServer {
     }
 
     async fn send_model(&self, request: Request<Streaming<Chunk>>) -> Result<Response<Reference>, Status> {
-        let module: Artifact<Module> = tcherror_to_status((unstream_data(request.into_inner()).await?).deserialize())?;
+        let module: Artifact<Module> = tcherror_to_status(unstream_data(request.into_inner()).await?.deserialize())?;
         let description = String::from(module.description.clone());
         let identifier = Uuid::new_v4();
         
         self.modules.write().unwrap().insert(identifier.clone(), module);
-
         Ok(Response::new(Reference { identifier: format!("{}", identifier), description }))
     }
 
@@ -89,19 +88,19 @@ impl RemoteTorch for BastionAIServer {
         Ok(Response::new(Empty {}))
     }
 
-    async fn train(&self, request: Request<TrainConfig>) -> Result<Response<Reference>, Status> {
+    async fn train(&self, _request: Request<TrainConfig>) -> Result<Response<Reference>, Status> {
         Ok(Response::new(Reference { identifier: String::from(""), description: String::from("") }))
     }
 
-    async fn predict(&self, request: Request<PredictConfig>) -> Result<Response<Reference>, Status> {
+    async fn predict(&self, _request: Request<PredictConfig>) -> Result<Response<Reference>, Status> {
         Ok(Response::new(Reference { identifier: String::from(""), description: String::from("") }))
     }
 
-    async fn test(&self, request:Request<PredictConfig>) -> Result<Response<Accuracy>, Status> {
+    async fn test(&self, _request:Request<PredictConfig>) -> Result<Response<Accuracy>, Status> {
         Ok(Response::new(Accuracy { value: 0. }))
     }
 
-    async fn available_models(&self, request: Request<Empty>) -> Result<Response<References>, Status> {
+    async fn available_models(&self, _request: Request<Empty>) -> Result<Response<References>, Status> {
         let list = self.modules.read().unwrap().iter().map(|(k, v)| Reference { identifier: format!("{}", k), description: v.description.clone() }).collect();
         
         Ok(Response::new(References { list } ))

@@ -1,12 +1,11 @@
-use ring::hmac;
-use tch::{TchError, Device, IValue, Tensor, TrainableCModule, CModule};
-use tch::nn::VarStore;
-use tonic::{Streaming, Response};
-use std::sync::Mutex;
-use std::convert::{TryFrom, TryInto};
-use std::collections::VecDeque;
 use crate::utils::*;
+use ring::hmac;
+use std::convert::{TryFrom, TryInto};
+use std::sync::Mutex;
+use tch::nn::VarStore;
+use tch::{CModule, Device, IValue, TchError, Tensor, TrainableCModule};
 
+#[derive(Debug)]
 pub struct SizedObjectsBytes(Vec<u8>);
 
 impl SizedObjectsBytes {
@@ -20,8 +19,12 @@ impl SizedObjectsBytes {
     }
 
     pub fn remove_front(&mut self) -> Vec<u8> {
-        let len = read_le_usize(&mut &self.0.drain(..4).collect::<Vec<u8>>()[..]);
+        let len = read_le_usize(&mut &self.0.drain(..8).collect::<Vec<u8>>()[..]);
         self.0.drain(..len).collect()
+    }
+
+    pub fn get(&self) -> &Vec<u8> {
+        &self.0
     }
 }
 
@@ -49,6 +52,7 @@ impl Iterator for SizedObjectsBytes {
     }
 }
 
+#[derive(Debug)]
 pub struct Module {
     c_module: TrainableCModule,
     var_store: VarStore,
@@ -58,9 +62,14 @@ impl TryFrom<SizedObjectsBytes> for Module {
     type Error = TchError;
 
     fn try_from(mut value: SizedObjectsBytes) -> Result<Self, Self::Error> {
-        let mut object = value.next().ok_or(TchError::FileFormat(String::from("Invalid data, expected at least one object in stream.")))?;
+        let object = value.next().ok_or(TchError::FileFormat(String::from(
+            "Invalid data, expected at least one object in stream.",
+        )))?;
         let vs = VarStore::new(Device::Cpu);
-        Ok(Module { c_module: TrainableCModule::load_data(&mut &object[..], vs.root())?, var_store: vs })
+        Ok(Module {
+            c_module: TrainableCModule::load_data(&mut &object[..], vs.root())?,
+            var_store: vs,
+        })
     }
 }
 
@@ -72,33 +81,34 @@ impl TryFrom<&Module> for SizedObjectsBytes {
             IValue::GenericDict(v) => Ok(v),
             _ => Err(TchError::FileFormat(String::from("Invalid data, expected module to have a `trainable_parameters` function returning the dict of named trainable parameters.")))
         }?;
-        
+
         let mut parameters_bytes = SizedObjectsBytes::new();
         for (name, parameter) in parameters {
-            let mut name_bytes = match name {
+            let  name_bytes = match name {
                 IValue::String(s) => Ok(s.into_bytes()),
                 _ => Err(TchError::FileFormat(String::from("Invalid data, expected value to be of type string in the dict returned by module's `trainable_parameters` function.")))
             }?;
-            let mut parameter_bytes = match parameter {
+            let  parameter_bytes = match parameter {
                 IValue::Tensor(t) => Ok(serialize_tensor(&t)),
                 _ => Err(TchError::FileFormat(String::from("Invalid data, expected value to be of type tensor in the dict returned by module's `trainable_parameters` function.")))
             }?;
             parameters_bytes.append_back(name_bytes);
             parameters_bytes.append_back(parameter_bytes);
         }
-        
+
         Ok(parameters_bytes)
     }
 }
 
+#[derive(Debug)]
 pub struct Dataset(Vec<Mutex<Tensor>>);
 
 impl TryFrom<SizedObjectsBytes> for Dataset {
     type Error = TchError;
 
-    fn try_from(mut value: SizedObjectsBytes) -> Result<Self, Self::Error> {
+    fn try_from(value: SizedObjectsBytes) -> Result<Self, Self::Error> {
         let mut dataset = Dataset(Vec::new());
-        for mut object in value {
+        for object in value {
             let module = CModule::load_data(&mut &object[..])?;
             match module.method_is::<IValue>("data", &[])? {
                 IValue::TensorList(v) => dataset.0.append(&mut v.into_iter().map(|x| Mutex::new(x)).collect()),
@@ -119,25 +129,12 @@ impl TryFrom<&Dataset> for SizedObjectsBytes {
             let bytes = serialize_tensor(&tensor.lock().unwrap());
             tensors_bytes.append_back(bytes);
         }
-        
+
         Ok(tensors_bytes)
     }
 }
 
-// pub enum ArtifactData {
-//     Module(Module),
-//     Dataset(Dataset),
-// }
-
-// impl From<&ArtifactData> for SizedObjectsBytes {
-//     fn from(value: &ArtifactData) -> Self {
-//         match value {
-//             ArtifactData::Module(m) => m.into(),
-//             ArtifactData::Dataset(d) => d.into(),
-//         }
-//     }
-// }
-
+#[derive(Debug)]
 pub struct Artifact<T> {
     pub data: T,
     pub description: String,
@@ -163,7 +160,7 @@ impl<T> Artifact<T> {
 
 impl<T> Artifact<T>
 where
-    for<'a> &'a T: TryInto<SizedObjectsBytes, Error=TchError>
+    for<'a> &'a T: TryInto<SizedObjectsBytes, Error = TchError>,
 {
     pub fn serialize(&self) -> Result<Artifact<SizedObjectsBytes>, TchError> {
         Ok(Artifact {
@@ -175,20 +172,13 @@ where
 }
 
 impl Artifact<SizedObjectsBytes> {
-    pub fn deserialize<T: TryFrom<SizedObjectsBytes, Error=TchError>>(mut self) -> Result<Artifact<T>, TchError> {
+    pub fn deserialize<T: TryFrom<SizedObjectsBytes, Error = TchError> + std::fmt::Debug>(
+        self,
+    ) -> Result<Artifact<T>, TchError> {
         Ok(Artifact {
             data: T::try_from(self.data)?,
             description: self.description,
             secret: self.secret,
         })
     }
-
-    // pub fn deserialize_dataset(self) -> Result<Artifact<ArtifactData>, Status> {
-    //     let dataset = tcherror_to_status(Dataset::try_from(self.data.next().into()))?;
-    //     Artifact {
-    //         data: ArtifactData::Dataset(dataset),
-    //         description: self.description,
-    //         secret: self.secret,
-    //     }
-    // }
 }

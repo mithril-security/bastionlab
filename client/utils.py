@@ -1,20 +1,48 @@
+import io
 import torch
 from torch import Tensor
 from torch.nn.parameter import Parameter
 from torch.utils.data import Dataset
 from torch.nn import Module
-import io
 from pb.remote_torch_pb2 import Chunk
 from typing import Any, Iterator, Callable, Tuple, TypeVar, List, Callable
 from private_module import trainable_parameters
 
 T = TypeVar('T')
+SIZE_LEN = 8
+
+
+class DataSetModuleWrapper(Module):
+    def __init__(self, data: Tuple[torch.Tensor]) -> None:
+        super().__init__()
+        self.x = data
+
+    @torch.jit.export
+    def data(self) -> List[torch.Tensor]:
+        return list(self.x)
+
+    def forward(self):
+        return self.x
+
+
+class ArtifactDataset:
+    def __init__(self, chunks: Iterator[Chunk]) -> None:
+        self.data = list(unstream_artifacts(
+            (chunk.data for chunk in chunks)))  # type: ignore
+
+    def __len__(self) -> int:
+        return len(self.data)
+
+    def __get_item__(self, index: int) -> Any:
+        return self.data[index]
+
 
 def chunk_bounds(size: int, chunk_size: int) -> Iterator[Tuple[int, int]]:
     start = 0
     while start < size:
         yield (start, min(start + chunk_size, size))
         start += chunk_size
+
 
 def chunks(arr: List[T], chunk_size: int) -> Iterator[List[T]]:
     for a, b in chunk_bounds(len(arr), chunk_size):
@@ -36,6 +64,10 @@ def bytes_to_tensor(bs: bytes) -> Tensor:
     return tensor
 
 
+def serialize_tensor(x, buff):
+    torch.jit.save(torch.jit.script(DataSetModuleWrapper(x)), buff)
+
+
 def stream_artifacts(artifacts: Iterator[T], chunk_size: int, serialization_fn: Callable[[T, io.BytesIO], None] = torch.save) -> Iterator[bytes]:
     eoi = False
     buff = io.BytesIO()
@@ -44,11 +76,13 @@ def stream_artifacts(artifacts: Iterator[T], chunk_size: int, serialization_fn: 
             try:
                 tensor = artifacts.__next__()
                 header = buff.tell()
-                buff.write(b"\xde\xad\xbe\xef")
+                buff.write(b"\xde\xad\xbe\xef\xde\xad\xbe\xef")
                 serialization_fn(tensor, buff)
                 end = buff.tell()
                 buff.seek(header)
-                buff.write((end - header - 4).to_bytes(4, "little"))
+                buff_len = (end - header - SIZE_LEN).to_bytes(SIZE_LEN,
+                                                   byteorder="little")
+                buff.write(buff_len)
                 buff.seek(end)
             except StopIteration:
                 eoi = True
@@ -84,43 +118,41 @@ def unstream_artifacts(stream: Iterator[bytes], deserialization_fn: Callable[[io
         if not eoi:
             end = buff.tell()
             buff.seek(size)
-            header = buff.read(4)
+            header = buff.read(SIZE_LEN)
             size = int.from_bytes(header, "little")
-            tail = buff.read(end - size - 4)
+            tail = buff.read(end - size - SIZE_LEN)
             buff.seek(0)
             yield deserialization_fn(buff)
             buff.seek(0)
             buff.write(tail)
 
-def data_chunks_generator(stream: Iterator[bytes], description: str) -> Iterator[Chunk]:
+
+def data_chunks_generator(stream: Iterator[bytes], description: str, secret: bytes) -> Iterator[Chunk]:
     first = True
     for x in stream:
         if first:
-            yield Chunk(data=x, description=description)
+            first = False
+            yield Chunk(data=x, description=description, secret=secret)
         else:
-            yield Chunk(data=x, description="")
+            yield Chunk(data=x, description="", secret=bytes())
 
-def serialize_dataset(dataset: Dataset, description: str, chunk_size=1000) -> Iterator[Chunk]:
-    return data_chunks_generator(stream_artifacts(iter(dataset), chunk_size), description)
 
-class ArtifactDataset:
-    def __init__(self, chunks: Iterator[Chunk]) -> None:
-        self.data = list(unstream_artifacts((chunk.data for chunk in chunks))) # type: ignore
+def serialize_dataset(dataset: Dataset, description: str, secret: bytes, chunk_size=1000) -> Iterator[Chunk]:
+    return data_chunks_generator(stream_artifacts(iter(dataset), chunk_size, serialization_fn=serialize_tensor), description, secret)
 
-    def __len__(self) -> int:
-        return len(self.data)
-    
-    def __get_item__(self, index: int) -> Any:
-        return self.data[index]
 
-def serialize_model(model: Module, description: str, chunk_size=1000) -> Iterator[Chunk]:
+def serialize_model(model: Module, description: str, secret: bytes, chunk_size=1000) -> Iterator[Chunk]:
     ts = torch.jit.script(model)  # type: ignore
-    return data_chunks_generator(stream_artifacts(iter([ts]), chunk_size, torch.jit.save), description) # type: ignore
+    # type: ignore
+    return data_chunks_generator(stream_artifacts(iter([ts]), chunk_size, torch.jit.save), description, secret)
+
 
 def deserialize_weights_to_model(chunks: Iterator[Chunk], model: Module) -> None:
-    tensors = unstream_artifacts((chunk.data for chunk in chunks)) # type: ignore
+    tensors = unstream_artifacts(
+        (chunk.data for chunk in chunks))  # type: ignore
     for p, t in zip(model.parameters(), tensors):
         p = Parameter(t)
+
 
 def remote_module(cls: Callable) -> Callable:
     init = cls.__init__
