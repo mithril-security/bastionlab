@@ -1,5 +1,6 @@
 SERVER_DIR:=./
 BIN_DIR := $(SERVER_DIR)/bin
+LIBTORCH_PATH := $(LIBTORCH)
 
 ifeq ($(MODE),)
 	BUILD_TYPE :=
@@ -9,11 +10,12 @@ else
 	TARGET_DIR := $(SERVER_DIR)/target/release
 endif
 
-SHELL := /bin/bash
 all: compile
 
 compile:
 	@mkdir -p $(BIN_DIR)
+	@export LIBTORCH=$(LIBTORCH_PATH)
+	@export LD_LIBRARY_PATH=${LIBTORCH}/lib:${LD_LIBRARY_PATH}
 	@cd $(SERVER_DIR) && cargo build $(BUILD_TYPE) && cp $(TARGET_DIR)/server $(BIN_DIR)
 	
 run:
