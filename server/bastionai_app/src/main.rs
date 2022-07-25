@@ -55,7 +55,7 @@ impl RemoteTorch for BastionAIServer {
     }
 
     async fn fetch_dataset(&self, request: Request<Reference>) -> Result<Response<Self::FetchDatasetStream>, Status> {
-        let identifier = Uuid::parse_str(&request.into_inner().identifier).unwrap(); // Fix this;
+        let identifier = parse_reference(request)?;
         let serialized = {
             let datasets = self.datasets.read().unwrap();
             let artifact = datasets.get(&identifier).ok_or(Status::not_found("Not found"))?;
@@ -66,7 +66,7 @@ impl RemoteTorch for BastionAIServer {
     }
 
     async fn fetch_module(&self, request: Request<Reference>) -> Result<Response<Self::FetchModuleStream>, Status> {
-        let identifier = Uuid::parse_str(&request.into_inner().identifier).unwrap(); // Fix this;
+        let identifier = parse_reference(request)?; 
         let serialized = {
             let modules = self.modules.read().unwrap();
             let artifact = modules.get(&identifier).ok_or(Status::not_found("Not found"))?;
@@ -77,13 +77,13 @@ impl RemoteTorch for BastionAIServer {
     }
 
     async fn delete_dataset(&self, request: Request<Reference>) -> Result<Response<Empty>, Status> {
-        let identifier = Uuid::parse_str(&request.into_inner().identifier).unwrap(); // Fix this;
+        let identifier = parse_reference(request)?; 
         self.datasets.write().unwrap().remove(&identifier);
         Ok(Response::new(Empty {}))
     }
 
     async fn delete_module(&self, request: Request<Reference>) -> Result<Response<Empty>, Status> {
-        let identifier = Uuid::parse_str(&request.into_inner().identifier).unwrap(); // Fix this;
+        let identifier = parse_reference(request)?; 
         self.modules.write().unwrap().remove(&identifier);
         Ok(Response::new(Empty {}))
     }
