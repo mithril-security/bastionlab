@@ -1,3 +1,6 @@
+use uuid::Uuid;
+use crate::Reference;
+use tonic::Request;
 use tonic::{ Status, Response};
 use tokio_stream::{StreamExt, wrappers::ReceiverStream};
 use super::Chunk;
@@ -53,4 +56,8 @@ pub fn serialize_tensor(tensor: &Tensor) -> Vec<u8> {
     let mut bytes = vec![0; capacity];
     tensor.copy_data_u8(&mut bytes, tensor.numel());
     bytes
+}
+
+pub fn parse_reference(request: Request<Reference>) -> Result<Uuid, Status> {
+    Uuid::parse_str(&request.into_inner().identifier).map_err(|_|Status::internal("Invalid BastionAI reference"))
 }
