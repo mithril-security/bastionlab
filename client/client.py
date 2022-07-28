@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import Any, Iterator, List
+from torch import Tensor
 from torch.nn import Module
 from torch.utils.data import Dataset
 from utils import serialize_dataset, serialize_model
@@ -61,28 +62,59 @@ class Connection:
 
 
 if __name__ == '__main__':
-    from dummy import DummyModel, DummyDataset
-    model = DummyModel()
-    dataset = DummyDataset()
+    from psg.nn import Linear
+    from torch.nn import Module
+    from torch import Tensor
+    from torch.utils.data import Dataset
+    import torch
+    from typing import Tuple
+
+
+    class LReg(Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.fc1 = Linear(1, 1, 2)
+
+        def forward(self, x: Tensor) -> Tensor:
+            return self.fc1(x)
+
+
+    class LRegDataset(Dataset):
+        def __init__(self) -> None:
+            super().__init__()
+            self.X = torch.tensor([[0.0], [1.0], [0.5], [0.2]])
+            self.Y = torch.tensor([[0.0], [2.0], [1.0], [0.4]])
+
+        def __len__(self) -> int:
+            return 10
+
+        def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
+            return (self.X[idx], self.Y[idx])
+
+
+    model = LReg()
+    dataset = LRegDataset()
 
     with Connection("localhost", 50051) as client:
-        model_ref = client.send_model(model, "DummyModel", b"secret")
+        model_ref = client.send_model(model, "1D Linear Regression Model", b"secret")
         print(f"Model ref: {model_ref}")
         # res = client.fetch_model(model_ref)
 
-        res = client.send_dataset(dataset, "DummyDataset", b'secret')
-        print(f"Dataset ref: {res}")
+        dataset_ref = client.send_dataset(dataset, "Dummy 1D Linear Regression Dataset (param is 2)", b'secret')
+        print(f"Dataset ref: {ref}")
 
-        res = client.delete_module(
-            Reference(identifier="881379b7-0a24-4e00-9d3c-716b0b31f6b5"))
+        # res = client.delete_module(
+        #     Reference(identifier="881379b7-0a24-4e00-9d3c-716b0b31f6b5"))
         # print(next(res))
 
-        res = client.get_available_models()
-        for model in res.list:  # type: ignore
+        model_list = client.get_available_models()
+        for model in model_list.list:  # type: ignore
             print(f"{model.identifier}, {model.description}")
 
-        # dataset_ref = client.send_dataset(dataset, "DummyDataset")
-        # print(f"Dataset ref: {dataset_ref}")
-
-        # client.train(TrainConfig(model=model_ref, dataset=dataset_ref,
-        #              batch_size=64, epochs=1, learning_rate=1e-3))
+        client.train(TrainConfig(
+            model=model_ref,
+            dataset=dataset_ref,
+            batch_size=2,
+            epochs=1,
+            learning_rate=1e-1
+        ))

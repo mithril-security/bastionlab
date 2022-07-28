@@ -64,7 +64,7 @@ class PrivacyEngine():
     def __init__(self) -> None:
         self.grad_sample_fn_table = {}
 
-    def define_grad_sample_fn(self, cls: Callable) -> Callable[[Callable], None]:
+    def grad_sample_fn(self, cls: Callable) -> Callable[[Callable], None]:
         def inner(fn: Callable) -> None:
             self.grad_sample_fn_table[cls] = fn
         return inner
@@ -161,7 +161,8 @@ class PrivacyEngine():
                 grad_sample_fn = self.grad_sample_fn_table[type(module)]
 
             for param, grad_sample in grad_sample_fn(module, module.input.pop(), grad_output).items():
-                module.grad_sample_store[param][: grad_sample.shape[0]] += grad_sample
+                if param in module.grad_sample_store:
+                    module.grad_sample_store[param][: grad_sample.shape[0]] += grad_sample
         return inner
 
 def global_grad_sample_fn(cls: Callable) -> Callable[[Callable], None]:
