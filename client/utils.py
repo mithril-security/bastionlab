@@ -5,11 +5,43 @@ from torch.nn.parameter import Parameter
 from torch.utils.data import Dataset
 from torch.nn import Module
 from pb.remote_torch_pb2 import Chunk
-from typing import Any, Iterator, Callable, Tuple, TypeVar, List, Callable
-from private_module import trainable_parameters
+from typing import Any, Iterator, Callable, Tuple, TypeVar, List, Callable, Iterable
 
 T = TypeVar('T')
 SIZE_LEN = 8
+
+
+def parametrized_modules(module: Module) -> Iterable[Module]:
+    """
+    Recursively iterates over all submodules, returning those that
+    have parameters (as opposed to "wrapper modules" that just organize modules).
+    """
+    yield from (
+        (m_name, m) # type: ignore
+        for (m_name, m) in module.named_modules()
+        if any(p is not None for p in m.parameters(recurse=False))
+    )
+
+def trainable_modules(module: Module) -> Iterable[Tuple[str, Module]]:
+    """
+    Recursively iterates over all submodules, returning those that
+    have parameters and are trainable (ie they want a grad).
+    """
+    yield from (
+        (m_name, m)
+        for (m_name, m) in parametrized_modules(module) # type: ignore
+        if any(p.requires_grad for p in m.parameters(recurse=False))
+    )
+
+
+def trainable_parameters(module: Module) -> Iterable[Tuple[str, Parameter]]:
+    """
+    Recursively iterates over all parameters, returning those that
+    are trainable (ie they want a grad).
+    """
+    yield from (
+        (p_name, p) for (p_name, p) in module.named_parameters() if p.requires_grad
+    )
 
 
 class DataSetModuleWrapper(Module):
