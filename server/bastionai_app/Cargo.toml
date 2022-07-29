@@ -16,6 +16,7 @@ tokio-stream = "0.1"
 # http = "0.2.8"
 # anyhow = "1.0.58"
 ring = "0.16.20"
+private_learning = { path = "../../private_learning" }
 
 [dependencies.uuid]
 version = "1.1.2"

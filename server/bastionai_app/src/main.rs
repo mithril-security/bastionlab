@@ -1,13 +1,16 @@
+use tch::Tensor;
+use tch::vision::dataset;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
 use tokio_stream::wrappers::ReceiverStream;
 use std::collections::HashMap;
 use uuid::Uuid;
 use std::sync::RwLock;
+use private_learning::{SGD, l2_loss, Optimizer};
 
 mod remote_torch {
     tonic::include_proto!("remote_torch");
 }
-use remote_torch::{Reference, References, Empty, Chunk, TrainConfig, PredictConfig, Accuracy};
+use remote_torch::{Reference, References, Empty, Chunk, TrainConfig, TestConfig, Accuracy};
 use remote_torch::remote_torch_server::{RemoteTorch, RemoteTorchServer};
 
 mod storage;
@@ -55,7 +58,7 @@ impl RemoteTorch for BastionAIServer {
     }
 
     async fn fetch_dataset(&self, request: Request<Reference>) -> Result<Response<Self::FetchDatasetStream>, Status> {
-        let identifier = parse_reference(request)?;
+        let identifier = parse_reference(request.into_inner())?;
         let serialized = {
             let datasets = self.datasets.read().unwrap();
             let artifact = datasets.get(&identifier).ok_or(Status::not_found("Not found"))?;
@@ -66,7 +69,7 @@ impl RemoteTorch for BastionAIServer {
     }
 
     async fn fetch_module(&self, request: Request<Reference>) -> Result<Response<Self::FetchModuleStream>, Status> {
-        let identifier = parse_reference(request)?; 
+        let identifier = parse_reference(request.into_inner())?; 
         let serialized = {
             let modules = self.modules.read().unwrap();
             let artifact = modules.get(&identifier).ok_or(Status::not_found("Not found"))?;
@@ -77,27 +80,43 @@ impl RemoteTorch for BastionAIServer {
     }
 
     async fn delete_dataset(&self, request: Request<Reference>) -> Result<Response<Empty>, Status> {
-        let identifier = parse_reference(request)?; 
+        let identifier = parse_reference(request.into_inner())?; 
         self.datasets.write().unwrap().remove(&identifier);
         Ok(Response::new(Empty {}))
     }
 
     async fn delete_module(&self, request: Request<Reference>) -> Result<Response<Empty>, Status> {
-        let identifier = parse_reference(request)?; 
+        let identifier = parse_reference(request.into_inner())?; 
         self.modules.write().unwrap().remove(&identifier);
         Ok(Response::new(Empty {}))
     }
 
-    async fn train(&self, _request: Request<TrainConfig>) -> Result<Response<Reference>, Status> {
-        Ok(Response::new(Reference { identifier: String::from(""), description: String::from("") }))
+    async fn train(&self, request: Request<TrainConfig>) -> Result<Response<Empty>, Status> {
+        let config = request.into_inner();
+        let dataset_id = parse_reference(config.dataset.clone().ok_or(Status::invalid_argument("Not found"))?)?;
+        let module_id = parse_reference(config.model.clone().ok_or(Status::invalid_argument("Not found"))?)?;
+        {
+            let datasets = self.datasets.read().unwrap();
+            let modules = self.modules.read().unwrap();
+            let dataset = datasets.get(&dataset_id).ok_or(Status::not_found("Not found"))?;
+            let module = modules.get(&module_id).ok_or(Status::not_found("Not found"))?;
+            tcherror_to_status(module.data.train(&dataset.data, config))?;
+        }
+        Ok(Response::new(Empty {}))
     }
 
-    async fn predict(&self, _request: Request<PredictConfig>) -> Result<Response<Reference>, Status> {
-        Ok(Response::new(Reference { identifier: String::from(""), description: String::from("") }))
-    }
-
-    async fn test(&self, _request:Request<PredictConfig>) -> Result<Response<Accuracy>, Status> {
-        Ok(Response::new(Accuracy { value: 0. }))
+    async fn test(&self, request: Request<TestConfig>) -> Result<Response<Accuracy>, Status> {
+        let config = request.into_inner();
+        let dataset_id = parse_reference(config.dataset.clone().ok_or(Status::invalid_argument("Not found"))?)?;
+        let module_id = parse_reference(config.model.clone().ok_or(Status::invalid_argument("Not found"))?)?;
+        let accuracy = {
+            let datasets = self.datasets.read().unwrap();
+            let modules = self.modules.read().unwrap();
+            let dataset = datasets.get(&dataset_id).ok_or(Status::not_found("Not found"))?;
+            let module = modules.get(&module_id).ok_or(Status::not_found("Not found"))?;
+            tcherror_to_status(module.data.test(&dataset.data, config))?
+        };
+        Ok(Response::new(Accuracy { value: accuracy }))
     }
 
     async fn available_models(&self, _request: Request<Empty>) -> Result<Response<References>, Status> {

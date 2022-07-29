@@ -1,9 +1,13 @@
+use crate::remote_torch::{TrainConfig, TestConfig};
 use crate::utils::*;
 use ring::hmac;
+use std::collections::{VecDeque, HashMap};
 use std::convert::{TryFrom, TryInto};
+use std::io::Cursor;
 use std::sync::Mutex;
 use tch::nn::VarStore;
-use tch::{CModule, Device, IValue, TchError, Tensor, TrainableCModule};
+use tch::{CModule, Device, IValue, TchError, Tensor, TrainableCModule, IndexOp};
+use private_learning::{Parameters, PrivateParameters, LossType, SGD, Optimizer, l2_loss};
 
 #[derive(Debug)]
 pub struct SizedObjectsBytes(Vec<u8>);
@@ -58,6 +62,51 @@ pub struct Module {
     var_store: VarStore,
 }
 
+impl Module {
+    pub fn parameters(&self) -> Result<Parameters, TchError> {
+        let mut vs = VarStore::new(self.var_store.device());
+        vs.copy(&self.var_store)?;
+        Ok(Parameters::from(vs))
+    }
+    pub fn private_parameters(&self, max_grad_norm: f64, noise_multiplier: f64, loss_type: LossType) -> Result<PrivateParameters, TchError> {
+        let mut vs = VarStore::new(self.var_store.device());
+        vs.copy(&self.var_store)?;
+        Ok(PrivateParameters::new(vs, max_grad_norm, noise_multiplier, loss_type))
+    }
+    pub fn train(&self, dataset: &Dataset, config: TrainConfig) -> Result<(), TchError> {
+        let mut optimizer = if config.private_learning {
+            let parameters = self.private_parameters(1.0, 0.01, private_learning::LossType::Sum)?;
+            Box::new(SGD::new(parameters, config.learning_rate as f64)) as Box<dyn Optimizer>
+        } else {
+            let parameters = self.parameters()?;
+            Box::new(SGD::new(parameters, config.learning_rate as f64)) as Box<dyn Optimizer>
+        };
+        for _ in 0..config.epochs {
+            for (input, label) in dataset.iter() {
+                let output = self.c_module.forward_ts(&[input])?;
+                let loss = l2_loss(&output, &label)?;
+                optimizer.zero_grad()?;
+                loss.backward();
+                optimizer.step()?;
+            }
+        }
+        Ok(())
+    }
+    pub fn test(&self, dataset: &Dataset, config: TestConfig) -> Result<f32, TchError> {
+        let mut count = 0;
+        let mut correct = 0;
+        for (input, label) in dataset.iter() {
+            let output = self.c_module.forward_ts(&[input])?;
+            let prediction = output.f_argmax(-1, false)?.double_value(&[]);
+            if prediction == label.double_value(&[]) {
+                correct += 1;
+            }
+            count += 1;
+        }
+        Ok(correct as f32 / count as f32)
+    }
+}
+
 impl TryFrom<SizedObjectsBytes> for Module {
     type Error = TchError;
 
@@ -77,45 +126,63 @@ impl TryFrom<&Module> for SizedObjectsBytes {
     type Error = TchError;
 
     fn try_from(value: &Module) -> Result<Self, Self::Error> {
-        let parameters: Vec<(IValue, IValue)> = match value.c_module.method_is::<IValue>("trainable_parameters", &[])? {
-            IValue::GenericDict(v) => Ok(v),
-            _ => Err(TchError::FileFormat(String::from("Invalid data, expected module to have a `trainable_parameters` function returning the dict of named trainable parameters.")))
-        }?;
-
-        let mut parameters_bytes = SizedObjectsBytes::new();
-        for (name, parameter) in parameters {
-            let  name_bytes = match name {
-                IValue::String(s) => Ok(s.into_bytes()),
-                _ => Err(TchError::FileFormat(String::from("Invalid data, expected value to be of type string in the dict returned by module's `trainable_parameters` function.")))
-            }?;
-            let  parameter_bytes = match parameter {
-                IValue::Tensor(t) => Ok(serialize_tensor(&t)),
-                _ => Err(TchError::FileFormat(String::from("Invalid data, expected value to be of type tensor in the dict returned by module's `trainable_parameters` function.")))
-            }?;
-            parameters_bytes.append_back(name_bytes);
-            parameters_bytes.append_back(parameter_bytes);
-        }
-
-        Ok(parameters_bytes)
+        let mut module_bytes = SizedObjectsBytes::new();
+        let mut buf = Vec::new();
+        value.var_store.save_to_stream(&mut buf)?;
+        module_bytes.append_back(buf);
+        Ok(module_bytes)
     }
 }
 
 #[derive(Debug)]
-pub struct Dataset(Vec<Mutex<Tensor>>);
+pub struct Dataset {
+    samples: Mutex<Tensor>,
+    labels: Mutex<Tensor>,
+}
+
+pub struct DatasetIter<'a> {
+    dataset: &'a Dataset,
+    index: i64,
+    len: i64,
+}
+
+impl<'a> Iterator for DatasetIter<'a> {
+    type Item = (Tensor, Tensor);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index < self.len {
+            let samples = self.dataset.samples.lock().unwrap();
+            let labels = self.dataset.labels.lock().unwrap();
+            Some((samples.i(self.index), labels.i(self.index)))
+        } else {
+            None
+        }
+    }
+}
+
+impl Dataset {
+    pub fn iter(&self) -> DatasetIter<'_> {
+        DatasetIter { dataset: &self, index: 0, len: self.samples.lock().unwrap().size()[0] }
+    }
+}
 
 impl TryFrom<SizedObjectsBytes> for Dataset {
     type Error = TchError;
 
     fn try_from(value: SizedObjectsBytes) -> Result<Self, Self::Error> {
-        let mut dataset = Dataset(Vec::new());
+        let dataset = Dataset { samples: Mutex::new(Tensor::new()), labels: Mutex::new(Tensor::new()) };
         for object in value {
-            let module = CModule::load_data(&mut &object[..])?;
-            match module.method_is::<IValue>("data", &[])? {
-                IValue::TensorList(v) => dataset.0.append(&mut v.into_iter().map(|x| Mutex::new(x)).collect()),
-                _ => return Err(TchError::FileFormat(String::from("Invalid data, expected a batch module with a `data` function returning the actual data."))),
+            let data = Tensor::load_multi_from_stream(Cursor::new(object))?;
+            for (name, tensor) in data {
+                let mut samples = dataset.samples.lock().unwrap();
+                let mut labels = dataset.labels.lock().unwrap();
+                match &*name {
+                    "samples" => *samples = Tensor::f_cat(&[&*samples, &tensor], 0)?,
+                    "labels" => *labels = Tensor::f_cat(&[&*labels, &tensor], 0)?,
+                    s => return Err(TchError::FileFormat(String::from(format!("Invalid data, unknown field {}.", s)))),
+                };
             }
         }
-
         Ok(dataset)
     }
 }
@@ -124,15 +191,19 @@ impl TryFrom<&Dataset> for SizedObjectsBytes {
     type Error = TchError;
 
     fn try_from(value: &Dataset) -> Result<Self, Self::Error> {
-        let mut tensors_bytes = SizedObjectsBytes::new();
-        for tensor in value.0.iter() {
-            let bytes = serialize_tensor(&tensor.lock().unwrap());
-            tensors_bytes.append_back(bytes);
-        }
+        let mut dataset_bytes = SizedObjectsBytes::new();
+        let mut buf = Vec::new();
+        Tensor::save_multi_to_stream(&[("samples", &*value.samples.lock().unwrap()), ("labels", &*value.labels.lock().unwrap())], &mut buf);
+        dataset_bytes.append_back(buf);
 
-        Ok(tensors_bytes)
+        Ok(dataset_bytes)
     }
 }
+
+// pub struct BatchedDataset {
+//     index_queue: Mutex<VecDeque<usize>>,
+//     data_store: Mutex<HashMap<usize, >>
+// }
 
 #[derive(Debug)]
 pub struct Artifact<T> {

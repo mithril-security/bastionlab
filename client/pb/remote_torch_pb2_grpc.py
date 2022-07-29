@@ -5,7 +5,7 @@ import grpc
 import remote_torch_pb2 as remote__torch__pb2
 
 
-class ReferenceProtocolStub(object):
+class RemoteTorchStub(object):
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -14,62 +14,62 @@ class ReferenceProtocolStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.SendData = channel.stream_unary(
-                '/remote_torch.ReferenceProtocol/SendData',
+        self.SendDataset = channel.stream_unary(
+                '/remote_torch.RemoteTorch/SendDataset',
                 request_serializer=remote__torch__pb2.Chunk.SerializeToString,
                 response_deserializer=remote__torch__pb2.Reference.FromString,
                 )
         self.SendModel = channel.stream_unary(
-                '/remote_torch.ReferenceProtocol/SendModel',
+                '/remote_torch.RemoteTorch/SendModel',
                 request_serializer=remote__torch__pb2.Chunk.SerializeToString,
                 response_deserializer=remote__torch__pb2.Reference.FromString,
                 )
-        self.Fetch = channel.unary_stream(
-                '/remote_torch.ReferenceProtocol/Fetch',
+        self.FetchDataset = channel.unary_stream(
+                '/remote_torch.RemoteTorch/FetchDataset',
                 request_serializer=remote__torch__pb2.Reference.SerializeToString,
                 response_deserializer=remote__torch__pb2.Chunk.FromString,
                 )
-        self.DeleteModel = channel.unary_unary(
-                '/remote_torch.ReferenceProtocol/DeleteModel',
+        self.FetchModule = channel.unary_stream(
+                '/remote_torch.RemoteTorch/FetchModule',
+                request_serializer=remote__torch__pb2.Reference.SerializeToString,
+                response_deserializer=remote__torch__pb2.Chunk.FromString,
+                )
+        self.DeleteDataset = channel.unary_unary(
+                '/remote_torch.RemoteTorch/DeleteDataset',
                 request_serializer=remote__torch__pb2.Reference.SerializeToString,
                 response_deserializer=remote__torch__pb2.Empty.FromString,
                 )
-        self.DeleteBatch = channel.unary_unary(
-                '/remote_torch.ReferenceProtocol/DeleteBatch',
+        self.DeleteModule = channel.unary_unary(
+                '/remote_torch.RemoteTorch/DeleteModule',
                 request_serializer=remote__torch__pb2.Reference.SerializeToString,
                 response_deserializer=remote__torch__pb2.Empty.FromString,
                 )
-        self.GetAvailableModels = channel.unary_unary(
-                '/remote_torch.ReferenceProtocol/GetAvailableModels',
+        self.AvailableModels = channel.unary_unary(
+                '/remote_torch.RemoteTorch/AvailableModels',
                 request_serializer=remote__torch__pb2.Empty.SerializeToString,
-                response_deserializer=remote__torch__pb2.AvailableObjects.FromString,
+                response_deserializer=remote__torch__pb2.References.FromString,
                 )
-        self.GetAvailableDataSets = channel.unary_unary(
-                '/remote_torch.ReferenceProtocol/GetAvailableDataSets',
+        self.AvailableDatasets = channel.unary_unary(
+                '/remote_torch.RemoteTorch/AvailableDatasets',
                 request_serializer=remote__torch__pb2.Empty.SerializeToString,
-                response_deserializer=remote__torch__pb2.AvailableObjects.FromString,
+                response_deserializer=remote__torch__pb2.References.FromString,
                 )
         self.Train = channel.unary_unary(
-                '/remote_torch.ReferenceProtocol/Train',
+                '/remote_torch.RemoteTorch/Train',
                 request_serializer=remote__torch__pb2.TrainConfig.SerializeToString,
-                response_deserializer=remote__torch__pb2.Reference.FromString,
-                )
-        self.Predict = channel.unary_unary(
-                '/remote_torch.ReferenceProtocol/Predict',
-                request_serializer=remote__torch__pb2.PredictConfig.SerializeToString,
-                response_deserializer=remote__torch__pb2.Reference.FromString,
+                response_deserializer=remote__torch__pb2.Empty.FromString,
                 )
         self.Test = channel.unary_unary(
-                '/remote_torch.ReferenceProtocol/Test',
-                request_serializer=remote__torch__pb2.PredictConfig.SerializeToString,
+                '/remote_torch.RemoteTorch/Test',
+                request_serializer=remote__torch__pb2.TestConfig.SerializeToString,
                 response_deserializer=remote__torch__pb2.Accuracy.FromString,
                 )
 
 
-class ReferenceProtocolServicer(object):
+class RemoteTorchServicer(object):
     """Missing associated documentation comment in .proto file."""
 
-    def SendData(self, request_iterator, context):
+    def SendDataset(self, request_iterator, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -81,43 +81,43 @@ class ReferenceProtocolServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def Fetch(self, request, context):
+    def FetchDataset(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def DeleteModel(self, request, context):
+    def FetchModule(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def DeleteBatch(self, request, context):
+    def DeleteDataset(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def GetAvailableModels(self, request, context):
+    def DeleteModule(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def GetAvailableDataSets(self, request, context):
+    def AvailableModels(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def AvailableDatasets(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def Train(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def Predict(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -130,10 +130,10 @@ class ReferenceProtocolServicer(object):
         raise NotImplementedError('Method not implemented!')
 
 
-def add_ReferenceProtocolServicer_to_server(servicer, server):
+def add_RemoteTorchServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'SendData': grpc.stream_unary_rpc_method_handler(
-                    servicer.SendData,
+            'SendDataset': grpc.stream_unary_rpc_method_handler(
+                    servicer.SendDataset,
                     request_deserializer=remote__torch__pb2.Chunk.FromString,
                     response_serializer=remote__torch__pb2.Reference.SerializeToString,
             ),
@@ -142,58 +142,58 @@ def add_ReferenceProtocolServicer_to_server(servicer, server):
                     request_deserializer=remote__torch__pb2.Chunk.FromString,
                     response_serializer=remote__torch__pb2.Reference.SerializeToString,
             ),
-            'Fetch': grpc.unary_stream_rpc_method_handler(
-                    servicer.Fetch,
+            'FetchDataset': grpc.unary_stream_rpc_method_handler(
+                    servicer.FetchDataset,
                     request_deserializer=remote__torch__pb2.Reference.FromString,
                     response_serializer=remote__torch__pb2.Chunk.SerializeToString,
             ),
-            'DeleteModel': grpc.unary_unary_rpc_method_handler(
-                    servicer.DeleteModel,
+            'FetchModule': grpc.unary_stream_rpc_method_handler(
+                    servicer.FetchModule,
+                    request_deserializer=remote__torch__pb2.Reference.FromString,
+                    response_serializer=remote__torch__pb2.Chunk.SerializeToString,
+            ),
+            'DeleteDataset': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeleteDataset,
                     request_deserializer=remote__torch__pb2.Reference.FromString,
                     response_serializer=remote__torch__pb2.Empty.SerializeToString,
             ),
-            'DeleteBatch': grpc.unary_unary_rpc_method_handler(
-                    servicer.DeleteBatch,
+            'DeleteModule': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeleteModule,
                     request_deserializer=remote__torch__pb2.Reference.FromString,
                     response_serializer=remote__torch__pb2.Empty.SerializeToString,
             ),
-            'GetAvailableModels': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetAvailableModels,
+            'AvailableModels': grpc.unary_unary_rpc_method_handler(
+                    servicer.AvailableModels,
                     request_deserializer=remote__torch__pb2.Empty.FromString,
-                    response_serializer=remote__torch__pb2.AvailableObjects.SerializeToString,
+                    response_serializer=remote__torch__pb2.References.SerializeToString,
             ),
-            'GetAvailableDataSets': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetAvailableDataSets,
+            'AvailableDatasets': grpc.unary_unary_rpc_method_handler(
+                    servicer.AvailableDatasets,
                     request_deserializer=remote__torch__pb2.Empty.FromString,
-                    response_serializer=remote__torch__pb2.AvailableObjects.SerializeToString,
+                    response_serializer=remote__torch__pb2.References.SerializeToString,
             ),
             'Train': grpc.unary_unary_rpc_method_handler(
                     servicer.Train,
                     request_deserializer=remote__torch__pb2.TrainConfig.FromString,
-                    response_serializer=remote__torch__pb2.Reference.SerializeToString,
-            ),
-            'Predict': grpc.unary_unary_rpc_method_handler(
-                    servicer.Predict,
-                    request_deserializer=remote__torch__pb2.PredictConfig.FromString,
-                    response_serializer=remote__torch__pb2.Reference.SerializeToString,
+                    response_serializer=remote__torch__pb2.Empty.SerializeToString,
             ),
             'Test': grpc.unary_unary_rpc_method_handler(
                     servicer.Test,
-                    request_deserializer=remote__torch__pb2.PredictConfig.FromString,
+                    request_deserializer=remote__torch__pb2.TestConfig.FromString,
                     response_serializer=remote__torch__pb2.Accuracy.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'remote_torch.ReferenceProtocol', rpc_method_handlers)
+            'remote_torch.RemoteTorch', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
 
 
  # This class is part of an EXPERIMENTAL API.
-class ReferenceProtocol(object):
+class RemoteTorch(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
-    def SendData(request_iterator,
+    def SendDataset(request_iterator,
             target,
             options=(),
             channel_credentials=None,
@@ -203,7 +203,7 @@ class ReferenceProtocol(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.stream_unary(request_iterator, target, '/remote_torch.ReferenceProtocol/SendData',
+        return grpc.experimental.stream_unary(request_iterator, target, '/remote_torch.RemoteTorch/SendDataset',
             remote__torch__pb2.Chunk.SerializeToString,
             remote__torch__pb2.Reference.FromString,
             options, channel_credentials,
@@ -220,14 +220,14 @@ class ReferenceProtocol(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.stream_unary(request_iterator, target, '/remote_torch.ReferenceProtocol/SendModel',
+        return grpc.experimental.stream_unary(request_iterator, target, '/remote_torch.RemoteTorch/SendModel',
             remote__torch__pb2.Chunk.SerializeToString,
             remote__torch__pb2.Reference.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
     @staticmethod
-    def Fetch(request,
+    def FetchDataset(request,
             target,
             options=(),
             channel_credentials=None,
@@ -237,14 +237,14 @@ class ReferenceProtocol(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_stream(request, target, '/remote_torch.ReferenceProtocol/Fetch',
+        return grpc.experimental.unary_stream(request, target, '/remote_torch.RemoteTorch/FetchDataset',
             remote__torch__pb2.Reference.SerializeToString,
             remote__torch__pb2.Chunk.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
     @staticmethod
-    def DeleteModel(request,
+    def FetchModule(request,
             target,
             options=(),
             channel_credentials=None,
@@ -254,14 +254,31 @@ class ReferenceProtocol(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/remote_torch.ReferenceProtocol/DeleteModel',
+        return grpc.experimental.unary_stream(request, target, '/remote_torch.RemoteTorch/FetchModule',
+            remote__torch__pb2.Reference.SerializeToString,
+            remote__torch__pb2.Chunk.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def DeleteDataset(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/remote_torch.RemoteTorch/DeleteDataset',
             remote__torch__pb2.Reference.SerializeToString,
             remote__torch__pb2.Empty.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
     @staticmethod
-    def DeleteBatch(request,
+    def DeleteModule(request,
             target,
             options=(),
             channel_credentials=None,
@@ -271,14 +288,14 @@ class ReferenceProtocol(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/remote_torch.ReferenceProtocol/DeleteBatch',
+        return grpc.experimental.unary_unary(request, target, '/remote_torch.RemoteTorch/DeleteModule',
             remote__torch__pb2.Reference.SerializeToString,
             remote__torch__pb2.Empty.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
     @staticmethod
-    def GetAvailableModels(request,
+    def AvailableModels(request,
             target,
             options=(),
             channel_credentials=None,
@@ -288,14 +305,14 @@ class ReferenceProtocol(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/remote_torch.ReferenceProtocol/GetAvailableModels',
+        return grpc.experimental.unary_unary(request, target, '/remote_torch.RemoteTorch/AvailableModels',
             remote__torch__pb2.Empty.SerializeToString,
-            remote__torch__pb2.AvailableObjects.FromString,
+            remote__torch__pb2.References.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
     @staticmethod
-    def GetAvailableDataSets(request,
+    def AvailableDatasets(request,
             target,
             options=(),
             channel_credentials=None,
@@ -305,9 +322,9 @@ class ReferenceProtocol(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/remote_torch.ReferenceProtocol/GetAvailableDataSets',
+        return grpc.experimental.unary_unary(request, target, '/remote_torch.RemoteTorch/AvailableDatasets',
             remote__torch__pb2.Empty.SerializeToString,
-            remote__torch__pb2.AvailableObjects.FromString,
+            remote__torch__pb2.References.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
@@ -322,26 +339,9 @@ class ReferenceProtocol(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/remote_torch.ReferenceProtocol/Train',
+        return grpc.experimental.unary_unary(request, target, '/remote_torch.RemoteTorch/Train',
             remote__torch__pb2.TrainConfig.SerializeToString,
-            remote__torch__pb2.Reference.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def Predict(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/remote_torch.ReferenceProtocol/Predict',
-            remote__torch__pb2.PredictConfig.SerializeToString,
-            remote__torch__pb2.Reference.FromString,
+            remote__torch__pb2.Empty.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
@@ -356,8 +356,8 @@ class ReferenceProtocol(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/remote_torch.ReferenceProtocol/Test',
-            remote__torch__pb2.PredictConfig.SerializeToString,
+        return grpc.experimental.unary_unary(request, target, '/remote_torch.RemoteTorch/Test',
+            remote__torch__pb2.TestConfig.SerializeToString,
             remote__torch__pb2.Accuracy.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
