@@ -5,11 +5,7 @@ mod tests {
     use tch::{TrainableCModule, Device, Tensor, Kind, TchError};
     use tch::nn::VarStore;
 
-    use crate::{Parameters, PrivateParameters, LossType, SGD, Optimizer};
-
-    fn l2_loss(output: &Tensor, target: &Tensor) -> Result<Tensor, TchError> {
-        output.f_sub(&target)?.f_norm_scalaropt_dim(2, &[1], false)?.f_mean(Kind::Float)
-    }
+    use crate::{Parameters, PrivateParameters, LossType, SGD, Optimizer, l2_loss};
 
     #[test]
     fn basic_sgd() {
@@ -70,6 +66,10 @@ mod tests {
         assert!(l2_loss(w, &Tensor::of_slice::<f32>(&[2.])).unwrap().double_value(&[]) < 0.1);
     }
 
+}
+
+pub fn l2_loss(output: &Tensor, target: &Tensor) -> Result<Tensor, TchError> {
+    output.f_sub(&target)?.f_norm_scalaropt_dim(2, &[1], false)?.f_mean(Kind::Float)
 }
 
 pub trait Optimizer {

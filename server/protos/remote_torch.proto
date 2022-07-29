@@ -17,12 +17,13 @@ message Empty {}
 message TrainConfig {
     Reference model = 1;
     Reference dataset = 2;
-    int32 batch_size = 3;
-    int32 epochs = 4;
-    float learning_rate = 5;
+    bool private_learning = 3;
+    int32 batch_size = 4;
+    int32 epochs = 5;
+    float learning_rate = 6;
 }
 
-message PredictConfig {
+message TestConfig {
     Reference model = 1;
     Reference dataset = 2;
     int32 batch_size = 3;
@@ -45,7 +46,6 @@ service RemoteTorch {
     rpc DeleteModule (Reference) returns (Empty) {}
     rpc AvailableModels(Empty) returns (References) {}
     rpc AvailableDatasets(Empty) returns (References) {}
-    rpc Train (TrainConfig) returns (Reference) {}
-    rpc Predict (PredictConfig) returns (Reference) {}
-    rpc Test (PredictConfig) returns (Accuracy) {}
+    rpc Train (TrainConfig) returns (Empty) {}
+    rpc Test (TestConfig) returns (Accuracy) {}
 }

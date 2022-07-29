@@ -8,6 +8,7 @@ from pb.remote_torch_pb2 import Chunk
 from typing import Any, Iterator, Callable, Tuple, TypeVar, List, Callable, Iterable
 
 T = TypeVar('T')
+U = TypeVar('U')
 SIZE_LEN = 8
 
 
@@ -44,41 +45,55 @@ def trainable_parameters(module: Module) -> Iterable[Tuple[str, Parameter]]:
     )
 
 
-class DataSetModuleWrapper(Module):
-    def __init__(self, data: Tuple[torch.Tensor]) -> None:
+class DataWrapper(Module):
+    def __init__(self, samples: torch.Tensor, labels: torch.Tensor) -> None:
         super().__init__()
-        self.x = data
-
-    @torch.jit.export
-    def data(self) -> List[torch.Tensor]:
-        return list(self.x)
-
-    def forward(self):
-        return self.x
+        self.samples = Parameter(samples)
+        self.labels = Parameter(labels)
 
 
 class ArtifactDataset:
     def __init__(self, chunks: Iterator[Chunk]) -> None:
-        self.data = list(unstream_artifacts(
-            (chunk.data for chunk in chunks)))  # type: ignore
+        wrapper = list(unstream_artifacts(
+            (chunk.data for chunk in chunks),
+            deserialization_fn=torch.jit.load
+        ))[0] # type: ignore
+        self.samples = None
+        self.labels = None
+        for name, param in wrapper.named_parameters():
+            if name == "samples":
+                self.samples = param
+            elif name == "labels":
+                self.labels = param
+            else:
+                raise Exception(f"Unknown field {name} in data wrapper.")
+        if self.samples is None:
+            raise Exception(f"Data wrapper must contain a samples field.")
 
     def __len__(self) -> int:
-        return len(self.data)
+        return len(self.samples)
 
-    def __get_item__(self, index: int) -> Any:
-        return self.data[index]
-
-
-def chunk_bounds(size: int, chunk_size: int) -> Iterator[Tuple[int, int]]:
-    start = 0
-    while start < size:
-        yield (start, min(start + chunk_size, size))
-        start += chunk_size
+    def __getitem__(self, index: int) -> Any:
+        return (self.samples[index], self.labels[index])
 
 
-def chunks(arr: List[T], chunk_size: int) -> Iterator[List[T]]:
-    for a, b in chunk_bounds(len(arr), chunk_size):
-        yield arr[a:b]
+# def chunk_bounds(size: int, chunk_size: int) -> Iterator[Tuple[int, int]]:
+#     start = 0
+#     while start < size:
+#         yield (start, min(start + chunk_size, size))
+#         start += chunk_size
+
+
+def chunks(it: Iterator[T], chunk_size: int, cat_fn: Callable[[List[T]], U] = lambda x: x) -> Iterator[U]:
+    chunk = []
+    for x in it:
+        if len(chunk) == chunk_size:
+            yield chunk
+            chunk = [x]
+        else:
+            chunk.append(x)
+    if len(chunk) > 0:
+        yield cat_fn(chunk)
 
 
 def tensor_to_bytes(tensor: Tensor) -> bytes:
@@ -96,8 +111,8 @@ def bytes_to_tensor(bs: bytes) -> Tensor:
     return tensor
 
 
-def serialize_tensor(x, buff):
-    torch.jit.save(torch.jit.script(DataSetModuleWrapper(x)), buff)
+def serialize_batch(data: Tuple[torch.Tensor, torch.Tensor], buff):
+    torch.jit.save(torch.jit.script(DataWrapper(*data)), buff)
 
 
 def stream_artifacts(artifacts: Iterator[T], chunk_size: int, serialization_fn: Callable[[T, io.BytesIO], None] = torch.save) -> Iterator[bytes]:
@@ -106,10 +121,10 @@ def stream_artifacts(artifacts: Iterator[T], chunk_size: int, serialization_fn: 
     while not eoi:
         while buff.tell() < chunk_size:
             try:
-                tensor = artifacts.__next__()
+                artifact = artifacts.__next__()
                 header = buff.tell()
                 buff.write(b"\xde\xad\xbe\xef\xde\xad\xbe\xef")
-                serialization_fn(tensor, buff)
+                serialization_fn(artifact, buff)
                 end = buff.tell()
                 buff.seek(header)
                 buff_len = (end - header - SIZE_LEN).to_bytes(SIZE_LEN,
@@ -169,8 +184,20 @@ def data_chunks_generator(stream: Iterator[bytes], description: str, secret: byt
             yield Chunk(data=x, description="", secret=bytes())
 
 
-def serialize_dataset(dataset: Dataset, description: str, secret: bytes, chunk_size=1000) -> Iterator[Chunk]:
-    return data_chunks_generator(stream_artifacts(iter(dataset), chunk_size, serialization_fn=serialize_tensor), description, secret)
+def make_batch(data: List[Tuple[Tensor, Tensor]]) -> Tuple[Tensor, Tensor]:
+    return (torch.cat([x[0] for x in data]), torch.cat([x[1] for x in data]))
+
+
+def serialize_dataset(dataset: Dataset, description: str, secret: bytes, chunk_size=1000, batch_size=1024) -> Iterator[Chunk]:
+    return data_chunks_generator(
+        stream_artifacts(
+            chunks(iter(dataset), batch_size, cat_fn=make_batch),
+            chunk_size,
+            serialization_fn=serialize_batch
+        ),
+        description,
+        secret
+    )
 
 
 def serialize_model(model: Module, description: str, secret: bytes, chunk_size=1000) -> Iterator[Chunk]:
@@ -179,25 +206,27 @@ def serialize_model(model: Module, description: str, secret: bytes, chunk_size=1
     return data_chunks_generator(stream_artifacts(iter([ts]), chunk_size, torch.jit.save), description, secret)
 
 
-def deserialize_weights_to_model(chunks: Iterator[Chunk], model: Module) -> None:
-    tensors = unstream_artifacts(
-        (chunk.data for chunk in chunks))  # type: ignore
-    for p, t in zip(model.parameters(), tensors):
-        p = Parameter(t)
+def deserialize_weights_to_model(model: Module, chunks: Iterator[Chunk]) -> None:
+    wrapper = list(unstream_artifacts(
+        (chunk.data for chunk in chunks),
+        deserialization_fn=torch.jit.load
+    ))[0] # type: ignore
+    for name, value in wrapper.named_parameters():
+        model.__setattr__(name, value)
 
 
-def remote_module(cls: Callable) -> Callable:
-    init = cls.__init__
+# def remote_module(cls: Callable) -> Callable:
+#     init = cls.__init__
 
-    def new_init(_self, *args, **kwargs):
-        init(_self, *args, **kwargs)  # type: ignore
-        _self._trainable_parameters = {}
-        for n, p in trainable_parameters(_self):
-            _self._trainable_parameters[n] = p
-    cls.__init__ = new_init
+#     def new_init(_self, *args, **kwargs):
+#         init(_self, *args, **kwargs)  # type: ignore
+#         _self._trainable_parameters = {}
+#         for n, p in trainable_parameters(_self):
+#             _self._trainable_parameters[n] = p
+#     cls.__init__ = new_init
 
-    @torch.jit.export  # type: ignore
-    def module_trainable_parameters(_self):
-        return _self._trainable_parameters
-    cls.trainable_parameters = module_trainable_parameters
-    return cls
+#     @torch.jit.export  # type: ignore
+#     def module_trainable_parameters(_self):
+#         return _self._trainable_parameters
+#     cls.trainable_parameters = module_trainable_parameters
+#     return cls

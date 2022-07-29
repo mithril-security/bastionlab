@@ -131,9 +131,10 @@ class GroupedConv(Module):
 # y = model(x)
 # print(y[0,0,:,:])
 
-model2 = GroupedConv(3, 16, 3, 64)
-# from psg.nn import Conv2dXXX
-# model2 = Conv2dXXX(3, 16, 3, 64)
+### model2 = GroupedConv(3, 16, 3, 64)
+
+from psg.nn import Conv2d
+model2 = Conv2d(3, 16, 3, 64)
 # y2 = model2(x)
 # print(y2[0,0,:,:])
 # print((y[0,0,:,:] - y2[0,0,:,:]).abs().sum() / 256 / 256)
@@ -147,12 +148,12 @@ for _ in range(N):
     loss2 = y2.sum()
     loss2.backward()
 print(f"PSGs method #2, expanded weights: {time() - start2}")
-print(f"Output mean delta: {(y - y2).abs().sum() / y.numel()}")
-print(f"Output max delta: {(y - y2).abs().max()}")
-psg = [g for _, g in model.grad_sample_parameters()][0]
-print(F"PSGs #1 size: {psg.size()}")
-psg2 = model2.expanded_weight.grad
-psg2 = psg2.view(64, -1, *psg2.size()[1:])
-print(F"PSGs #2 size: {psg2.size()}")
-print(f"PSGs mean delta: {(psg - psg2).abs().sum() / psg.numel() / N}")
-print(f"PSGs max delta: {(psg - psg2).abs().max() / N}")
+### print(f"Output mean delta: {(y - y2).abs().sum() / y.numel()}")
+### print(f"Output max delta: {(y - y2).abs().max()}")
+### psg = [g for _, g in model.grad_sample_parameters()][0]
+### print(F"PSGs #1 size: {psg.size()}")
+### psg2 = model2.expanded_weight.grad
+### psg2 = psg2.view(64, -1, *psg2.size()[1:])
+### print(F"PSGs #2 size: {psg2.size()}")
+### print(f"PSGs mean delta: {(psg - psg2).abs().sum() / psg.numel() / N}")
+### print(f"PSGs max delta: {(psg - psg2).abs().max() / N}")

@@ -58,6 +58,6 @@ pub fn serialize_tensor(tensor: &Tensor) -> Vec<u8> {
     bytes
 }
 
-pub fn parse_reference(request: Request<Reference>) -> Result<Uuid, Status> {
-    Uuid::parse_str(&request.into_inner().identifier).map_err(|_|Status::internal("Invalid BastionAI reference"))
+pub fn parse_reference(reference: Reference) -> Result<Uuid, Status> {
+    Uuid::parse_str(&reference.identifier).map_err(|_|Status::internal("Invalid BastionAI reference"))
 }
