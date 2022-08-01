@@ -148,8 +148,8 @@ def stream_artifacts(artifacts: Iterator[T], chunk_size: int, serialization_fn: 
 def unstream_artifacts(stream: Iterator[bytes], deserialization_fn: Callable[[io.BytesIO], T] = torch.load) -> Iterator[T]:
     buff = io.BytesIO()
     init_chunk = stream.__next__()
-    size = int.from_bytes(init_chunk[:4], "little")
-    buff.write(init_chunk[4:])
+    size = int.from_bytes(init_chunk[:8], "little")
+    buff.write(init_chunk[8:])
     eoi = False
 
     while not eoi:
@@ -212,7 +212,7 @@ def deserialize_weights_to_model(model: Module, chunks: Iterator[Chunk]) -> None
         deserialization_fn=torch.jit.load
     ))[0] # type: ignore
     for name, value in wrapper.named_parameters():
-        model.__setattr__(name, value)
+        model.__setattr__(name.replace("_", "."), value)
 
 
 # def remote_module(cls: Callable) -> Callable:
