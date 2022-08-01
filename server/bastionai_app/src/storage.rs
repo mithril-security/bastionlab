@@ -170,15 +170,15 @@ impl TryFrom<SizedObjectsBytes> for Dataset {
     type Error = TchError;
 
     fn try_from(value: SizedObjectsBytes) -> Result<Self, Self::Error> {
-        let dataset = Dataset { samples: Mutex::new(Tensor::new()), labels: Mutex::new(Tensor::new()) };
+        let dataset = Dataset { samples: Mutex::new(Tensor::of_slice::<f32>(&[])), labels: Mutex::new(Tensor::of_slice::<f32>(&[])) };
         for object in value {
-            let data = Tensor::load_multi_from_stream(Cursor::new(object))?;
+            let data = Tensor::load_multi_from_stream_with_device(Cursor::new(object), Device::Cpu)?;
             for (name, tensor) in data {
                 let mut samples = dataset.samples.lock().unwrap();
                 let mut labels = dataset.labels.lock().unwrap();
                 match &*name {
-                    "samples" => *samples = Tensor::f_cat(&[&*samples, &tensor], 0)?,
-                    "labels" => *labels = Tensor::f_cat(&[&*labels, &tensor], 0)?,
+                    "samples" => *samples = Tensor::f_cat(&[&*samples, &tensor], 0).unwrap(),
+                    "labels" => *labels = Tensor::f_cat(&[&*labels, &tensor], 0).unwrap(),
                     s => return Err(TchError::FileFormat(String::from(format!("Invalid data, unknown field {}.", s)))),
                 };
             }
@@ -193,7 +193,7 @@ impl TryFrom<&Dataset> for SizedObjectsBytes {
     fn try_from(value: &Dataset) -> Result<Self, Self::Error> {
         let mut dataset_bytes = SizedObjectsBytes::new();
         let mut buf = Vec::new();
-        Tensor::save_multi_to_stream(&[("samples", &*value.samples.lock().unwrap()), ("labels", &*value.labels.lock().unwrap())], &mut buf);
+        Tensor::save_multi_to_stream(&[("samples", &*value.samples.lock().unwrap()), ("labels", &*value.labels.lock().unwrap())], &mut buf)?;
         dataset_bytes.append_back(buf);
 
         Ok(dataset_bytes)
