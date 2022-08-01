@@ -1,12 +1,12 @@
-use uuid::Uuid;
-use crate::Reference;
-use tonic::Request;
-use tonic::{ Status, Response};
-use tokio_stream::{StreamExt, wrappers::ReceiverStream};
 use super::Chunk;
-use tch::{TchError, Tensor};
 use crate::storage::{Artifact, SizedObjectsBytes};
+use crate::Reference;
+use tch::{TchError, Tensor};
 use tokio::sync::mpsc;
+use tokio_stream::{wrappers::ReceiverStream, StreamExt};
+use tonic::Request;
+use tonic::{Response, Status};
+use uuid::Uuid;
 
 pub fn read_le_usize(input: &mut &[u8]) -> usize {
     let (int_bytes, rest) = input.split_at(std::mem::size_of::<usize>());
@@ -18,7 +18,9 @@ pub fn tcherror_to_status<T>(input: Result<T, TchError>) -> Result<T, Status> {
     input.map_err(|err| Status::internal(format!("Torch error: {}", err)))
 }
 
-pub async fn unstream_data(mut stream: tonic::Streaming<Chunk>) -> Result<Artifact<SizedObjectsBytes>, Status> {
+pub async fn unstream_data(
+    mut stream: tonic::Streaming<Chunk>,
+) -> Result<Artifact<SizedObjectsBytes>, Status> {
     let mut data_bytes: Vec<u8> = Vec::new();
     let mut description: String = String::new();
     let mut secret: Vec<u8> = Vec::new();
@@ -37,17 +39,29 @@ pub async fn unstream_data(mut stream: tonic::Streaming<Chunk>) -> Result<Artifa
     Ok(Artifact::new(data_bytes.into(), description, &secret))
 }
 
-pub async fn stream_data(artifact: Artifact<SizedObjectsBytes>, chunk_size: usize) -> Response<ReceiverStream<Result<Chunk, Status>>> {
+pub async fn stream_data(
+    artifact: Artifact<SizedObjectsBytes>,
+    chunk_size: usize,
+) -> Response<ReceiverStream<Result<Chunk, Status>>> {
     let (tx, rx) = mpsc::channel(4);
-    
+
     let raw_bytes: Vec<u8> = artifact.data.into();
-    for (i, bytes) in raw_bytes.chunks(chunk_size).enumerate() {
-        tx.send(Ok(Chunk { // Chunks always contain one object -> fix this
-            data: bytes.to_vec(),
-            description: if i == 0 { artifact.description.clone() } else { String::from("") },
-            secret: vec![],
-        })).await.unwrap(); // Fix this
-    }
+    tokio::spawn(async move {
+        for (i, bytes) in raw_bytes.chunks(chunk_size).enumerate() {
+            tx.send(Ok(Chunk {
+                // Chunks always contain one object -> fix this
+                data: bytes.to_vec(),
+                description: if i == 0 {
+                    artifact.description.clone()
+                } else {
+                    String::from("")
+                },
+                secret: vec![],
+            }))
+            .await
+            .unwrap(); // Fix this
+        }
+    });
 
     Response::new(ReceiverStream::new(rx))
 }
@@ -60,5 +74,6 @@ pub fn serialize_tensor(tensor: &Tensor) -> Vec<u8> {
 }
 
 pub fn parse_reference(reference: Reference) -> Result<Uuid, Status> {
-    Uuid::parse_str(&reference.identifier).map_err(|_|Status::internal("Invalid BastionAI reference"))
+    Uuid::parse_str(&reference.identifier)
+        .map_err(|_| Status::internal("Invalid BastionAI reference"))
 }
