@@ -5,7 +5,7 @@ from torch.nn import Module
 from torch.utils.data import Dataset
 from utils import deserialize_weights_to_model, serialize_dataset, serialize_model, ArtifactDataset
 from pb.remote_torch_pb2_grpc import RemoteTorchStub
-from pb.remote_torch_pb2 import Chunk, Empty, Reference, TrainConfig
+from pb.remote_torch_pb2 import Chunk, Empty, Reference, TrainConfig, TestConfig
 import grpc
 
 
@@ -34,6 +34,9 @@ class Client:
 
     def train(self, config: TrainConfig) -> None:
         self.stub.Train(config)
+
+    def test(self, config: TestConfig) -> float:
+        return self.stub.Test(config)
 
     def delete_dataset(self, ref: Reference) -> None:
         self.stub.DeleteDataset(ref)
@@ -87,24 +90,33 @@ if __name__ == '__main__':
             return (self.X[idx], self.Y[idx])
 
 
-    model = LReg()
-    dataset = LRegDataset()
+    lreg_model = LReg()
+    lreg_dataset = LRegDataset()
 
     with Connection("localhost", 50051) as client:
-        model_ref = client.send_model(model, "1D Linear Regression Model", b"secret")
+        model_ref = client.send_model(lreg_model, "1D Linear Regression Model", b"secret")
         print(f"Model ref: {model_ref}")
 
-        dataset_ref = client.send_dataset(dataset, "Dummy 1D Linear Regression Dataset (param is 2)", b'secret')
+        dataset_ref = client.send_dataset(lreg_dataset, "Dummy 1D Linear Regression Dataset (param is 2)", b'secret')
         print(f"Dataset ref: {dataset_ref}")
 
         model_list = client.get_available_models()
         for model in model_list.list:  # type: ignore
             print(f"{model.identifier}, {model.description}")
+        
+        client.fetch_model_weights(lreg_model, model_ref)
+        print(list(client.fetch_dataset(dataset_ref)))
 
-        # client.train(TrainConfig(
-        #     model=model_ref,
-        #     dataset=dataset_ref,
-        #     batch_size=2,
-        #     epochs=1,
-        #     learning_rate=1e-1
-        # ))
+        client.train(TrainConfig(
+            model=model_ref,
+            dataset=dataset_ref,
+            batch_size=2,
+            epochs=1,
+            learning_rate=1e-1
+        ))
+
+        print("Model's accuracy: {}".format(client.test(TestConfig(
+            model=model_ref,
+            dataset=dataset_ref,
+            batch_size=2,
+        ))))
