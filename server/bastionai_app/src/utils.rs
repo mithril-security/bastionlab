@@ -37,12 +37,13 @@ pub async fn unstream_data(mut stream: tonic::Streaming<Chunk>) -> Result<Artifa
     Ok(Artifact::new(data_bytes.into(), description, &secret))
 }
 
-pub async fn stream_data(artifact: Artifact<SizedObjectsBytes>) -> Response<ReceiverStream<Result<Chunk, Status>>> {
+pub async fn stream_data(artifact: Artifact<SizedObjectsBytes>, chunk_size: usize) -> Response<ReceiverStream<Result<Chunk, Status>>> {
     let (tx, rx) = mpsc::channel(4);
     
-    for (i, bytes) in artifact.data.enumerate() {
+    let raw_bytes: Vec<u8> = artifact.data.into();
+    for (i, bytes) in raw_bytes.chunks(chunk_size).enumerate() {
         tx.send(Ok(Chunk { // Chunks always contain one object -> fix this
-            data: bytes,
+            data: bytes.to_vec(),
             description: if i == 0 { artifact.description.clone() } else { String::from("") },
             secret: vec![],
         })).await.unwrap(); // Fix this
