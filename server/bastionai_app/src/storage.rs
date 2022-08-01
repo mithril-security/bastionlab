@@ -177,8 +177,8 @@ impl TryFrom<SizedObjectsBytes> for Dataset {
                 let mut samples = dataset.samples.lock().unwrap();
                 let mut labels = dataset.labels.lock().unwrap();
                 match &*name {
-                    "samples" => *samples = Tensor::f_cat(&[&*samples, &tensor], 0).unwrap(),
-                    "labels" => *labels = Tensor::f_cat(&[&*labels, &tensor], 0).unwrap(),
+                    "samples" => *samples = Tensor::f_cat(&[&*samples, &tensor], 0)?,
+                    "labels" => *labels = Tensor::f_cat(&[&*labels, &tensor], 0)?,
                     s => return Err(TchError::FileFormat(String::from(format!("Invalid data, unknown field {}.", s)))),
                 };
             }
