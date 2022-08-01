@@ -83,6 +83,7 @@ impl Module {
         };
         for _ in 0..config.epochs {
             for (input, label) in dataset.iter() {
+                let input = input.f_view([1, 1])?;
                 let output = self.c_module.forward_ts(&[input])?;
                 let loss = l2_loss(&output, &label)?;
                 optimizer.zero_grad()?;
@@ -96,6 +97,7 @@ impl Module {
         let mut count = 0;
         let mut correct = 0;
         for (input, label) in dataset.iter() {
+            let input = input.f_view([1, 1])?;
             let output = self.c_module.forward_ts(&[input])?;
             let prediction = output.f_argmax(-1, false)?.double_value(&[]);
             if prediction == label.double_value(&[]) {
@@ -153,7 +155,9 @@ impl<'a> Iterator for DatasetIter<'a> {
         if self.index < self.len {
             let samples = self.dataset.samples.lock().unwrap();
             let labels = self.dataset.labels.lock().unwrap();
-            Some((samples.i(self.index), labels.i(self.index)))
+            let res = Some((samples.i(self.index), labels.i(self.index)));
+            self.index += 1;
+            res
         } else {
             None
         }
