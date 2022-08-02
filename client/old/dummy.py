@@ -1,10 +1,12 @@
+from typing import List, Tuple
+
 import torch
-from torch.nn import Module, Linear
+from bastionai.utils import remote_module
+from torch.nn import Linear, Module
 from torch.nn.functional import relu
 from torch.utils.data import Dataset
-from typing import List, Tuple
+
 from private_module import PrivacyEngine
-from utils import remote_module
 
 engine = PrivacyEngine()
 
