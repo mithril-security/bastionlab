@@ -1,11 +1,13 @@
 import io
+from typing import Any, Callable, Iterable, Iterator, List, Tuple, TypeVar
+
 import torch
 from torch import Tensor
+from torch.nn import Module
 from torch.nn.parameter import Parameter
 from torch.utils.data import Dataset
-from torch.nn import Module
+
 from pb.remote_torch_pb2 import Chunk
-from typing import Any, Iterator, Callable, Tuple, TypeVar, List, Callable, Iterable
 
 T = TypeVar('T')
 U = TypeVar('U')
@@ -18,10 +20,11 @@ def parametrized_modules(module: Module) -> Iterable[Module]:
     have parameters (as opposed to "wrapper modules" that just organize modules).
     """
     yield from (
-        (m_name, m) # type: ignore
+        (m_name, m)  # type: ignore
         for (m_name, m) in module.named_modules()
         if any(p is not None for p in m.parameters(recurse=False))
     )
+
 
 def trainable_modules(module: Module) -> Iterable[Tuple[str, Module]]:
     """
@@ -30,7 +33,7 @@ def trainable_modules(module: Module) -> Iterable[Tuple[str, Module]]:
     """
     yield from (
         (m_name, m)
-        for (m_name, m) in parametrized_modules(module) # type: ignore
+        for (m_name, m) in parametrized_modules(module)  # type: ignore
         if any(p.requires_grad for p in m.parameters(recurse=False))
     )
 
@@ -57,7 +60,7 @@ class ArtifactDataset:
         wrapper = list(unstream_artifacts(
             (chunk.data for chunk in chunks),
             deserialization_fn=torch.jit.load
-        ))[0] # type: ignore
+        ))[0]  # type: ignore
         self.samples = None
         self.labels = None
         for name, param in wrapper.named_parameters():
@@ -128,7 +131,7 @@ def stream_artifacts(artifacts: Iterator[T], chunk_size: int, serialization_fn: 
                 end = buff.tell()
                 buff.seek(header)
                 buff_len = (end - header - SIZE_LEN).to_bytes(SIZE_LEN,
-                                                   byteorder="little")
+                                                              byteorder="little")
                 buff.write(buff_len)
                 buff.seek(end)
             except StopIteration:
@@ -210,23 +213,23 @@ def deserialize_weights_to_model(model: Module, chunks: Iterator[Chunk]) -> None
     wrapper = list(unstream_artifacts(
         (chunk.data for chunk in chunks),
         deserialization_fn=torch.jit.load
-    ))[0] # type: ignore
+    ))[0]  # type: ignore
     for name, value in wrapper.named_parameters():
         model.__setattr__(name.replace("_", "."), value)
 
 
-# def remote_module(cls: Callable) -> Callable:
-#     init = cls.__init__
+def remote_module(cls: Callable) -> Callable:
+    init = cls.__init__
 
-#     def new_init(_self, *args, **kwargs):
-#         init(_self, *args, **kwargs)  # type: ignore
-#         _self._trainable_parameters = {}
-#         for n, p in trainable_parameters(_self):
-#             _self._trainable_parameters[n] = p
-#     cls.__init__ = new_init
+    def new_init(_self, *args, **kwargs):
+        init(_self, *args, **kwargs)  # type: ignore
+        _self._trainable_parameters = {}
+        for n, p in trainable_parameters(_self):
+            _self._trainable_parameters[n] = p
+    cls.__init__ = new_init
 
-#     @torch.jit.export  # type: ignore
-#     def module_trainable_parameters(_self):
-#         return _self._trainable_parameters
-#     cls.trainable_parameters = module_trainable_parameters
-#     return cls
+    @torch.jit.export  # type: ignore
+    def module_trainable_parameters(_self):
+        return _self._trainable_parameters
+    cls.trainable_parameters = module_trainable_parameters
+    return cls
