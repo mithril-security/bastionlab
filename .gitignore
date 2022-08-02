@@ -182,3 +182,6 @@ tests/host_server.pem
 ################
 ftenv
 *.pt
+
+**/remote_torch_pb2.py
+bastionai/pb/remote_torch_pb2_grpc.py

@@ -2,12 +2,11 @@ from typing import Tuple
 
 import torch
 from bastionai.client import Connection
+from bastionai.pb.remote_torch_pb2 import TestConfig, TrainConfig
+from bastionai.psg.nn import Linear
 from torch import Tensor
 from torch.nn import Module
 from torch.utils.data import Dataset
-
-from pb.remote_torch_pb2 import TestConfig, TrainConfig
-from psg.nn import Linear
 
 
 class LReg(Module):

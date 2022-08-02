@@ -1,6 +1,7 @@
 import torch
-from torch.nn import Module, Linear
-from utils import remote_module
+from bastionai.utils import remote_module
+from torch.nn import Linear, Module
+
 
 @remote_module
 class LReg(Module):
