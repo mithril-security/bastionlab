@@ -1,7 +1,8 @@
 import torch
+from bastionai.psg.nn import Linear
+from bastionai.utils import remote_module
 from torch.nn import Module
-from psg.nn import Linear
-from utils import remote_module
+
 
 @remote_module
 class PrivateLReg(Module):

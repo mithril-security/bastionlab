@@ -57,16 +57,11 @@ class RemoteTorchStub(object):
         self.Train = channel.unary_unary(
                 '/remote_torch.RemoteTorch/Train',
                 request_serializer=remote__torch__pb2.TrainConfig.SerializeToString,
-                response_deserializer=remote__torch__pb2.Reference.FromString,
-                )
-        self.Predict = channel.unary_unary(
-                '/remote_torch.RemoteTorch/Predict',
-                request_serializer=remote__torch__pb2.PredictConfig.SerializeToString,
-                response_deserializer=remote__torch__pb2.Reference.FromString,
+                response_deserializer=remote__torch__pb2.Empty.FromString,
                 )
         self.Test = channel.unary_unary(
                 '/remote_torch.RemoteTorch/Test',
-                request_serializer=remote__torch__pb2.PredictConfig.SerializeToString,
+                request_serializer=remote__torch__pb2.TestConfig.SerializeToString,
                 response_deserializer=remote__torch__pb2.Accuracy.FromString,
                 )
 
@@ -128,12 +123,6 @@ class RemoteTorchServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def Predict(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
     def Test(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -186,16 +175,11 @@ def add_RemoteTorchServicer_to_server(servicer, server):
             'Train': grpc.unary_unary_rpc_method_handler(
                     servicer.Train,
                     request_deserializer=remote__torch__pb2.TrainConfig.FromString,
-                    response_serializer=remote__torch__pb2.Reference.SerializeToString,
-            ),
-            'Predict': grpc.unary_unary_rpc_method_handler(
-                    servicer.Predict,
-                    request_deserializer=remote__torch__pb2.PredictConfig.FromString,
-                    response_serializer=remote__torch__pb2.Reference.SerializeToString,
+                    response_serializer=remote__torch__pb2.Empty.SerializeToString,
             ),
             'Test': grpc.unary_unary_rpc_method_handler(
                     servicer.Test,
-                    request_deserializer=remote__torch__pb2.PredictConfig.FromString,
+                    request_deserializer=remote__torch__pb2.TestConfig.FromString,
                     response_serializer=remote__torch__pb2.Accuracy.SerializeToString,
             ),
     }
@@ -357,24 +341,7 @@ class RemoteTorch(object):
             metadata=None):
         return grpc.experimental.unary_unary(request, target, '/remote_torch.RemoteTorch/Train',
             remote__torch__pb2.TrainConfig.SerializeToString,
-            remote__torch__pb2.Reference.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def Predict(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/remote_torch.RemoteTorch/Predict',
-            remote__torch__pb2.PredictConfig.SerializeToString,
-            remote__torch__pb2.Reference.FromString,
+            remote__torch__pb2.Empty.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
@@ -390,7 +357,7 @@ class RemoteTorch(object):
             timeout=None,
             metadata=None):
         return grpc.experimental.unary_unary(request, target, '/remote_torch.RemoteTorch/Test',
-            remote__torch__pb2.PredictConfig.SerializeToString,
+            remote__torch__pb2.TestConfig.SerializeToString,
             remote__torch__pb2.Accuracy.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
