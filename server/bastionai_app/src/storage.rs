@@ -1,13 +1,17 @@
-use crate::remote_torch::{TrainConfig, TestConfig};
+use crate::remote_torch::{TestConfig, TrainConfig};
 use crate::utils::*;
+use private_learning::{l2_loss, LossType, Optimizer, Parameters, PrivateParameters, SGD};
+use rand::seq::SliceRandom;
+use rand::thread_rng;
+
 use ring::hmac;
-use std::collections::{VecDeque, HashMap};
+use std::collections::{HashMap, VecDeque};
 use std::convert::{TryFrom, TryInto};
 use std::io::Cursor;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tch::nn::VarStore;
-use tch::{CModule, Device, IValue, TchError, Tensor, TrainableCModule, IndexOp};
-use private_learning::{Parameters, PrivateParameters, LossType, SGD, Optimizer, l2_loss};
+use tch::{CModule, Device, IValue, IndexOp, TchError, Tensor, TrainableCModule};
+use tokio::sync::mpsc::{self, Receiver, Sender};
 
 #[derive(Debug)]
 pub struct SizedObjectsBytes(Vec<u8>);
@@ -68,10 +72,20 @@ impl Module {
         vs.copy(&self.var_store)?;
         Ok(Parameters::from(vs))
     }
-    pub fn private_parameters(&self, max_grad_norm: f64, noise_multiplier: f64, loss_type: LossType) -> Result<PrivateParameters, TchError> {
+    pub fn private_parameters(
+        &self,
+        max_grad_norm: f64,
+        noise_multiplier: f64,
+        loss_type: LossType,
+    ) -> Result<PrivateParameters, TchError> {
         let mut vs = VarStore::new(self.var_store.device());
         vs.copy(&self.var_store)?;
-        Ok(PrivateParameters::new(vs, max_grad_norm, noise_multiplier, loss_type))
+        Ok(PrivateParameters::new(
+            vs,
+            max_grad_norm,
+            noise_multiplier,
+            loss_type,
+        ))
     }
     pub fn train(&self, dataset: &Dataset, config: TrainConfig) -> Result<(), TchError> {
         let mut optimizer = if config.private_learning {
@@ -81,14 +95,70 @@ impl Module {
             let parameters = self.parameters()?;
             Box::new(SGD::new(parameters, config.learning_rate as f64)) as Box<dyn Optimizer>
         };
+
+        let samples = Arc::clone(&dataset.samples);
+        let labels = Arc::clone(&dataset.labels);
+
+        let create_shuffled_index_list = |size: i64| -> Arc<Mutex<VecDeque<i64>>> {
+            let mut list: Vec<i64> = (0..size).collect();
+            list.shuffle(&mut thread_rng());
+            let mut output = VecDeque::from_iter(list.iter());
+            Arc::new(Mutex::new(output.into_iter().map(|v| *v).collect()))
+        };
+        /*
+            Get size of list in tensor.
+            Create a list of items from 0..size_of_tensor.
+            Shuffle list.
+            Create workers
+            Create a channel and keep consumer end.
+            Spawn workers and pass producer end to them
+            Pass transform to worker.
+        */
+        let samples_index_queue =
+            create_shuffled_index_list(dataset.samples.lock().unwrap().size()[0]);
+        let labels_index_queue =
+            create_shuffled_index_list(dataset.labels.lock().unwrap().size()[0]);
+
+        let (sender, mut recver) = mpsc::unbounded_channel();
+        tokio::task::spawn(async move {
+            let samples_lock = Arc::clone(&samples_index_queue);
+            let labels_lock = Arc::clone(&labels_index_queue);
+
+            // Apply transformation here
+
+            // Apply transform
+            // add 2 to each value
+            loop {
+                let sample_index = samples_lock.lock().unwrap().pop_back();
+                let label_index = labels_lock.lock().unwrap().pop_back();
+
+                match sample_index {
+                    Some(v) => {
+                        sender.send((v, samples.lock().unwrap().get(v)));
+                    }
+                    None => return,
+                }
+                match label_index {
+                    Some(v) => {
+                        let value = labels.lock().unwrap().get(v);
+                        sender.send((v, value));
+                    }
+                    None => return,
+                }
+            }
+        });
+
         for _ in 0..config.epochs {
             for (input, label) in dataset.iter() {
-                let input = input.f_view([1, 1])?;
-                let output = self.c_module.forward_ts(&[input])?;
-                let loss = l2_loss(&output, &label)?;
-                optimizer.zero_grad()?;
-                loss.backward();
-                optimizer.step()?;
+                let t = recver.try_recv();
+                println!("Received {:?} from samples", t);
+                // let input = input.f_view([1, 1])?;
+
+                // let output = self.c_module.forward_ts(&[input])?;
+                // let loss = l2_loss(&output, &label)?;
+                // optimizer.zero_grad()?;
+                // loss.backward();
+                // optimizer.step()?;
             }
         }
         Ok(())
@@ -138,8 +208,8 @@ impl TryFrom<&Module> for SizedObjectsBytes {
 
 #[derive(Debug)]
 pub struct Dataset {
-    samples: Mutex<Tensor>,
-    labels: Mutex<Tensor>,
+    samples: Arc<Mutex<Tensor>>,
+    labels: Arc<Mutex<Tensor>>,
 }
 
 pub struct DatasetIter<'a> {
@@ -166,7 +236,11 @@ impl<'a> Iterator for DatasetIter<'a> {
 
 impl Dataset {
     pub fn iter(&self) -> DatasetIter<'_> {
-        DatasetIter { dataset: &self, index: 0, len: self.samples.lock().unwrap().size()[0] }
+        DatasetIter {
+            dataset: &self,
+            index: 0,
+            len: self.samples.lock().unwrap().size()[0],
+        }
     }
 }
 
@@ -174,16 +248,25 @@ impl TryFrom<SizedObjectsBytes> for Dataset {
     type Error = TchError;
 
     fn try_from(value: SizedObjectsBytes) -> Result<Self, Self::Error> {
-        let dataset = Dataset { samples: Mutex::new(Tensor::of_slice::<f32>(&[])), labels: Mutex::new(Tensor::of_slice::<f32>(&[])) };
+        let dataset = Dataset {
+            samples: Arc::new(Mutex::new(Tensor::of_slice::<f32>(&[]))),
+            labels: Arc::new(Mutex::new(Tensor::of_slice::<f32>(&[]))),
+        };
         for object in value {
-            let data = Tensor::load_multi_from_stream_with_device(Cursor::new(object), Device::Cpu)?;
+            let data =
+                Tensor::load_multi_from_stream_with_device(Cursor::new(object), Device::Cpu)?;
             for (name, tensor) in data {
                 let mut samples = dataset.samples.lock().unwrap();
                 let mut labels = dataset.labels.lock().unwrap();
                 match &*name {
                     "samples" => *samples = Tensor::f_cat(&[&*samples, &tensor], 0)?,
                     "labels" => *labels = Tensor::f_cat(&[&*labels, &tensor], 0)?,
-                    s => return Err(TchError::FileFormat(String::from(format!("Invalid data, unknown field {}.", s)))),
+                    s => {
+                        return Err(TchError::FileFormat(String::from(format!(
+                            "Invalid data, unknown field {}.",
+                            s
+                        ))))
+                    }
                 };
             }
         }
@@ -197,7 +280,13 @@ impl TryFrom<&Dataset> for SizedObjectsBytes {
     fn try_from(value: &Dataset) -> Result<Self, Self::Error> {
         let mut dataset_bytes = SizedObjectsBytes::new();
         let mut buf = Vec::new();
-        Tensor::save_multi_to_stream(&[("samples", &*value.samples.lock().unwrap()), ("labels", &*value.labels.lock().unwrap())], &mut buf)?;
+        Tensor::save_multi_to_stream(
+            &[
+                ("samples", &*value.samples.lock().unwrap()),
+                ("labels", &*value.labels.lock().unwrap()),
+            ],
+            &mut buf,
+        )?;
         dataset_bytes.append_back(buf);
 
         Ok(dataset_bytes)
