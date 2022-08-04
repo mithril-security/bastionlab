@@ -54,6 +54,7 @@ Potential customers: Hospitals and companies that use and share sensitive data a
 <p align="center">
   <img src="assets/architecture.png" alt="BastionAI" />
 </p>
+
 ## Server
 The server is responsible for receiving and properly storing data and models sent by clients; also, it is responsible for securely saving models to disk, if need be (sealing). It uses an in-memory storage for all the artifacts the server receives. Both data and models are serialized as Pytorch JIT modules (TorchScript) which is the only format readable by both the client-side library (plain Pytorch) and the server-side ML back-end (libtorch) through the [tch-rs](https://github.com/LaurentMazare/tch-rs) Rust library. The server also injects differential privacy to the per-sample gradients (PSGs) during training to ensure the privacy of the output model.
 
