@@ -8,19 +8,19 @@
 
   ## :round_pushpin: Table of content
 - [:lock: Motivation](#lock-motivation)
-- [Why use BastionAI](#why-use-bastionai)
+- [:question: Why use BastionAI](#question-why-use-bastionai)
   - [Case #1, single actor, confidential but not personal data](#case-1-single-actor-confidential-but-not-personal-data)
   - [Case #2, single actor, personal data](#case-2-single-actor-personal-data)
   - [Case #3, multiple actors, any form of confidential or personal data](#case-3-multiple-actors-any-form-of-confidential-or-personal-data)
 - [:gear: Architecture](#gear-architecture)
   - [Server](#server)
   - [Client](#client)
-- [Key Features](#key-features)
+- [:hammer_and_wrench: Key Features](#hammer_and_wrench-key-features)
   - [Remote execution](#remote-execution)
   - [Authentication](#authentication)
   - [Differential Privacy (DP)](#differential-privacy-dp)
-- [How to get started](#how-to-get-started)
-- [Disclaimer](#disclaimer)
+- [:wrench: How to get started](#wrench-how-to-get-started)
+- [:bangbang: Disclaimer](#bangbang-disclaimer)
 
 # :lock: Motivation
 Machine learning models are often trained on large volumes of sensitive or proprietary data, and incur significant costs in development to their owners. Yet, models are often trained in the Cloud as maintenance costs of on-premise infrastructures (both hardware and skilled engineers) are prohibitive to most actors. This setting inherently poses security and privacy threats: even with end-to-end encryption, either the Cloud provider or an insider may read data as it is processed on the remote server.
@@ -37,7 +37,7 @@ Privacy matrix: Data privacy may be analyzed, categorized, and thought of around
 | Output Verification | Ensure integrity of the computation                                 | TEEs through the attestation mechanism                 |
 | Flow Governance     | Provide strong access and ownership policies                        | Custom solution (outlined in the architecture section) |
 
-# Why use BastionAI
+# :question: Why use BastionAI
 ## Case #1, single actor, confidential but not personal data
 In this scenario, a company wants to train an in-house model on confidential but not personal data it owns. Model and data need strong privacy guarantees when they are in the Cloud but may be used freely on-premise. Output Privacy and flow governance thus do not apply in this case. A simple TEE-based training solution is enough to cover this use case.
 
@@ -65,7 +65,7 @@ The server is responsible for receiving and properly storing data and models sen
 ## Client
 We provide a lightweight client which is responsible for serializing datasets and models with Pytorch's JIT compiler before sending to the server. And to strength the security of artifacts (datasets and models,) the server returns a unique identifier for every artifact uploaded.
 
-# Key Features
+# :hammer_and_wrench: Key Features
 
 ## Remote execution
 BastionAI uses [tch-rs](https://github.com/LaurentMazare/tch-rs) with [libtorch](https://github.com/pytorch/pytorch/tree/master/torch/csrc) (C++ bindings) as a backend for the server written in Rust. This has two benefits:
@@ -81,8 +81,8 @@ The per-layer weights are expanded, which is replicating them along a new “bat
 
 [Opacus](https://github.com/pytorch/opacus) is another differential privacy library but due to TorchScript's inability with backward pass hooks.
 
-# How to get started
+# :wrench: How to get started
 
-# Disclaimer
+# :bangbang: Disclaimer
 
 BastionAI is still in alpha and is being actively developed. It is provided as is, use it at your own risk.
