@@ -63,7 +63,7 @@ Potential customers: Hospitals and companies that use and share sensitive data a
 The server is responsible for receiving and properly storing data and models sent by clients; also, it is responsible for securely saving models to disk, if need be (sealing). It uses an in-memory storage for all the artifacts the server receives. Both data and models are serialized as Pytorch JIT modules (TorchScript) which is the only format readable by both the client-side library (plain Pytorch) and the server-side ML back-end (libtorch) through the [tch-rs](https://github.com/LaurentMazare/tch-rs) Rust library. The server also injects differential privacy to the per-sample gradients (PSGs) during training to ensure the privacy of the output model.
 
 ## Client
-We provide a lightweight client which is responsible for serializing data and models with Pytorch's JIT compiler before sending to the server. And to strength the security of artifacts (datasets and models,) the server returns a unique identifier for every artifact uploaded.
+We provide a lightweight client which is responsible for serializing datasets and models with Pytorch's JIT compiler before sending to the server. And to strength the security of artifacts (datasets and models,) the server returns a unique identifier for every artifact uploaded.
 
 # Key Features
 
@@ -85,4 +85,4 @@ The per-layer weights are expanded, which is replicating them along a new “bat
 
 # Disclaimer
 
-BlindAI is still in alpha and is being actively developed. It is provided as is, use it at your own risk.
+BastionAI is still in alpha and is being actively developed. It is provided as is, use it at your own risk.
