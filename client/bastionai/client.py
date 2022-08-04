@@ -3,7 +3,7 @@ from typing import Any, Iterator, List
 
 import grpc
 from pb.remote_torch_pb2 import (Chunk, Empty, Reference, TestConfig,
-                                 TrainConfig)
+                                 TrainConfig, Devices)
 from pb.remote_torch_pb2_grpc import RemoteTorchStub
 from torch import Tensor
 from torch.nn import Module
@@ -35,6 +35,9 @@ class Client:
 
     def get_available_datasets(self) -> List[Reference]:
         return self.stub.AvailableDatasets(Empty())
+
+    def get_available_devices(self) -> List[Devices]:
+        return self.stub.AvailableDevices(Empty())
 
     def train(self, config: TrainConfig) -> None:
         self.stub.Train(config)

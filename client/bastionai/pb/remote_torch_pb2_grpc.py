@@ -54,6 +54,11 @@ class RemoteTorchStub(object):
                 request_serializer=remote__torch__pb2.Empty.SerializeToString,
                 response_deserializer=remote__torch__pb2.References.FromString,
                 )
+        self.AvailableDevices = channel.unary_unary(
+                '/remote_torch.RemoteTorch/AvailableDevices',
+                request_serializer=remote__torch__pb2.Empty.SerializeToString,
+                response_deserializer=remote__torch__pb2.Devices.FromString,
+                )
         self.Train = channel.unary_unary(
                 '/remote_torch.RemoteTorch/Train',
                 request_serializer=remote__torch__pb2.TrainConfig.SerializeToString,
@@ -117,6 +122,12 @@ class RemoteTorchServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def AvailableDevices(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def Train(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -171,6 +182,11 @@ def add_RemoteTorchServicer_to_server(servicer, server):
                     servicer.AvailableDatasets,
                     request_deserializer=remote__torch__pb2.Empty.FromString,
                     response_serializer=remote__torch__pb2.References.SerializeToString,
+            ),
+            'AvailableDevices': grpc.unary_unary_rpc_method_handler(
+                    servicer.AvailableDevices,
+                    request_deserializer=remote__torch__pb2.Empty.FromString,
+                    response_serializer=remote__torch__pb2.Devices.SerializeToString,
             ),
             'Train': grpc.unary_unary_rpc_method_handler(
                     servicer.Train,
@@ -325,6 +341,23 @@ class RemoteTorch(object):
         return grpc.experimental.unary_unary(request, target, '/remote_torch.RemoteTorch/AvailableDatasets',
             remote__torch__pb2.Empty.SerializeToString,
             remote__torch__pb2.References.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def AvailableDevices(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/remote_torch.RemoteTorch/AvailableDevices',
+            remote__torch__pb2.Empty.SerializeToString,
+            remote__torch__pb2.Devices.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 

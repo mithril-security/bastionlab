@@ -215,21 +215,16 @@ def deserialize_weights_to_model(model: Module, chunks: Iterator[Chunk]) -> None
         deserialization_fn=torch.jit.load
     ))[0]  # type: ignore
     for name, value in wrapper.named_parameters():
-        model.__setattr__(name.replace("_", "."), value)
+        param = model
+        parent = None
+        segments = name.split("_")
+        name_buf = []
+        for segment in segments:
+            name_buf.append(segment)
+            name = "_".join(name_buf)
+            if hasattr(param, name):
+                parent = param
+                param = param.__getattr__(name)
+                name_buf = []
 
-
-def remote_module(cls: Callable) -> Callable:
-    init = cls.__init__
-
-    def new_init(_self, *args, **kwargs):
-        init(_self, *args, **kwargs)  # type: ignore
-        _self._trainable_parameters = {}
-        for n, p in trainable_parameters(_self):
-            _self._trainable_parameters[n] = p
-    cls.__init__ = new_init
-
-    @torch.jit.export  # type: ignore
-    def module_trainable_parameters(_self):
-        return _self._trainable_parameters
-    cls.trainable_parameters = module_trainable_parameters
-    return cls
+        parent.__setattr__(name, torch.nn.Parameter(value))

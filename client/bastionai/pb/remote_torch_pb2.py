@@ -14,7 +14,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x12remote_torch.proto\x12\x0cremote_torch\"4\n\tReference\x12\x12\n\nidentifier\x18\x01 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x02 \x01(\t\":\n\x05\x43hunk\x12\x0c\n\x04\x64\x61ta\x18\x01 \x01(\x0c\x12\x13\n\x0b\x64\x65scription\x18\x02 \x01(\t\x12\x0e\n\x06secret\x18\x03 \x01(\x0c\"\x07\n\x05\x45mpty\"\xb4\x01\n\x0bTrainConfig\x12&\n\x05model\x18\x01 \x01(\x0b\x32\x17.remote_torch.Reference\x12(\n\x07\x64\x61taset\x18\x02 \x01(\x0b\x32\x17.remote_torch.Reference\x12\x18\n\x10private_learning\x18\x03 \x01(\x08\x12\x12\n\nbatch_size\x18\x04 \x01(\x05\x12\x0e\n\x06\x65pochs\x18\x05 \x01(\x05\x12\x15\n\rlearning_rate\x18\x06 \x01(\x02\"r\n\nTestConfig\x12&\n\x05model\x18\x01 \x01(\x0b\x32\x17.remote_torch.Reference\x12(\n\x07\x64\x61taset\x18\x02 \x01(\x0b\x32\x17.remote_torch.Reference\x12\x12\n\nbatch_size\x18\x03 \x01(\x05\"3\n\nReferences\x12%\n\x04list\x18\x01 \x03(\x0b\x32\x17.remote_torch.Reference\"\x19\n\x08\x41\x63\x63uracy\x12\r\n\x05value\x18\x01 \x01(\x02\x32\x92\x05\n\x0bRemoteTorch\x12?\n\x0bSendDataset\x12\x13.remote_torch.Chunk\x1a\x17.remote_torch.Reference\"\x00(\x01\x12=\n\tSendModel\x12\x13.remote_torch.Chunk\x1a\x17.remote_torch.Reference\"\x00(\x01\x12@\n\x0c\x46\x65tchDataset\x12\x17.remote_torch.Reference\x1a\x13.remote_torch.Chunk\"\x00\x30\x01\x12?\n\x0b\x46\x65tchModule\x12\x17.remote_torch.Reference\x1a\x13.remote_torch.Chunk\"\x00\x30\x01\x12?\n\rDeleteDataset\x12\x17.remote_torch.Reference\x1a\x13.remote_torch.Empty\"\x00\x12>\n\x0c\x44\x65leteModule\x12\x17.remote_torch.Reference\x1a\x13.remote_torch.Empty\"\x00\x12\x42\n\x0f\x41vailableModels\x12\x13.remote_torch.Empty\x1a\x18.remote_torch.References\"\x00\x12\x44\n\x11\x41vailableDatasets\x12\x13.remote_torch.Empty\x1a\x18.remote_torch.References\"\x00\x12\x39\n\x05Train\x12\x19.remote_torch.TrainConfig\x1a\x13.remote_torch.Empty\"\x00\x12:\n\x04Test\x12\x18.remote_torch.TestConfig\x1a\x16.remote_torch.Accuracy\"\x00\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x12remote_torch.proto\x12\x0cremote_torch\"4\n\tReference\x12\x12\n\nidentifier\x18\x01 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x02 \x01(\t\":\n\x05\x43hunk\x12\x0c\n\x04\x64\x61ta\x18\x01 \x01(\x0c\x12\x13\n\x0b\x64\x65scription\x18\x02 \x01(\t\x12\x0e\n\x06secret\x18\x03 \x01(\x0c\"\x07\n\x05\x45mpty\"\xc4\x01\n\x0bTrainConfig\x12&\n\x05model\x18\x01 \x01(\x0b\x32\x17.remote_torch.Reference\x12(\n\x07\x64\x61taset\x18\x02 \x01(\x0b\x32\x17.remote_torch.Reference\x12\x18\n\x10private_learning\x18\x03 \x01(\x08\x12\x12\n\nbatch_size\x18\x04 \x01(\x05\x12\x0e\n\x06\x65pochs\x18\x05 \x01(\x05\x12\x15\n\rlearning_rate\x18\x06 \x01(\x02\x12\x0e\n\x06\x64\x65vice\x18\x07 \x01(\t\"r\n\nTestConfig\x12&\n\x05model\x18\x01 \x01(\x0b\x32\x17.remote_torch.Reference\x12(\n\x07\x64\x61taset\x18\x02 \x01(\x0b\x32\x17.remote_torch.Reference\x12\x12\n\nbatch_size\x18\x03 \x01(\x05\"3\n\nReferences\x12%\n\x04list\x18\x01 \x03(\x0b\x32\x17.remote_torch.Reference\"\x19\n\x08\x41\x63\x63uracy\x12\r\n\x05value\x18\x01 \x01(\x02\"\x17\n\x07\x44\x65vices\x12\x0c\n\x04list\x18\x01 \x03(\t2\xd4\x05\n\x0bRemoteTorch\x12?\n\x0bSendDataset\x12\x13.remote_torch.Chunk\x1a\x17.remote_torch.Reference\"\x00(\x01\x12=\n\tSendModel\x12\x13.remote_torch.Chunk\x1a\x17.remote_torch.Reference\"\x00(\x01\x12@\n\x0c\x46\x65tchDataset\x12\x17.remote_torch.Reference\x1a\x13.remote_torch.Chunk\"\x00\x30\x01\x12?\n\x0b\x46\x65tchModule\x12\x17.remote_torch.Reference\x1a\x13.remote_torch.Chunk\"\x00\x30\x01\x12?\n\rDeleteDataset\x12\x17.remote_torch.Reference\x1a\x13.remote_torch.Empty\"\x00\x12>\n\x0c\x44\x65leteModule\x12\x17.remote_torch.Reference\x1a\x13.remote_torch.Empty\"\x00\x12\x42\n\x0f\x41vailableModels\x12\x13.remote_torch.Empty\x1a\x18.remote_torch.References\"\x00\x12\x44\n\x11\x41vailableDatasets\x12\x13.remote_torch.Empty\x1a\x18.remote_torch.References\"\x00\x12@\n\x10\x41vailableDevices\x12\x13.remote_torch.Empty\x1a\x15.remote_torch.Devices\"\x00\x12\x39\n\x05Train\x12\x19.remote_torch.TrainConfig\x1a\x13.remote_torch.Empty\"\x00\x12:\n\x04Test\x12\x18.remote_torch.TestConfig\x1a\x16.remote_torch.Accuracy\"\x00\x62\x06proto3')
 
 
 
@@ -25,6 +25,7 @@ _TRAINCONFIG = DESCRIPTOR.message_types_by_name['TrainConfig']
 _TESTCONFIG = DESCRIPTOR.message_types_by_name['TestConfig']
 _REFERENCES = DESCRIPTOR.message_types_by_name['References']
 _ACCURACY = DESCRIPTOR.message_types_by_name['Accuracy']
+_DEVICES = DESCRIPTOR.message_types_by_name['Devices']
 Reference = _reflection.GeneratedProtocolMessageType('Reference', (_message.Message,), {
   'DESCRIPTOR' : _REFERENCE,
   '__module__' : 'remote_torch_pb2'
@@ -74,6 +75,13 @@ Accuracy = _reflection.GeneratedProtocolMessageType('Accuracy', (_message.Messag
   })
 _sym_db.RegisterMessage(Accuracy)
 
+Devices = _reflection.GeneratedProtocolMessageType('Devices', (_message.Message,), {
+  'DESCRIPTOR' : _DEVICES,
+  '__module__' : 'remote_torch_pb2'
+  # @@protoc_insertion_point(class_scope:remote_torch.Devices)
+  })
+_sym_db.RegisterMessage(Devices)
+
 _REMOTETORCH = DESCRIPTOR.services_by_name['RemoteTorch']
 if _descriptor._USE_C_DESCRIPTORS == False:
 
@@ -85,13 +93,15 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _EMPTY._serialized_start=150
   _EMPTY._serialized_end=157
   _TRAINCONFIG._serialized_start=160
-  _TRAINCONFIG._serialized_end=340
-  _TESTCONFIG._serialized_start=342
-  _TESTCONFIG._serialized_end=456
-  _REFERENCES._serialized_start=458
-  _REFERENCES._serialized_end=509
-  _ACCURACY._serialized_start=511
-  _ACCURACY._serialized_end=536
-  _REMOTETORCH._serialized_start=539
-  _REMOTETORCH._serialized_end=1197
+  _TRAINCONFIG._serialized_end=356
+  _TESTCONFIG._serialized_start=358
+  _TESTCONFIG._serialized_end=472
+  _REFERENCES._serialized_start=474
+  _REFERENCES._serialized_end=525
+  _ACCURACY._serialized_start=527
+  _ACCURACY._serialized_end=552
+  _DEVICES._serialized_start=554
+  _DEVICES._serialized_end=577
+  _REMOTETORCH._serialized_start=580
+  _REMOTETORCH._serialized_end=1304
 # @@protoc_insertion_point(module_scope)
