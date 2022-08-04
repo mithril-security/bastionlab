@@ -97,10 +97,10 @@ impl RemoteTorch for BastionAIServer {
         let module_id = parse_reference(config.model.clone().ok_or(Status::invalid_argument("Not found"))?)?;
         {
             let datasets = self.datasets.read().unwrap();
-            let modules = self.modules.read().unwrap();
+            let mut modules = self.modules.write().unwrap();
             let dataset = datasets.get(&dataset_id).ok_or(Status::not_found("Not found"))?;
-            let module = modules.get(&module_id).ok_or(Status::not_found("Not found"))?;
-            tcherror_to_status(module.data.train(&dataset.data, config))?;
+            let module = modules.get_mut(&module_id).ok_or(Status::not_found("Not found"))?;
+            tcherror_to_status(module.data.write().unwrap().train(&dataset.data.read().unwrap(), config))?;
         }
         Ok(Response::new(Empty {}))
     }
@@ -114,7 +114,8 @@ impl RemoteTorch for BastionAIServer {
             let modules = self.modules.read().unwrap();
             let dataset = datasets.get(&dataset_id).ok_or(Status::not_found("Not found"))?;
             let module = modules.get(&module_id).ok_or(Status::not_found("Not found"))?;
-            tcherror_to_status(module.data.test(&dataset.data, config))?
+            let acc = tcherror_to_status(module.data.read().unwrap().test(&dataset.data.read().unwrap(), config))?;
+            acc
         };
         Ok(Response::new(Accuracy { value: accuracy }))
     }
