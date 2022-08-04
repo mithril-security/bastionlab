@@ -1,4 +1,4 @@
-use tch::Tensor;
+use tch::{Tensor, Device};
 use tch::vision::dataset;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
 use tokio_stream::wrappers::ReceiverStream;
@@ -10,7 +10,7 @@ use private_learning::{SGD, l2_loss, Optimizer};
 mod remote_torch {
     tonic::include_proto!("remote_torch");
 }
-use remote_torch::{Reference, References, Empty, Chunk, TrainConfig, TestConfig, Accuracy};
+use remote_torch::{Reference, References, Empty, Chunk, TrainConfig, TestConfig, Accuracy, Devices};
 use remote_torch::remote_torch_server::{RemoteTorch, RemoteTorchServer};
 
 mod storage;
@@ -95,12 +95,24 @@ impl RemoteTorch for BastionAIServer {
         let config = request.into_inner();
         let dataset_id = parse_reference(config.dataset.clone().ok_or(Status::invalid_argument("Not found"))?)?;
         let module_id = parse_reference(config.model.clone().ok_or(Status::invalid_argument("Not found"))?)?;
+        let device = match &config.device[..] {
+            "cpu" => Device::Cpu,
+            "gpu" => Device::cuda_if_available(),
+            device => {
+                if device.starts_with("cuda:") {
+                    let id = usize::from_str_radix(&device[5..], 10).or(Err(Status::invalid_argument("Wrong device")))?;
+                    Device::Cuda(id)
+                } else {
+                    return Err(Status::invalid_argument("Wrong device"));
+                }
+            }
+        };
         {
             let datasets = self.datasets.read().unwrap();
             let mut modules = self.modules.write().unwrap();
             let dataset = datasets.get(&dataset_id).ok_or(Status::not_found("Not found"))?;
             let module = modules.get_mut(&module_id).ok_or(Status::not_found("Not found"))?;
-            tcherror_to_status(module.data.write().unwrap().train(&dataset.data.read().unwrap(), config))?;
+            tcherror_to_status(module.data.write().unwrap().train(&dataset.data.read().unwrap(), config, device))?;
         }
         Ok(Response::new(Empty {}))
     }
@@ -126,10 +138,22 @@ impl RemoteTorch for BastionAIServer {
         Ok(Response::new(References { list } ))
     }
 
-    async fn available_datasets(&self, _request:Request<Empty>) -> Result<Response<References>, Status> {
+    async fn available_datasets(&self, _request: Request<Empty>) -> Result<Response<References>, Status> {
         let list = self.datasets.read().unwrap().iter().map(|(k, v)| Reference { identifier: format!("{}", k), description: v.description.clone() }).collect();
         
         Ok(Response::new(References { list } ))
+    }
+
+    async fn available_devices(&self, _request: Request<Empty>) -> Result<Response<Devices>, Status> {
+        let mut list = vec![String::from("cpu")];
+        if tch::Cuda::is_available() {
+            list.push(String::from("gpu"));
+            for index in 0..tch::Cuda::device_count()  {
+                list.push(format!("cuda:{}", index));
+            }
+        }
+        
+        Ok(Response::new(Devices { list } ))
     }
 
 }
