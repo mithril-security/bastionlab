@@ -15,6 +15,10 @@
 - [:gear: Architecture](#gear-architecture)
   - [Server](#server)
   - [Client](#client)
+- [Key Features](#key-features)
+  - [Remote execution](#remote-execution)
+  - [Authentication](#authentication)
+  - [Differential Privacy (DP)](#differential-privacy-dp)
 - [How to get started](#how-to-get-started)
 - [Disclaimer](#disclaimer)
 
@@ -60,6 +64,22 @@ The server is responsible for receiving and properly storing data and models sen
 
 ## Client
 We provide a lightweight client which is responsible for serializing data and models with Pytorch's JIT compiler before sending to the server. And to strength the security of artifacts (datasets and models,) the server returns a unique identifier for every artifact uploaded.
+
+# Key Features
+
+## Remote execution
+BastionAI uses [tch-rs](https://github.com/LaurentMazare/tch-rs) with [libtorch](https://github.com/pytorch/pytorch/tree/master/torch/csrc) (C++ bindings) as a backend for the server written in Rust. This has two benefits:
+- enhanced compatibility with [BlindAI](https://github.com/mithril-security/blindai).
+- reduced attack surface: less code needs to be audited, and less room for vulnerabilities and side channels. All training procedures are coded in Rust: optimizers, DP-SGD, etc.
+
+## Authentication
+BastionAI uses HMAC instead of digital signatures based on asymmetric cryptography for owner authentication (as we have no real motivation for public key infrastructure, it is better to use HMAC that are faster to make and to verify). The use of JWTs for access tokens as then may contain various structured fields that may prove useful for fine-grained access management and are inherently stateless (this feature though does not make billing easy but this matter is orthogonal).
+
+## Differential Privacy (DP)
+The DP framework we support is [DP-SGD](). BastionAI uniquely implements DP by using an approach of expanded weights.
+The per-layer weights are expanded, which is replicating them along a new “batch” dimension as many times as the number of samples in a batch. With proper changes to the forward pass of the layer, the gradient of the expanded weights computed by the autograd engine during the backward pass are directly the PSGs. A careful analysis of the memory footprint of the approach shows that it is no more memory hungry than the hooks-based approach. In terms of compute time, we notice that the modified forward passes, at least in a naive implementation, are less efficient than the hooks-based approach or non-private learning. Nevertheless, the use of some tricks on key layers such as convolutions (e.g. grouped convolutions) allows this method to be on par with the hooks-based technique.
+
+[Opacus](https://github.com/pytorch/opacus) is another differential privacy library but due to TorchScript's inability with backward pass hooks.
 
 # How to get started
 
