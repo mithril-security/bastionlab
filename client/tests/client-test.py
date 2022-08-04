@@ -43,23 +43,30 @@ with Connection("localhost", 50051) as client:
         lreg_dataset, "Dummy 1D Linear Regression Dataset (param is 2)", b'secret')
     print(f"Dataset ref: {dataset_ref}")
 
-    model_list = client.get_available_models()
-    for model in model_list.list:  # type: ignore
-        print(f"{model.identifier}, {model.description}")
+    #model_list = client.get_available_models()
+    #for model in model_list.list:  # type: ignore
+    #    print(f"{model.identifier}, {model.description}")
 
-    client.fetch_model_weights(lreg_model, model_ref)
-    print(list(client.fetch_dataset(dataset_ref)))
+    print(f"Weight: {lreg_model.fc1.inner.expanded_weight}")
+    print(f"Devices: {client.get_available_devices()}")
+
+    #print(list(client.fetch_dataset(dataset_ref)))
 
     client.train(TrainConfig(
         model=model_ref,
         dataset=dataset_ref,
+        private_learning=True,
         batch_size=2,
-        epochs=1,
-        learning_rate=1e-1
+        epochs=100,
+        learning_rate=0.1,
+        device="cpu"
     ))
 
-    print("Model's accuracy: {}".format(client.test(TestConfig(
-        model=model_ref,
-        dataset=dataset_ref,
-        batch_size=2,
-    ))))
+    client.fetch_model_weights(lreg_model, model_ref)
+    print(f"Weight: {lreg_model.fc1.inner.expanded_weight}")
+
+    #print("Model's accuracy: {}".format(client.test(TestConfig(
+    #    model=model_ref,
+    #    dataset=dataset_ref,
+    #    batch_size=2,
+    #))))
