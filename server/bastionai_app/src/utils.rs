@@ -45,7 +45,7 @@ pub async fn stream_data(
 ) -> Response<ReceiverStream<Result<Chunk, Status>>> {
     let (tx, rx) = mpsc::channel(4);
 
-    let raw_bytes: Vec<u8> = artifact.data.into();
+    let raw_bytes: Vec<u8> = artifact.data.into_inner().unwrap().into();
     tokio::spawn(async move {
         for (i, bytes) in raw_bytes.chunks(chunk_size).enumerate() {
             tx.send(Ok(Chunk {

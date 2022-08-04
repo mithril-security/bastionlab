@@ -8,6 +8,7 @@ use std::sync::Mutex;
 use tch::nn::VarStore;
 use tch::{CModule, Device, IValue, TchError, Tensor, TrainableCModule, IndexOp};
 use private_learning::{Parameters, PrivateParameters, LossType, SGD, Optimizer, l2_loss};
+use std::sync::RwLock;
 
 #[derive(Debug)]
 pub struct SizedObjectsBytes(Vec<u8>);
@@ -63,22 +64,18 @@ pub struct Module {
 }
 
 impl Module {
-    pub fn parameters(&self) -> Result<Parameters, TchError> {
-        let mut vs = VarStore::new(self.var_store.device());
-        vs.copy(&self.var_store)?;
-        Ok(Parameters::from(vs))
+    pub fn parameters(&self) -> Parameters {
+        Parameters::new(&self.var_store)
     }
-    pub fn private_parameters(&self, max_grad_norm: f64, noise_multiplier: f64, loss_type: LossType) -> Result<PrivateParameters, TchError> {
-        let mut vs = VarStore::new(self.var_store.device());
-        vs.copy(&self.var_store)?;
-        Ok(PrivateParameters::new(vs, max_grad_norm, noise_multiplier, loss_type))
+    pub fn private_parameters(&self, max_grad_norm: f64, noise_multiplier: f64, loss_type: LossType) -> PrivateParameters {
+        PrivateParameters::new(&self.var_store, max_grad_norm, noise_multiplier, loss_type)
     }
-    pub fn train(&self, dataset: &Dataset, config: TrainConfig) -> Result<(), TchError> {
+    pub fn train(&mut self, dataset: &Dataset, config: TrainConfig) -> Result<(), TchError> {
         let mut optimizer = if config.private_learning {
-            let parameters = self.private_parameters(1.0, 0.01, private_learning::LossType::Sum)?;
+            let parameters = self.private_parameters(1.0, 0.01, private_learning::LossType::Sum);
             Box::new(SGD::new(parameters, config.learning_rate as f64)) as Box<dyn Optimizer>
         } else {
-            let parameters = self.parameters()?;
+            let parameters = self.parameters();
             Box::new(SGD::new(parameters, config.learning_rate as f64)) as Box<dyn Optimizer>
         };
         for _ in 0..config.epochs {
@@ -211,7 +208,7 @@ impl TryFrom<&Dataset> for SizedObjectsBytes {
 
 #[derive(Debug)]
 pub struct Artifact<T> {
-    pub data: T,
+    pub data: RwLock<T>,
     pub description: String,
     pub secret: hmac::Key,
 }
@@ -219,7 +216,7 @@ pub struct Artifact<T> {
 impl<T> Artifact<T> {
     pub fn new(data: T, description: String, secret: &[u8]) -> Self {
         Artifact {
-            data,
+            data: RwLock::new(data),
             description,
             secret: hmac::Key::new(hmac::HMAC_SHA256, &secret),
         }
@@ -239,7 +236,7 @@ where
 {
     pub fn serialize(&self) -> Result<Artifact<SizedObjectsBytes>, TchError> {
         Ok(Artifact {
-            data: (&self.data).try_into()?,
+            data: RwLock::new((&*self.data.read().unwrap()).try_into()?),
             description: self.description.clone(),
             secret: self.secret.clone(),
         })
@@ -251,7 +248,7 @@ impl Artifact<SizedObjectsBytes> {
         self,
     ) -> Result<Artifact<T>, TchError> {
         Ok(Artifact {
-            data: T::try_from(self.data)?,
+            data: RwLock::new(T::try_from(self.data.into_inner().unwrap())?),
             description: self.description,
             secret: self.secret,
         })
