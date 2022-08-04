@@ -21,12 +21,15 @@ message TrainConfig {
     int32 batch_size = 4;
     int32 epochs = 5;
     float learning_rate = 6;
+    string device = 7;
+    string metric = 8;
 }
 
 message TestConfig {
     Reference model = 1;
     Reference dataset = 2;
     int32 batch_size = 3;
+    string metric = 4;
 }
 
 message References {
@@ -35,6 +38,10 @@ message References {
 
 message Accuracy {
     float value = 1;
+}
+
+message Devices {
+    repeated string list = 1;
 }
 
 service RemoteTorch {
@@ -46,6 +53,7 @@ service RemoteTorch {
     rpc DeleteModule (Reference) returns (Empty) {}
     rpc AvailableModels(Empty) returns (References) {}
     rpc AvailableDatasets(Empty) returns (References) {}
+    rpc AvailableDevices(Empty) returns (Devices) {}
     rpc Train (TrainConfig) returns (Empty) {}
     rpc Test (TestConfig) returns (Accuracy) {}
 }

@@ -40,7 +40,7 @@ mod tests {
     fn private_sgd() {
         let vs = VarStore::new(Device::Cpu);
         let model = TrainableCModule::load("../client/tests/private_lreg.pt", vs.root()).unwrap();
-        let parameters = PrivateParameters::new(vs, 1.0, 0.1, LossType::Mean(2));
+        let parameters = PrivateParameters::new(&vs, 1.0, 0.1, LossType::Mean(2));
         let mut optimizer = SGD::new(parameters, 0.1);
 
         let data = vec![
@@ -93,8 +93,8 @@ pub trait Updatable {
 
 pub struct Parameters(Vec<Tensor>);
 
-impl From<VarStore> for Parameters {
-    fn from(vs: VarStore) -> Self {
+impl Parameters {
+    pub fn new(vs: &VarStore) -> Self {
         Parameters(vs.trainable_variables())
     }
 }
@@ -136,7 +136,7 @@ pub struct PrivateParameters {
 }
 
 impl PrivateParameters {
-    pub fn new(vs: VarStore, max_grad_norm: f64, noise_multiplier: f64, loss_type: LossType) -> Self {
+    pub fn new(vs: &VarStore, max_grad_norm: f64, noise_multiplier: f64, loss_type: LossType) -> Self {
         PrivateParameters { parameters: vs.trainable_variables(), max_grad_norm, noise_multiplier, loss_type }
     }
 

@@ -1,4 +1,4 @@
-use crate::remote_torch::{TrainConfig, TestConfig};
+use crate::remote_torch::{TrainConfig, TestConfig, Accuracy};
 use crate::utils::*;
 use ring::hmac;
 use std::collections::{VecDeque, HashMap};
@@ -70,7 +70,11 @@ impl Module {
     pub fn private_parameters(&self, max_grad_norm: f64, noise_multiplier: f64, loss_type: LossType) -> PrivateParameters {
         PrivateParameters::new(&self.var_store, max_grad_norm, noise_multiplier, loss_type)
     }
-    pub fn train(&mut self, dataset: &Dataset, config: TrainConfig) -> Result<(), TchError> {
+    pub fn set_device(&mut self, device: Device) {
+        self.var_store.set_device(device);
+    }
+    pub fn train(&mut self, dataset: &Dataset, config: TrainConfig, device: Device) -> Result<(), TchError> {
+        self.set_device(device);
         let mut optimizer = if config.private_learning {
             let parameters = self.private_parameters(1.0, 0.01, private_learning::LossType::Sum);
             Box::new(SGD::new(parameters, config.learning_rate as f64)) as Box<dyn Optimizer>
@@ -80,7 +84,7 @@ impl Module {
         };
         for _ in 0..config.epochs {
             for (input, label) in dataset.iter() {
-                let input = input.f_view([1, 1])?;
+                let input = input.f_view([1, 1])?.f_to(device)?;
                 let output = self.c_module.forward_ts(&[input])?;
                 let loss = l2_loss(&output, &label)?;
                 optimizer.zero_grad()?;
@@ -130,6 +134,36 @@ impl TryFrom<&Module> for SizedObjectsBytes {
         value.var_store.save_to_stream(&mut buf)?;
         module_bytes.append_back(buf);
         Ok(module_bytes)
+    }
+}
+
+pub enum Metric {
+    Accuracy(usize, f32),
+    Loss(fn(&Tensor, &Tensor) -> Result<Tensor, TchError>, usize, f32),
+}
+
+impl Metric {
+    pub fn accumulate(&self, output: &Tensor, label: &Tensor) -> Result<(), TchError> {
+        match self {
+            Self::Accuracy(mut count, mut acc) => {
+                let prediction = output.f_argmax(-1, false)?.double_value(&[]);
+                if prediction == label.double_value(&[]) {
+                    acc += 1./(count as f32) * (1. - acc);
+                }
+                count += 1;
+            }
+            Self::Loss(f, mut count, mut loss) => {
+                loss += 1./(count as f32) * (f(output, label)?.double_value(&[]) as f32 - loss);
+                count += 1;
+            }
+        }
+        Ok(())
+    }
+    pub fn into_float(self) -> f32 {
+        match self {
+            Self::Accuracy(_, acc) => acc,
+            Self::Loss(_, _, loss) => loss,
+        }
     }
 }
 
