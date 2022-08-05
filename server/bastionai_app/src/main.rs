@@ -95,18 +95,7 @@ impl RemoteTorch for BastionAIServer {
         let config = request.into_inner();
         let dataset_id = parse_reference(config.dataset.clone().ok_or(Status::invalid_argument("Not found"))?)?;
         let module_id = parse_reference(config.model.clone().ok_or(Status::invalid_argument("Not found"))?)?;
-        let device = match &config.device[..] {
-            "cpu" => Device::Cpu,
-            "gpu" => Device::cuda_if_available(),
-            device => {
-                if device.starts_with("cuda:") {
-                    let id = usize::from_str_radix(&device[5..], 10).or(Err(Status::invalid_argument("Wrong device")))?;
-                    Device::Cuda(id)
-                } else {
-                    return Err(Status::invalid_argument("Wrong device"));
-                }
-            }
-        };
+        let device = parse_device(&config.device)?;
         {
             let datasets = self.datasets.read().unwrap();
             let mut modules = self.modules.write().unwrap();
@@ -121,12 +110,13 @@ impl RemoteTorch for BastionAIServer {
         let config = request.into_inner();
         let dataset_id = parse_reference(config.dataset.clone().ok_or(Status::invalid_argument("Not found"))?)?;
         let module_id = parse_reference(config.model.clone().ok_or(Status::invalid_argument("Not found"))?)?;
+        let device = parse_device(&config.device)?;
         let accuracy = {
             let datasets = self.datasets.read().unwrap();
             let modules = self.modules.read().unwrap();
             let dataset = datasets.get(&dataset_id).ok_or(Status::not_found("Not found"))?;
             let module = modules.get(&module_id).ok_or(Status::not_found("Not found"))?;
-            let acc = tcherror_to_status(module.data.read().unwrap().test(&dataset.data.read().unwrap(), config))?;
+            let acc = tcherror_to_status(module.data.write().unwrap().test(&dataset.data.read().unwrap(), config, device))?;
             acc
         };
         Ok(Response::new(Accuracy { value: accuracy }))

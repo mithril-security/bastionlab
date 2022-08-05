@@ -59,7 +59,8 @@ message TestConfig {
     Reference model = 1;
     Reference dataset = 2;
     int32 batch_size = 3;
-    string metric = 4;
+    string device = 4;
+    string metric = 5;
 }
 
 message References {

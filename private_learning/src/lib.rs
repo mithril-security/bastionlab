@@ -68,12 +68,18 @@ mod tests {
 
 }
 
+/// L2 loss function
+/// 
+/// This loss function is suited for linear regression problems.
 pub fn l2_loss(output: &Tensor, target: &Tensor) -> Result<Tensor, TchError> {
     output.f_sub(&target)?.f_norm_scalaropt_dim(2, &[1], false)?.f_mean(Kind::Float)
 }
 
+/// Common interface for all optimizers
 pub trait Optimizer {
+    /// Sets the accumulated gradients of all trained parameters to zero.
     fn zero_grad(&mut self) -> Result<(), TchError>;
+    /// Performs a single training step using the accumulated gradients.
     fn step(&mut self) -> Result<(), TchError>;
 }
 
@@ -86,6 +92,11 @@ impl Optimizer for COptimizer {
     }
 }
 
+/// Contains the trainable parameters of a model to be used by an optimizer
+/// 
+/// The standard variant provides standard parameter update, the private variant performs DP-SGD.
+/// Note that the private variant requires the model to use expanded weights. In the Python API,
+/// layers with expanded weights may be found under `bastionai.psg.nn`.
 pub enum Parameters {
     Standard(Vec<Tensor>),
     Private {
@@ -97,14 +108,25 @@ pub enum Parameters {
 }
 
 impl Parameters {
+    /// Creates a new standard variant from given `VarStore`.
     pub fn standard(vs: &VarStore) -> Self {
         Parameters::Standard(vs.trainable_variables())
     }
 
+    /// Creates a new private variant from given `VarStore` with given DP parameters.
+    /// 
+    /// `max_grad_norm` controls gradient clipping.
+    /// `noise_multiplier` controls the level of DP noise to apply.
+    /// `loss_type` tells the DP-SGD algorithm which type of aggregation is used by the training loss: either sum or mean.
     pub fn private(vs: &VarStore, max_grad_norm: f64, noise_multiplier: f64, loss_type: LossType) -> Self {
         Parameters::Private { parameters: vs.trainable_variables(), max_grad_norm, noise_multiplier, loss_type }
     }
 
+    /// Returns contained parameters.
+    /// 
+    /// This method is useful to inspect the weights during or after training.
+    /// Note that for privacy reasons, a call to this method erases the accumulated gradients
+    /// that contain non DP protected information about the samples.
     pub fn into_inner(mut self) -> Vec<Tensor> {
         self.zero_grad();
         match self {
@@ -113,6 +135,7 @@ impl Parameters {
         }
     }
 
+    /// Returns the number of contained parameters.
     pub fn len(&self) -> usize {
         match self {
             Parameters::Standard(parameters) => parameters.len(),
@@ -120,6 +143,7 @@ impl Parameters {
         }
     }
 
+    /// Sets all accumulated gradients to zero.
     pub fn zero_grad(&mut self) {
         match self {
             Parameters::Standard(parameters) => {
@@ -136,6 +160,9 @@ impl Parameters {
         
     }
 
+    /// Iterates over the contained parameters and updates them using given update function.
+    /// 
+    /// When called on a private variant, DP-SGD is applied.
     pub fn update(&mut self, mut update_fn: impl FnMut(usize, &Tensor, Tensor) -> Result<Tensor, TchError>) -> Result<(), TchError> {
         match self {
             Parameters::Standard(parameters) => {
@@ -179,11 +206,16 @@ impl Parameters {
     }
 }
 
+/// Type of batch aggregation used by a loss function
+/// 
+/// The `Mean` variant contains the number of samples in a batch.
 pub enum LossType {
     Sum,
     Mean(i64),
 }
 
+// Generates a tensor having the same size as `tensor` that contains gaussian noise
+// with mean 0 and standard deviation `std`.
 fn generate_noise_like(tensor: &Tensor, std: f64) -> Result<Tensor, TchError> {
     let zeros = Tensor::zeros(&tensor.size(), (Kind::Float, tensor.device()));
     if std == 0. {
@@ -199,7 +231,7 @@ fn generate_noise_like(tensor: &Tensor, std: f64) -> Result<Tensor, TchError> {
     }
 }
 
-pub fn initialize_statistics(length: usize) -> Vec<Option<Tensor>> {
+fn initialize_statistics(length: usize) -> Vec<Option<Tensor>> {
     let mut v = Vec::with_capacity(length);
     for _ in 0..length {
         v.push(None);
@@ -207,6 +239,15 @@ pub fn initialize_statistics(length: usize) -> Vec<Option<Tensor>> {
     v
 }
 
+/// Stochastic Gradient Descent Optimizer
+/// 
+/// Updates contained parameters using the SGD algorithm.
+/// This optimizer also supports weight decay, momentum, dampening
+/// and nesterov updates.
+/// 
+/// It is a reimplementation of Pytorch's [SGD] in Rust.
+/// 
+/// [SGD]: https://pytorch.org/docs/stable/generated/torch.optim.SGD.html
 pub struct SGD {
     learning_rate: f64,
     weight_decay: f64,
@@ -218,6 +259,7 @@ pub struct SGD {
 }
 
 impl SGD {
+    /// Returns a new SGD optimizer to update given `parameters` using given `learning_rate`.
     pub fn new(parameters: Parameters, learning_rate: f64) -> Self {
         SGD {
             learning_rate: learning_rate,
@@ -229,18 +271,22 @@ impl SGD {
             parameters,
         }
     }
+    /// Sets weight_decay.
     pub fn weight_decay(mut self, weight_decay: f64) -> Self {
         self.weight_decay = weight_decay;
         self
     }
+    /// Sets momentum.
     pub fn momentum(mut self, momentum: f64) -> Self {
         self.momentum = momentum;
         self
     }
+    /// Sets dampening factor.
     pub fn dampening(mut self, dampening: f64) -> Self {
         self.dampening = dampening;
         self
     }
+    /// Enables or disables nesterov updates.
     pub fn nesterov(mut self, nesterov: bool) -> Self {
         self.nesterov = nesterov;
         self
@@ -279,6 +325,12 @@ impl Optimizer for SGD {
     }
 }
 
+/// Adam Optimizer
+/// 
+/// Updates contained parameters using the Adam algorithm.
+/// This is a reimplementation of Pytorch's [Adam] in Rust.
+/// 
+/// [Adam]: https://pytorch.org/docs/stable/generated/torch.optim.Adam.html
 pub struct Adam {
     learning_rate: f64,
     beta_1: f64,

@@ -1,7 +1,7 @@
 use super::Chunk;
 use crate::storage::{Artifact, SizedObjectsBytes};
 use crate::Reference;
-use tch::{TchError, Tensor};
+use tch::{TchError, Tensor, Device};
 use tokio::sync::mpsc;
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use tonic::Request;
@@ -76,4 +76,19 @@ pub fn serialize_tensor(tensor: &Tensor) -> Vec<u8> {
 pub fn parse_reference(reference: Reference) -> Result<Uuid, Status> {
     Uuid::parse_str(&reference.identifier)
         .map_err(|_| Status::internal("Invalid BastionAI reference"))
+}
+
+pub fn parse_device(device: &str) -> Result<Device, Status> {
+    Ok(match device {
+        "cpu" => Device::Cpu,
+        "gpu" => Device::cuda_if_available(),
+        device => {
+            if device.starts_with("cuda:") {
+                let id = usize::from_str_radix(&device[5..], 10).or(Err(Status::invalid_argument("Wrong device")))?;
+                Device::Cuda(id)
+            } else {
+                return Err(Status::invalid_argument("Wrong device"));
+            }
+        }
+    })
 }
