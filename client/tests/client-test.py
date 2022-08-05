@@ -55,11 +55,14 @@ with Connection("localhost", 50051) as client:
     client.train(TrainConfig(
         model=model_ref,
         dataset=dataset_ref,
-        private_learning=True,
         batch_size=2,
         epochs=100,
         device="cpu",
         metric="l2",
+        differential_privacy=TrainConfig.DpParameters(
+            max_grad_norm=1.,
+            noise_multiplier=0.1
+        ),
         sgd=TrainConfig.SGD(
             learning_rate=0.1,
             weight_decay=0.,
