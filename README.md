@@ -33,7 +33,7 @@ Privacy matrix: Data privacy may be analyzed, categorized, and thought of around
 | Priciple            | Objective                                                           | Chosen Technical Solution                              |
 | ------------------- | ------------------------------------------------------------------- | ------------------------------------------------------ |
 | Input Privacy       | Send, store and use data/model weights securely                     | TEEs through the sealing mechanism + encrypted channel |
-| Output Privacy      | Ensure output does not leak (too much) information about the inputs | Differential Privacy (DP-SGD)                          |
+| Output Privacy      | Ensure output does not leak (too much) information about the inputs | Differential Privacy ([DP-SGD](https://arxiv.org/pdf/1607.00133.pdf))                          |
 | Input Verification  | Ensure authentication and integrity of the inputs                   | TEEs through the attestation mechanism                 |
 | Output Verification | Ensure integrity of the computation                                 | TEEs through the attestation mechanism                 |
 | Flow Governance     | Provide strong access and ownership policies                        | Custom solution (outlined in the architecture section) |
@@ -77,7 +77,7 @@ BastionAI uses [tch-rs](https://github.com/LaurentMazare/tch-rs) with [libtorch]
 BastionAI uses HMAC instead of digital signatures based on asymmetric cryptography for owner authentication (as we have no real motivation for public key infrastructure, it is better to use HMAC that are faster to make and to verify). The use of JWTs for access tokens as then may contain various structured fields that may prove useful for fine-grained access management and are inherently stateless (this feature though does not make billing easy but this matter is orthogonal).
 
 ## Differential Privacy (DP)
-The DP framework we support is [DP-SGD](). BastionAI uniquely implements DP by using an approach of expanded weights.
+The DP framework we support is [DP-SGD](https://arxiv.org/pdf/1607.00133.pdf). BastionAI uniquely implements DP by using an approach of expanded weights.
 The per-layer weights are expanded, which is replicating them along a new “batch” dimension as many times as the number of samples in a batch. With proper changes to the forward pass of the layer, the gradient of the expanded weights computed by the autograd engine during the backward pass are directly the PSGs. A careful analysis of the memory footprint of the approach shows that it is no more memory hungry than the hooks-based approach. In terms of compute time, we notice that the modified forward passes, at least in a naive implementation, are less efficient than the hooks-based approach or non-private learning. Nevertheless, the use of some tricks on key layers such as convolutions (e.g. grouped convolutions) allows this method to be on par with the hooks-based technique.
 
 [Opacus](https://github.com/pytorch/opacus) is another differential privacy library but due to TorchScript's inability with backward pass hooks.
