@@ -58,8 +58,15 @@ with Connection("localhost", 50051) as client:
         private_learning=True,
         batch_size=2,
         epochs=100,
-        learning_rate=0.1,
-        device="cpu"
+        device="cpu",
+        metric="l2",
+        sgd=TrainConfig.SGD(
+            learning_rate=0.1,
+            weight_decay=0.,
+            momentum=0.,
+            dampening=0.,
+            nesterov=False
+        )
     ))
 
     client.fetch_model_weights(lreg_model, model_ref)
