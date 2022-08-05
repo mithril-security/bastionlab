@@ -86,103 +86,102 @@ impl Optimizer for COptimizer {
     }
 }
 
-pub trait Updatable {
-    fn zero_grad(&mut self);
-    fn update(&mut self, update_fn: impl FnMut(&Tensor, Tensor) -> Result<Tensor, TchError>) -> Result<(), TchError>;
+pub enum Parameters {
+    Standard(Vec<Tensor>),
+    Private {
+        parameters: Vec<Tensor>,
+        max_grad_norm: f64,
+        noise_multiplier: f64,
+        loss_type: LossType,
+    },
 }
 
-pub struct Parameters(Vec<Tensor>);
-
 impl Parameters {
-    pub fn new(vs: &VarStore) -> Self {
-        Parameters(vs.trainable_variables())
+    pub fn standard(vs: &VarStore) -> Self {
+        Parameters::Standard(vs.trainable_variables())
     }
-}
 
-impl Parameters {
+    pub fn private(vs: &VarStore, max_grad_norm: f64, noise_multiplier: f64, loss_type: LossType) -> Self {
+        Parameters::Private { parameters: vs.trainable_variables(), max_grad_norm, noise_multiplier, loss_type }
+    }
+
     pub fn into_inner(mut self) -> Vec<Tensor> {
         self.zero_grad();
-        self.0
-    }
-}
-
-impl Updatable for Parameters {
-    fn zero_grad(&mut self) {
-        for param in self.0.iter_mut() {
-            param.zero_grad();
+        match self {
+            Parameters::Standard(parameters) => parameters,
+            Parameters::Private { parameters, .. } => parameters,
         }
     }
-    fn update(&mut self, mut update_fn: impl FnMut(&Tensor, Tensor) -> Result<Tensor, TchError>) -> Result<(), TchError> {
-        tch::no_grad(|| {
-            for param in self.0.iter_mut() {
-                let update = update_fn(param, param.f_grad()?)?;
-                let _ = param.f_sub_(&update)?;
+
+    pub fn len(&self) -> usize {
+        match self {
+            Parameters::Standard(parameters) => parameters.len(),
+            Parameters::Private { parameters, .. } => parameters.len(),
+        }
+    }
+
+    pub fn zero_grad(&mut self) {
+        match self {
+            Parameters::Standard(parameters) => {
+                for param in parameters.iter_mut() {
+                    param.zero_grad();
+                }
             }
-            Ok(())
-        })
+            Parameters::Private { parameters, .. } => {
+                for param in parameters.iter_mut() {
+                    param.zero_grad();
+                }
+            }
+        }
+        
+    }
+
+    pub fn update(&mut self, mut update_fn: impl FnMut(usize, &Tensor, Tensor) -> Result<Tensor, TchError>) -> Result<(), TchError> {
+        match self {
+            Parameters::Standard(parameters) => {
+                tch::no_grad(|| {
+                    for (i, param) in parameters.iter_mut().enumerate() {
+                        let update = update_fn(i, param, param.f_grad()?)?;
+                        let _ = param.f_sub_(&update)?;
+                    }
+                    Ok(())
+                })
+            }
+            Parameters::Private { parameters, max_grad_norm, noise_multiplier, loss_type } => {
+                tch::no_grad(|| {
+                    let mut per_param_norms = Vec::with_capacity(parameters.len());
+                    for param in parameters.iter() {
+                        let per_sample_grad = param.grad();
+                        let dims: Vec<i64> = (1..per_sample_grad.dim()).map(|x| x as i64).collect();
+                        per_param_norms.push(per_sample_grad.f_norm_scalaropt_dim(2, &dims, false)?);
+                    }
+                    let per_sample_norms = Tensor::f_stack(&per_param_norms, 1)?
+                        .f_norm_scalaropt_dim(2, &[1], false)?;
+                    let max_grad_norm = Tensor::of_slice(&[*max_grad_norm as f32]);
+                    let per_sample_clip_factor = max_grad_norm.f_div(&per_sample_norms.f_add_scalar(1e-6)?)?.f_clamp(0., 1.)?;
+        
+                    for (i, param) in parameters.iter_mut().enumerate() {
+                        let per_sample_grad = param.grad();
+                        let mut update_size = per_sample_grad.size();
+                        update_size.remove(0);
+                        let grad = Tensor::f_einsum("i,i...", &[&per_sample_clip_factor, &per_sample_grad])?;
+                        let mut grad = grad.f_add(&generate_noise_like(&grad, *noise_multiplier)?)?.f_view(&update_size[..])?;
+                        if let LossType::Mean(batch_size) = loss_type {
+                            let _ = grad.f_div_scalar_(*batch_size)?;
+                        }
+                        let update = update_fn(i, &param.i(0), grad)?;
+                        let _ = param.i(0).f_sub_(&update)?;
+                    }
+                    Ok(())
+                })
+            }
+        }
     }
 }
 
 pub enum LossType {
     Sum,
     Mean(i64),
-}
-
-pub struct PrivateParameters {
-    pub(crate) parameters: Vec<Tensor>,
-    max_grad_norm: f64,
-    noise_multiplier: f64,
-    loss_type: LossType,
-}
-
-impl PrivateParameters {
-    pub fn new(vs: &VarStore, max_grad_norm: f64, noise_multiplier: f64, loss_type: LossType) -> Self {
-        PrivateParameters { parameters: vs.trainable_variables(), max_grad_norm, noise_multiplier, loss_type }
-    }
-
-    // It is ok to retrieve the weights through
-    // this function as we erase the gradients prior
-    // to returning. Private data remain private.
-    pub fn into_inner(mut self) -> Vec<Tensor> {
-        self.zero_grad();
-        self.parameters
-    }
-}
-
-impl Updatable for PrivateParameters {
-    fn zero_grad(&mut self) {
-        for param in self.parameters.iter_mut() {
-            param.zero_grad();
-        }
-    }
-    fn update(&mut self, mut update_fn: impl FnMut(&Tensor, Tensor) -> Result<Tensor, TchError>) -> Result<(), TchError> {
-        tch::no_grad(|| {
-            let mut per_param_norms = Vec::with_capacity(self.parameters.len());
-            for param in self.parameters.iter() {
-                let per_sample_grad = param.grad();
-                let dims: Vec<i64> = (1..per_sample_grad.dim()).map(|x| x as i64).collect();
-                per_param_norms.push(per_sample_grad.f_norm_scalaropt_dim(2, &dims, false)?);
-            }
-            let per_sample_norms = Tensor::f_stack(&per_param_norms, 1)?
-                .f_norm_scalaropt_dim(2, &[1], false)?;
-            let max_grad_norm = Tensor::of_slice(&[self.max_grad_norm as f32]);
-            let per_sample_clip_factor = max_grad_norm.f_div(&per_sample_norms.f_add_scalar(1e-6)?)?.f_clamp(0., 1.)?;
-
-            for param in self.parameters.iter_mut() {
-                let per_sample_grad = param.grad();
-                let mut update_size = per_sample_grad.size();
-                update_size.remove(0);
-                let grad = Tensor::f_einsum("i,i...", &[&per_sample_clip_factor, &per_sample_grad])?;
-                let mut grad = grad.f_add(&generate_noise_like(&grad, self.noise_multiplier)?)?.f_view(&update_size[..])?;
-                if let LossType::Mean(batch_size) = self.loss_type {
-                    let _ = grad.f_div_scalar_(batch_size)?;
-                }
-                let update = update_fn(&param.i(0), grad)?;
-                let _ = param.i(0).f_sub_(&update)?;
-            }
-            Ok(())
-        })
-    }
 }
 
 fn generate_noise_like(tensor: &Tensor, std: f64) -> Result<Tensor, TchError> {
@@ -200,26 +199,34 @@ fn generate_noise_like(tensor: &Tensor, std: f64) -> Result<Tensor, TchError> {
     }
 }
 
-pub struct SGD<P> {
+pub fn initialize_statistics(length: usize) -> Vec<Option<Tensor>> {
+    let mut v = Vec::with_capacity(length);
+    for _ in 0..length {
+        v.push(None);
+    }
+    v
+}
+
+pub struct SGD {
     learning_rate: f64,
     weight_decay: f64,
     momentum: f64,
     dampening: f64,
     nesterov: bool,
-    pub parameters: P,
-    statistics: Option<Tensor>,
+    statistics: Vec<Option<Tensor>>,
+    pub parameters: Parameters,
 }
 
-impl<P> SGD<P> {
-    pub fn new(parameters: P, learning_rate: f64) -> Self {
+impl SGD {
+    pub fn new(parameters: Parameters, learning_rate: f64) -> Self {
         SGD {
             learning_rate: learning_rate,
             weight_decay: 0.,
             momentum: 0.,
             dampening: 0.,
             nesterov: false,
+            statistics: initialize_statistics(parameters.len()),
             parameters,
-            statistics: None,
         }
     }
     pub fn weight_decay(mut self, weight_decay: f64) -> Self {
@@ -240,34 +247,133 @@ impl<P> SGD<P> {
     }
 }
 
-impl<P: Updatable> Optimizer for SGD<P> {
+impl Optimizer for SGD {
     fn zero_grad(&mut self) -> Result<(), TchError> {
         self.parameters.zero_grad();
         Ok(())
     }
 
     fn step(&mut self) -> Result<(), TchError> {
-        self.parameters.update(|x, mut grad| {
+        self.parameters.update(|i, x, mut grad| {
             if self.weight_decay != 0. {
-                // grad = grad + self.weight_decay * x;
+                // grad = grad + weight_decay * x
                 grad = grad.f_add(&x.f_mul_scalar(self.weight_decay)?)?;
             }
             if self.momentum != 0. {
-                if let Some(b) = &mut self.statistics {
-                    // b = self.momentum * b + (1 - self.dampening) * grad;
+                if let Some(b) = &mut self.statistics[i] {
+                    // b = momentum * b + (1 - dampening) * grad
                     *b = b.f_mul_scalar(self.momentum)?.f_add(&grad.f_mul_scalar(1. - self.dampening)?)?;
                 } else {
-                    self.statistics = Some(grad.f_detach_copy()?)
+                    self.statistics[i] = Some(grad.f_detach_copy()?)
                 }
                 if self.nesterov {
-                    // grad = grad + self.momentum * self.statistics.unwrap();
-                    grad = grad.f_add(&(&self.statistics).as_ref().unwrap().f_mul_scalar(self.momentum)?)?;
+                    // grad = grad + momentum * statistics
+                    grad = grad.f_add(&(&self.statistics[i]).as_ref().unwrap().f_mul_scalar(self.momentum)?)?;
                 } else {
-                    grad = (&self.statistics).as_ref().unwrap().f_detach_copy()?;
+                    grad = (&self.statistics[i]).as_ref().unwrap().f_detach_copy()?;
                 }
             }
-            // update := self.learning_rate * grad;
+            // update = learning_rate * grad
             grad.f_mul_scalar(self.learning_rate)
+        })
+    }
+}
+
+pub struct Adam {
+    learning_rate: f64,
+    beta_1: f64,
+    beta_2: f64,
+    epsilon: f64,
+    weight_decay: f64,
+    amsgrad: bool,
+    m: Vec<Option<Tensor>>,
+    v: Vec<Option<Tensor>>,
+    v_hat_max: Vec<Option<Tensor>>,
+    t: i32,
+    pub parameters: Parameters,
+}
+
+impl Adam {
+    pub fn new(parameters: Parameters, learning_rate: f64) -> Self {
+        Adam {
+            learning_rate: learning_rate,
+            beta_1: 0.9,
+            beta_2: 0.999,
+            epsilon: 1e-8,
+            weight_decay: 0.,
+            amsgrad: false,
+            m: initialize_statistics(parameters.len()),
+            v: initialize_statistics(parameters.len()),
+            v_hat_max: initialize_statistics(parameters.len()),
+            t: 1,
+            parameters,
+        }
+    }
+    pub fn beta_1(mut self, beta_1: f64) -> Self {
+        self.beta_1 = beta_1;
+        self
+    }
+    pub fn beta_2(mut self, beta_2: f64) -> Self {
+        self.beta_2 = beta_2;
+        self
+    }
+    pub fn epsilon(mut self, epsilon: f64) -> Self {
+        self.epsilon = epsilon;
+        self
+    }
+    pub fn weight_decay(mut self, weight_decay: f64) -> Self {
+        self.weight_decay = weight_decay;
+        self
+    }
+    pub fn amsgrad(mut self, amsgrad: bool) -> Self {
+        self.amsgrad = amsgrad;
+        self
+    }
+}
+
+impl Optimizer for Adam {
+    fn zero_grad(&mut self) -> Result<(), TchError> {
+        self.parameters.zero_grad();
+        Ok(())
+    }
+
+    fn step(&mut self) -> Result<(), TchError> {
+        self.parameters.update(|i, x, mut grad| {
+            if self.weight_decay != 0. {
+                // grad = grad + weight_decay * x;
+                grad = grad.f_add(&x.f_mul_scalar(self.weight_decay)?)?;
+            }
+            if let Some(m) = &mut self.m[i] {
+                // m = beta_1 * m + (1 - beta_1) * grad
+                *m = m.f_mul_scalar(self.beta_1)?.f_add(&grad.f_mul_scalar(1. - self.beta_1)?)?;
+            } else {
+                self.m[i] = Some(grad.f_mul_scalar(1. - self.beta_1)?);
+            }
+            if let Some(v) = &mut self.v[i] {
+                // v = beta_2 * v + (1 - beta_1) * grad ** 2
+                *v = v.f_mul_scalar(self.beta_2)?.f_add(&grad.f_square()?.f_mul_scalar(1. - self.beta_2)?)?;
+            } else {
+                self.v[i] = Some(grad.f_square()?.f_mul_scalar(1. - self.beta_2)?);
+            }
+            // m_hat = m / (1 - beta_1 ** t)
+            let m_hat = self.m[i].as_ref().unwrap().f_div_scalar(1. - self.beta_1.powi(self.t))?;
+            // v_hat = v / (1 - beta_2 ** t)
+            let v_hat = self.v[i].as_ref().unwrap().f_div_scalar(1. - self.beta_2.powi(self.t))?;
+
+            if self.amsgrad {
+                if let Some(v_hat_max) = &mut self.v_hat_max[i] {
+                    // v_hat_max = max(v_hat_max, v_hat)
+                    *v_hat_max = v_hat_max.f_maximum(&v_hat)?;
+                } else {
+                    // v_hat_max = v_hat
+                    self.v_hat_max[i] = Some(v_hat.f_detach_copy()?);
+                }
+                // update = learning_rate * m_hat / (sqrt(v_hat_max) + epsilon)
+                m_hat.f_div(&self.v_hat_max[i].as_ref().unwrap().f_sqrt()?.f_add_scalar(self.epsilon)?)?.f_mul_scalar(self.learning_rate)
+            } else {
+                // update = learning_rate * m_hat / (sqrt(v_hat) + epsilon)
+                m_hat.f_div(&v_hat.f_sqrt()?.f_add_scalar(self.epsilon)?)?.f_mul_scalar(self.learning_rate)
+            }
         })
     }
 }

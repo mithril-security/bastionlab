@@ -1,4 +1,4 @@
-use crate::remote_torch::{TrainConfig, TestConfig, Accuracy};
+use crate::remote_torch::{TrainConfig, TestConfig, Accuracy, train_config};
 use crate::utils::*;
 use ring::hmac;
 use std::collections::{VecDeque, HashMap};
@@ -7,7 +7,7 @@ use std::io::Cursor;
 use std::sync::Mutex;
 use tch::nn::VarStore;
 use tch::{CModule, Device, IValue, TchError, Tensor, TrainableCModule, IndexOp};
-use private_learning::{Parameters, PrivateParameters, LossType, SGD, Optimizer, l2_loss};
+use private_learning::{Parameters, LossType, SGD, Optimizer, l2_loss, Adam};
 use std::sync::RwLock;
 
 #[derive(Debug)]
@@ -65,48 +65,68 @@ pub struct Module {
 
 impl Module {
     pub fn parameters(&self) -> Parameters {
-        Parameters::new(&self.var_store)
+        Parameters::standard(&self.var_store)
     }
-    pub fn private_parameters(&self, max_grad_norm: f64, noise_multiplier: f64, loss_type: LossType) -> PrivateParameters {
-        PrivateParameters::new(&self.var_store, max_grad_norm, noise_multiplier, loss_type)
+    pub fn private_parameters(&self, max_grad_norm: f64, noise_multiplier: f64, loss_type: LossType) -> Parameters {
+        Parameters::private(&self.var_store, max_grad_norm, noise_multiplier, loss_type)
     }
     pub fn set_device(&mut self, device: Device) {
         self.var_store.set_device(device);
     }
     pub fn train(&mut self, dataset: &Dataset, config: TrainConfig, device: Device) -> Result<(), TchError> {
         self.set_device(device);
-        let mut optimizer = if config.private_learning {
-            let parameters = self.private_parameters(1.0, 0.01, private_learning::LossType::Sum);
-            Box::new(SGD::new(parameters, config.learning_rate as f64)) as Box<dyn Optimizer>
-        } else {
-            let parameters = self.parameters();
-            Box::new(SGD::new(parameters, config.learning_rate as f64)) as Box<dyn Optimizer>
+
+        let parameters = match config.privacy.ok_or(TchError::FileFormat(String::from("Invalid privacy option")))? {
+            train_config::Privacy::Standard(_) => self.parameters(),
+            train_config::Privacy::DifferentialPrivacy(train_config::DpParameters { max_grad_norm, noise_multiplier }) => 
+                self.private_parameters(max_grad_norm as f64, noise_multiplier as f64, private_learning::LossType::Mean(config.batch_size as i64)),
         };
+        
+        // let parameters = if config.private_learning {
+        //     self.private_parameters(1.0, 0.01, private_learning::LossType::Sum)
+        // } else {
+        //     self.parameters()
+        // };
+        
+        let mut optimizer = match config.optimizer.ok_or(TchError::FileFormat(String::from("Invalid optimizer")))? {
+            train_config::Optimizer::Sgd(train_config::Sgd { learning_rate, weight_decay, momentum, dampening, nesterov }) =>
+                Box::new(SGD::new(parameters, learning_rate as f64)
+                    .weight_decay(weight_decay as f64)
+                    .momentum(momentum as f64)
+                    .dampening(dampening as f64)
+                    .nesterov(nesterov)) as Box<dyn Optimizer>,
+            train_config::Optimizer::Adam(train_config::Adam { learning_rate, beta_1, beta_2, epsilon, weight_decay, amsgrad }) =>
+                Box::new(Adam::new(parameters, learning_rate as f64)
+                    .beta_1(beta_1 as f64)
+                    .beta_2(beta_2 as f64)
+                    .epsilon(epsilon as f64)
+                    .weight_decay(weight_decay as f64)
+                    .amsgrad(amsgrad)) as Box<dyn Optimizer>,
+        };
+        
+        let mut metric = Metric::try_from_name(&config.metric)?;
+        
         for _ in 0..config.epochs {
             for (input, label) in dataset.iter() {
                 let input = input.f_view([1, 1])?.f_to(device)?;
                 let output = self.c_module.forward_ts(&[input])?;
-                let loss = l2_loss(&output, &label)?;
+                let loss = metric.compute(&output, &label)?;
                 optimizer.zero_grad()?;
                 loss.backward();
                 optimizer.step()?;
             }
         }
+        
         Ok(())
     }
     pub fn test(&self, dataset: &Dataset, config: TestConfig) -> Result<f32, TchError> {
-        let mut count = 0;
-        let mut correct = 0;
+        let mut metric = Metric::try_from_name(&config.metric)?;
         for (input, label) in dataset.iter() {
             let input = input.f_view([1, 1])?;
             let output = self.c_module.forward_ts(&[input])?;
-            let prediction = output.f_argmax(-1, false)?.double_value(&[]);
-            if prediction == label.double_value(&[]) {
-                correct += 1;
-            }
-            count += 1;
+            let _ = metric.compute(&output, &label)?;
         }
-        Ok(correct as f32 / count as f32)
+        Ok(metric.value())
     }
 }
 
@@ -134,36 +154,6 @@ impl TryFrom<&Module> for SizedObjectsBytes {
         value.var_store.save_to_stream(&mut buf)?;
         module_bytes.append_back(buf);
         Ok(module_bytes)
-    }
-}
-
-pub enum Metric {
-    Accuracy(usize, f32),
-    Loss(fn(&Tensor, &Tensor) -> Result<Tensor, TchError>, usize, f32),
-}
-
-impl Metric {
-    pub fn accumulate(&self, output: &Tensor, label: &Tensor) -> Result<(), TchError> {
-        match self {
-            Self::Accuracy(mut count, mut acc) => {
-                let prediction = output.f_argmax(-1, false)?.double_value(&[]);
-                if prediction == label.double_value(&[]) {
-                    acc += 1./(count as f32) * (1. - acc);
-                }
-                count += 1;
-            }
-            Self::Loss(f, mut count, mut loss) => {
-                loss += 1./(count as f32) * (f(output, label)?.double_value(&[]) as f32 - loss);
-                count += 1;
-            }
-        }
-        Ok(())
-    }
-    pub fn into_float(self) -> f32 {
-        match self {
-            Self::Accuracy(_, acc) => acc,
-            Self::Loss(_, _, loss) => loss,
-        }
     }
 }
 
@@ -235,10 +225,43 @@ impl TryFrom<&Dataset> for SizedObjectsBytes {
     }
 }
 
-// pub struct BatchedDataset {
-//     index_queue: Mutex<VecDeque<usize>>,
-//     data_store: Mutex<HashMap<usize, >>
-// }
+pub struct Metric {
+    loss_fn: Box<dyn Fn(&Tensor, &Tensor) -> Result<Tensor, TchError>>,
+    value: f32,
+    nb_samples: usize,
+}
+
+impl Metric {
+    pub fn try_from_name(loss_name: &str) -> Result<Self, TchError> {
+        Ok(Metric {
+            loss_fn: match loss_name {
+                "accuracy" => Box::new(|output, label| {
+                    let prediction = output.f_argmax(-1, false)?.double_value(&[]);
+                    Ok(if prediction == label.double_value(&[]) {
+                        Tensor::of_slice(&[1]).f_view([])?
+                    } else {
+                        Tensor::of_slice(&[1]).f_view([])?
+                    })
+                }),
+                "l2" => Box::new(|output, label| l2_loss(output, label)),
+                s => return Err(TchError::FileFormat(String::from(format!("Invalid loss name, unknown loss {}.", s)))),
+            },
+            value: 0.0,
+            nb_samples: 0,
+        })
+    }
+
+    pub fn compute(&mut self, output: &Tensor, label: &Tensor) -> Result<Tensor, TchError> {
+        let loss = (self.loss_fn)(output, label)?;
+        self.value += 1./(self.nb_samples as f32) * (loss.double_value(&[]) as f32 - self.value);
+        self.nb_samples += 1;
+        Ok(loss)
+    }
+
+    pub fn value(&self) -> f32 {
+        self.value
+    }
+}
 
 #[derive(Debug)]
 pub struct Artifact<T> {

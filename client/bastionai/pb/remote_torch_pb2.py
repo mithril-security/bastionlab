@@ -14,7 +14,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x12remote_torch.proto\x12\x0cremote_torch\"4\n\tReference\x12\x12\n\nidentifier\x18\x01 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x02 \x01(\t\":\n\x05\x43hunk\x12\x0c\n\x04\x64\x61ta\x18\x01 \x01(\x0c\x12\x13\n\x0b\x64\x65scription\x18\x02 \x01(\t\x12\x0e\n\x06secret\x18\x03 \x01(\x0c\"\x07\n\x05\x45mpty\"\x8a\x04\n\x0bTrainConfig\x12&\n\x05model\x18\x01 \x01(\x0b\x32\x17.remote_torch.Reference\x12(\n\x07\x64\x61taset\x18\x02 \x01(\x0b\x32\x17.remote_torch.Reference\x12\x18\n\x10private_learning\x18\x03 \x01(\x08\x12\x12\n\nbatch_size\x18\x04 \x01(\x05\x12\x0e\n\x06\x65pochs\x18\x05 \x01(\x05\x12\x0e\n\x06\x64\x65vice\x18\x07 \x01(\t\x12\x0e\n\x06metric\x18\x08 \x01(\t\x12,\n\x03sgd\x18\t \x01(\x0b\x32\x1d.remote_torch.TrainConfig.SGDH\x00\x12.\n\x04\x61\x64\x61m\x18\n \x01(\x0b\x32\x1e.remote_torch.TrainConfig.AdamH\x00\x1ai\n\x03SGD\x12\x15\n\rlearning_rate\x18\x01 \x01(\x02\x12\x14\n\x0cweight_decay\x18\x02 \x01(\x02\x12\x10\n\x08momentum\x18\x03 \x01(\x02\x12\x11\n\tdampening\x18\x04 \x01(\x02\x12\x10\n\x08nesterov\x18\x05 \x01(\x08\x1au\n\x04\x41\x64\x61m\x12\x15\n\rlearning_rate\x18\x01 \x01(\x02\x12\x0e\n\x06\x62\x65ta_1\x18\x02 \x01(\x02\x12\x0e\n\x06\x62\x65ta_2\x18\x03 \x01(\x02\x12\x0f\n\x07\x65psilon\x18\x04 \x01(\x02\x12\x14\n\x0cweight_decay\x18\x05 \x01(\x02\x12\x0f\n\x07\x61msgrad\x18\x06 \x01(\x08\x42\x0b\n\toptimizer\"\x82\x01\n\nTestConfig\x12&\n\x05model\x18\x01 \x01(\x0b\x32\x17.remote_torch.Reference\x12(\n\x07\x64\x61taset\x18\x02 \x01(\x0b\x32\x17.remote_torch.Reference\x12\x12\n\nbatch_size\x18\x03 \x01(\x05\x12\x0e\n\x06metric\x18\x04 \x01(\t\"3\n\nReferences\x12%\n\x04list\x18\x01 \x03(\x0b\x32\x17.remote_torch.Reference\"\x19\n\x08\x41\x63\x63uracy\x12\r\n\x05value\x18\x01 \x01(\x02\"\x17\n\x07\x44\x65vices\x12\x0c\n\x04list\x18\x01 \x03(\t2\xd4\x05\n\x0bRemoteTorch\x12?\n\x0bSendDataset\x12\x13.remote_torch.Chunk\x1a\x17.remote_torch.Reference\"\x00(\x01\x12=\n\tSendModel\x12\x13.remote_torch.Chunk\x1a\x17.remote_torch.Reference\"\x00(\x01\x12@\n\x0c\x46\x65tchDataset\x12\x17.remote_torch.Reference\x1a\x13.remote_torch.Chunk\"\x00\x30\x01\x12?\n\x0b\x46\x65tchModule\x12\x17.remote_torch.Reference\x1a\x13.remote_torch.Chunk\"\x00\x30\x01\x12?\n\rDeleteDataset\x12\x17.remote_torch.Reference\x1a\x13.remote_torch.Empty\"\x00\x12>\n\x0c\x44\x65leteModule\x12\x17.remote_torch.Reference\x1a\x13.remote_torch.Empty\"\x00\x12\x42\n\x0f\x41vailableModels\x12\x13.remote_torch.Empty\x1a\x18.remote_torch.References\"\x00\x12\x44\n\x11\x41vailableDatasets\x12\x13.remote_torch.Empty\x1a\x18.remote_torch.References\"\x00\x12@\n\x10\x41vailableDevices\x12\x13.remote_torch.Empty\x1a\x15.remote_torch.Devices\"\x00\x12\x39\n\x05Train\x12\x19.remote_torch.TrainConfig\x1a\x13.remote_torch.Empty\"\x00\x12:\n\x04Test\x12\x18.remote_torch.TestConfig\x1a\x16.remote_torch.Accuracy\"\x00\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x12remote_torch.proto\x12\x0cremote_torch\"4\n\tReference\x12\x12\n\nidentifier\x18\x01 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x02 \x01(\t\":\n\x05\x43hunk\x12\x0c\n\x04\x64\x61ta\x18\x01 \x01(\x0c\x12\x13\n\x0b\x64\x65scription\x18\x02 \x01(\t\x12\x0e\n\x06secret\x18\x03 \x01(\x0c\"\x07\n\x05\x45mpty\"\xad\x05\n\x0bTrainConfig\x12&\n\x05model\x18\x01 \x01(\x0b\x32\x17.remote_torch.Reference\x12(\n\x07\x64\x61taset\x18\x02 \x01(\x0b\x32\x17.remote_torch.Reference\x12\x12\n\nbatch_size\x18\x03 \x01(\x05\x12\x0e\n\x06\x65pochs\x18\x04 \x01(\x05\x12\x0e\n\x06\x64\x65vice\x18\x05 \x01(\t\x12\x0e\n\x06metric\x18\x06 \x01(\t\x12\'\n\x08standard\x18\x07 \x01(\x0b\x32\x13.remote_torch.EmptyH\x00\x12\x46\n\x14\x64ifferential_privacy\x18\x08 \x01(\x0b\x32&.remote_torch.TrainConfig.DpParametersH\x00\x12,\n\x03sgd\x18\t \x01(\x0b\x32\x1d.remote_torch.TrainConfig.SGDH\x01\x12.\n\x04\x61\x64\x61m\x18\n \x01(\x0b\x32\x1e.remote_torch.TrainConfig.AdamH\x01\x1a?\n\x0c\x44pParameters\x12\x15\n\rmax_grad_norm\x18\x01 \x01(\x02\x12\x18\n\x10noise_multiplier\x18\x02 \x01(\x02\x1ai\n\x03SGD\x12\x15\n\rlearning_rate\x18\x01 \x01(\x02\x12\x14\n\x0cweight_decay\x18\x02 \x01(\x02\x12\x10\n\x08momentum\x18\x03 \x01(\x02\x12\x11\n\tdampening\x18\x04 \x01(\x02\x12\x10\n\x08nesterov\x18\x05 \x01(\x08\x1au\n\x04\x41\x64\x61m\x12\x15\n\rlearning_rate\x18\x01 \x01(\x02\x12\x0e\n\x06\x62\x65ta_1\x18\x02 \x01(\x02\x12\x0e\n\x06\x62\x65ta_2\x18\x03 \x01(\x02\x12\x0f\n\x07\x65psilon\x18\x04 \x01(\x02\x12\x14\n\x0cweight_decay\x18\x05 \x01(\x02\x12\x0f\n\x07\x61msgrad\x18\x06 \x01(\x08\x42\t\n\x07privacyB\x0b\n\toptimizer\"\x82\x01\n\nTestConfig\x12&\n\x05model\x18\x01 \x01(\x0b\x32\x17.remote_torch.Reference\x12(\n\x07\x64\x61taset\x18\x02 \x01(\x0b\x32\x17.remote_torch.Reference\x12\x12\n\nbatch_size\x18\x03 \x01(\x05\x12\x0e\n\x06metric\x18\x04 \x01(\t\"3\n\nReferences\x12%\n\x04list\x18\x01 \x03(\x0b\x32\x17.remote_torch.Reference\"\x19\n\x08\x41\x63\x63uracy\x12\r\n\x05value\x18\x01 \x01(\x02\"\x17\n\x07\x44\x65vices\x12\x0c\n\x04list\x18\x01 \x03(\t2\xd4\x05\n\x0bRemoteTorch\x12?\n\x0bSendDataset\x12\x13.remote_torch.Chunk\x1a\x17.remote_torch.Reference\"\x00(\x01\x12=\n\tSendModel\x12\x13.remote_torch.Chunk\x1a\x17.remote_torch.Reference\"\x00(\x01\x12@\n\x0c\x46\x65tchDataset\x12\x17.remote_torch.Reference\x1a\x13.remote_torch.Chunk\"\x00\x30\x01\x12?\n\x0b\x46\x65tchModule\x12\x17.remote_torch.Reference\x1a\x13.remote_torch.Chunk\"\x00\x30\x01\x12?\n\rDeleteDataset\x12\x17.remote_torch.Reference\x1a\x13.remote_torch.Empty\"\x00\x12>\n\x0c\x44\x65leteModule\x12\x17.remote_torch.Reference\x1a\x13.remote_torch.Empty\"\x00\x12\x42\n\x0f\x41vailableModels\x12\x13.remote_torch.Empty\x1a\x18.remote_torch.References\"\x00\x12\x44\n\x11\x41vailableDatasets\x12\x13.remote_torch.Empty\x1a\x18.remote_torch.References\"\x00\x12@\n\x10\x41vailableDevices\x12\x13.remote_torch.Empty\x1a\x15.remote_torch.Devices\"\x00\x12\x39\n\x05Train\x12\x19.remote_torch.TrainConfig\x1a\x13.remote_torch.Empty\"\x00\x12:\n\x04Test\x12\x18.remote_torch.TestConfig\x1a\x16.remote_torch.Accuracy\"\x00\x62\x06proto3')
 
 
 
@@ -22,6 +22,7 @@ _REFERENCE = DESCRIPTOR.message_types_by_name['Reference']
 _CHUNK = DESCRIPTOR.message_types_by_name['Chunk']
 _EMPTY = DESCRIPTOR.message_types_by_name['Empty']
 _TRAINCONFIG = DESCRIPTOR.message_types_by_name['TrainConfig']
+_TRAINCONFIG_DPPARAMETERS = _TRAINCONFIG.nested_types_by_name['DpParameters']
 _TRAINCONFIG_SGD = _TRAINCONFIG.nested_types_by_name['SGD']
 _TRAINCONFIG_ADAM = _TRAINCONFIG.nested_types_by_name['Adam']
 _TESTCONFIG = DESCRIPTOR.message_types_by_name['TestConfig']
@@ -51,6 +52,13 @@ _sym_db.RegisterMessage(Empty)
 
 TrainConfig = _reflection.GeneratedProtocolMessageType('TrainConfig', (_message.Message,), {
 
+  'DpParameters' : _reflection.GeneratedProtocolMessageType('DpParameters', (_message.Message,), {
+    'DESCRIPTOR' : _TRAINCONFIG_DPPARAMETERS,
+    '__module__' : 'remote_torch_pb2'
+    # @@protoc_insertion_point(class_scope:remote_torch.TrainConfig.DpParameters)
+    })
+  ,
+
   'SGD' : _reflection.GeneratedProtocolMessageType('SGD', (_message.Message,), {
     'DESCRIPTOR' : _TRAINCONFIG_SGD,
     '__module__' : 'remote_torch_pb2'
@@ -69,6 +77,7 @@ TrainConfig = _reflection.GeneratedProtocolMessageType('TrainConfig', (_message.
   # @@protoc_insertion_point(class_scope:remote_torch.TrainConfig)
   })
 _sym_db.RegisterMessage(TrainConfig)
+_sym_db.RegisterMessage(TrainConfig.DpParameters)
 _sym_db.RegisterMessage(TrainConfig.SGD)
 _sym_db.RegisterMessage(TrainConfig.Adam)
 
@@ -111,19 +120,21 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _EMPTY._serialized_start=150
   _EMPTY._serialized_end=157
   _TRAINCONFIG._serialized_start=160
-  _TRAINCONFIG._serialized_end=682
-  _TRAINCONFIG_SGD._serialized_start=445
-  _TRAINCONFIG_SGD._serialized_end=550
-  _TRAINCONFIG_ADAM._serialized_start=552
-  _TRAINCONFIG_ADAM._serialized_end=669
-  _TESTCONFIG._serialized_start=685
-  _TESTCONFIG._serialized_end=815
-  _REFERENCES._serialized_start=817
-  _REFERENCES._serialized_end=868
-  _ACCURACY._serialized_start=870
-  _ACCURACY._serialized_end=895
-  _DEVICES._serialized_start=897
-  _DEVICES._serialized_end=920
-  _REMOTETORCH._serialized_start=923
-  _REMOTETORCH._serialized_end=1647
+  _TRAINCONFIG._serialized_end=845
+  _TRAINCONFIG_DPPARAMETERS._serialized_start=532
+  _TRAINCONFIG_DPPARAMETERS._serialized_end=595
+  _TRAINCONFIG_SGD._serialized_start=597
+  _TRAINCONFIG_SGD._serialized_end=702
+  _TRAINCONFIG_ADAM._serialized_start=704
+  _TRAINCONFIG_ADAM._serialized_end=821
+  _TESTCONFIG._serialized_start=848
+  _TESTCONFIG._serialized_end=978
+  _REFERENCES._serialized_start=980
+  _REFERENCES._serialized_end=1031
+  _ACCURACY._serialized_start=1033
+  _ACCURACY._serialized_end=1058
+  _DEVICES._serialized_start=1060
+  _DEVICES._serialized_end=1083
+  _REMOTETORCH._serialized_start=1086
+  _REMOTETORCH._serialized_end=1810
 # @@protoc_insertion_point(module_scope)
