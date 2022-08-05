@@ -24,7 +24,7 @@
 - [:bangbang: Disclaimer](#bangbang-disclaimer)
 
 # :lock: Motivation
-Machine learning models are often trained on large volumes of sensitive or proprietary data, and incur significant costs in development to their owners. Yet, models are often trained in the Cloud as maintenance costs of on-premise infrastructures (both hardware and skilled engineers) are prohibitive to most actors. This setting inherently poses security and privacy threats: even with end-to-end encryption, either the Cloud provider or an insider may read data as it is processed on the remote server.
+Machine learning models are often trained on large volumes of sensitive or proprietary data, and incur significant costs in development to their owners. Yet, models are often trained in the Cloud as maintenance costs of on-premise infrastructure (both hardware and skilled engineers) are prohibitive to most actors. This setting inherently poses security and privacy threats: even with end-to-end encryption, either the Cloud provider or an insider may read data as it is processed on the remote server.
 
 Moreover, as typical Deep Learning models benefit from increased amounts of data and compute power, actors in the ML industry tend to group to share data and resources. This Federated Learning approach conflicts with security and privacy constraints, especially in the medical sector which uses very sensitive personal data.
 
