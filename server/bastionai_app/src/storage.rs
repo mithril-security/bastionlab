@@ -1,12 +1,11 @@
-use crate::remote_torch::{TrainConfig, TestConfig, Accuracy, train_config};
+use crate::remote_torch::{TrainConfig, TestConfig, train_config};
 use crate::utils::*;
 use ring::hmac;
-use std::collections::{VecDeque, HashMap};
 use std::convert::{TryFrom, TryInto};
 use std::io::Cursor;
 use std::sync::Mutex;
 use tch::nn::VarStore;
-use tch::{CModule, Device, IValue, TchError, Tensor, TrainableCModule, IndexOp};
+use tch::{Device, TchError, Tensor, TrainableCModule, IndexOp};
 use private_learning::{Parameters, LossType, SGD, Optimizer, l2_loss, Adam};
 use std::sync::RwLock;
 use rand::{seq::SliceRandom, thread_rng};
@@ -128,7 +127,7 @@ impl Module {
         
         for _ in 0..config.epochs {
             for (input, label) in dataset.iter_shuffle(config.batch_size as usize) {
-                let input = input.f_view([1, 1])?.f_to(device)?;
+                let input = input.f_to(device)?;
                 let label = label.f_to(device)?;
                 let output = self.c_module.forward_ts(&[input])?;
                 let loss = metric.compute(&output, &label)?;
@@ -201,8 +200,10 @@ impl<'a> Iterator for DatasetIter<'a> {
     type Item = (Tensor, Tensor);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let indexes = self.indexes.drain(..self.batch_size);
-        if indexes.len() == self.batch_size {
+        if self.indexes.len() < self.batch_size {
+            None
+        } else {
+            let indexes = self.indexes.drain(..self.batch_size);
             let samples = self.dataset.samples.lock().unwrap();
             let labels = self.dataset.labels.lock().unwrap();
             let items = indexes.map(|idx| (samples.i(idx), labels.i(idx)));
@@ -215,8 +216,6 @@ impl<'a> Iterator for DatasetIter<'a> {
             let samples = Tensor::stack(&samples, 0);
             let labels = Tensor::stack(&labels, 0);
             Some((samples, labels))
-        } else {
-            None
         }
     }
 }

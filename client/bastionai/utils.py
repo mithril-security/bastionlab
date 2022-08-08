@@ -188,7 +188,7 @@ def data_chunks_generator(stream: Iterator[bytes], description: str, secret: byt
 
 
 def make_batch(data: List[Tuple[Tensor, Tensor]]) -> Tuple[Tensor, Tensor]:
-    return (torch.cat([x[0] for x in data]), torch.cat([x[1] for x in data]))
+    return (torch.stack([x[0] for x in data]), torch.stack([x[1] for x in data]))
 
 
 def serialize_dataset(dataset: Dataset, description: str, secret: bytes, chunk_size=1000, batch_size=1024) -> Iterator[Chunk]:

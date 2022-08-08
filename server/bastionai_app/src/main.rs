@@ -1,11 +1,8 @@
-use tch::{Tensor, Device};
-use tch::vision::dataset;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
 use tokio_stream::wrappers::ReceiverStream;
 use std::collections::HashMap;
 use uuid::Uuid;
 use std::sync::RwLock;
-use private_learning::{SGD, l2_loss, Optimizer};
 
 mod remote_torch {
     tonic::include_proto!("remote_torch");

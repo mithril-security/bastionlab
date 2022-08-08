@@ -1,10 +1,9 @@
 use super::Chunk;
 use crate::storage::{Artifact, SizedObjectsBytes};
 use crate::Reference;
-use tch::{TchError, Tensor, Device};
+use tch::{TchError, Device};
 use tokio::sync::mpsc;
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
-use tonic::Request;
 use tonic::{Response, Status};
 use uuid::Uuid;
 
@@ -64,13 +63,6 @@ pub async fn stream_data(
     });
 
     Response::new(ReceiverStream::new(rx))
-}
-
-pub fn serialize_tensor(tensor: &Tensor) -> Vec<u8> {
-    let capacity = tensor.numel() * tensor.f_kind().unwrap().elt_size_in_bytes();
-    let mut bytes = vec![0; capacity];
-    tensor.copy_data_u8(&mut bytes, tensor.numel());
-    bytes
 }
 
 pub fn parse_reference(reference: Reference) -> Result<Uuid, Status> {

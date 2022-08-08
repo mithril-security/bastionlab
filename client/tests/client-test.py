@@ -34,6 +34,8 @@ class LRegDataset(Dataset):
 lreg_model = LReg()
 lreg_dataset = LRegDataset()
 
+print(f"X size: {lreg_dataset.X.size()}")
+
 with Connection("localhost", 50051) as client:
     model_ref = client.send_model(
         lreg_model, "1D Linear Regression Model", b"secret")
