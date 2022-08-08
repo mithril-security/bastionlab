@@ -15,11 +15,14 @@ from utils import (ArtifactDataset, deserialize_weights_to_model,
 
 @dataclass
 class Client:
+    """
+        BastionAI client class.
+    """
     stub: RemoteTorchStub
 
     def send_model(self, model: Module, description: str, secret: bytes) -> Reference:
         """
-        send_model provides the endpoint to uploading Pytorch Modules to BastionAI.
+        This method provides the endpoint to uploading Pytorch Modules to BastionAI.
 
         Args:
             model (Module): This is Pytorch's nn.Module.
@@ -33,7 +36,7 @@ class Client:
 
     def send_dataset(self, dataset: Dataset, description: str, secret: bytes) -> Reference:
         """
-        send_data provides the endpoint for uploading Pytorch DataLoader to BastionAI.
+        This method provides the endpoint for uploading Pytorch DataLoader to BastionAI.
 
         Args:
             model (Module): This is Pytorch's nn.Module.
@@ -47,6 +50,8 @@ class Client:
 
     def fetch_model_weights(self, model: Module, ref: Reference) -> None:
         """
+        This method provides the endpoint for fetching the weights of a trained model with a BastionAI reference.
+
         Args:
             model (Module): This is Pytorch's nn.Module corresponding to an uploaded module.
             ref (Reference): BastionAI reference object corresponding to a module.
@@ -59,6 +64,8 @@ class Client:
 
     def fetch_dataset(self, ref: Reference) -> ArtifactDataset:
         """
+        This method provides the endpoint for fetching the dataset with a BastionAI reference.
+
         Args:
             ref (Reference): BastionAI reference object corresponding to a dataset.
 
@@ -69,6 +76,8 @@ class Client:
 
     def get_available_models(self) -> List[Reference]:
         """
+            This method provides the endpoint for getting a list of references of available models on BastionAI.
+
             Returns: 
                 List[Reference]: A list of BastionAI available model references.
         """
@@ -76,6 +85,8 @@ class Client:
 
     def get_available_datasets(self) -> List[Reference]:
         """
+            This method provides the endpoint for getting a list of references of datasets on BastionAI.
+
             Returns: 
                 List[Reference]: A list of BastionAI available dataset references.
         """
@@ -83,6 +94,8 @@ class Client:
 
     def get_available_devices(self) -> List[Devices]:
         """
+            This method provides the endpoint for getting a list of devices available on BastionAI.
+
             Returns: 
                 List[Reference]: A list of BastionAI available device references.
         """
@@ -90,7 +103,7 @@ class Client:
 
     def train(self, config: TrainConfig) -> None:
         """
-        Trains model with `TrainConfig` on BastionAI server.
+        This method provides the endpoint for training a model with `TrainConfig` configuration on BastionAI.
 
         Args:
             config (TrainConfig): Training configuration to pass to BastionAI.
@@ -101,13 +114,19 @@ class Client:
 
     def test(self, config: TestConfig) -> float:
         """
-            
+        This method provides the endpoint for testing a dataset on a model on BastionAI.
+
+        Args:
+            config (TestConfig): Configuration for testing on BastionAI.
+        
+        Returns:
+            float
         """
         return self.stub.Test(config)
 
     def delete_dataset(self, ref: Reference) -> None:
         """
-            Delets dataset with reference from BastionAI server.
+            This method provides the endpoint for deleting a dataset with reference on BastionAI.
 
             Args:
                 ref (Reference): BastionAI reference to dataset.
@@ -119,7 +138,7 @@ class Client:
 
     def delete_module(self, ref: Reference) -> None:
         """
-            Delets model with reference from BastionAI server.
+            This method provides the endpoint for deleting a model with reference from BastionAI.
 
             Args:
                 ref (Reference): BastionAI reference to dataset.
@@ -132,6 +151,9 @@ class Client:
 
 @dataclass
 class Connection:
+    """
+    Connection class for creating connections to BastionAI.
+    """
     host: str
     port: int
     channel: Any = None

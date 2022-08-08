@@ -18,6 +18,12 @@ def parametrized_modules(module: Module) -> Iterable[Module]:
     """
     Recursively iterates over all submodules, returning those that
     have parameters (as opposed to "wrapper modules" that just organize modules).
+
+    Args:
+        module (Module): torch.nn.Module
+    
+    Returns:
+        Iterable[Module]
     """
     yield from (
         (m_name, m)  # type: ignore
@@ -30,6 +36,12 @@ def trainable_modules(module: Module) -> Iterable[Tuple[str, Module]]:
     """
     Recursively iterates over all submodules, returning those that
     have parameters and are trainable (ie they want a grad).
+
+    Args:
+        module (Module): torch.nn.Module
+
+    Returns:
+        Iterable[Tuple[str, Module]]
     """
     yield from (
         (m_name, m)
@@ -42,6 +54,12 @@ def trainable_parameters(module: Module) -> Iterable[Tuple[str, Parameter]]:
     """
     Recursively iterates over all parameters, returning those that
     are trainable (ie they want a grad).
+
+    Args:
+        module (Module): torch.nn.Module
+    
+    Returns:
+        Iterable[Tuple[str, Parameter]]
     """
     yield from (
         (p_name, p) for (p_name, p) in module.named_parameters() if p.requires_grad
@@ -78,13 +96,6 @@ class ArtifactDataset:
 
     def __getitem__(self, index: int) -> Any:
         return (self.samples[index], self.labels[index])
-
-
-# def chunk_bounds(size: int, chunk_size: int) -> Iterator[Tuple[int, int]]:
-#     start = 0
-#     while start < size:
-#         yield (start, min(start + chunk_size, size))
-#         start += chunk_size
 
 
 def chunks(it: Iterator[T], chunk_size: int, cat_fn: Callable[[List[T]], U] = lambda x: x) -> Iterator[U]:
