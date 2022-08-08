@@ -59,15 +59,15 @@ class RemoteTorchStub(object):
                 request_serializer=remote__torch__pb2.Empty.SerializeToString,
                 response_deserializer=remote__torch__pb2.Devices.FromString,
                 )
-        self.Train = channel.unary_unary(
+        self.Train = channel.unary_stream(
                 '/remote_torch.RemoteTorch/Train',
                 request_serializer=remote__torch__pb2.TrainConfig.SerializeToString,
-                response_deserializer=remote__torch__pb2.Empty.FromString,
+                response_deserializer=remote__torch__pb2.Metric.FromString,
                 )
-        self.Test = channel.unary_unary(
+        self.Test = channel.unary_stream(
                 '/remote_torch.RemoteTorch/Test',
                 request_serializer=remote__torch__pb2.TestConfig.SerializeToString,
-                response_deserializer=remote__torch__pb2.Accuracy.FromString,
+                response_deserializer=remote__torch__pb2.Metric.FromString,
                 )
 
 
@@ -188,15 +188,15 @@ def add_RemoteTorchServicer_to_server(servicer, server):
                     request_deserializer=remote__torch__pb2.Empty.FromString,
                     response_serializer=remote__torch__pb2.Devices.SerializeToString,
             ),
-            'Train': grpc.unary_unary_rpc_method_handler(
+            'Train': grpc.unary_stream_rpc_method_handler(
                     servicer.Train,
                     request_deserializer=remote__torch__pb2.TrainConfig.FromString,
-                    response_serializer=remote__torch__pb2.Empty.SerializeToString,
+                    response_serializer=remote__torch__pb2.Metric.SerializeToString,
             ),
-            'Test': grpc.unary_unary_rpc_method_handler(
+            'Test': grpc.unary_stream_rpc_method_handler(
                     servicer.Test,
                     request_deserializer=remote__torch__pb2.TestConfig.FromString,
-                    response_serializer=remote__torch__pb2.Accuracy.SerializeToString,
+                    response_serializer=remote__torch__pb2.Metric.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -372,9 +372,9 @@ class RemoteTorch(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/remote_torch.RemoteTorch/Train',
+        return grpc.experimental.unary_stream(request, target, '/remote_torch.RemoteTorch/Train',
             remote__torch__pb2.TrainConfig.SerializeToString,
-            remote__torch__pb2.Empty.FromString,
+            remote__torch__pb2.Metric.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
@@ -389,8 +389,8 @@ class RemoteTorch(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/remote_torch.RemoteTorch/Test',
+        return grpc.experimental.unary_stream(request, target, '/remote_torch.RemoteTorch/Test',
             remote__torch__pb2.TestConfig.SerializeToString,
-            remote__torch__pb2.Accuracy.FromString,
+            remote__torch__pb2.Metric.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)

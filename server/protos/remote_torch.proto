@@ -79,6 +79,8 @@ message Metric {
     float value = 1;
     int32 batch = 2;
     int32 epoch = 3;
+    int32 nb_epochs = 4;
+    int32 nb_batches = 5;
 }
 
 service RemoteTorch {

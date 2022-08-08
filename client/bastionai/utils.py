@@ -7,7 +7,10 @@ from torch.nn import Module
 from torch.nn.parameter import Parameter
 from torch.utils.data import Dataset
 
-from pb.remote_torch_pb2 import Chunk
+from tqdm import tqdm
+from time import sleep
+
+from pb.remote_torch_pb2 import Chunk, Metric
 
 T = TypeVar('T')
 U = TypeVar('U')
@@ -228,3 +231,37 @@ def deserialize_weights_to_model(model: Module, chunks: Iterator[Chunk]) -> None
                 name_buf = []
 
         parent.__setattr__(name, torch.nn.Parameter(value))
+
+def metric_tqdm_with_epochs(metric_stream: Iterator[Metric], name: str):
+    def new_tqdm_bar(epoch: int, nb_epochs, nb_batches):
+        t = tqdm(
+                total=nb_batches,
+                unit="batch",
+                bar_format="{l_bar}{bar:20}{r_bar}",
+            )
+        t.set_description("Epoch {}/{} - train".format(epoch, nb_epochs))
+        return t
+
+    t = None
+    for metric in metric_stream:
+        if t is None:
+            t = new_tqdm_bar(1, metric.nb_epochs, metric.nb_batches)
+        t.update()
+        t.set_postfix(**{name: "{:.4f}".format(metric.value)})
+        if metric.batch == 1:
+            t.close()
+            if metric.epoch < metric.nb_epochs - 1:
+                t = new_tqdm_bar(metric.epoch + 2, metric.nb_epochs, metric.nb_batches)
+
+def metric_tqdm(metric_stream: Iterator[Metric], name: str):
+    with tqdm(
+        metric_stream,
+        unit="batch",
+        bar_format="{l_bar}{bar:20}{r_bar}",
+    ) as t:
+        t.set_description("Test")
+
+        for metric in t:
+            if t.total is None:
+                t.total = metric.nb_batches
+            t.set_postfix(**{name: "{:.4f}".format(metric.value)})

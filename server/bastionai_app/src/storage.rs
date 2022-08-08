@@ -106,6 +106,14 @@ impl ModuleTrainer {
         self.optimizer.step()?;
         Ok((self.current_epoch as i32, i as i32, self.metric.value()))
     }
+
+    pub fn nb_epochs(&self) -> usize {
+        self.epochs
+    }
+
+    pub fn nb_batches(&self) -> usize {
+        self.dataset.read().unwrap().len() / self.batch_size
+    }
 }
 
 impl Iterator for ModuleTrainer {
@@ -116,6 +124,7 @@ impl Iterator for ModuleTrainer {
             Some(self.train_on_batch(i, input, label))
         } else {
             self.current_epoch += 1;
+            self.metric.reset();
             if self.current_epoch < self.epochs {
                 self.dataloader = Dataset::iter_shuffle(Arc::clone(&self.dataset), self.batch_size).enumerate();
                 self.next()
@@ -131,15 +140,18 @@ pub struct ModuleTester {
     metric: Metric,
     device: Device,
     dataloader: std::iter::Enumerate<DatasetIter>,
+    nb_batches: usize,
 }
 
 impl ModuleTester {
     pub fn new(module: Arc<RwLock<Module>>, dataset: Arc<RwLock<Dataset>>, metric: Metric, device: Device, batch_size: usize) -> ModuleTester {
+        let nb_batches = dataset.read().unwrap().len() / batch_size;
         ModuleTester {
             module,
             metric,
             device,
             dataloader: Dataset::iter_shuffle(dataset, batch_size).enumerate(),
+            nb_batches,
         }
     }
 
@@ -149,6 +161,10 @@ impl ModuleTester {
         let output = self.module.read().unwrap().c_module.forward_ts(&[input])?;
         let _ = self.metric.compute(&output, &label)?;
         Ok((i as i32, self.metric.value()))
+    }
+
+    pub fn nb_batches(&self) -> usize {
+        self.nb_batches
     }
 }
 
@@ -376,7 +392,7 @@ impl Metric {
                 s => return Err(TchError::FileFormat(String::from(format!("Invalid loss name, unknown loss {}.", s)))),
             },
             value: 0.0,
-            nb_samples: 0,
+            nb_samples: 1,
         })
     }
 
@@ -391,6 +407,12 @@ impl Metric {
     /// Returns the average.
     pub fn value(&self) -> f32 {
         self.value
+    }
+
+    /// Resets the metric
+    pub fn reset(&mut self) {
+        self.value = 0.0;
+        self.nb_samples = 1;
     }
 }
 
