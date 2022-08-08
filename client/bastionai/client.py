@@ -40,10 +40,12 @@ class Client:
         return self.stub.AvailableDevices(Empty())
 
     def train(self, config: TrainConfig) -> None:
-        self.stub.Train(config)
+        for metric in self.stub.Train(config):
+            print(metric)
 
     def test(self, config: TestConfig) -> float:
-        return self.stub.Test(config)
+        for metric in self.stub.Test(config):
+            print(metric)
 
     def delete_dataset(self, ref: Reference) -> None:
         self.stub.DeleteDataset(ref)

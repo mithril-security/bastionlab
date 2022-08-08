@@ -1,11 +1,13 @@
 use super::Chunk;
-use crate::storage::{Artifact, SizedObjectsBytes};
+use crate::storage::{Artifact, SizedObjectsBytes, Dataset, Module};
 use crate::Reference;
 use tch::{TchError, Device};
 use tokio::sync::mpsc;
+use std::sync::{Arc, RwLock};
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use tonic::{Response, Status};
 use uuid::Uuid;
+use crate::remote_torch::{Metric, TrainConfig, TestConfig};
 
 pub fn read_le_usize(input: &mut &[u8]) -> usize {
     let (int_bytes, rest) = input.split_at(std::mem::size_of::<usize>());
@@ -38,13 +40,55 @@ pub async fn unstream_data(
     Ok(Artifact::new(data_bytes.into(), description, &secret))
 }
 
+pub async fn stream_module_train(
+    module: Arc<RwLock<Module>>,
+    dataset: Arc<RwLock<Dataset>>,
+    config: TrainConfig,
+    device: Device,
+) -> Response<ReceiverStream<Result<Metric, Status>>> {
+    let (tx, rx) = mpsc::channel(100_000_000);
+    tokio::spawn(async move {
+        let trainer = Module::train(module, dataset, config, device).unwrap();
+        for res in trainer {
+            let res = tcherror_to_status(res.map(|(epoch, batch, value)| Metric { epoch, batch, value }));
+            println!("{:?}", res);
+            tx.send(res)
+                .await
+                .unwrap(); // Fix this
+        }
+    });
+
+    Response::new(ReceiverStream::new(rx))
+}
+
+pub async fn stream_module_test(
+    module: Arc<RwLock<Module>>,
+    dataset: Arc<RwLock<Dataset>>,
+    config: TestConfig,
+    device: Device,
+) -> Response<ReceiverStream<Result<Metric, Status>>> {
+    let (tx, rx) = mpsc::channel(100_000_000);
+    tokio::spawn(async move {
+        let trainer = Module::test(module, dataset, config, device).unwrap();
+        for res in trainer {
+            let res = tcherror_to_status(res.map(|(batch, value)| Metric { epoch: 0, batch, value }));
+            println!("{:?}", res);
+            tx.send(res)
+                .await
+                .unwrap(); // Fix this
+        }
+    });
+
+    Response::new(ReceiverStream::new(rx))
+}
+
 pub async fn stream_data(
     artifact: Artifact<SizedObjectsBytes>,
     chunk_size: usize,
 ) -> Response<ReceiverStream<Result<Chunk, Status>>> {
     let (tx, rx) = mpsc::channel(4);
 
-    let raw_bytes: Vec<u8> = artifact.data.into_inner().unwrap().into();
+    let raw_bytes: Vec<u8> = Arc::try_unwrap(artifact.data).unwrap().into_inner().unwrap().into();
     tokio::spawn(async move {
         for (i, bytes) in raw_bytes.chunks(chunk_size).enumerate() {
             tx.send(Ok(Chunk {

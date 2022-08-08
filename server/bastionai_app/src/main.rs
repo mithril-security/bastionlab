@@ -2,12 +2,12 @@ use tonic::{transport::Server, Request, Response, Status, Streaming};
 use tokio_stream::wrappers::ReceiverStream;
 use std::collections::HashMap;
 use uuid::Uuid;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
 mod remote_torch {
     tonic::include_proto!("remote_torch");
 }
-use remote_torch::{Reference, References, Empty, Chunk, TrainConfig, TestConfig, Accuracy, Devices};
+use remote_torch::{Reference, References, Empty, Chunk, TrainConfig, TestConfig, Accuracy, Devices, Metric};
 use remote_torch::remote_torch_server::{RemoteTorch, RemoteTorchServer};
 
 mod storage;
@@ -34,6 +34,8 @@ impl BastionAIServer {
 impl RemoteTorch for BastionAIServer {
     type FetchDatasetStream = ReceiverStream<Result<Chunk, Status>>;
     type FetchModuleStream = ReceiverStream<Result<Chunk, Status>>;
+    type TrainStream = ReceiverStream<Result<Metric, Status>>;
+    type TestStream = ReceiverStream<Result<Metric, Status>>;
 
     async fn send_dataset(&self, request: Request<Streaming<Chunk>>) -> Result<Response<Reference>, Status> {
         let dataset: Artifact<Dataset> = tcherror_to_status((unstream_data(request.into_inner()).await?).deserialize())?;
@@ -88,35 +90,40 @@ impl RemoteTorch for BastionAIServer {
         Ok(Response::new(Empty {}))
     }
 
-    async fn train(&self, request: Request<TrainConfig>) -> Result<Response<Empty>, Status> {
+    async fn train(&self, request: Request<TrainConfig>) -> Result<Response<Self::TrainStream>, Status> {
         let config = request.into_inner();
         let dataset_id = parse_reference(config.dataset.clone().ok_or(Status::invalid_argument("Not found"))?)?;
         let module_id = parse_reference(config.model.clone().ok_or(Status::invalid_argument("Not found"))?)?;
         let device = parse_device(&config.device)?;
-        {
+        let module = {
+            let mut modules = self.modules.read().unwrap();
+            let module = modules.get(&module_id).ok_or(Status::not_found("Not found"))?;
+            Arc::clone(&module.data)
+        };
+        let dataset = {
             let datasets = self.datasets.read().unwrap();
-            let mut modules = self.modules.write().unwrap();
             let dataset = datasets.get(&dataset_id).ok_or(Status::not_found("Not found"))?;
-            let module = modules.get_mut(&module_id).ok_or(Status::not_found("Not found"))?;
-            tcherror_to_status(module.data.write().unwrap().train(&dataset.data.read().unwrap(), config, device))?;
-        }
-        Ok(Response::new(Empty {}))
+            Arc::clone(&dataset.data)
+        };
+        Ok(stream_module_train(module, dataset, config, device).await)
     }
 
-    async fn test(&self, request: Request<TestConfig>) -> Result<Response<Accuracy>, Status> {
+    async fn test(&self, request: Request<TestConfig>) -> Result<Response<Self::TestStream>, Status> {
         let config = request.into_inner();
         let dataset_id = parse_reference(config.dataset.clone().ok_or(Status::invalid_argument("Not found"))?)?;
         let module_id = parse_reference(config.model.clone().ok_or(Status::invalid_argument("Not found"))?)?;
         let device = parse_device(&config.device)?;
-        let accuracy = {
-            let datasets = self.datasets.read().unwrap();
-            let modules = self.modules.read().unwrap();
-            let dataset = datasets.get(&dataset_id).ok_or(Status::not_found("Not found"))?;
+        let module = {
+            let mut modules = self.modules.read().unwrap();
             let module = modules.get(&module_id).ok_or(Status::not_found("Not found"))?;
-            let acc = tcherror_to_status(module.data.write().unwrap().test(&dataset.data.read().unwrap(), config, device))?;
-            acc
+            Arc::clone(&module.data)
         };
-        Ok(Response::new(Accuracy { value: accuracy }))
+        let dataset = {
+            let datasets = self.datasets.read().unwrap();
+            let dataset = datasets.get(&dataset_id).ok_or(Status::not_found("Not found"))?;
+            Arc::clone(&dataset.data)
+        };
+        Ok(stream_module_test(module, dataset, config, device).await)
     }
 
     async fn available_models(&self, _request: Request<Empty>) -> Result<Response<References>, Status> {

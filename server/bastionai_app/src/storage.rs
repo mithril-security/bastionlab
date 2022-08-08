@@ -7,7 +7,7 @@ use std::sync::Mutex;
 use tch::nn::VarStore;
 use tch::{Device, TchError, Tensor, TrainableCModule, IndexOp};
 use private_learning::{Parameters, LossType, SGD, Optimizer, l2_loss, Adam};
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 use rand::{seq::SliceRandom, thread_rng};
 
 /// A buffer to serialize/deserialize byte data in the following format:
@@ -69,6 +69,101 @@ impl Iterator for SizedObjectsBytes {
     }
 }
 
+pub struct ModuleTrainer {
+    module: Arc<RwLock<Module>>,
+    dataset: Arc<RwLock<Dataset>>,
+    optimizer: Box<dyn Optimizer + Send>,
+    metric: Metric,
+    device: Device,
+    epochs: usize,
+    batch_size: usize,
+    dataloader: std::iter::Enumerate<DatasetIter>,
+    current_epoch: usize,
+}
+
+impl ModuleTrainer {
+    pub fn new(module: Arc<RwLock<Module>>, dataset: Arc<RwLock<Dataset>>, optimizer: Box<dyn Optimizer + Send>, metric: Metric, device: Device, epochs: usize, batch_size: usize) -> ModuleTrainer {
+        ModuleTrainer {
+            module,
+            dataset: Arc::clone(&dataset),
+            optimizer,
+            metric,
+            device,
+            epochs,
+            batch_size,
+            dataloader: Dataset::iter_shuffle(dataset, batch_size).enumerate(),
+            current_epoch: 0,
+        }
+    }
+
+    pub fn train_on_batch(&mut self, i: usize, input: Tensor, label: Tensor) -> Result<(i32, i32, f32), TchError> {
+        let input = input.f_to(self.device)?;
+        let label = label.f_to(self.device)?;
+        let output = self.module.read().unwrap().c_module.forward_ts(&[input])?;
+        let loss = self.metric.compute(&output, &label)?;
+        self.optimizer.zero_grad()?;
+        loss.backward();
+        self.optimizer.step()?;
+        Ok((self.current_epoch as i32, i as i32, self.metric.value()))
+    }
+}
+
+impl Iterator for ModuleTrainer {
+    type Item = Result<(i32, i32, f32), TchError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some((i, (input, label))) = self.dataloader.next() {
+            Some(self.train_on_batch(i, input, label))
+        } else {
+            self.current_epoch += 1;
+            if self.current_epoch < self.epochs {
+                self.dataloader = Dataset::iter_shuffle(Arc::clone(&self.dataset), self.batch_size).enumerate();
+                self.next()
+            } else {
+                None
+            }
+        }
+    }
+}
+
+pub struct ModuleTester {
+    module: Arc<RwLock<Module>>,
+    metric: Metric,
+    device: Device,
+    dataloader: std::iter::Enumerate<DatasetIter>,
+}
+
+impl ModuleTester {
+    pub fn new(module: Arc<RwLock<Module>>, dataset: Arc<RwLock<Dataset>>, metric: Metric, device: Device, batch_size: usize) -> ModuleTester {
+        ModuleTester {
+            module,
+            metric,
+            device,
+            dataloader: Dataset::iter_shuffle(dataset, batch_size).enumerate(),
+        }
+    }
+
+    pub fn test_on_batch(&mut self, i: usize, input: Tensor, label: Tensor) -> Result<(i32, f32), TchError> {
+        let input = input.f_to(self.device)?;
+        let label = label.f_to(self.device)?;
+        let output = self.module.read().unwrap().c_module.forward_ts(&[input])?;
+        let _ = self.metric.compute(&output, &label)?;
+        Ok((i as i32, self.metric.value()))
+    }
+}
+
+impl Iterator for ModuleTester {
+    type Item = Result<(i32, f32), TchError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some((i, (input, label))) = self.dataloader.next() {
+            Some(self.test_on_batch(i, input, label))
+        } else {
+            None
+        }
+    }
+}
+
 /// A Trainable Model
 /// 
 /// Contains a reference to a `tch::TrainableCModule`
@@ -96,62 +191,46 @@ impl Module {
     pub fn set_device(&mut self, device: Device) {
         self.var_store.set_device(device);
     }
-    /// Trains the model using a very basic training loop on specified `device`.
+    /// Returns an ietrator that trains the model using a very basic training loop on specified `device`
+    /// and that yields the loss after every iteration (i.e. every batch).
     /// Loss, optimizer, batch size and more are read from the given `config`.
-    pub fn train(&mut self, dataset: &Dataset, config: TrainConfig, device: Device) -> Result<(), TchError> {
-        self.set_device(device);
+    pub fn train(s: Arc<RwLock<Self>>, dataset: Arc<RwLock<Dataset>>, config: TrainConfig, device: Device) -> Result<ModuleTrainer, TchError> {
+        let mut module = s.write().unwrap();
+        module.set_device(device);
 
         let parameters = match config.privacy.ok_or(TchError::FileFormat(String::from("Invalid privacy option")))? {
-            train_config::Privacy::Standard(_) => self.parameters(),
+            train_config::Privacy::Standard(_) => module.parameters(),
             train_config::Privacy::DifferentialPrivacy(train_config::DpParameters { max_grad_norm, noise_multiplier }) => 
-                self.private_parameters(max_grad_norm as f64, noise_multiplier as f64, private_learning::LossType::Mean(config.batch_size as i64)),
+                module.private_parameters(max_grad_norm as f64, noise_multiplier as f64, private_learning::LossType::Mean(config.batch_size as i64)),
         };
         
-        let mut optimizer = match config.optimizer.ok_or(TchError::FileFormat(String::from("Invalid optimizer")))? {
+        let optimizer = match config.optimizer.ok_or(TchError::FileFormat(String::from("Invalid optimizer")))? {
             train_config::Optimizer::Sgd(train_config::Sgd { learning_rate, weight_decay, momentum, dampening, nesterov }) =>
                 Box::new(SGD::new(parameters, learning_rate as f64)
                     .weight_decay(weight_decay as f64)
                     .momentum(momentum as f64)
                     .dampening(dampening as f64)
-                    .nesterov(nesterov)) as Box<dyn Optimizer>,
+                    .nesterov(nesterov)) as Box<dyn Optimizer + Send>,
             train_config::Optimizer::Adam(train_config::Adam { learning_rate, beta_1, beta_2, epsilon, weight_decay, amsgrad }) =>
                 Box::new(Adam::new(parameters, learning_rate as f64)
                     .beta_1(beta_1 as f64)
                     .beta_2(beta_2 as f64)
                     .epsilon(epsilon as f64)
                     .weight_decay(weight_decay as f64)
-                    .amsgrad(amsgrad)) as Box<dyn Optimizer>,
+                    .amsgrad(amsgrad)) as Box<dyn Optimizer + Send>,
         };
         
-        let mut metric = Metric::try_from_name(&config.metric)?;
+        let metric = Metric::try_from_name(&config.metric)?;
         
-        for _ in 0..config.epochs {
-            for (input, label) in dataset.iter_shuffle(config.batch_size as usize) {
-                let input = input.f_to(device)?;
-                let label = label.f_to(device)?;
-                let output = self.c_module.forward_ts(&[input])?;
-                let loss = metric.compute(&output, &label)?;
-                optimizer.zero_grad()?;
-                loss.backward();
-                optimizer.step()?;
-            }
-        }
-        
-        Ok(())
+        Ok(ModuleTrainer::new(Arc::clone(&s), dataset, optimizer, metric, device, config.epochs as usize, config.batch_size as usize))
     }
     /// Tests the model using a very basic test loop on specified `device`.
     /// Metric, batch size and more are read from the given `config`.
-    pub fn test(&mut self, dataset: &Dataset, config: TestConfig, device: Device) -> Result<f32, TchError> {
-        self.set_device(device);
+    pub fn test(s: Arc<RwLock<Module>>, dataset: Arc<RwLock<Dataset>>, config: TestConfig, device: Device) -> Result<ModuleTester, TchError> {
+        s.write().unwrap().set_device(device);
 
         let mut metric = Metric::try_from_name(&config.metric)?;
-        for (input, label) in dataset.iter(config.batch_size as usize) {
-            let input = input.f_view([1, 1])?.f_to(device)?;
-            let label = label.f_to(device)?;
-            let output = self.c_module.forward_ts(&[input])?;
-            let _ = metric.compute(&output, &label)?;
-        }
-        Ok(metric.value())
+        Ok(ModuleTester::new(s, dataset, metric, device, config.batch_size as usize))
     }
 }
 
@@ -190,13 +269,13 @@ pub struct Dataset {
 }
 
 /// Simple iterator over [`Dataset`].
-pub struct DatasetIter<'a> {
-    dataset: &'a Dataset,
+pub struct DatasetIter {
+    dataset: Arc<RwLock<Dataset>>,
     indexes: Vec<i64>,
     batch_size: usize,
 }
 
-impl<'a> Iterator for DatasetIter<'a> {
+impl Iterator for DatasetIter {
     type Item = (Tensor, Tensor);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -204,8 +283,9 @@ impl<'a> Iterator for DatasetIter<'a> {
             None
         } else {
             let indexes = self.indexes.drain(..self.batch_size);
-            let samples = self.dataset.samples.lock().unwrap();
-            let labels = self.dataset.labels.lock().unwrap();
+            let dataset = self.dataset.read().unwrap();
+            let samples = dataset.samples.lock().unwrap();
+            let labels = dataset.labels.lock().unwrap();
             let items = indexes.map(|idx| (samples.i(idx), labels.i(idx)));
             let mut samples = Vec::with_capacity(self.batch_size);
             let mut labels = Vec::with_capacity(self.batch_size);
@@ -222,15 +302,15 @@ impl<'a> Iterator for DatasetIter<'a> {
 
 impl Dataset {
     /// Returns an iterator over this dataset.
-    pub fn iter_shuffle(&self, batch_size: usize) -> DatasetIter<'_> {
+    pub fn iter_shuffle(s: Arc<RwLock<Self>>, batch_size: usize) -> DatasetIter {
         let mut rng = thread_rng();
-        let mut indexes: Vec<_> = (0..self.len() as i64).collect();
+        let mut indexes: Vec<_> = (0..s.read().unwrap().len() as i64).collect();
         indexes.shuffle(&mut rng);
-        DatasetIter { dataset: &self, indexes, batch_size }
+        DatasetIter { dataset: s, indexes, batch_size }
     }
-    pub fn iter(&self, batch_size: usize) -> DatasetIter<'_> {
-        let indexes: Vec<_> = (0..self.len() as i64).collect();
-        DatasetIter { dataset: &self, indexes, batch_size }
+    pub fn iter(s: Arc<RwLock<Self>>, batch_size: usize) -> DatasetIter {
+        let indexes: Vec<_> = (0..s.read().unwrap().len() as i64).collect();
+        DatasetIter { dataset: s, indexes, batch_size }
     }
 
     pub fn len(&self) -> usize {
@@ -274,7 +354,7 @@ impl TryFrom<&Dataset> for SizedObjectsBytes {
 
 /// A loss function with average statistics
 pub struct Metric {
-    loss_fn: Box<dyn Fn(&Tensor, &Tensor) -> Result<Tensor, TchError>>,
+    loss_fn: Box<dyn Fn(&Tensor, &Tensor) -> Result<Tensor, TchError> + Send>,
     value: f32,
     nb_samples: usize,
 }
@@ -317,7 +397,7 @@ impl Metric {
 /// Stored object with encryption and owner key
 #[derive(Debug)]
 pub struct Artifact<T> {
-    pub data: RwLock<T>,
+    pub data: Arc<RwLock<T>>,
     pub description: String,
     pub secret: hmac::Key,
 }
@@ -326,7 +406,7 @@ impl<T> Artifact<T> {
     /// Creates new artifact from data, description and owner key.
     pub fn new(data: T, description: String, secret: &[u8]) -> Self {
         Artifact {
-            data: RwLock::new(data),
+            data: Arc::new(RwLock::new(data)),
             description,
             secret: hmac::Key::new(hmac::HMAC_SHA256, &secret),
         }
@@ -351,7 +431,7 @@ where
     /// Note that the object should be convertible into a SizedObjectBytes (with `TryInto`).
     pub fn serialize(&self) -> Result<Artifact<SizedObjectsBytes>, TchError> {
         Ok(Artifact {
-            data: RwLock::new((&*self.data.read().unwrap()).try_into()?),
+            data: Arc::new(RwLock::new((&*self.data.read().unwrap()).try_into()?)),
             description: self.description.clone(),
             secret: self.secret.clone(),
         })
@@ -367,7 +447,7 @@ impl Artifact<SizedObjectsBytes> {
         self,
     ) -> Result<Artifact<T>, TchError> {
         Ok(Artifact {
-            data: RwLock::new(T::try_from(self.data.into_inner().unwrap())?),
+            data: Arc::new(RwLock::new(T::try_from(Arc::try_unwrap(self.data).unwrap().into_inner().unwrap())?)),
             description: self.description,
             secret: self.secret,
         })
