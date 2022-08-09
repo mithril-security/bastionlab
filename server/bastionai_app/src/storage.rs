@@ -1,19 +1,19 @@
-use crate::remote_torch::{TrainConfig, TestConfig, train_config};
+use crate::remote_torch::{train_config, TestConfig, TrainConfig};
 use crate::utils::*;
+use private_learning::{l2_loss, Adam, LossType, Optimizer, Parameters, SGD};
+use rand::{seq::SliceRandom, thread_rng};
 use ring::hmac;
 use std::convert::{TryFrom, TryInto};
 use std::io::Cursor;
 use std::sync::Mutex;
-use tch::nn::VarStore;
-use tch::{Device, TchError, Tensor, TrainableCModule, IndexOp};
-use private_learning::{Parameters, LossType, SGD, Optimizer, l2_loss, Adam};
 use std::sync::{Arc, RwLock};
-use rand::{seq::SliceRandom, thread_rng};
+use tch::nn::VarStore;
+use tch::{Device, IndexOp, TchError, Tensor, TrainableCModule};
 
 /// A buffer to serialize/deserialize byte data in the following format:
-/// 
+///
 /// `obj = [length: 8 bytes, little-endian | data: length bytes]`
-/// 
+///
 /// `stream = [obj, ...]`
 #[derive(Debug)]
 pub struct SizedObjectsBytes(Vec<u8>);
@@ -82,7 +82,15 @@ pub struct ModuleTrainer {
 }
 
 impl ModuleTrainer {
-    pub fn new(module: Arc<RwLock<Module>>, dataset: Arc<RwLock<Dataset>>, optimizer: Box<dyn Optimizer + Send>, metric: Metric, device: Device, epochs: usize, batch_size: usize) -> ModuleTrainer {
+    pub fn new(
+        module: Arc<RwLock<Module>>,
+        dataset: Arc<RwLock<Dataset>>,
+        optimizer: Box<dyn Optimizer + Send>,
+        metric: Metric,
+        device: Device,
+        epochs: usize,
+        batch_size: usize,
+    ) -> ModuleTrainer {
         ModuleTrainer {
             module,
             dataset: Arc::clone(&dataset),
@@ -96,7 +104,12 @@ impl ModuleTrainer {
         }
     }
 
-    pub fn train_on_batch(&mut self, i: usize, input: Tensor, label: Tensor) -> Result<(i32, i32, f32), TchError> {
+    pub fn train_on_batch(
+        &mut self,
+        i: usize,
+        input: Tensor,
+        label: Tensor,
+    ) -> Result<(i32, i32, f32), TchError> {
         let input = input.f_to(self.device)?;
         let label = label.f_to(self.device)?;
         let output = self.module.read().unwrap().c_module.forward_ts(&[input])?;
@@ -126,7 +139,8 @@ impl Iterator for ModuleTrainer {
             self.current_epoch += 1;
             self.metric.reset();
             if self.current_epoch < self.epochs {
-                self.dataloader = Dataset::iter_shuffle(Arc::clone(&self.dataset), self.batch_size).enumerate();
+                self.dataloader =
+                    Dataset::iter_shuffle(Arc::clone(&self.dataset), self.batch_size).enumerate();
                 self.next()
             } else {
                 None
@@ -144,7 +158,13 @@ pub struct ModuleTester {
 }
 
 impl ModuleTester {
-    pub fn new(module: Arc<RwLock<Module>>, dataset: Arc<RwLock<Dataset>>, metric: Metric, device: Device, batch_size: usize) -> ModuleTester {
+    pub fn new(
+        module: Arc<RwLock<Module>>,
+        dataset: Arc<RwLock<Dataset>>,
+        metric: Metric,
+        device: Device,
+        batch_size: usize,
+    ) -> ModuleTester {
         let nb_batches = dataset.read().unwrap().len() / batch_size;
         ModuleTester {
             module,
@@ -155,7 +175,12 @@ impl ModuleTester {
         }
     }
 
-    pub fn test_on_batch(&mut self, i: usize, input: Tensor, label: Tensor) -> Result<(i32, f32), TchError> {
+    pub fn test_on_batch(
+        &mut self,
+        i: usize,
+        input: Tensor,
+        label: Tensor,
+    ) -> Result<(i32, f32), TchError> {
         let input = input.f_to(self.device)?;
         let label = label.f_to(self.device)?;
         let output = self.module.read().unwrap().c_module.forward_ts(&[input])?;
@@ -181,7 +206,7 @@ impl Iterator for ModuleTester {
 }
 
 /// A Trainable Model
-/// 
+///
 /// Contains a reference to a `tch::TrainableCModule`
 /// obtained from bytes data that has been serialized with
 /// `torch.jit.save` and a VarStore that holds the models
@@ -200,7 +225,12 @@ impl Module {
     }
     /// Get the model's parameters wrapped in a `Parameter::Private` variant
     /// to train the model with DP-SGD with an [`Optimizer`].
-    pub fn private_parameters(&self, max_grad_norm: f64, noise_multiplier: f64, loss_type: LossType) -> Parameters {
+    pub fn private_parameters(
+        &self,
+        max_grad_norm: f64,
+        noise_multiplier: f64,
+        loss_type: LossType,
+    ) -> Parameters {
         Parameters::private(&self.var_store, max_grad_norm, noise_multiplier, loss_type)
     }
     /// Moves all the parameters to the specified device.
@@ -210,43 +240,94 @@ impl Module {
     /// Returns an ietrator that trains the model using a very basic training loop on specified `device`
     /// and that yields the loss after every iteration (i.e. every batch).
     /// Loss, optimizer, batch size and more are read from the given `config`.
-    pub fn train(s: Arc<RwLock<Self>>, dataset: Arc<RwLock<Dataset>>, config: TrainConfig, device: Device) -> Result<ModuleTrainer, TchError> {
+    pub fn train(
+        s: Arc<RwLock<Self>>,
+        dataset: Arc<RwLock<Dataset>>,
+        config: TrainConfig,
+        device: Device,
+    ) -> Result<ModuleTrainer, TchError> {
         let mut module = s.write().unwrap();
         module.set_device(device);
 
-        let parameters = match config.privacy.ok_or(TchError::FileFormat(String::from("Invalid privacy option")))? {
+        let parameters = match config
+            .privacy
+            .ok_or(TchError::FileFormat(String::from("Invalid privacy option")))?
+        {
             train_config::Privacy::Standard(_) => module.parameters(),
-            train_config::Privacy::DifferentialPrivacy(train_config::DpParameters { max_grad_norm, noise_multiplier }) => 
-                module.private_parameters(max_grad_norm as f64, noise_multiplier as f64, private_learning::LossType::Mean(config.batch_size as i64)),
+            train_config::Privacy::DifferentialPrivacy(train_config::DpParameters {
+                max_grad_norm,
+                noise_multiplier,
+            }) => module.private_parameters(
+                max_grad_norm as f64,
+                noise_multiplier as f64,
+                private_learning::LossType::Mean(config.batch_size as i64),
+            ),
         };
-        
-        let optimizer = match config.optimizer.ok_or(TchError::FileFormat(String::from("Invalid optimizer")))? {
-            train_config::Optimizer::Sgd(train_config::Sgd { learning_rate, weight_decay, momentum, dampening, nesterov }) =>
-                Box::new(SGD::new(parameters, learning_rate as f64)
+
+        let optimizer = match config
+            .optimizer
+            .ok_or(TchError::FileFormat(String::from("Invalid optimizer")))?
+        {
+            train_config::Optimizer::Sgd(train_config::Sgd {
+                learning_rate,
+                weight_decay,
+                momentum,
+                dampening,
+                nesterov,
+            }) => Box::new(
+                SGD::new(parameters, learning_rate as f64)
                     .weight_decay(weight_decay as f64)
                     .momentum(momentum as f64)
                     .dampening(dampening as f64)
-                    .nesterov(nesterov)) as Box<dyn Optimizer + Send>,
-            train_config::Optimizer::Adam(train_config::Adam { learning_rate, beta_1, beta_2, epsilon, weight_decay, amsgrad }) =>
-                Box::new(Adam::new(parameters, learning_rate as f64)
+                    .nesterov(nesterov),
+            ) as Box<dyn Optimizer + Send>,
+            train_config::Optimizer::Adam(train_config::Adam {
+                learning_rate,
+                beta_1,
+                beta_2,
+                epsilon,
+                weight_decay,
+                amsgrad,
+            }) => Box::new(
+                Adam::new(parameters, learning_rate as f64)
                     .beta_1(beta_1 as f64)
                     .beta_2(beta_2 as f64)
                     .epsilon(epsilon as f64)
                     .weight_decay(weight_decay as f64)
-                    .amsgrad(amsgrad)) as Box<dyn Optimizer + Send>,
+                    .amsgrad(amsgrad),
+            ) as Box<dyn Optimizer + Send>,
         };
-        
+
         let metric = Metric::try_from_name(&config.metric)?;
-        
-        Ok(ModuleTrainer::new(Arc::clone(&s), dataset, optimizer, metric, device, config.epochs as usize, config.batch_size as usize))
+
+        Ok(ModuleTrainer::new(
+            Arc::clone(&s),
+            dataset,
+            optimizer,
+            metric,
+            device,
+            config.epochs as usize,
+            config.batch_size as usize,
+        ))
     }
     /// Tests the model using a very basic test loop on specified `device`.
     /// Metric, batch size and more are read from the given `config`.
-    pub fn test(s: Arc<RwLock<Module>>, dataset: Arc<RwLock<Dataset>>, config: TestConfig, device: Device) -> Result<ModuleTester, TchError> {
+    pub fn test(
+        s: Arc<RwLock<Module>>,
+        dataset: Arc<RwLock<Dataset>>,
+        config: TestConfig,
+        device: Device,
+    ) -> Result<ModuleTester, TchError> {
         s.write().unwrap().set_device(device);
 
         let mut metric = Metric::try_from_name(&config.metric)?;
-        Ok(ModuleTester::new(s, dataset, metric, device, config.batch_size as usize))
+        Ok(ModuleTester::new(
+            s,
+            dataset,
+            metric,
+            device,
+            config.batch_size as usize,
+        ))
     }
 }
 
@@ -322,11 +403,19 @@ impl Dataset {
         let mut rng = thread_rng();
         let mut indexes: Vec<_> = (0..s.read().unwrap().len() as i64).collect();
         indexes.shuffle(&mut rng);
-        DatasetIter { dataset: s, indexes, batch_size }
+        DatasetIter {
+            dataset: s,
+            indexes,
+            batch_size,
+        }
     }
     pub fn iter(s: Arc<RwLock<Self>>, batch_size: usize) -> DatasetIter {
         let indexes: Vec<_> = (0..s.read().unwrap().len() as i64).collect();
-        DatasetIter { dataset: s, indexes, batch_size }
+        DatasetIter {
+            dataset: s,
+            indexes,
+            batch_size,
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -338,16 +427,25 @@ impl TryFrom<SizedObjectsBytes> for Dataset {
     type Error = TchError;
 
     fn try_from(value: SizedObjectsBytes) -> Result<Self, Self::Error> {
-        let dataset = Dataset { samples: Mutex::new(Tensor::of_slice::<f32>(&[])), labels: Mutex::new(Tensor::of_slice::<f32>(&[])) };
+        let dataset = Dataset {
+            samples: Mutex::new(Tensor::of_slice::<f32>(&[])),
+            labels: Mutex::new(Tensor::of_slice::<f32>(&[])),
+        };
         for object in value {
-            let data = Tensor::load_multi_from_stream_with_device(Cursor::new(object), Device::Cpu)?;
+            let data =
+                Tensor::load_multi_from_stream_with_device(Cursor::new(object), Device::Cpu)?;
             for (name, tensor) in data {
                 let mut samples = dataset.samples.lock().unwrap();
                 let mut labels = dataset.labels.lock().unwrap();
                 match &*name {
                     "samples" => *samples = Tensor::f_cat(&[&*samples, &tensor], 0)?,
                     "labels" => *labels = Tensor::f_cat(&[&*labels, &tensor], 0)?,
-                    s => return Err(TchError::FileFormat(String::from(format!("Invalid data, unknown field {}.", s)))),
+                    s => {
+                        return Err(TchError::FileFormat(String::from(format!(
+                            "Invalid data, unknown field {}.",
+                            s
+                        ))))
+                    }
                 };
             }
         }
@@ -361,7 +459,13 @@ impl TryFrom<&Dataset> for SizedObjectsBytes {
     fn try_from(value: &Dataset) -> Result<Self, Self::Error> {
         let mut dataset_bytes = SizedObjectsBytes::new();
         let mut buf = Vec::new();
-        Tensor::save_multi_to_stream(&[("samples", &*value.samples.lock().unwrap()), ("labels", &*value.labels.lock().unwrap())], &mut buf)?;
+        Tensor::save_multi_to_stream(
+            &[
+                ("samples", &*value.samples.lock().unwrap()),
+                ("labels", &*value.labels.lock().unwrap()),
+            ],
+            &mut buf,
+        )?;
         dataset_bytes.append_back(buf);
 
         Ok(dataset_bytes)
@@ -389,7 +493,12 @@ impl Metric {
                     })
                 }),
                 "l2" => Box::new(|output, label| l2_loss(output, label)),
-                s => return Err(TchError::FileFormat(String::from(format!("Invalid loss name, unknown loss {}.", s)))),
+                s => {
+                    return Err(TchError::FileFormat(String::from(format!(
+                        "Invalid loss name, unknown loss {}.",
+                        s
+                    ))))
+                }
             },
             value: 0.0,
             nb_samples: 1,
@@ -399,7 +508,7 @@ impl Metric {
     /// Computes the metric's value given `output` and `label` and updates the average.
     pub fn compute(&mut self, output: &Tensor, label: &Tensor) -> Result<Tensor, TchError> {
         let loss = (self.loss_fn)(output, label)?;
-        self.value += 1./(self.nb_samples as f32) * (loss.double_value(&[]) as f32 - self.value);
+        self.value += 1. / (self.nb_samples as f32) * (loss.double_value(&[]) as f32 - self.value);
         self.nb_samples += 1;
         Ok(loss)
     }
@@ -449,7 +558,7 @@ where
 {
     /// Serializes the contained object and returns a new artifact that contains
     /// a SizedObjectBytes instead of the object.
-    /// 
+    ///
     /// Note that the object should be convertible into a SizedObjectBytes (with `TryInto`).
     pub fn serialize(&self) -> Result<Artifact<SizedObjectsBytes>, TchError> {
         Ok(Artifact {
@@ -463,13 +572,15 @@ where
 impl Artifact<SizedObjectsBytes> {
     /// Deserializes the contained [`SizedObjectBytes`] object and returns a new artifact that contains
     /// a the deserialized object instead.
-    /// 
+    ///
     /// Note that the object should be convertible from a SizedObjectBytes (with `TryForm`).
     pub fn deserialize<T: TryFrom<SizedObjectsBytes, Error = TchError> + std::fmt::Debug>(
         self,
     ) -> Result<Artifact<T>, TchError> {
         Ok(Artifact {
-            data: Arc::new(RwLock::new(T::try_from(Arc::try_unwrap(self.data).unwrap().into_inner().unwrap())?)),
+            data: Arc::new(RwLock::new(T::try_from(
+                Arc::try_unwrap(self.data).unwrap().into_inner().unwrap(),
+            )?)),
             description: self.description,
             secret: self.secret,
         })

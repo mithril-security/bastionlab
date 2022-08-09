@@ -44,13 +44,13 @@ with Connection("::1", 50051) as client:
     print(f"Dataset ref: {dataset_ref}")
 
     #model_list = client.get_available_models()
-    #for model in model_list.list:  # type: ignore
+    # for model in model_list.list:  # type: ignore
     #    print(f"{model.identifier}, {model.description}")
 
     print(f"Weight: {lreg_model.fc1.inner.expanded_weight}")
     print(f"Devices: {client.get_available_devices()}")
 
-    #print(list(client.fetch_dataset(dataset_ref)))
+    # print(list(client.fetch_dataset(dataset_ref)))
 
     client.train(TrainConfig(
         model=model_ref,
@@ -82,3 +82,8 @@ with Connection("::1", 50051) as client:
         device="cpu",
         metric="l2",
     ))
+    # print("Model's accuracy: {}".format(client.test(TestConfig(
+    #    model=model_ref,
+    #    dataset=dataset_ref,
+    #    batch_size=2,
+    # ))))
