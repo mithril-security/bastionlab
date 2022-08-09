@@ -87,7 +87,8 @@ message TestConfig {
     Reference model = 1;
     Reference dataset = 2;
     int32 batch_size = 3;
-    string metric = 4;
+    string device = 4;
+    string metric = 5;
 }
 
 message References {
@@ -102,6 +103,14 @@ message Devices {
     repeated string list = 1;
 }
 
+message Metric {
+    float value = 1;
+    int32 batch = 2;
+    int32 epoch = 3;
+    int32 nb_epochs = 4;
+    int32 nb_batches = 5;
+}
+
 service RemoteTorch {
     rpc SendDataset (stream Chunk) returns (Reference) {}
     rpc SendModel (stream Chunk) returns (Reference) {}
@@ -112,6 +121,6 @@ service RemoteTorch {
     rpc AvailableModels(Empty) returns (References) {}
     rpc AvailableDatasets(Empty) returns (References) {}
     rpc AvailableDevices(Empty) returns (Devices) {}
-    rpc Train (TrainConfig) returns (Empty) {}
-    rpc Test (TestConfig) returns (Accuracy) {}
+    rpc Train (TrainConfig) returns (stream Metric) {}
+    rpc Test (TestConfig) returns (stream Metric) {}
 }
