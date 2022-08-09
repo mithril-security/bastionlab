@@ -1,0 +1,14 @@
+site_name: "BastionAI"
+
+site_url: https://www.mithrilsecurity.io/
+
+repo_url: https://github.com/mithril-security/bastionai
+
+theme: "readthedocs"
+
+nav:
+  - Home: "index.md"
+  - "Getting Started":
+      - getting-started/quick-start.md'
+  - Resources:
+    - "Client API reference": "resources/bastionai/index.html"
