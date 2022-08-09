@@ -1,2 +1,3 @@
 torch
 grpcio
+grpcio-tools
