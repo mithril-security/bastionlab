@@ -9,6 +9,6 @@ theme: "readthedocs"
 nav:
   - Home: "index.md"
   - "Getting Started":
-      - getting-started/quick-start.md'
+      - 'getting-started/quick-start.md'
   - Resources:
     - "Client API reference": "resources/bastionai/index.html"
