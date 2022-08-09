@@ -34,7 +34,7 @@ class LRegDataset(Dataset):
 lreg_model = LReg()
 lreg_dataset = LRegDataset()
 
-with Connection("localhost", 50051) as client:
+with Connection("::1", 50051) as client:
     model_ref = client.send_model(
         lreg_model, "1D Linear Regression Model", b"secret")
     print(f"Model ref: {model_ref}")
@@ -44,13 +44,13 @@ with Connection("localhost", 50051) as client:
     print(f"Dataset ref: {dataset_ref}")
 
     #model_list = client.get_available_models()
-    #for model in model_list.list:  # type: ignore
+    # for model in model_list.list:  # type: ignore
     #    print(f"{model.identifier}, {model.description}")
 
     print(f"Weight: {lreg_model.fc1.inner.expanded_weight}")
     print(f"Devices: {client.get_available_devices()}")
 
-    #print(list(client.fetch_dataset(dataset_ref)))
+    # print(list(client.fetch_dataset(dataset_ref)))
 
     client.train(TrainConfig(
         model=model_ref,
@@ -75,8 +75,15 @@ with Connection("localhost", 50051) as client:
     client.fetch_model_weights(lreg_model, model_ref)
     print(f"Weight: {lreg_model.fc1.inner.expanded_weight}")
 
-    #print("Model's accuracy: {}".format(client.test(TestConfig(
+    client.test(TestConfig(
+        model=model_ref,
+        dataset=dataset_ref,
+        batch_size=2,
+        device="cpu",
+        metric="l2",
+    ))
+    # print("Model's accuracy: {}".format(client.test(TestConfig(
     #    model=model_ref,
     #    dataset=dataset_ref,
     #    batch_size=2,
-    #))))
+    # ))))

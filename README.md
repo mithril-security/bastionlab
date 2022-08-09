@@ -83,7 +83,6 @@ The per-layer weights are expanded, which is replicating them along a new “bat
 [Opacus](https://github.com/pytorch/opacus) is another differential privacy library but due to TorchScript's inability with backward pass hooks.
 
 # :runner: Upcoming Features.
-- Using Opacus for differential privacy.
 - Providing Attestation to BastionAI through AMD SEV.
 
 # :wrench: How to get started

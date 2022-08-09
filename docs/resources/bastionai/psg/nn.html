@@ -1,0 +1,826 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
+<meta name="generator" content="pdoc 0.10.0" />
+<title>bastionai.psg.nn API documentation</title>
+<meta name="description" content="" />
+<link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
+<link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/typography.min.css" integrity="sha256-7l/o7C8jubJiy74VsKTidCy1yBkRtiUGbVkYBylBqUg=" crossorigin>
+<link rel="stylesheet preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/styles/github.min.css" crossorigin>
+<style>:root{--highlight-color:#fe9}.flex{display:flex !important}body{line-height:1.5em}#content{padding:20px}#sidebar{padding:30px;overflow:hidden}#sidebar > *:last-child{margin-bottom:2cm}.http-server-breadcrumbs{font-size:130%;margin:0 0 15px 0}#footer{font-size:.75em;padding:5px 30px;border-top:1px solid #ddd;text-align:right}#footer p{margin:0 0 0 1em;display:inline-block}#footer p:last-child{margin-right:30px}h1,h2,h3,h4,h5{font-weight:300}h1{font-size:2.5em;line-height:1.1em}h2{font-size:1.75em;margin:1em 0 .50em 0}h3{font-size:1.4em;margin:25px 0 10px 0}h4{margin:0;font-size:105%}h1:target,h2:target,h3:target,h4:target,h5:target,h6:target{background:var(--highlight-color);padding:.2em 0}a{color:#058;text-decoration:none;transition:color .3s ease-in-out}a:hover{color:#e82}.title code{font-weight:bold}h2[id^="header-"]{margin-top:2em}.ident{color:#900}pre code{background:#f8f8f8;font-size:.8em;line-height:1.4em}code{background:#f2f2f1;padding:1px 4px;overflow-wrap:break-word}h1 code{background:transparent}pre{background:#f8f8f8;border:0;border-top:1px solid #ccc;border-bottom:1px solid #ccc;margin:1em 0;padding:1ex}#http-server-module-list{display:flex;flex-flow:column}#http-server-module-list div{display:flex}#http-server-module-list dt{min-width:10%}#http-server-module-list p{margin-top:0}.toc ul,#index{list-style-type:none;margin:0;padding:0}#index code{background:transparent}#index h3{border-bottom:1px solid #ddd}#index ul{padding:0}#index h4{margin-top:.6em;font-weight:bold}@media (min-width:200ex){#index .two-column{column-count:2}}@media (min-width:300ex){#index .two-column{column-count:3}}dl{margin-bottom:2em}dl dl:last-child{margin-bottom:4em}dd{margin:0 0 1em 3em}#header-classes + dl > dd{margin-bottom:3em}dd dd{margin-left:2em}dd p{margin:10px 0}.name{background:#eee;font-weight:bold;font-size:.85em;padding:5px 10px;display:inline-block;min-width:40%}.name:hover{background:#e0e0e0}dt:target .name{background:var(--highlight-color)}.name > span:first-child{white-space:nowrap}.name.class > span:nth-child(2){margin-left:.4em}.inherited{color:#999;border-left:5px solid #eee;padding-left:1em}.inheritance em{font-style:normal;font-weight:bold}.desc h2{font-weight:400;font-size:1.25em}.desc h3{font-size:1em}.desc dt code{background:inherit}.source summary,.git-link-div{color:#666;text-align:right;font-weight:400;font-size:.8em;text-transform:uppercase}.source summary > *{white-space:nowrap;cursor:pointer}.git-link{color:inherit;margin-left:1em}.source pre{max-height:500px;overflow:auto;margin:0}.source pre code{font-size:12px;overflow:visible}.hlist{list-style:none}.hlist li{display:inline}.hlist li:after{content:',\2002'}.hlist li:last-child:after{content:none}.hlist .hlist{display:inline;padding-left:1em}img{max-width:100%}td{padding:0 .5em}.admonition{padding:.1em .5em;margin-bottom:1em}.admonition-title{font-weight:bold}.admonition.note,.admonition.info,.admonition.important{background:#aef}.admonition.todo,.admonition.versionadded,.admonition.tip,.admonition.hint{background:#dfd}.admonition.warning,.admonition.versionchanged,.admonition.deprecated{background:#fd4}.admonition.error,.admonition.danger,.admonition.caution{background:lightpink}</style>
+<style media="screen and (min-width: 700px)">@media screen and (min-width:700px){#sidebar{width:30%;height:100vh;overflow:auto;position:sticky;top:0}#content{width:70%;max-width:100ch;padding:3em 4em;border-left:1px solid #ddd}pre code{font-size:1em}.item .name{font-size:1em}main{display:flex;flex-direction:row-reverse;justify-content:flex-end}.toc ul ul,#index ul{padding-left:1.5em}.toc > ul > li{margin-top:.5em}}</style>
+<style media="print">@media print{#sidebar h1{page-break-before:always}.source{display:none}}@media print{*{background:transparent !important;color:#000 !important;box-shadow:none !important;text-shadow:none !important}a[href]:after{content:" (" attr(href) ")";font-size:90%}a[href][title]:after{content:none}abbr[title]:after{content:" (" attr(title) ")"}.ir a:after,a[href^="javascript:"]:after,a[href^="#"]:after{content:""}pre,blockquote{border:1px solid #999;page-break-inside:avoid}thead{display:table-header-group}tr,img{page-break-inside:avoid}img{max-width:100% !important}@page{margin:0.5cm}p,h2,h3{orphans:3;widows:3}h1,h2,h3,h4,h5,h6{page-break-after:avoid}}</style>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/highlight.min.js" integrity="sha256-Uv3H6lx7dJmRfRvH8TH6kJD1TSK1aFcwgx+mdg3epi8=" crossorigin></script>
+<script>window.addEventListener('DOMContentLoaded', () => hljs.initHighlighting())</script>
+</head>
+<body>
+<main>
+<article id="content">
+<header>
+<h1 class="title">Module <code>bastionai.psg.nn</code></h1>
+</header>
+<section id="section-intro">
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.nn.modules.conv as conv
+from torch.nn.common_types import _size_1_t, _size_2_t, _size_3_t
+from torch.nn.modules.utils import _single, _pair, _triple
+from typing import Callable, List, Type, Union, Tuple, Optional, TypeVar
+from torch import Tensor, tensor
+
+def _gconv_size(tensor: Tensor, drop_first: bool = False) -&gt; List[int]:
+    s = list(tensor.size())
+    s[0] = 1
+    s[1] = -1
+    return s[1:] if drop_first else s
+
+def _std_size(tensor: Tensor, max_batch_size: int) -&gt; List[int]:
+    s = list(tensor.size())
+    s[0] = max_batch_size
+    s[1] = -1
+    return s
+
+def _reassign_parameter_as_buffer(module: nn.Module, name: str, value: Tensor) -&gt; None:
+    x = module.__getattr__(name).detach()
+    module.__dict__.get(&#39;_parameters&#39;).pop(name)
+    module.__dict__.get(&#39;_buffers&#39;)[name] = value
+
+class _ConvNd(conv._ConvNd):
+    def __init__(self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: Tuple[int, ...],
+        max_batch_size: int,
+        stride: Tuple[int, ...],
+        padding: Tuple[int, ...],
+        dilation: Tuple[int, ...],
+        transposed: bool,
+        output_padding: Tuple[int, ...],
+        groups: int,
+        bias: bool,
+        padding_mode: str,
+        device=None,
+        dtype=None
+    ) -&gt; None:
+        super().__init__(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            padding,
+            dilation,
+            transposed,
+            output_padding,
+            groups,
+            bias,
+            padding_mode,
+            device,
+            dtype
+        )
+        self.max_batch_size = max_batch_size
+        _reassign_parameter_as_buffer(self, &#39;weight&#39;, self.weight.detach())
+        self.expanded_weight = nn.Parameter(self.weight.expand(max_batch_size, *self.weight.size()))
+        if bias:
+            _reassign_parameter_as_buffer(self, &#39;bias&#39;, self.bias.detach())
+            self.expanded_bias = nn.Parameter(self.bias.expand(max_batch_size, *self.bias.size()))
+        else:
+            del self.bias
+            self.bias = None
+            self.register_parameter(&#39;expanded_bias&#39;, None)
+
+    def extra_repr(self):
+        s = super().extra_repr()
+        s_params = s.split(&#39;,&#39;)
+        return &#34;, &#34;.join([*s_params[:3], f&#34;max_batch_size={self.max_batch_size}&#34;, *s_params[3:]])
+
+def expanded_convolution(conv_fn: Callable, tuple_type: Type, tuple_fn: Callable) -&gt; Callable:
+    def inner(cls: Callable) -&gt; Callable:
+        T = TypeVar(&#39;T&#39;, bound=tuple_type)
+
+        def init(
+            _self,
+            in_channels: int,
+            out_channels: int,
+            kernel_size: T,
+            max_batch_size: int,
+            stride: T = 1,
+            padding: Union[str, T] = 0,
+            dilation: T = 1,
+            groups: int = 1,
+            bias: bool = True,
+            padding_mode: str = &#39;zeros&#39;,
+            device: Optional[Union[torch.device, str]] = None,
+            dtype: Optional[torch.dtype] = None,
+        ):
+            kernel_size_ = tuple_fn(kernel_size)
+            stride_ = tuple_fn(stride)
+            padding_ = padding if isinstance(padding, str) else tuple_fn(padding)
+            dilation_ = tuple_fn(dilation)
+            super(cls, _self).__init__(
+                in_channels,
+                out_channels,
+                kernel_size_,
+                max_batch_size,
+                stride_,
+                padding_,
+                dilation_,
+                False,
+                tuple_fn(0),
+                groups,
+                bias,
+                padding_mode,
+                device,
+                dtype,
+            )
+        
+        def _conv_forward(_self, x: Tensor, weight: Tensor, bias: Optional[Tensor]):
+            batch_size = x.size(0)
+            batch_padding = [0, 0] * (len(_self.kernel_size) + 1) + [0, _self.max_batch_size - batch_size]
+            x = F.pad(x, batch_padding, &#34;constant&#34;, 0.)
+            x = x.view(_gconv_size(x))
+            weight = weight.reshape(_gconv_size(weight, drop_first=True))
+            if bias is not None:
+                bias = bias.reshape(_gconv_size(bias, drop_first=True))
+            
+            if _self.padding_mode != &#39;zeros&#39;:
+                x = conv_fn(F.pad(x, _self._reversed_padding_repeated_twice, mode=_self.padding_mode),
+                                weight, bias, _self.stride,
+                                tuple_fn(0), _self.dilation, _self.groups * _self.max_batch_size)
+            x = conv_fn(x, weight, bias, _self.stride,
+                            _self.padding, _self.dilation, _self.groups * _self.max_batch_size)
+            
+            x = x.view(_std_size(x, _self.max_batch_size))
+            return x[:batch_size]
+
+        def forward(_self, x: Tensor) -&gt; Tensor:
+            return _self._conv_forward(x, _self.expanded_weight, _self.expanded_bias)
+        
+        cls.__init__ = init
+        cls._conv_forward = _conv_forward
+        cls.forward = forward
+
+        return cls
+    return inner
+            
+
+@expanded_convolution(F.conv1d, _size_1_t, _single)
+class Conv1d(_ConvNd):
+    pass
+
+@expanded_convolution(F.conv2d, _size_2_t, _pair)
+class Conv2d(_ConvNd):
+    pass
+
+@expanded_convolution(F.conv3d, _size_3_t, _triple)
+class Conv3d(_ConvNd):
+    pass
+
+
+class Linear(nn.Module):
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        max_batch_size: int,
+        bias: bool = True,
+        device: Optional[Union[torch.device, str]] = None,
+        dtype: Optional[torch.dtype] = None,
+    ):
+        super().__init__()
+        self.inner = Conv1d(in_features, out_features, 1, max_batch_size, bias=bias, device=device, dtype=dtype)
+    
+    def forward(self, x):
+        x = x.view(x.size(0), x.size(1), 1)
+        x = self.inner(x)
+        return x.view(x.size(0), -1)
+
+if __name__ == &#39;__main__&#39;:
+    model = Conv2d(3, 16, 3, 64)
+    model = torch.jit.script(Conv2d(3, 16, 3, 64))
+    x = torch.randn(64, 3, 256, 256)
+    y = model(x)
+    loss = y.sum()
+    loss.backward()
+    print(model.expanded_weight.grad.size())
+    print([x.size() for x in model.parameters()])
+
+    model = Linear(100, 10, 64)
+    x = torch.randn(64, 100)
+    y = model(x)
+    loss = y.sum()
+    loss.backward()
+    print(model.inner.expanded_weight.grad.size())</code></pre>
+</details>
+</section>
+<section>
+</section>
+<section>
+</section>
+<section>
+<h2 class="section-title" id="header-functions">Functions</h2>
+<dl>
+<dt id="bastionai.psg.nn.expanded_convolution"><code class="name flex">
+<span>def <span class="ident">expanded_convolution</span></span>(<span>conv_fn: Callable, tuple_type: Type[+CT_co], tuple_fn: Callable) ‑> Callable</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def expanded_convolution(conv_fn: Callable, tuple_type: Type, tuple_fn: Callable) -&gt; Callable:
+    def inner(cls: Callable) -&gt; Callable:
+        T = TypeVar(&#39;T&#39;, bound=tuple_type)
+
+        def init(
+            _self,
+            in_channels: int,
+            out_channels: int,
+            kernel_size: T,
+            max_batch_size: int,
+            stride: T = 1,
+            padding: Union[str, T] = 0,
+            dilation: T = 1,
+            groups: int = 1,
+            bias: bool = True,
+            padding_mode: str = &#39;zeros&#39;,
+            device: Optional[Union[torch.device, str]] = None,
+            dtype: Optional[torch.dtype] = None,
+        ):
+            kernel_size_ = tuple_fn(kernel_size)
+            stride_ = tuple_fn(stride)
+            padding_ = padding if isinstance(padding, str) else tuple_fn(padding)
+            dilation_ = tuple_fn(dilation)
+            super(cls, _self).__init__(
+                in_channels,
+                out_channels,
+                kernel_size_,
+                max_batch_size,
+                stride_,
+                padding_,
+                dilation_,
+                False,
+                tuple_fn(0),
+                groups,
+                bias,
+                padding_mode,
+                device,
+                dtype,
+            )
+        
+        def _conv_forward(_self, x: Tensor, weight: Tensor, bias: Optional[Tensor]):
+            batch_size = x.size(0)
+            batch_padding = [0, 0] * (len(_self.kernel_size) + 1) + [0, _self.max_batch_size - batch_size]
+            x = F.pad(x, batch_padding, &#34;constant&#34;, 0.)
+            x = x.view(_gconv_size(x))
+            weight = weight.reshape(_gconv_size(weight, drop_first=True))
+            if bias is not None:
+                bias = bias.reshape(_gconv_size(bias, drop_first=True))
+            
+            if _self.padding_mode != &#39;zeros&#39;:
+                x = conv_fn(F.pad(x, _self._reversed_padding_repeated_twice, mode=_self.padding_mode),
+                                weight, bias, _self.stride,
+                                tuple_fn(0), _self.dilation, _self.groups * _self.max_batch_size)
+            x = conv_fn(x, weight, bias, _self.stride,
+                            _self.padding, _self.dilation, _self.groups * _self.max_batch_size)
+            
+            x = x.view(_std_size(x, _self.max_batch_size))
+            return x[:batch_size]
+
+        def forward(_self, x: Tensor) -&gt; Tensor:
+            return _self._conv_forward(x, _self.expanded_weight, _self.expanded_bias)
+        
+        cls.__init__ = init
+        cls._conv_forward = _conv_forward
+        cls.forward = forward
+
+        return cls
+    return inner</code></pre>
+</details>
+</dd>
+</dl>
+</section>
+<section>
+<h2 class="section-title" id="header-classes">Classes</h2>
+<dl>
+<dt id="bastionai.psg.nn.Conv1d"><code class="flex name class">
+<span>class <span class="ident">Conv1d</span></span>
+<span>(</span><span>in_channels: int, out_channels: int, kernel_size: ~T, max_batch_size: int, stride: ~T = 1, padding: Union[str, ~T] = 0, dilation: ~T = 1, groups: int = 1, bias: bool = True, padding_mode: str = 'zeros', device: Union[torch.device, str, None] = None, dtype: Optional[torch.dtype] = None)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Base class for all neural network modules.</p>
+<p>Your models should also subclass this class.</p>
+<p>Modules can also contain other Modules, allowing to nest them in
+a tree structure. You can assign the submodules as regular attributes::</p>
+<pre><code>import torch.nn as nn
+import torch.nn.functional as F
+
+class Model(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv1 = nn.Conv2d(1, 20, 5)
+        self.conv2 = nn.Conv2d(20, 20, 5)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        return F.relu(self.conv2(x))
+</code></pre>
+<p>Submodules assigned in this way will be registered, and will have their
+parameters converted too when you call :meth:<code>to</code>, etc.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>As per the example above, an <code>__init__()</code> call to the parent class
+must be made before assignment on the child.</p>
+</div>
+<p>:ivar training: Boolean represents whether this module is in training or
+evaluation mode.
+:vartype training: bool</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class Conv1d(_ConvNd):
+    pass</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>bastionai.psg.nn._ConvNd</li>
+<li>torch.nn.modules.conv._ConvNd</li>
+<li>torch.nn.modules.module.Module</li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="bastionai.psg.nn.Conv1d.bias"><code class="name">var <span class="ident">bias</span> : Optional[torch.Tensor]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Conv1d.dilation"><code class="name">var <span class="ident">dilation</span> : Tuple[int, ...]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Conv1d.groups"><code class="name">var <span class="ident">groups</span> : int</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Conv1d.kernel_size"><code class="name">var <span class="ident">kernel_size</span> : Tuple[int, ...]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Conv1d.out_channels"><code class="name">var <span class="ident">out_channels</span> : int</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Conv1d.output_padding"><code class="name">var <span class="ident">output_padding</span> : Tuple[int, ...]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Conv1d.padding"><code class="name">var <span class="ident">padding</span> : Union[str, Tuple[int, ...]]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Conv1d.padding_mode"><code class="name">var <span class="ident">padding_mode</span> : str</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Conv1d.stride"><code class="name">var <span class="ident">stride</span> : Tuple[int, ...]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Conv1d.transposed"><code class="name">var <span class="ident">transposed</span> : bool</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Conv1d.weight"><code class="name">var <span class="ident">weight</span> : torch.Tensor</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+<h3>Methods</h3>
+<dl>
+<dt id="bastionai.psg.nn.Conv1d.forward"><code class="name flex">
+<span>def <span class="ident">forward</span></span>(<span>_self, x: torch.Tensor) ‑> torch.Tensor</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def forward(_self, x: Tensor) -&gt; Tensor:
+    return _self._conv_forward(x, _self.expanded_weight, _self.expanded_bias)</code></pre>
+</details>
+</dd>
+</dl>
+</dd>
+<dt id="bastionai.psg.nn.Conv2d"><code class="flex name class">
+<span>class <span class="ident">Conv2d</span></span>
+<span>(</span><span>in_channels: int, out_channels: int, kernel_size: ~T, max_batch_size: int, stride: ~T = 1, padding: Union[str, ~T] = 0, dilation: ~T = 1, groups: int = 1, bias: bool = True, padding_mode: str = 'zeros', device: Union[torch.device, str, None] = None, dtype: Optional[torch.dtype] = None)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Base class for all neural network modules.</p>
+<p>Your models should also subclass this class.</p>
+<p>Modules can also contain other Modules, allowing to nest them in
+a tree structure. You can assign the submodules as regular attributes::</p>
+<pre><code>import torch.nn as nn
+import torch.nn.functional as F
+
+class Model(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv1 = nn.Conv2d(1, 20, 5)
+        self.conv2 = nn.Conv2d(20, 20, 5)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        return F.relu(self.conv2(x))
+</code></pre>
+<p>Submodules assigned in this way will be registered, and will have their
+parameters converted too when you call :meth:<code>to</code>, etc.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>As per the example above, an <code>__init__()</code> call to the parent class
+must be made before assignment on the child.</p>
+</div>
+<p>:ivar training: Boolean represents whether this module is in training or
+evaluation mode.
+:vartype training: bool</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class Conv2d(_ConvNd):
+    pass</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>bastionai.psg.nn._ConvNd</li>
+<li>torch.nn.modules.conv._ConvNd</li>
+<li>torch.nn.modules.module.Module</li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="bastionai.psg.nn.Conv2d.bias"><code class="name">var <span class="ident">bias</span> : Optional[torch.Tensor]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Conv2d.dilation"><code class="name">var <span class="ident">dilation</span> : Tuple[int, ...]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Conv2d.groups"><code class="name">var <span class="ident">groups</span> : int</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Conv2d.kernel_size"><code class="name">var <span class="ident">kernel_size</span> : Tuple[int, ...]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Conv2d.out_channels"><code class="name">var <span class="ident">out_channels</span> : int</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Conv2d.output_padding"><code class="name">var <span class="ident">output_padding</span> : Tuple[int, ...]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Conv2d.padding"><code class="name">var <span class="ident">padding</span> : Union[str, Tuple[int, ...]]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Conv2d.padding_mode"><code class="name">var <span class="ident">padding_mode</span> : str</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Conv2d.stride"><code class="name">var <span class="ident">stride</span> : Tuple[int, ...]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Conv2d.transposed"><code class="name">var <span class="ident">transposed</span> : bool</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Conv2d.weight"><code class="name">var <span class="ident">weight</span> : torch.Tensor</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+<h3>Methods</h3>
+<dl>
+<dt id="bastionai.psg.nn.Conv2d.forward"><code class="name flex">
+<span>def <span class="ident">forward</span></span>(<span>_self, x: torch.Tensor) ‑> torch.Tensor</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def forward(_self, x: Tensor) -&gt; Tensor:
+    return _self._conv_forward(x, _self.expanded_weight, _self.expanded_bias)</code></pre>
+</details>
+</dd>
+</dl>
+</dd>
+<dt id="bastionai.psg.nn.Conv3d"><code class="flex name class">
+<span>class <span class="ident">Conv3d</span></span>
+<span>(</span><span>in_channels: int, out_channels: int, kernel_size: ~T, max_batch_size: int, stride: ~T = 1, padding: Union[str, ~T] = 0, dilation: ~T = 1, groups: int = 1, bias: bool = True, padding_mode: str = 'zeros', device: Union[torch.device, str, None] = None, dtype: Optional[torch.dtype] = None)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Base class for all neural network modules.</p>
+<p>Your models should also subclass this class.</p>
+<p>Modules can also contain other Modules, allowing to nest them in
+a tree structure. You can assign the submodules as regular attributes::</p>
+<pre><code>import torch.nn as nn
+import torch.nn.functional as F
+
+class Model(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv1 = nn.Conv2d(1, 20, 5)
+        self.conv2 = nn.Conv2d(20, 20, 5)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        return F.relu(self.conv2(x))
+</code></pre>
+<p>Submodules assigned in this way will be registered, and will have their
+parameters converted too when you call :meth:<code>to</code>, etc.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>As per the example above, an <code>__init__()</code> call to the parent class
+must be made before assignment on the child.</p>
+</div>
+<p>:ivar training: Boolean represents whether this module is in training or
+evaluation mode.
+:vartype training: bool</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class Conv3d(_ConvNd):
+    pass</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>bastionai.psg.nn._ConvNd</li>
+<li>torch.nn.modules.conv._ConvNd</li>
+<li>torch.nn.modules.module.Module</li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="bastionai.psg.nn.Conv3d.bias"><code class="name">var <span class="ident">bias</span> : Optional[torch.Tensor]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Conv3d.dilation"><code class="name">var <span class="ident">dilation</span> : Tuple[int, ...]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Conv3d.groups"><code class="name">var <span class="ident">groups</span> : int</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Conv3d.kernel_size"><code class="name">var <span class="ident">kernel_size</span> : Tuple[int, ...]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Conv3d.out_channels"><code class="name">var <span class="ident">out_channels</span> : int</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Conv3d.output_padding"><code class="name">var <span class="ident">output_padding</span> : Tuple[int, ...]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Conv3d.padding"><code class="name">var <span class="ident">padding</span> : Union[str, Tuple[int, ...]]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Conv3d.padding_mode"><code class="name">var <span class="ident">padding_mode</span> : str</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Conv3d.stride"><code class="name">var <span class="ident">stride</span> : Tuple[int, ...]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Conv3d.transposed"><code class="name">var <span class="ident">transposed</span> : bool</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Conv3d.weight"><code class="name">var <span class="ident">weight</span> : torch.Tensor</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+<h3>Methods</h3>
+<dl>
+<dt id="bastionai.psg.nn.Conv3d.forward"><code class="name flex">
+<span>def <span class="ident">forward</span></span>(<span>_self, x: torch.Tensor) ‑> torch.Tensor</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def forward(_self, x: Tensor) -&gt; Tensor:
+    return _self._conv_forward(x, _self.expanded_weight, _self.expanded_bias)</code></pre>
+</details>
+</dd>
+</dl>
+</dd>
+<dt id="bastionai.psg.nn.Linear"><code class="flex name class">
+<span>class <span class="ident">Linear</span></span>
+<span>(</span><span>in_features: int, out_features: int, max_batch_size: int, bias: bool = True, device: Union[torch.device, str, None] = None, dtype: Optional[torch.dtype] = None)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Base class for all neural network modules.</p>
+<p>Your models should also subclass this class.</p>
+<p>Modules can also contain other Modules, allowing to nest them in
+a tree structure. You can assign the submodules as regular attributes::</p>
+<pre><code>import torch.nn as nn
+import torch.nn.functional as F
+
+class Model(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv1 = nn.Conv2d(1, 20, 5)
+        self.conv2 = nn.Conv2d(20, 20, 5)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        return F.relu(self.conv2(x))
+</code></pre>
+<p>Submodules assigned in this way will be registered, and will have their
+parameters converted too when you call :meth:<code>to</code>, etc.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>As per the example above, an <code>__init__()</code> call to the parent class
+must be made before assignment on the child.</p>
+</div>
+<p>:ivar training: Boolean represents whether this module is in training or
+evaluation mode.
+:vartype training: bool</p>
+<p>Initializes internal Module state, shared by both nn.Module and ScriptModule.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class Linear(nn.Module):
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        max_batch_size: int,
+        bias: bool = True,
+        device: Optional[Union[torch.device, str]] = None,
+        dtype: Optional[torch.dtype] = None,
+    ):
+        super().__init__()
+        self.inner = Conv1d(in_features, out_features, 1, max_batch_size, bias=bias, device=device, dtype=dtype)
+    
+    def forward(self, x):
+        x = x.view(x.size(0), x.size(1), 1)
+        x = self.inner(x)
+        return x.view(x.size(0), -1)</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>torch.nn.modules.module.Module</li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="bastionai.psg.nn.Linear.dump_patches"><code class="name">var <span class="ident">dump_patches</span> : bool</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="bastionai.psg.nn.Linear.training"><code class="name">var <span class="ident">training</span> : bool</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+<h3>Methods</h3>
+<dl>
+<dt id="bastionai.psg.nn.Linear.forward"><code class="name flex">
+<span>def <span class="ident">forward</span></span>(<span>self, x) ‑> Callable[..., Any]</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Defines the computation performed at every call.</p>
+<p>Should be overridden by all subclasses.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Although the recipe for forward pass needs to be defined within
+this function, one should call the :class:<code>Module</code> instance afterwards
+instead of this since the former takes care of running the
+registered hooks while the latter silently ignores them.</p>
+</div></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def forward(self, x):
+    x = x.view(x.size(0), x.size(1), 1)
+    x = self.inner(x)
+    return x.view(x.size(0), -1)</code></pre>
+</details>
+</dd>
+</dl>
+</dd>
+</dl>
+</section>
+</article>
+<nav id="sidebar">
+<h1>Index</h1>
+<div class="toc">
+<ul></ul>
+</div>
+<ul id="index">
+<li><h3>Super-module</h3>
+<ul>
+<li><code><a title="bastionai.psg" href="index.html">bastionai.psg</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-functions">Functions</a></h3>
+<ul class="">
+<li><code><a title="bastionai.psg.nn.expanded_convolution" href="#bastionai.psg.nn.expanded_convolution">expanded_convolution</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-classes">Classes</a></h3>
+<ul>
+<li>
+<h4><code><a title="bastionai.psg.nn.Conv1d" href="#bastionai.psg.nn.Conv1d">Conv1d</a></code></h4>
+<ul class="two-column">
+<li><code><a title="bastionai.psg.nn.Conv1d.bias" href="#bastionai.psg.nn.Conv1d.bias">bias</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv1d.dilation" href="#bastionai.psg.nn.Conv1d.dilation">dilation</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv1d.forward" href="#bastionai.psg.nn.Conv1d.forward">forward</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv1d.groups" href="#bastionai.psg.nn.Conv1d.groups">groups</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv1d.kernel_size" href="#bastionai.psg.nn.Conv1d.kernel_size">kernel_size</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv1d.out_channels" href="#bastionai.psg.nn.Conv1d.out_channels">out_channels</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv1d.output_padding" href="#bastionai.psg.nn.Conv1d.output_padding">output_padding</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv1d.padding" href="#bastionai.psg.nn.Conv1d.padding">padding</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv1d.padding_mode" href="#bastionai.psg.nn.Conv1d.padding_mode">padding_mode</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv1d.stride" href="#bastionai.psg.nn.Conv1d.stride">stride</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv1d.transposed" href="#bastionai.psg.nn.Conv1d.transposed">transposed</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv1d.weight" href="#bastionai.psg.nn.Conv1d.weight">weight</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="bastionai.psg.nn.Conv2d" href="#bastionai.psg.nn.Conv2d">Conv2d</a></code></h4>
+<ul class="two-column">
+<li><code><a title="bastionai.psg.nn.Conv2d.bias" href="#bastionai.psg.nn.Conv2d.bias">bias</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv2d.dilation" href="#bastionai.psg.nn.Conv2d.dilation">dilation</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv2d.forward" href="#bastionai.psg.nn.Conv2d.forward">forward</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv2d.groups" href="#bastionai.psg.nn.Conv2d.groups">groups</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv2d.kernel_size" href="#bastionai.psg.nn.Conv2d.kernel_size">kernel_size</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv2d.out_channels" href="#bastionai.psg.nn.Conv2d.out_channels">out_channels</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv2d.output_padding" href="#bastionai.psg.nn.Conv2d.output_padding">output_padding</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv2d.padding" href="#bastionai.psg.nn.Conv2d.padding">padding</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv2d.padding_mode" href="#bastionai.psg.nn.Conv2d.padding_mode">padding_mode</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv2d.stride" href="#bastionai.psg.nn.Conv2d.stride">stride</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv2d.transposed" href="#bastionai.psg.nn.Conv2d.transposed">transposed</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv2d.weight" href="#bastionai.psg.nn.Conv2d.weight">weight</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="bastionai.psg.nn.Conv3d" href="#bastionai.psg.nn.Conv3d">Conv3d</a></code></h4>
+<ul class="two-column">
+<li><code><a title="bastionai.psg.nn.Conv3d.bias" href="#bastionai.psg.nn.Conv3d.bias">bias</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv3d.dilation" href="#bastionai.psg.nn.Conv3d.dilation">dilation</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv3d.forward" href="#bastionai.psg.nn.Conv3d.forward">forward</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv3d.groups" href="#bastionai.psg.nn.Conv3d.groups">groups</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv3d.kernel_size" href="#bastionai.psg.nn.Conv3d.kernel_size">kernel_size</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv3d.out_channels" href="#bastionai.psg.nn.Conv3d.out_channels">out_channels</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv3d.output_padding" href="#bastionai.psg.nn.Conv3d.output_padding">output_padding</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv3d.padding" href="#bastionai.psg.nn.Conv3d.padding">padding</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv3d.padding_mode" href="#bastionai.psg.nn.Conv3d.padding_mode">padding_mode</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv3d.stride" href="#bastionai.psg.nn.Conv3d.stride">stride</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv3d.transposed" href="#bastionai.psg.nn.Conv3d.transposed">transposed</a></code></li>
+<li><code><a title="bastionai.psg.nn.Conv3d.weight" href="#bastionai.psg.nn.Conv3d.weight">weight</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="bastionai.psg.nn.Linear" href="#bastionai.psg.nn.Linear">Linear</a></code></h4>
+<ul class="">
+<li><code><a title="bastionai.psg.nn.Linear.dump_patches" href="#bastionai.psg.nn.Linear.dump_patches">dump_patches</a></code></li>
+<li><code><a title="bastionai.psg.nn.Linear.forward" href="#bastionai.psg.nn.Linear.forward">forward</a></code></li>
+<li><code><a title="bastionai.psg.nn.Linear.training" href="#bastionai.psg.nn.Linear.training">training</a></code></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</nav>
+</main>
+<footer id="footer">
+<p>Generated by <a href="https://pdoc3.github.io/pdoc" title="pdoc: Python API documentation generator"><cite>pdoc</cite> 0.10.0</a>.</p>
+</footer>
+</body>
+</html>

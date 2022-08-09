@@ -9,8 +9,10 @@ from torch import Tensor
 from torch.nn import Module
 from torch.utils.data import Dataset
 
-from utils import (ArtifactDataset, deserialize_weights_to_model,
+from utils import (ArtifactDataset, deserialize_weights_to_model, metric_tqdm, metric_tqdm_with_epochs,
                    serialize_dataset, serialize_model)
+from tqdm import tqdm
+from time import sleep
 
 
 @dataclass
@@ -110,7 +112,7 @@ class Client:
         Returns:
             None
         """
-        self.stub.Train(config)
+        metric_tqdm_with_epochs(self.stub.Train(config), name=f"loss ({config.metric})")
 
     def test(self, config: TestConfig) -> float:
         """
@@ -122,7 +124,7 @@ class Client:
         Returns:
             float
         """
-        return self.stub.Test(config)
+        metric_tqdm(self.stub.Test(config), name=f"metric ({config.metric})")
 
     def delete_dataset(self, ref: Reference) -> None:
         """
