@@ -18,15 +18,16 @@ SIZE_LEN = 8
 
 
 def parametrized_modules(module: Module) -> Iterable[Module]:
-    """
-    Recursively iterates over all submodules, returning those that
-    have parameters (as opposed to "wrapper modules" that just organize modules).
+    """Recursively iterates over all submodules.
+
+    The method returns submodules that have parameters 
+    (as opposed to "wrapper modules" that just organize modules).
 
     Args:
         module (Module): torch.nn.Module
     
     Returns:
-        Iterable[Module]
+        Iterable[Module]:
     """
     yield from (
         (m_name, m)  # type: ignore
@@ -36,15 +37,15 @@ def parametrized_modules(module: Module) -> Iterable[Module]:
 
 
 def trainable_modules(module: Module) -> Iterable[Tuple[str, Module]]:
-    """
-    Recursively iterates over all submodules, returning those that
-    have parameters and are trainable (ie they want a grad).
+    """Recursively iterates over all submodules.
+
+    The method returns submodules that have parameters and are trainable. 
 
     Args:
         module (Module): torch.nn.Module
 
     Returns:
-        Iterable[Tuple[str, Module]]
+        Iterable[Tuple[str, Module]]:
     """
     yield from (
         (m_name, m)
@@ -54,15 +55,15 @@ def trainable_modules(module: Module) -> Iterable[Tuple[str, Module]]:
 
 
 def trainable_parameters(module: Module) -> Iterable[Tuple[str, Parameter]]:
-    """
-    Recursively iterates over all parameters, returning those that
-    are trainable (ie they want a grad).
+    """Recursively iterates over all parameters.
+
+    It returns submodules that are trainable (ie they want a grad).
 
     Args:
         module (Module): torch.nn.Module
     
     Returns:
-        Iterable[Tuple[str, Parameter]]
+        Iterable[Tuple[str, Parameter]]:
     """
     yield from (
         (p_name, p) for (p_name, p) in module.named_parameters() if p.requires_grad
