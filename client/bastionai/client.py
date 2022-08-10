@@ -163,7 +163,7 @@ class Connection:
     channel: Any = None
 
     def __enter__(self) -> Client:
-        self.channel = grpc.insecure_channel("localhost:50051")
+        self.channel = grpc.insecure_channel(f"{self.host}:{self.port}")
         return Client(RemoteTorchStub(self.channel))
 
     def __exit__(self, exc_type: Any, exc_value: Any, exc_traceback: Any) -> None:
