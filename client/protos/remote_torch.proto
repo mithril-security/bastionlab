@@ -103,6 +103,10 @@ message Devices {
     repeated string list = 1;
 }
 
+message Optimizers {
+    repeated string list = 1;
+}
+
 message Metric {
     float value = 1;
     int32 batch = 2;
@@ -121,6 +125,7 @@ service RemoteTorch {
     rpc AvailableModels(Empty) returns (References) {}
     rpc AvailableDatasets(Empty) returns (References) {}
     rpc AvailableDevices(Empty) returns (Devices) {}
+    rpc AvailableOptimizers(Empty) returns (Optimizers) {}
     rpc Train (TrainConfig) returns (stream Metric) {}
     rpc Test (TestConfig) returns (stream Metric) {}
 }

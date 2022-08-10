@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Any, Iterator, List
 
 import grpc
-from pb.remote_torch_pb2 import (Chunk, Empty, Reference, TestConfig,
+from pb.remote_torch_pb2 import (Chunk, Empty, Optimizers, Reference, TestConfig,
                                  TrainConfig, Devices)
 from pb.remote_torch_pb2_grpc import RemoteTorchStub
 from torch import Tensor
@@ -101,10 +101,19 @@ class Client:
     def get_available_devices(self) -> List[Devices]:
         """Gets a list of devices available on BastionAI.
         Returns: 
-            List[Reference]: 
+            List[Devices]: 
                 A list of BastionAI available device references.
         """
         return self.stub.AvailableDevices(Empty())
+
+    def get_available_optimizers(self) -> List[Optimizers]:
+        """Gets a list of optimizers supported by BastionAI.
+
+        Returns:
+            List[Optimizers]:
+                A list of optimizers available on BastionAI training server.
+        """
+        return self.stub.AvailableOptimizers(Empty())
 
     def train(self, config: TrainConfig) -> None:
         """Trains a model with `TrainConfig` configuration on BastionAI.
@@ -113,14 +122,15 @@ class Client:
             config (TrainConfig):
                 Training configuration to pass to BastionAI.
         """
-        metric_tqdm_with_epochs(self.stub.Train(config), name=f"loss ({config.metric})")
+        metric_tqdm_with_epochs(self.stub.Train(
+            config), name=f"loss ({config.metric})")
 
     def test(self, config: TestConfig) -> float:
         """Tests a dataset on a model on BastionAI.
 
         Args:
             config (TestConfig): Configuration for testing on BastionAI.
-        
+
         Returns:
             float: 
                 The evaluation of the model on the datatset.

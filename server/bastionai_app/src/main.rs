@@ -9,7 +9,7 @@ mod remote_torch {
 }
 use remote_torch::remote_torch_server::{RemoteTorch, RemoteTorchServer};
 use remote_torch::{
-    Accuracy, Chunk, Devices, Empty, Metric, Reference, References, TestConfig, TrainConfig,
+    Chunk, Devices, Empty, Metric, Optimizers, Reference, References, TestConfig, TrainConfig,
 };
 
 mod storage;
@@ -141,7 +141,7 @@ impl RemoteTorch for BastionAIServer {
         )?;
         let device = parse_device(&config.device)?;
         let module = {
-            let mut modules = self.modules.read().unwrap();
+            let modules = self.modules.read().unwrap();
             let module = modules
                 .get(&module_id)
                 .ok_or(Status::not_found("Not found"))?;
@@ -176,7 +176,7 @@ impl RemoteTorch for BastionAIServer {
         )?;
         let device = parse_device(&config.device)?;
         let module = {
-            let mut modules = self.modules.read().unwrap();
+            let modules = self.modules.read().unwrap();
             let module = modules
                 .get(&module_id)
                 .ok_or(Status::not_found("Not found"))?;
@@ -241,6 +241,14 @@ impl RemoteTorch for BastionAIServer {
         }
 
         Ok(Response::new(Devices { list }))
+    }
+
+    async fn available_optimizers(
+        &self,
+        _request: Request<Empty>,
+    ) -> Result<Response<Optimizers>, Status> {
+        let list = vec!["SGD", "Adam"].iter().map(|v| v.to_string()).collect();
+        Ok(Response::new(Optimizers { list }))
     }
 }
 

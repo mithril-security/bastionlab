@@ -48,8 +48,22 @@ with Connection("::1", 50051) as client:
     print(f"Weight: {lreg_model.fc1.inner.expanded_weight}")
     print(f"Devices: {client.get_available_devices()}")
 
+    print(f"Optimizers: {(client.get_available_optimizers())}")
+
     client.train(
-        create_training_config(model_ref, dataset_ref, 2, 100, 0.1, 0., {"momentum": 0., "dampening": 0., "nesterov": False}, optimizer_type="SGD"))
+        create_training_config(model_ref,
+                               dataset_ref,
+                               2,
+                               100,
+                               0.1,
+                               0.,
+                               {
+                                   "momentum": 0.,
+                                   "dampening": 0.,
+                                   "nesterov": False
+                               },
+                               with_dp=True,
+                               optimizer_type="SGD"))
 
     client.fetch_model_weights(lreg_model, model_ref)
     print(f"Weight: {lreg_model.fc1.inner.expanded_weight}")

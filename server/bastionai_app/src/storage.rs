@@ -320,7 +320,7 @@ impl Module {
     ) -> Result<ModuleTester, TchError> {
         s.write().unwrap().set_device(device);
 
-        let mut metric = Metric::try_from_name(&config.metric)?;
+        let metric = Metric::try_from_name(&config.metric)?;
         Ok(ModuleTester::new(
             s,
             dataset,

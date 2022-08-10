@@ -296,6 +296,7 @@ def create_training_config(model: Reference,
                            noise_multiplier: float = 0.,
                            optimizer_type: str = "SGD"
                            ) -> TrainConfig:
+
     def comapare_args(l1: List, l2: List):
         l1.sort()
         l2.sort()
