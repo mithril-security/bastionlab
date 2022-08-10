@@ -8,6 +8,8 @@ from torch import Tensor
 from torch.nn import Module
 from torch.utils.data import Dataset
 
+from bastionai.utils import create_training_config, create_test_config
+
 
 class LReg(Module):
     def __init__(self) -> None:
@@ -43,47 +45,13 @@ with Connection("::1", 50051) as client:
         lreg_dataset, "Dummy 1D Linear Regression Dataset (param is 2)", b'secret')
     print(f"Dataset ref: {dataset_ref}")
 
-    #model_list = client.get_available_models()
-    # for model in model_list.list:  # type: ignore
-    #    print(f"{model.identifier}, {model.description}")
-
     print(f"Weight: {lreg_model.fc1.inner.expanded_weight}")
     print(f"Devices: {client.get_available_devices()}")
 
-    # print(list(client.fetch_dataset(dataset_ref)))
-
-    client.train(TrainConfig(
-        model=model_ref,
-        dataset=dataset_ref,
-        batch_size=2,
-        epochs=100,
-        device="cpu",
-        metric="l2",
-        differential_privacy=TrainConfig.DpParameters(
-            max_grad_norm=1.,
-            noise_multiplier=0.1
-        ),
-        sgd=TrainConfig.SGD(
-            learning_rate=0.1,
-            weight_decay=0.,
-            momentum=0.,
-            dampening=0.,
-            nesterov=False
-        )
-    ))
+    client.train(
+        create_training_config(model_ref, dataset_ref, 2, 100, 0.1, 0., {"momentum": 0., "dampening": 0., "nesterov": False}, optimizer_type="SGD"))
 
     client.fetch_model_weights(lreg_model, model_ref)
     print(f"Weight: {lreg_model.fc1.inner.expanded_weight}")
 
-    client.test(TestConfig(
-        model=model_ref,
-        dataset=dataset_ref,
-        batch_size=2,
-        device="cpu",
-        metric="l2",
-    ))
-    # print("Model's accuracy: {}".format(client.test(TestConfig(
-    #    model=model_ref,
-    #    dataset=dataset_ref,
-    #    batch_size=2,
-    # ))))
+    client.test(create_test_config(model_ref, dataset_ref, 2))

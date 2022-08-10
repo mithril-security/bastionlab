@@ -1,5 +1,5 @@
 import io
-from typing import Any, Callable, Iterable, Iterator, List, Tuple, TypeVar
+from typing import Any, Callable, Dict, Iterable, Iterator, List, Tuple, TypeVar
 
 import torch
 from torch import Tensor
@@ -10,7 +10,7 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 from time import sleep
 
-from pb.remote_torch_pb2 import Chunk, Metric
+from pb.remote_torch_pb2 import Chunk, Metric, Reference, Empty, TestConfig, TrainConfig
 
 T = TypeVar('T')
 U = TypeVar('U')
@@ -20,12 +20,12 @@ SIZE_LEN = 8
 def parametrized_modules(module: Module) -> Iterable[Module]:
     """Recursively iterates over all submodules.
 
-    The method returns submodules that have parameters 
+    The method returns submodules that have parameters
     (as opposed to "wrapper modules" that just organize modules).
 
     Args:
         module (Module): torch.nn.Module
-    
+
     Returns:
         Iterable[Module]:
     """
@@ -39,7 +39,7 @@ def parametrized_modules(module: Module) -> Iterable[Module]:
 def trainable_modules(module: Module) -> Iterable[Tuple[str, Module]]:
     """Recursively iterates over all submodules.
 
-    The method returns submodules that have parameters and are trainable. 
+    The method returns submodules that have parameters and are trainable.
 
     Args:
         module (Module): torch.nn.Module
@@ -61,7 +61,7 @@ def trainable_parameters(module: Module) -> Iterable[Tuple[str, Parameter]]:
 
     Args:
         module (Module): torch.nn.Module
-    
+
     Returns:
         Iterable[Tuple[str, Parameter]]:
     """
@@ -244,13 +244,14 @@ def deserialize_weights_to_model(model: Module, chunks: Iterator[Chunk]) -> None
 
         parent.__setattr__(name, torch.nn.Parameter(value))
 
+
 def metric_tqdm_with_epochs(metric_stream: Iterator[Metric], name: str):
     def new_tqdm_bar(epoch: int, nb_epochs, nb_batches):
         t = tqdm(
-                total=nb_batches,
-                unit="batch",
-                bar_format="{l_bar}{bar:20}{r_bar}",
-            )
+            total=nb_batches,
+            unit="batch",
+            bar_format="{l_bar}{bar:20}{r_bar}",
+        )
         t.set_description("Epoch {}/{} - train".format(epoch, nb_epochs))
         return t
 
@@ -263,7 +264,9 @@ def metric_tqdm_with_epochs(metric_stream: Iterator[Metric], name: str):
         if metric.batch == 1:
             t.close()
             if metric.epoch < metric.nb_epochs - 1:
-                t = new_tqdm_bar(metric.epoch + 2, metric.nb_epochs, metric.nb_batches)
+                t = new_tqdm_bar(metric.epoch + 2,
+                                 metric.nb_epochs, metric.nb_batches)
+
 
 def metric_tqdm(metric_stream: Iterator[Metric], name: str):
     with tqdm(
@@ -277,3 +280,86 @@ def metric_tqdm(metric_stream: Iterator[Metric], name: str):
             if t.total is None:
                 t.total = metric.nb_batches
             t.set_postfix(**{name: "{:.4f}".format(metric.value)})
+
+
+def create_training_config(model: Reference,
+                           dataset: Reference,
+                           batch_size: int,
+                           epochs: int,
+                           learning_rate: float,
+                           weight_decay: float,
+                           extra_args: Dict,
+                           with_dp: bool = True,
+                           device: str = "cpu",
+                           metric: str = "l2",
+                           max_grad_norm: float = 0.,
+                           noise_multiplier: float = 0.,
+                           optimizer_type: str = "SGD"
+                           ) -> TrainConfig:
+    def comapare_args(l1: List, l2: List):
+        l1.sort()
+        l2.sort()
+        return l1 == l2
+
+    def get_config():
+        if optimizer_type == "SGD":
+            optim = TrainConfig.SGD(
+                learning_rate=learning_rate,
+                weight_decay=weight_decay,
+            )
+            if not comapare_args(list(extra_args.keys()), ["momentum", "dampening", "nesterov"]):
+                raise Exception("SGD Optimizer missing arguments")
+
+            for (k, v) in extra_args.items():
+                optim.__setattr__(k, v)
+
+            return TrainConfig(
+                model=model,
+                dataset=dataset,
+                batch_size=batch_size,
+                epochs=epochs,
+                device=device,
+                metric=metric,
+                sgd=optim
+            )
+        else:
+            optim = TrainConfig.Adam(
+                learning_rate=learning_rate,
+                weight_decay=weight_decay,
+            )
+            if not comapare_args(list(extra_args.keys()), ["beta_1", "beta_2", "amsgrad", "epsilon"]):
+                raise Exception("Adam Optimizer missing arguments")
+
+            for (k, v) in extra_args.items():
+                optim.__setattr__(k, v)
+
+            return TrainConfig(
+                model=model,
+                dataset=dataset,
+                batch_size=batch_size,
+                epochs=epochs,
+                device=device,
+                metric=metric,
+                adam=optim)
+
+    dp = TrainConfig.DpParameters(
+        max_grad_norm=max_grad_norm, noise_multiplier=noise_multiplier)
+
+    train_config = get_config()
+
+    if with_dp:
+        train_config.differential_privacy.CopyFrom(dp)
+    else:
+        train_config.standard.CopyFrom(Empty())
+
+    return train_config
+
+
+def create_test_config(model: Reference, dataset: Reference, batch_size: int, device: str = "cpu", metric: str = "l2") -> TestConfig:
+    return TestConfig(
+        model=model,
+        dataset=dataset,
+        batch_size=batch_size,
+        device=device,
+        metric=metric
+    )
