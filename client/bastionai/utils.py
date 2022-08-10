@@ -303,6 +303,7 @@ def create_training_config(model: Reference,
         return l1 == l2
 
     def get_config():
+        print(learning_rate, weight_decay)
         if optimizer_type == "SGD":
             optim = TrainConfig.SGD(
                 learning_rate=learning_rate,
