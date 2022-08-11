@@ -35,6 +35,14 @@ setup(
     version="0.1.0",
     packages=find_packages(),
     description="Client SDK for BastionAI Confidential AI Training.",
+    long_description_content_type="text/markdown",
+    keywords="confidential computing training client enclave amd-sev machine learning",
     cmdclass={"build_py": BuildPackage},
+    python_requires=">=3.6.8",
+    install_requires=[
+        "grpcio==1.47",
+        "grpcio-tools==1.47",
+        "typing-extensions==4.3.0",
+    ],
     classifiers=["Programming Language :: Python :: 3"]
 )

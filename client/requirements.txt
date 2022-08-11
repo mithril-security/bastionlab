@@ -4,16 +4,34 @@
 #
 #    pip-compile
 #
+bashlex==0.16
+    # via cibuildwheel
+bracex==2.3.post1
+    # via cibuildwheel
+certifi==2022.6.15
+    # via cibuildwheel
+cibuildwheel==2.8.1
+    # via -r requirements.in
+filelock==3.8.0
+    # via cibuildwheel
 grpcio==1.47.0
     # via
     #   -r requirements.in
     #   grpcio-tools
 grpcio-tools==1.47.0
     # via -r requirements.in
+packaging==21.3
+    # via cibuildwheel
+platformdirs==2.5.2
+    # via cibuildwheel
 protobuf==3.20.1
     # via grpcio-tools
+pyparsing==3.0.9
+    # via packaging
 six==1.16.0
     # via grpcio
+tomli==2.0.1
+    # via cibuildwheel
 torch==1.12.1
     # via -r requirements.in
 typing-extensions==4.3.0

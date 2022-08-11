@@ -1,3 +1,4 @@
 torch
 grpcio
 grpcio-tools
+cibuildwheel
