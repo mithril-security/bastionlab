@@ -10,7 +10,7 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 from time import sleep
 
-from pb.remote_torch_pb2 import Chunk, Metric
+from remote_torch_pb2 import Chunk, Metric
 
 T = TypeVar('T')
 U = TypeVar('U')
@@ -52,35 +52,78 @@ def trainable_parameters(module: Module) -> Iterable[Tuple[str, Parameter]]:
 
 
 class DataWrapper(Module):
-    def __init__(self, samples: torch.Tensor, labels: torch.Tensor) -> None:
+    def __init__(self, columns: List[torch.Tensor], labels: torch.Tensor) -> None:
         super().__init__()
-        self.samples = Parameter(samples)
-        self.labels = Parameter(labels)
+        for i, column in enumerate(columns):
+            self.__setattr__(f"samples_{i}", Parameter(column, requires_grad=False))
+        self.labels = Parameter(labels, requires_grad=False)
 
 
-class ArtifactDataset:
-    def __init__(self, chunks: Iterator[Chunk]) -> None:
-        wrapper = list(unstream_artifacts(
-            (chunk.data for chunk in chunks),
-            deserialization_fn=torch.jit.load
-        ))[0]  # type: ignore
-        self.samples = None
-        self.labels = None
-        for name, param in wrapper.named_parameters():
-            if name == "samples":
-                self.samples = param
-            elif name == "labels":
-                self.labels = param
-            else:
-                raise Exception(f"Unknown field {name} in data wrapper.")
-        if self.samples is None:
-            raise Exception(f"Data wrapper must contain a samples field.")
+class TensorDataset(Dataset):
+    def __init__(self, columns: List[torch.Tensor], labels: torch.Tensor) -> None:
+        super().__init__()
+        self.columns = columns
+        self.labels = labels
 
     def __len__(self) -> int:
-        return len(self.samples)
+        return len(self.labels)
 
-    def __getitem__(self, index: int) -> Any:
-        return (self.samples[index], self.labels[index])
+    def __getitem__(self, idx: int) -> Tuple[List[torch.Tensor], torch.Tensor]:
+        return ([column[idx] for column in self.columns], self.labels[idx])
+
+
+def dataset_from_chunks(chunks: Iterator[Chunk]) -> TensorDataset:
+    wrapper = list(unstream_artifacts(
+        (chunk.data for chunk in chunks),
+        deserialization_fn=torch.jit.load
+    ))[0]  # type: ignore
+    columns = []
+    labels = None
+    for name, param in wrapper.named_parameters():
+        if name == "labels":
+            labels = param
+        elif name.startswith("samples_"):
+            idx = int(name[8:])
+            if len(columns) < idx:
+                columns += [None] * (idx + 1 - len(columns))
+            columns[idx] = param
+        else:
+            raise Exception(f"Unknown field {name} in data wrapper")
+    if len(columns) == 0:
+        raise Exception(f"Data wrapper must contain at least one column.")
+    if any([x is None for x in columns]):
+        raise Exception(f"Missing column in data wrapper.")
+    
+    return TensorDataset(columns, labels)
+
+# class ArtifactDataset:
+#     def __init__(self, chunks: Iterator[Chunk]) -> None:
+#         wrapper = list(unstream_artifacts(
+#             (chunk.data for chunk in chunks),
+#             deserialization_fn=torch.jit.load
+#         ))[0]  # type: ignore
+#         self.columns = []
+#         self.labels = None
+#         for name, param in wrapper.named_parameters():
+#             if name == "labels":
+#                 self.labels = param
+#             elif name.startswith("samples_"):
+#                 idx = int(name[8:])
+#                 if len(self.columns) < idx:
+#                     self.columns += [None] * (idx + 1 - len(self.columns))
+#                 self.columns[idx] = param
+#             else:
+#                 raise Exception(f"Unknown field {name} in data wrapper")
+#         if len(self.columns) == 0:
+#             raise Exception(f"Data wrapper must contain at least one column.")
+#         if any([x is None for x in self.columns]):
+#             raise Exception(f"Missing column in data wrapper.")
+
+#     def __len__(self) -> int:
+#         return len(self.columns[0])
+
+#     def __getitem__(self, index: int) -> Any:
+#         return (*[column[index] for column in self.columns], self.labels[index])
 
 
 # def chunk_bounds(size: int, chunk_size: int) -> Iterator[Tuple[int, int]]:
@@ -94,7 +137,7 @@ def chunks(it: Iterator[T], chunk_size: int, cat_fn: Callable[[List[T]], U] = la
     chunk = []
     for x in it:
         if len(chunk) == chunk_size:
-            yield chunk
+            yield cat_fn(chunk)
             chunk = [x]
         else:
             chunk.append(x)
@@ -117,7 +160,7 @@ def bytes_to_tensor(bs: bytes) -> Tensor:
     return tensor
 
 
-def serialize_batch(data: Tuple[torch.Tensor, torch.Tensor], buff):
+def serialize_batch(data: Tuple[List[torch.Tensor], torch.Tensor], buff):
     torch.jit.save(torch.jit.script(DataWrapper(*data)), buff)
 
 
@@ -190,11 +233,11 @@ def data_chunks_generator(stream: Iterator[bytes], description: str, secret: byt
             yield Chunk(data=x, description="", secret=bytes())
 
 
-def make_batch(data: List[Tuple[Tensor, Tensor]]) -> Tuple[Tensor, Tensor]:
-    return (torch.stack([x[0] for x in data]), torch.stack([x[1] for x in data]))
+def make_batch(data: List[Tuple[List[Tensor], Tensor]]) -> Tuple[Tensor, Tensor]:
+    return ([torch.stack([x[0][i] for x in data]) for i in range(len(data[0][0]))], torch.stack([x[1] for x in data]))
 
 
-def serialize_dataset(dataset: Dataset, description: str, secret: bytes, chunk_size=1000, batch_size=1024) -> Iterator[Chunk]:
+def serialize_dataset(dataset: Dataset, description: str, secret: bytes, chunk_size=100_000_000, batch_size=1024) -> Iterator[Chunk]:
     return data_chunks_generator(
         stream_artifacts(
             chunks(iter(dataset), batch_size, cat_fn=make_batch),
@@ -206,7 +249,7 @@ def serialize_dataset(dataset: Dataset, description: str, secret: bytes, chunk_s
     )
 
 
-def serialize_model(model: Module, description: str, secret: bytes, chunk_size=1000) -> Iterator[Chunk]:
+def serialize_model(model: Module, description: str, secret: bytes, chunk_size=100_000_000) -> Iterator[Chunk]:
     ts = torch.jit.script(model)  # type: ignore
     # type: ignore
     return data_chunks_generator(stream_artifacts(iter([ts]), chunk_size, torch.jit.save), description, secret)
@@ -248,7 +291,7 @@ def metric_tqdm_with_epochs(metric_stream: Iterator[Metric], name: str):
             t = new_tqdm_bar(1, metric.nb_epochs, metric.nb_batches)
         t.update()
         t.set_postfix(**{name: "{:.4f}".format(metric.value)})
-        if metric.batch == 1:
+        if metric.batch == metric.nb_batches - 1:
             t.close()
             if metric.epoch < metric.nb_epochs - 1:
                 t = new_tqdm_bar(metric.epoch + 2, metric.nb_epochs, metric.nb_batches)
@@ -265,3 +308,14 @@ def metric_tqdm(metric_stream: Iterator[Metric], name: str):
             if t.total is None:
                 t.total = metric.nb_batches
             t.set_postfix(**{name: "{:.4f}".format(metric.value)})
+
+
+class MultipleOutputWrapper(Module):
+    def __init__(self, module: Module, output: int = 0) -> None:
+        super().__init__()
+        self.inner = module
+        self.output = output
+    
+    def forward(self, *args, **kwargs) -> Tensor:
+        output = self.inner.forward(*args, **kwargs)
+        return output[self.output]

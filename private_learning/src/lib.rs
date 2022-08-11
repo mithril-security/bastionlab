@@ -180,24 +180,24 @@ impl Parameters {
                     for param in parameters.iter() {
                         let per_sample_grad = param.grad();
                         let dims: Vec<i64> = (1..per_sample_grad.dim()).map(|x| x as i64).collect();
-                        per_param_norms.push(per_sample_grad.f_norm_scalaropt_dim(2, &dims, false)?);
+                        per_param_norms.push(per_sample_grad.f_norm_scalaropt_dim(2, &dims, false).unwrap());
                     }
-                    let per_sample_norms = Tensor::f_stack(&per_param_norms, 1)?
-                        .f_norm_scalaropt_dim(2, &[1], false)?;
+                    let per_sample_norms = Tensor::f_stack(&per_param_norms, 1).unwrap()
+                        .f_norm_scalaropt_dim(2, &[1], false).unwrap();
                     let max_grad_norm = Tensor::of_slice(&[*max_grad_norm as f32]);
-                    let per_sample_clip_factor = max_grad_norm.f_div(&per_sample_norms.f_add_scalar(1e-6)?)?.f_clamp(0., 1.)?;
+                    let per_sample_clip_factor = max_grad_norm.f_div(&per_sample_norms.f_add_scalar(1e-6).unwrap()).unwrap().f_clamp(0., 1.).unwrap();
         
                     for (i, param) in parameters.iter_mut().enumerate() {
                         let per_sample_grad = param.grad();
                         let mut update_size = per_sample_grad.size();
                         update_size.remove(0);
-                        let grad = Tensor::f_einsum("i,i...", &[&per_sample_clip_factor, &per_sample_grad])?;
-                        let mut grad = grad.f_add(&generate_noise_like(&grad, *noise_multiplier)?)?.f_view(&update_size[..])?;
+                        let grad = Tensor::f_einsum("i,i...", &[&per_sample_clip_factor, &per_sample_grad]).unwrap();
+                        let mut grad = grad.f_add(&generate_noise_like(&grad, *noise_multiplier).unwrap()).unwrap().f_view(&update_size[..]).unwrap();
                         if let LossType::Mean(batch_size) = loss_type {
-                            let _ = grad.f_div_scalar_(*batch_size)?;
+                            let _ = grad.f_div_scalar_(*batch_size).unwrap();
                         }
-                        let update = update_fn(i, &param.i(0), grad)?;
-                        let _ = param.i(0).f_sub_(&update)?;
+                        let update = update_fn(i, &param.i(0), grad).unwrap();
+                        let _ = param.i(0).f_sub_(&update).unwrap();
                     }
                     Ok(())
                 })
