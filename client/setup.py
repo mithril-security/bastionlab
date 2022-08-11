@@ -44,5 +44,15 @@ setup(
         "grpcio-tools==1.47",
         "typing-extensions==4.3.0",
     ],
+    extras_require={
+        "dev": [
+            "setuptools",
+            "wheel",
+            "check-wheel-contents",
+            "auditwheel",
+            "grpcio-tools==1.47",
+            "grpcio==1.47",
+        ]
+    },
     classifiers=["Programming Language :: Python :: 3"]
 )
