@@ -53,16 +53,17 @@ with Connection("localhost", 50051) as client:
     client.train(
         create_training_config(model_ref,
                                dataset_ref,
-                               2,
-                               100,
-                               0.1,
-                               0.,
-                               {
+                               batch_size=2,
+                               epochs=100,
+                               learning_rate=0.1,
+                               weight_decay=0.,
+                               noise_multiplier=0.1,
+                               max_grad_norm=1.,
+                               extra_args={
                                    "momentum": 0.,
                                    "dampening": 0.,
                                    "nesterov": False
                                },
-                               with_dp=True,
                                optimizer_type="SGD"))
 
     client.fetch_model_weights(lreg_model, model_ref)
