@@ -1,12 +1,17 @@
 use env_logger::Env;
 use log::info;
 use std::collections::HashMap;
+use std::fs;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 use std::{fs::File, io::Read};
 use tokio_stream::wrappers::ReceiverStream;
+use tonic::transport::Identity;
+use tonic::transport::ServerTlsConfig;
+
 use tonic::{transport::Server, Request, Response, Status, Streaming};
 use uuid::Uuid;
+
 mod remote_torch {
     tonic::include_proto!("remote_torch");
 }
@@ -281,6 +286,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     fill_blank_and_print(&version_str, text_size);
 
+    // Identity for untrusted (non-attested) communication
+    let server_cert = fs::read("tls/host_server.pem")?;
+    let server_key = fs::read("tls/host_server.key")?;
+    let server_identity = Identity::from_pem(&server_cert, &server_key);
+
     let server = BastionAIServer::new();
 
     let mut file = File::open("config.toml")?;
@@ -293,6 +303,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         network_config.client_to_enclave_untrusted_socket()?
     );
     Server::builder()
+        .tls_config(ServerTlsConfig::new().identity(server_identity))?
         .add_service(RemoteTorchServer::new(server))
         .serve(network_config.client_to_enclave_untrusted_socket()?)
         .await?;

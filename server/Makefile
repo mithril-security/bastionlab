@@ -35,6 +35,9 @@ all: compile
 
 compile:
 	$(call check_defined, LIBTORCH_PATH)
+# Create server tls config
+	@bash $(TOOLS_DIR)/create_tls_config.sh $(BIN_DIR)
+
 	@mkdir -p $(BIN_DIR)
 	@cd $(SERVER_DIR) && cargo build $(BUILD_TYPE)
 	
@@ -48,7 +51,7 @@ compile:
 	@cp $(TARGET_DIR)/server $(BIN_DIR)
 	
 run:
-	@./$(BIN_DIR)/server
+	@cd $(BIN_DIR) && ./server
 
 clean:
 	@rm -rf $(BIN_DIR)
