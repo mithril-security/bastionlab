@@ -8,8 +8,7 @@ from torch import Tensor
 from torch.nn import Module
 from torch.utils.data import Dataset
 
-from bastionai.utils import create_training_config, create_test_config
-
+from bastionai.utils import create_training_config, create_test_config, Optimizers
 
 class LReg(Module):
     def __init__(self) -> None:
@@ -64,7 +63,7 @@ with Connection("localhost", 50051) as client:
                                    "dampening": 0.,
                                    "nesterov": False
                                },
-                               optimizer_type="SGD"))
+                               optimizer=Optimizers.SGD))
 
     client.fetch_model_weights(lreg_model, model_ref)
     print(f"Weight: {lreg_model.fc1.inner.expanded_weight}")
