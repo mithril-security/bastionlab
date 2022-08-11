@@ -23,13 +23,18 @@ def generate_stub():
             ]
         )
 
-# Create Protobuf files before packaging.
-generate_stub()
+
+class BuildPackage(build_py):
+    def run(self):
+        generate_stub()
+        super(BuildPackage, self).run()
+
 
 setup(
     name='bastionai',
     version="0.1.0",
     packages=find_packages(),
     description="Client SDK for BastionAI Confidential AI Training.",
+    cmdclass={"build_py": BuildPackage},
     classifiers=["Programming Language :: Python :: 3"]
 )
