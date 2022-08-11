@@ -184,4 +184,6 @@ ftenv
 *.pt
 
 **/remote_torch_pb2.py
-bastionai/pb/remote_torch_pb2_grpc.py
+
+client/bastionai/pb/remote_torch_pb2_*.py
+docs/
