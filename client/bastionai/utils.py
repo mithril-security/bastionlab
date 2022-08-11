@@ -39,7 +39,7 @@ def parametrized_modules(module: Module) -> Iterable[Module]:
 def trainable_modules(module: Module) -> Iterable[Tuple[str, Module]]:
     """Recursively iterates over all submodules.
 
-    The method returns submodules that have parameters and are trainable.
+    The method returns submodules that have parameters and are trainable. 
 
     Args:
         module (Module): torch.nn.Module

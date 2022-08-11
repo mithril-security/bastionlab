@@ -98,22 +98,23 @@ class Client:
         """
         return self.stub.AvailableDatasets(Empty())
 
-    def get_available_devices(self) -> List[Devices]:
+    def get_available_devices(self) -> List[str]:
         """Gets a list of devices available on BastionAI.
         Returns: 
+
             List[Devices]: 
                 A list of BastionAI available device references.
         """
-        return self.stub.AvailableDevices(Empty())
+        return self.stub.AvailableDevices(Empty()).list
 
-    def get_available_optimizers(self) -> List[Optimizers]:
+    def get_available_optimizers(self) -> List[str]:
         """Gets a list of optimizers supported by BastionAI.
 
         Returns:
             List[Optimizers]:
                 A list of optimizers available on BastionAI training server.
         """
-        return self.stub.AvailableOptimizers(Empty())
+        return self.stub.AvailableOptimizers(Empty()).list
 
     def train(self, config: TrainConfig) -> None:
         """Trains a model with `TrainConfig` configuration on BastionAI.
