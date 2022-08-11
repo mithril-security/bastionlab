@@ -1,14 +1,15 @@
 from typing import Tuple
 
 import torch
-from bastionai.client import Connection
 from bastionai.pb.remote_torch_pb2 import TestConfig, TrainConfig
 from bastionai.psg.nn import Linear
 from torch import Tensor
 from torch.nn import Module
 from torch.utils.data import Dataset
 
-from bastionai.utils import create_training_config, create_test_config
+from bastionai.utils.utils import create_training_config, create_test_config, Optimizers
+
+from bastionai.client import connect
 
 
 class LReg(Module):
@@ -36,37 +37,38 @@ class LRegDataset(Dataset):
 lreg_model = LReg()
 lreg_dataset = LRegDataset()
 
-with Connection("localhost", 50051) as client:
-    model_ref = client.send_model(
-        lreg_model, "1D Linear Regression Model", b"secret")
-    print(f"Model ref: {model_ref}")
+client = connect(addr='localhost', port=50053)
 
-    dataset_ref = client.send_dataset(
-        lreg_dataset, "Dummy 1D Linear Regression Dataset (param is 2)", b'secret')
-    print(f"Dataset ref: {dataset_ref}")
+model_ref = client.send_model(
+    lreg_model, "1D Linear Regression Model", b"secret")
+print(f"Model ref: {model_ref}")
 
-    print(f"Weight: {lreg_model.fc1.inner.expanded_weight}")
-    print(f"Devices: {client.get_available_devices()}")
+dataset_ref = client.send_dataset(
+    lreg_dataset, "Dummy 1D Linear Regression Dataset (param is 2)", b'secret')
+print(f"Dataset ref: {dataset_ref}")
 
-    print(f"Optimizers: {(client.get_available_optimizers())}")
+print(f"Weight: {lreg_model.fc1.inner.expanded_weight}")
+print(f"Devices: {client.get_available_devices()}")
 
-    client.train(
-        create_training_config(model_ref,
-                               dataset_ref,
-                               batch_size=2,
-                               epochs=100,
-                               learning_rate=0.1,
-                               weight_decay=0.,
-                               noise_multiplier=0.1,
-                               max_grad_norm=1.,
-                               extra_args={
-                                   "momentum": 0.,
-                                   "dampening": 0.,
-                                   "nesterov": False
-                               },
-                               optimizer_type="SGD"))
+print(f"Optimizers: {(client.get_available_optimizers())}")
 
-    client.fetch_model_weights(lreg_model, model_ref)
-    print(f"Weight: {lreg_model.fc1.inner.expanded_weight}")
+client.train(
+    create_training_config(model_ref,
+                           dataset_ref,
+                           batch_size=2,
+                           epochs=100,
+                           learning_rate=0.1,
+                           weight_decay=0.,
+                           noise_multiplier=0.1,
+                           max_grad_norm=1.,
+                           extra_args={
+                               "momentum": 0.,
+                               "dampening": 0.,
+                               "nesterov": False
+                           },
+                           optimizer=Optimizers.SGD))
 
-    client.test(create_test_config(model_ref, dataset_ref, 2))
+client.fetch_model_weights(lreg_model, model_ref)
+print(f"Weight: {lreg_model.fc1.inner.expanded_weight}")
+
+client.test(create_test_config(model_ref, dataset_ref, 2))
