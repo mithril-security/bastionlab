@@ -182,6 +182,12 @@ tests/host_server.pem
 ################
 ftenv
 *.pt
+
 **/tests/data
 **/tests/models
 **/bastionai/pb
+
+docs/resources
+
+server/bin
+server/target

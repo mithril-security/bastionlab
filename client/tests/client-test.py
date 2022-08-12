@@ -1,10 +1,13 @@
 import torch
-from bastionai.client import Connection
 from bastionai.pb.remote_torch_pb2 import TestConfig, TrainConfig
 from bastionai.psg.nn import Linear
 from torch import Tensor
 from torch.nn import Module
 from bastionai.utils import TensorDataset
+
+from bastionai.utils.utils import create_training_config, create_test_config, Optimizers
+
+from bastionai.client import connect
 
 
 class LReg(Module):

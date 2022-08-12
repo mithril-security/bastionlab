@@ -125,8 +125,6 @@ def expanded_convolution(conv_fn: Callable, tuple_type: Type, tuple_fn: Callable
         
         def _conv_forward(_self, x: Tensor, weight: Tensor, bias: Optional[Tensor]):
             batch_size = x.size(0)
-            # batch_padding = [0, 0] * (len(_self.kernel_size) + 1) + [0, _self.max_batch_size - batch_size]
-            # x = F.pad(x, batch_padding, "constant", 0.)
             x = _pad_input(x, _self.max_batch_size)
             x = x.view(_gconv_size(x))
             weight = weight.reshape(_gconv_size(weight, drop_first=True))
@@ -184,7 +182,6 @@ class ConvLinear(nn.Module):
         x = x.view(x.size(0), x.size(1), 1)
         x = self.inner(x)
         return x.view(x.size(0), -1)
-
 
 class Linear(nn.Linear):
     def __init__(
