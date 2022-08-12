@@ -86,7 +86,7 @@ The per-layer weights are expanded, which is replicating them along a new “bat
 - Providing Attestation to BastionAI through AMD SEV.
 
 # :wrench: How to get started
-To build and run the server, first make sure you have Pytorch's C++ libtorch library.
+To build and run the server, first make sure you have [Pytorch's C++ libtorch library](https://pytorch.org/cppdocs/installing.html).
 
 ```shell
 cd server
