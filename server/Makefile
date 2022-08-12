@@ -43,6 +43,8 @@ compile:
 	
 # Replace missing LIBTORCH shared library dependency with actual paths
 	@patchelf --replace-needed libtorch_cpu.so $(LIBTORCH_PATH)/lib/libtorch_cpu.so $(TARGET_DIR)/$(SERVER_NAME)
+# Fixme: :(
+#	We will have to replace the shared library link for libtorch_gpu too.
 	@patchelf --replace-needed libc10.so $(LIBTORCH_PATH)/lib/libc10.so $(TARGET_DIR)/$(SERVER_NAME)
 
 # Copy $(TOOL_DIR)/config.toml to $(BIN_DIR)
