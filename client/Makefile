@@ -28,7 +28,4 @@ clean:
 	find . -type f -name '*.pyc' -delete
 	find . -type d -name '__pycache__' -delete
 
-test:
-	./$(VENV)/bin/python3 tests/client.py
-
-.PHONY: all venv build install clean test
+.PHONY: all venv build install clean
