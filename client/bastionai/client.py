@@ -34,35 +34,8 @@ def raise_exception_if_conn_closed(f):
     return wrapper
 
 
-@dataclass
-class BastionAiClient:
-    """BastionAI client class."""
-
-    _stub: RemoteTorchStub
-    _channel: Optional[Channel] = None
-    
-    closed: bool = False
-
-    def __init__(self, addr: str, port: int = 50053, server_name: str = 'bastionai-srv', debug_mode: bool = False) -> None:
-        """Connect to the server with the specified parameters.
-        Currently, the server is set up in Simulation mode and you do not need to provide your own server certificate.
-
-        Args:
-            addr (str): The address of BastionAI server you want to reach.
-            server_name (str, optional): Contains the CN expected by the server TLS certificate. Defaults to "bastionai-srv".
-            port (int, optional):  Connection server port. Defaults to 50053.
-
-        Raises:
-            ConnectionError: will be raised if the connection with the server fails.
-        """
-        if debug_mode:  # pragma: no cover
-            os.environ["GRPC_TRACE"] = "transport_security,tsi"
-            os.environ["GRPC_VERBOSITY"] = "DEBUG"
-
-        self._connect_server(addr, port, server_name)
-
-    def _connect_server(self, addr: str, port: int, server_name: str):
-
+class Connection:
+    def __init__(self, addr: str, port: int, server_name: str) -> None:
         client_to_server = f"{addr}:{port}"
         try:
             socket.setdefaulttimeout(CONNECTION_TIMEOUT)
@@ -90,6 +63,34 @@ class BastionAiClient:
         except RpcError as rpc_error:
             channel.close()
             raise ConnectionError(check_rpc_exception(rpc_error))
+
+
+@dataclass
+class BastionAiClient:
+    """BastionAI client class."""
+
+    _stub: RemoteTorchStub
+    _channel: Optional[Channel] = None
+
+    closed: bool = False
+
+    def __init__(self, addr: str, port: int = 50053, server_name: str = 'bastionai-srv', debug_mode: bool = False) -> None:
+        """Connect to the server with the specified parameters.
+        Currently, the server is set up in Simulation mode and you do not need to provide your own server certificate.
+
+        Args:
+            addr (str): The address of BastionAI server you want to reach.
+            server_name (str, optional): Contains the CN expected by the server TLS certificate. Defaults to "bastionai-srv".
+            port (int, optional):  Connection server port. Defaults to 50053.
+
+        Raises:
+            ConnectionError: will be raised if the connection with the server fails.
+        """
+        if debug_mode:  # pragma: no cover
+            os.environ["GRPC_TRACE"] = "transport_security,tsi"
+            os.environ["GRPC_VERBOSITY"] = "DEBUG"
+
+        Connection(addr, port, server_name)
 
     @raise_exception_if_conn_closed
     def send_model(self, model: Module, description: str, secret: bytes) -> Reference:
@@ -179,6 +180,7 @@ class BastionAiClient:
     @raise_exception_if_conn_closed
     def get_available_optimizers(self) -> List[str]:
         """Gets a list of optimizers supported by BastionAI.
+
         Returns:
             A list of optimizers available on BastionAI training server.
         """

@@ -1,4 +1,4 @@
-# BlindAI Client
+# BastionAI Client
 
 BastionAI Client is a python library to create client applications for BastionAI Server (Mithril-security's confidential training server). 
 
@@ -25,6 +25,6 @@ python setup.py install
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
 
 ## License
-This project is licensed under [Apache 2.0 License.](https://github.com/mithril-security/blindai/blob/master/LICENSE)
+This project is licensed under [Apache 2.0 License.](https://github.com/mithril-security/bastionai/blob/master/LICENSE)
 
 The project uses the "Intel SGX DCAP Quote Validation Library" for attestation verification, See [Intel SGX DCAP Quote Validation Library License](https://github.com/intel/SGXDataCenterAttestationPrimitives/blob/master/License.txt)
