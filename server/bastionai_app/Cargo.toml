@@ -6,10 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tonic = { version = "0.5.2", features = ["tls"] }
-prost = { version = "0.8", default-features = false, features = [
-    "prost-derive",
-] }
+tonic = "0.5.2"
+prost = {version = "0.8", default-features = false, features = ["prost-derive"]}
 tokio = { version = "1.19.2", features = ["macros", "rt-multi-thread"] }
 futures-core = "0.3.21"
 futures = "0.3.21"
@@ -19,11 +17,7 @@ tokio-stream = "0.1"
 # anyhow = "1.0.58"
 ring = "0.16.20"
 private_learning = { path = "../../private_learning" }
-bastionai_common = { path = "../bastionai_common" }
 rand = "0.8.5"
-toml = "0.5.9"
-log = "0.4.17"
-env_logger = "0.9.0"
 
 [dependencies.uuid]
 version = "1.1.2"

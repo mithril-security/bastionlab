@@ -186,7 +186,4 @@ ftenv
 **/remote_torch_pb2.py
 
 client/bastionai/pb/remote_torch_pb2_*.py
-docs/resources
-
-server/bin
-server/target
+docs/
