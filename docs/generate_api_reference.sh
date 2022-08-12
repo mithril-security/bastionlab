@@ -1,9 +1,5 @@
 pip install pdoc3
 
-# For now, use setup.py to install bastionai package.
-cd client && python setup install
-cd -
-
 rm -rf docs/resources
 
 pdoc --html --skip-errors -o docs/resources client/bastionai
