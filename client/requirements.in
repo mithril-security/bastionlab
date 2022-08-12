@@ -6,3 +6,4 @@ setuptools
 wheel
 check-wheel-contents
 auditwheel
+tqdm

@@ -50,6 +50,8 @@ tomli==2.0.1
     #   cibuildwheel
 torch==1.12.1
     # via -r requirements.in
+tqdm==4.64.0
+    # via -r requirements.in
 typing-extensions==4.3.0
     # via
     #   pydantic
