@@ -2,22 +2,31 @@ from dataclasses import dataclass
 from typing import Any, List
 
 import grpc
-from remote_torch_pb2 import (Empty, Reference, TestConfig,
-                                 TrainConfig, Devices)
+from remote_torch_pb2 import Empty, Reference, TestConfig, TrainConfig, Devices
 from remote_torch_pb2_grpc import RemoteTorchStub
 from torch.nn import Module
 from torch.utils.data import Dataset
 
-from bastionai.utils import (TensorDataset, dataset_from_chunks, deserialize_weights_to_model, metric_tqdm, metric_tqdm_with_epochs,
-                   serialize_dataset, serialize_model)
+from bastionai.utils import (
+    TensorDataset,
+    dataset_from_chunks,
+    deserialize_weights_to_model,
+    metric_tqdm,
+    metric_tqdm_with_epochs,
+    serialize_dataset,
+    serialize_model,
+)
 
 
 @dataclass
 class Client:
     """BastionAI client class."""
+
     stub: RemoteTorchStub
 
-    def send_model(self, model: Module, description: str, secret: bytes, chunk_size=100_000_000) -> Reference:
+    def send_model(
+        self, model: Module, description: str, secret: bytes, chunk_size=100_000_000
+    ) -> Reference:
         """Uploads Pytorch Modules to BastionAI
 
         This endpoint transforms Pytorch modules into TorchScript modules and sends
@@ -26,33 +35,52 @@ class Client:
         Args:
             model (Module):
                 This is Pytorch's nn.Module.
-            description (str): 
+            description (str):
                 A string description of the module being uploaded.
-            secret (bytes): 
+            secret (bytes):
                 User secret to secure module with.
 
         Returns:
-            Reference: 
+            Reference:
                 BastionAI reference object
         """
-        return self.stub.SendModel(serialize_model(model, description=description, secret=secret, chunk_size=chunk_size))
+        return self.stub.SendModel(
+            serialize_model(
+                model, description=description, secret=secret, chunk_size=chunk_size
+            )
+        )
 
-    def send_dataset(self, dataset: Dataset, description: str, secret: bytes, chunk_size=100_000_000, batch_size=1024) -> Reference:
+    def send_dataset(
+        self,
+        dataset: Dataset,
+        description: str,
+        secret: bytes,
+        chunk_size=100_000_000,
+        batch_size=1024,
+    ) -> Reference:
         """Uploads Pytorch Dataset to BastionAI.
 
         Args:
-            model (Module): 
+            model (Module):
                 This is Pytorch's nn.Module.
-            description (str): 
+            description (str):
                 A string description of the dataset being uploaded.
-            secret (bytes): 
+            secret (bytes):
                 User secret to secure module with.
 
         Returns:
-            Reference: 
+            Reference:
                 BastionAI reference object
         """
-        return self.stub.SendDataset(serialize_dataset(dataset, description=description, secret=secret, chunk_size=chunk_size, batch_size=batch_size))
+        return self.stub.SendDataset(
+            serialize_dataset(
+                dataset,
+                description=description,
+                secret=secret,
+                chunk_size=chunk_size,
+                batch_size=batch_size,
+            )
+        )
 
     def fetch_model_weights(self, model: Module, ref: Reference) -> None:
         """Fetchs the weights of a trained model with a BastionAI reference.
@@ -81,7 +109,7 @@ class Client:
     def get_available_models(self) -> List[Reference]:
         """Gets a list of references of available models on BastionAI.
 
-        Returns: 
+        Returns:
             List[Reference]: A list of BastionAI available model references.
         """
         return self.stub.AvailableModels(Empty())
@@ -89,17 +117,17 @@ class Client:
     def get_available_datasets(self) -> List[Reference]:
         """Gets a list of references of datasets on BastionAI.
 
-        Returns: 
-            List[Reference]: 
+        Returns:
+            List[Reference]:
                 A list of BastionAI available dataset references.
         """
         return self.stub.AvailableDatasets(Empty())
 
     def get_available_devices(self) -> List[str]:
         """Gets a list of devices available on BastionAI.
-        Returns: 
+        Returns:
 
-            List[Devices]: 
+            List[Devices]:
                 A list of BastionAI available device references.
         """
         return self.stub.AvailableDevices(Empty()).list
@@ -120,8 +148,7 @@ class Client:
             config (TrainConfig):
                 Training configuration to pass to BastionAI.
         """
-        metric_tqdm_with_epochs(self.stub.Train(
-            config), name=f"loss ({config.metric})")
+        metric_tqdm_with_epochs(self.stub.Train(config), name=f"loss ({config.metric})")
 
     def test(self, config: TestConfig) -> float:
         """Tests a dataset on a model on BastionAI.
@@ -130,7 +157,7 @@ class Client:
             config (TestConfig): Configuration for testing on BastionAI.
 
         Returns:
-            float: 
+            float:
                 The evaluation of the model on the datatset.
         """
         metric_tqdm(self.stub.Test(config), name=f"metric ({config.metric})")
@@ -156,6 +183,7 @@ class Client:
 @dataclass
 class Connection:
     """Connection class for creating connections to BastionAI."""
+
     host: str
     port: int
     channel: Any = None

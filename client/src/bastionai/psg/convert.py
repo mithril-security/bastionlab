@@ -1,12 +1,13 @@
 import torch
 from .nn import LayerNorm, Linear, Embedding
 
+
 def expand_weights(module, max_batch_size):
-    '''
+    """
     Recursively put desired batch norm in nn.module module.
 
     set module = net to start code.
-    '''
+    """
     # go through all attributes of module nn.module (e.g. network or layer) and put batch norms if present
     for attr_str in dir(module):
         target_attr = getattr(module, attr_str)
@@ -16,12 +17,12 @@ def expand_weights(module, max_batch_size):
             bias = target_attr.bias is not None
 
             new_layer = Linear(in_features, out_features, max_batch_size, bias)
-            
+
             # Set weight to pretrained value
             torch.nn.init.zeros_(new_layer.weight)
             with torch.no_grad():
                 new_layer.weight.add_(target_attr.weight)
-            
+
             # Set bias to pretrained value
             torch.nn.init.zeros_(new_layer.bias)
             with torch.no_grad():
@@ -45,14 +46,14 @@ def expand_weights(module, max_batch_size):
                 max_norm,
                 norm_type,
                 scale_grad_by_freq,
-                sparse
+                sparse,
             )
 
             # Set weight to pretrained value
             torch.nn.init.zeros_(new_layer.weight)
             with torch.no_grad():
                 new_layer.weight.add_(target_attr.weight)
-            
+
             setattr(module, attr_str, new_layer)
         elif type(target_attr) == torch.nn.LayerNorm:
             normalized_shape = target_attr.normalized_shape
@@ -71,12 +72,12 @@ def expand_weights(module, max_batch_size):
                 torch.nn.init.zeros_(new_layer.weight)
                 with torch.no_grad():
                     new_layer.weight.add_(target_attr.weight)
-                
+
                 # Set bias to pretrained value
                 torch.nn.init.zeros_(new_layer.bias)
                 with torch.no_grad():
                     new_layer.bias.add_(target_attr.bias)
-            
+
             setattr(module, attr_str, new_layer)
 
     # iterate through immediate child modules. Note, the recursion is done by our code no need to use named_modules()
