@@ -1,3 +1,0 @@
-[build-system]
-requires = ["grpcio-tools", "wheel"]
-build-backend = "setuptools.build_meta:__legacy__"

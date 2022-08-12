@@ -9,20 +9,12 @@ from torch.utils.data import Dataset
 
 from tqdm import tqdm
 from time import sleep
-from enum import Enum
+
 from pb.remote_torch_pb2 import Chunk, Metric, Reference, Empty, TestConfig, TrainConfig
 
 T = TypeVar('T')
 U = TypeVar('U')
 SIZE_LEN = 8
-
-
-class Optimizers(Enum):
-    SGD = 'SGD'
-    Adam = 'Adam'
-
-    def __str__(self):
-        return str(self.value)
 
 
 def parametrized_modules(module: Module) -> Iterable[Module]:
@@ -302,7 +294,7 @@ def create_training_config(model: Reference,
                            metric: str = "l2",
                            max_grad_norm: float = 0.,
                            noise_multiplier: float = 0.,
-                           optimizer: Optimizers = Optimizers.SGD
+                           optimizer_type: str = "SGD"
                            ) -> TrainConfig:
 
     def comapare_args(l1: List, l2: List):
@@ -311,7 +303,8 @@ def create_training_config(model: Reference,
         return l1 == l2
 
     def get_config():
-        if optimizer == Optimizers.SGD:
+        print(learning_rate, weight_decay)
+        if optimizer_type == "SGD":
             optim = TrainConfig.SGD(
                 learning_rate=learning_rate,
                 weight_decay=weight_decay,
@@ -321,6 +314,7 @@ def create_training_config(model: Reference,
 
             for (k, v) in extra_args.items():
                 optim.__setattr__(k, v)
+
             return TrainConfig(
                 model=model,
                 dataset=dataset,
@@ -330,7 +324,7 @@ def create_training_config(model: Reference,
                 metric=metric,
                 sgd=optim
             )
-        elif optimizer == Optimizers.Adam:
+        else:
             optim = TrainConfig.Adam(
                 learning_rate=learning_rate,
                 weight_decay=weight_decay,

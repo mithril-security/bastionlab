@@ -23,36 +23,13 @@ def generate_stub():
             ]
         )
 
-
-class BuildPackage(build_py):
-    def run(self):
-        generate_stub()
-        super(BuildPackage, self).run()
-
+# Create Protobuf files before packaging.
+generate_stub()
 
 setup(
     name='bastionai',
     version="0.1.0",
     packages=find_packages(),
     description="Client SDK for BastionAI Confidential AI Training.",
-    long_description_content_type="text/markdown",
-    keywords="confidential computing training client enclave amd-sev machine learning",
-    cmdclass={"build_py": BuildPackage},
-    python_requires=">=3.6.8",
-    install_requires=[
-        "grpcio==1.47",
-        "grpcio-tools==1.47",
-        "typing-extensions==4.3.0",
-    ],
-    extras_require={
-        "dev": [
-            "setuptools",
-            "wheel",
-            "check-wheel-contents",
-            "auditwheel",
-            "grpcio-tools==1.47",
-            "grpcio==1.47",
-        ]
-    },
     classifiers=["Programming Language :: Python :: 3"]
 )

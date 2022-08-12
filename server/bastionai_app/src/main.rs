@@ -1,14 +1,6 @@
-use env_logger::Env;
-use log::info;
 use std::collections::HashMap;
-use std::fs;
 use std::sync::{Arc, RwLock};
-use std::time::Instant;
-use std::{fs::File, io::Read};
 use tokio_stream::wrappers::ReceiverStream;
-use tonic::transport::Identity;
-use tonic::transport::ServerTlsConfig;
-
 use tonic::{transport::Server, Request, Response, Status, Streaming};
 use uuid::Uuid;
 
@@ -51,8 +43,6 @@ impl RemoteTorch for BastionAIServer {
         &self,
         request: Request<Streaming<Chunk>>,
     ) -> Result<Response<Reference>, Status> {
-        let start_time = Instant::now();
-
         let dataset: Artifact<Dataset> =
             tcherror_to_status((unstream_data(request.into_inner()).await?).deserialize())?;
         let description = String::from(dataset.description.clone());
@@ -62,9 +52,6 @@ impl RemoteTorch for BastionAIServer {
             .write()
             .unwrap()
             .insert(identifier.clone(), dataset);
-
-        let elapsed = start_time.elapsed();
-        info!("Upload Dataset successful in {}ms", elapsed.as_millis());
 
         Ok(Response::new(Reference {
             identifier: format!("{}", identifier),
@@ -76,8 +63,6 @@ impl RemoteTorch for BastionAIServer {
         &self,
         request: Request<Streaming<Chunk>>,
     ) -> Result<Response<Reference>, Status> {
-        let start_time = Instant::now();
-
         let module: Artifact<Module> =
             tcherror_to_status(unstream_data(request.into_inner()).await?.deserialize())?;
         let description = String::from(module.description.clone());
@@ -87,9 +72,6 @@ impl RemoteTorch for BastionAIServer {
             .write()
             .unwrap()
             .insert(identifier.clone(), module);
-        let elapsed = start_time.elapsed();
-        info!("Upload Model successful in {}ms", elapsed.as_millis());
-
         Ok(Response::new(Reference {
             identifier: format!("{}", identifier),
             description,
@@ -272,40 +254,13 @@ impl RemoteTorch for BastionAIServer {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
-
-    let logo_str: &str = include_str!("../logo.txt");
-    let version_str: String = format!("VERSION : {}", env!("CARGO_PKG_VERSION"));
-    let text_size: usize = 58;
-    println!("{}\n", logo_str);
-    fill_blank_and_print("BastionAI - SECURE AI TRAINING SERVER", text_size);
-    fill_blank_and_print("MADE BY MITHRIL SECURITY", text_size);
-    fill_blank_and_print(
-        "GITHUB: https://github.com/mithril-security/bastionai",
-        text_size,
-    );
-    fill_blank_and_print(&version_str, text_size);
-
-    // Identity for untrusted (non-attested) communication
-    let server_cert = fs::read("tls/host_server.pem")?;
-    let server_key = fs::read("tls/host_server.key")?;
-    let server_identity = Identity::from_pem(&server_cert, &server_key);
-
+    let addr = "[::1]:50051".parse()?;
     let server = BastionAIServer::new();
 
-    let mut file = File::open("config.toml")?;
-    let mut contents = String::new();
-    file.read_to_string(&mut contents)?;
-    let network_config: bastionai_common::NetworkConfig = toml::from_str(&contents)?;
-
-    info!(
-        "BastionAI listening on {}",
-        network_config.client_to_enclave_untrusted_socket()?
-    );
+    println!("BastionAI listening on {:?}", addr);
     Server::builder()
-        .tls_config(ServerTlsConfig::new().identity(server_identity))?
         .add_service(RemoteTorchServer::new(server))
-        .serve(network_config.client_to_enclave_untrusted_socket()?)
+        .serve(addr)
         .await?;
 
     Ok(())

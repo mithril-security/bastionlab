@@ -4,6 +4,5 @@ cargo-features = ["resolver"]
 resolver = "2"
 
 members = [
-    "bastionai_app",
-    "bastionai_common"
+    "bastionai_app"
 ]
