@@ -21,7 +21,7 @@ CONNECTION_TIMEOUT = 10
 
 def raise_exception_if_conn_closed(f):
     """
-    Decorator which raises an exception if the BlindAiConnection is closed before calling
+    Decorator which raises an exception if the BastionAiConnection is closed before calling
     the decorated method
     """
 

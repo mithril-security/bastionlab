@@ -8,8 +8,17 @@ BastionAI Client is a python library to create client applications for BastionAI
 
 ### Using pip
 ```bash
-$ pip install bastionais
+$ pip install bastionai
 ```
+
+### Local installation
+**Note**: It is preferrable to install BastionAI package in a virtual environment.
+
+Execute the following command to install BastionAI locally.
+```shell
+python setup.py install
+```
+
 ## Usage
 
 ## Contributing
