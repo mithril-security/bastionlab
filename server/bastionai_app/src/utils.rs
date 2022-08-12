@@ -1,13 +1,13 @@
 use super::Chunk;
-use crate::storage::{Artifact, SizedObjectsBytes, Dataset, Module};
+use crate::remote_torch::{Metric, TestConfig, TrainConfig};
+use crate::storage::{Artifact, Dataset, Module, SizedObjectsBytes};
 use crate::Reference;
-use tch::{TchError, Device};
-use tokio::sync::mpsc;
 use std::sync::{Arc, RwLock};
+use tch::{Device, TchError};
+use tokio::sync::mpsc;
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use tonic::{Response, Status};
 use uuid::Uuid;
-use crate::remote_torch::{Metric, TrainConfig, TestConfig};
 
 pub fn read_le_usize(input: &mut &[u8]) -> usize {
     let (int_bytes, rest) = input.split_at(std::mem::size_of::<usize>());
@@ -115,7 +115,11 @@ pub async fn stream_data(
 ) -> Response<ReceiverStream<Result<Chunk, Status>>> {
     let (tx, rx) = mpsc::channel(4);
 
-    let raw_bytes: Vec<u8> = Arc::try_unwrap(artifact.data).unwrap().into_inner().unwrap().into();
+    let raw_bytes: Vec<u8> = Arc::try_unwrap(artifact.data)
+        .unwrap()
+        .into_inner()
+        .unwrap()
+        .into();
     tokio::spawn(async move {
         for (i, bytes) in raw_bytes.chunks(chunk_size).enumerate() {
             tx.send(Ok(Chunk {
@@ -147,7 +151,8 @@ pub fn parse_device(device: &str) -> Result<Device, Status> {
         "gpu" => Device::cuda_if_available(),
         device => {
             if device.starts_with("cuda:") {
-                let id = usize::from_str_radix(&device[5..], 10).or(Err(Status::invalid_argument("Wrong device")))?;
+                let id = usize::from_str_radix(&device[5..], 10)
+                    .or(Err(Status::invalid_argument("Wrong device")))?;
                 Device::Cuda(id)
             } else {
                 return Err(Status::invalid_argument("Wrong device"));

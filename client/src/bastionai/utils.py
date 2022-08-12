@@ -1,5 +1,5 @@
 import io
-from typing import Any, Callable, Iterable, Iterator, List, Tuple, TypeVar
+from typing import Any, Callable, Dict, Iterable, Iterator, List, Tuple, TypeVar
 
 import torch
 from torch import Tensor
@@ -18,9 +18,16 @@ SIZE_LEN = 8
 
 
 def parametrized_modules(module: Module) -> Iterable[Module]:
-    """
-    Recursively iterates over all submodules, returning those that
-    have parameters (as opposed to "wrapper modules" that just organize modules).
+    """Recursively iterates over all submodules.
+
+    The method returns submodules that have parameters
+    (as opposed to "wrapper modules" that just organize modules).
+
+    Args:
+        module (Module): torch.nn.Module
+
+    Returns:
+        Iterable[Module]:
     """
     yield from (
         (m_name, m)  # type: ignore
@@ -30,9 +37,15 @@ def parametrized_modules(module: Module) -> Iterable[Module]:
 
 
 def trainable_modules(module: Module) -> Iterable[Tuple[str, Module]]:
-    """
-    Recursively iterates over all submodules, returning those that
-    have parameters and are trainable (ie they want a grad).
+    """Recursively iterates over all submodules.
+
+    The method returns submodules that have parameters and are trainable. 
+
+    Args:
+        module (Module): torch.nn.Module
+
+    Returns:
+        Iterable[Tuple[str, Module]]:
     """
     yield from (
         (m_name, m)
@@ -42,9 +55,15 @@ def trainable_modules(module: Module) -> Iterable[Tuple[str, Module]]:
 
 
 def trainable_parameters(module: Module) -> Iterable[Tuple[str, Parameter]]:
-    """
-    Recursively iterates over all parameters, returning those that
-    are trainable (ie they want a grad).
+    """Recursively iterates over all parameters.
+
+    It returns submodules that are trainable (ie they want a grad).
+
+    Args:
+        module (Module): torch.nn.Module
+
+    Returns:
+        Iterable[Tuple[str, Parameter]]:
     """
     yield from (
         (p_name, p) for (p_name, p) in module.named_parameters() if p.requires_grad
@@ -95,42 +114,6 @@ def dataset_from_chunks(chunks: Iterator[Chunk]) -> TensorDataset:
         raise Exception(f"Missing column in data wrapper.")
     
     return TensorDataset(columns, labels)
-
-# class ArtifactDataset:
-#     def __init__(self, chunks: Iterator[Chunk]) -> None:
-#         wrapper = list(unstream_artifacts(
-#             (chunk.data for chunk in chunks),
-#             deserialization_fn=torch.jit.load
-#         ))[0]  # type: ignore
-#         self.columns = []
-#         self.labels = None
-#         for name, param in wrapper.named_parameters():
-#             if name == "labels":
-#                 self.labels = param
-#             elif name.startswith("samples_"):
-#                 idx = int(name[8:])
-#                 if len(self.columns) < idx:
-#                     self.columns += [None] * (idx + 1 - len(self.columns))
-#                 self.columns[idx] = param
-#             else:
-#                 raise Exception(f"Unknown field {name} in data wrapper")
-#         if len(self.columns) == 0:
-#             raise Exception(f"Data wrapper must contain at least one column.")
-#         if any([x is None for x in self.columns]):
-#             raise Exception(f"Missing column in data wrapper.")
-
-#     def __len__(self) -> int:
-#         return len(self.columns[0])
-
-#     def __getitem__(self, index: int) -> Any:
-#         return (*[column[index] for column in self.columns], self.labels[index])
-
-
-# def chunk_bounds(size: int, chunk_size: int) -> Iterator[Tuple[int, int]]:
-#     start = 0
-#     while start < size:
-#         yield (start, min(start + chunk_size, size))
-#         start += chunk_size
 
 
 def chunks(it: Iterator[T], chunk_size: int, cat_fn: Callable[[List[T]], U] = lambda x: x) -> Iterator[U]:
@@ -275,13 +258,14 @@ def deserialize_weights_to_model(model: Module, chunks: Iterator[Chunk]) -> None
 
         parent.__setattr__(name, torch.nn.Parameter(value))
 
+
 def metric_tqdm_with_epochs(metric_stream: Iterator[Metric], name: str):
     def new_tqdm_bar(epoch: int, nb_epochs, nb_batches):
         t = tqdm(
-                total=nb_batches,
-                unit="batch",
-                bar_format="{l_bar}{bar:20}{r_bar}",
-            )
+            total=nb_batches,
+            unit="batch",
+            bar_format="{l_bar}{bar:20}{r_bar}",
+        )
         t.set_description("Epoch {}/{} - train".format(epoch, nb_epochs))
         return t
 
@@ -294,7 +278,9 @@ def metric_tqdm_with_epochs(metric_stream: Iterator[Metric], name: str):
         if metric.batch == metric.nb_batches - 1:
             t.close()
             if metric.epoch < metric.nb_epochs - 1:
-                t = new_tqdm_bar(metric.epoch + 2, metric.nb_epochs, metric.nb_batches)
+                t = new_tqdm_bar(metric.epoch + 2,
+                                 metric.nb_epochs, metric.nb_batches)
+
 
 def metric_tqdm(metric_stream: Iterator[Metric], name: str):
     with tqdm(

@@ -21,7 +21,7 @@ X = torch.tensor([[0.0], [1.0], [0.5], [0.2]])
 Y = torch.tensor([[0.0], [2.0], [1.0], [0.4]])
 lreg_dataset = TensorDataset([X], Y)
 
-with Connection("::1", 50051) as client:
+with Connection("localhost", 50051) as client:
     model_ref = client.send_model(
         lreg_model, "1D Linear Regression Model", b"secret")
     print(f"Model ref: {model_ref}")
@@ -30,14 +30,11 @@ with Connection("::1", 50051) as client:
         lreg_dataset, "Dummy 1D Linear Regression Dataset (param is 2)", b'secret')
     print(f"Dataset ref: {dataset_ref}")
 
-    #model_list = client.get_available_models()
-    #for model in model_list.list:  # type: ignore
-    #    print(f"{model.identifier}, {model.description}")
-
     print(f"Weight: {lreg_model.fc1.expanded_weight}")
+
     print(f"Devices: {client.get_available_devices()}")
 
-    #print(list(client.fetch_dataset(dataset_ref)))
+    print(f"Optimizers: {(client.get_available_optimizers())}")
 
     client.train(TrainConfig(
         model=model_ref,
