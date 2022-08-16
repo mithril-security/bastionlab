@@ -110,6 +110,47 @@ class ArtifactDataset:
         return (self.samples[index], self.labels[index])
 
 
+class TensorDataset(Dataset):
+    def __init__(self, columns: List[torch.Tensor], labels: torch.Tensor) -> None:
+        super().__init__()
+        self.columns = columns
+        self.labels = labels
+
+    def __len__(self) -> int:
+        return len(self.labels)
+
+    def __getitem__(self, idx: int) -> Tuple[List[torch.Tensor], torch.Tensor]:
+        return ([column[idx] for column in self.columns], self.labels[idx])
+
+
+def dataset_from_chunks(chunks: Iterator[Chunk]) -> TensorDataset:
+    wrapper = list(
+        unstream_artifacts(
+            (chunk.data for chunk in chunks), deserialization_fn=torch.jit.load
+        )
+    )[
+        0
+    ]  # type: ignore
+    columns = []
+    labels = None
+    for name, param in wrapper.named_parameters():
+        if name == "labels":
+            labels = param
+        elif name.startswith("samples_"):
+            idx = int(name[8:])
+            if len(columns) < idx:
+                columns += [None] * (idx + 1 - len(columns))
+            columns[idx] = param
+        else:
+            raise Exception(f"Unknown field {name} in data wrapper")
+    if len(columns) == 0:
+        raise Exception(f"Data wrapper must contain at least one column.")
+    if any([x is None for x in columns]):
+        raise Exception(f"Missing column in data wrapper.")
+
+    return TensorDataset(columns, labels)
+
+
 def chunks(it: Iterator[T], chunk_size: int, cat_fn: Callable[[List[T]], U] = lambda x: x) -> Iterator[U]:
     chunk = []
     for x in it:

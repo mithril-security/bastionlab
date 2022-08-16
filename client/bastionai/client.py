@@ -1,13 +1,15 @@
 from dataclasses import dataclass
+import ssl
 from typing import Any, List
 
 import grpc
-from remote_torch_pb2 import Empty, Reference, TestConfig, TrainConfig, Devices
-from remote_torch_pb2_grpc import RemoteTorchStub
+from grpc import ssl_channel_credentials
+from pb.remote_torch_pb2 import Empty, Reference, TestConfig, TrainConfig, Devices
+from pb.remote_torch_pb2_grpc import RemoteTorchStub
 from torch.nn import Module
 from torch.utils.data import Dataset
 
-from bastionai.utils import (
+from bastionai.utils.utils import (
     TensorDataset,
     dataset_from_chunks,
     deserialize_weights_to_model,
@@ -148,7 +150,8 @@ class Client:
             config (TrainConfig):
                 Training configuration to pass to BastionAI.
         """
-        metric_tqdm_with_epochs(self.stub.Train(config), name=f"loss ({config.metric})")
+        metric_tqdm_with_epochs(self.stub.Train(
+            config), name=f"loss ({config.metric})")
 
     def test(self, config: TestConfig) -> float:
         """Tests a dataset on a model on BastionAI.
@@ -186,10 +189,23 @@ class Connection:
 
     host: str
     port: int
+    server_name: str = 'bastionai-srv'
     channel: Any = None
 
     def __enter__(self) -> Client:
-        self.channel = grpc.insecure_channel(f"{self.host}:{self.port}")
+        server_cert = ssl.get_server_certificate(
+            (self.host, str(self.port))
+        )
+
+        server_cred = ssl_channel_credentials(
+            root_certificates=bytes(server_cert, encoding='utf8'))
+
+        connection_options = (
+            ("grpc.ssl_target_name_override", self.server_name),)
+
+        server_conn = f"{self.host}:{self.port}"
+        self.channel = grpc.secure_channel(
+            server_conn, server_cred, options=connection_options)
         return Client(RemoteTorchStub(self.channel))
 
     def __exit__(self, exc_type: Any, exc_value: Any, exc_traceback: Any) -> None:

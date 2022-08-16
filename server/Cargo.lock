@@ -97,6 +97,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a32fd6af2b5827bce66c29053ba0e7c42b9dcab01835835058558c10851a46b"
 
 [[package]]
+name = "bastionai_app"
+version = "0.1.0"
+dependencies = [
+ "bastionai_common",
+ "env_logger",
+ "futures",
+ "futures-core",
+ "log",
+ "private_learning",
+ "prost",
+ "rand",
+ "ring",
+ "tch",
+ "tokio",
+ "tokio-stream",
+ "toml",
+ "tonic",
+ "tonic-build",
+ "uuid",
+]
+
+[[package]]
 name = "bastionai_common"
 version = "0.1.0"
 dependencies = [
@@ -1081,28 +1103,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "server"
-version = "0.1.0"
-dependencies = [
- "bastionai_common",
- "env_logger",
- "futures",
- "futures-core",
- "log",
- "private_learning",
- "prost",
- "rand",
- "ring",
- "tch",
- "tokio",
- "tokio-stream",
- "toml",
- "tonic",
- "tonic-build",
- "uuid",
 ]
 
 [[package]]
