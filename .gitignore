@@ -182,8 +182,7 @@ tests/host_server.pem
 ################
 ftenv
 *.pt
-
-**/remote_torch_pb2.py
-
-client/bastionai/pb/remote_torch_pb2_*.py
+**/tests/data
+**/tests/models
+**/bastionai/pb
 docs/

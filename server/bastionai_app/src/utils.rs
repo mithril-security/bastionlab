@@ -46,20 +46,29 @@ pub async fn stream_module_train(
     config: TrainConfig,
     device: Device,
 ) -> Response<ReceiverStream<Result<Metric, Status>>> {
-    let (tx, rx) = mpsc::channel(300);
+    let (tx, rx) = mpsc::channel(1);
     tokio::spawn(async move {
-        let trainer = Module::train(module, dataset, config, device).unwrap();
-        let nb_epochs = trainer.nb_epochs() as i32;
-        let nb_batches = trainer.nb_batches() as i32;
-        for res in trainer {
-            let res = tcherror_to_status(res.map(|(epoch, batch, value)| Metric {
-                epoch,
-                batch,
-                value,
-                nb_epochs,
-                nb_batches,
-            }));
-            tx.send(res).await.unwrap(); // Fix this
+        let trainer = tcherror_to_status(Module::train(module, dataset, config, device));
+        match trainer {
+            Ok(trainer) => {
+                let nb_epochs = trainer.nb_epochs() as i32;
+                let nb_batches = trainer.nb_batches() as i32;
+                for res in trainer {
+                    let res = tcherror_to_status(res.map(|(epoch, batch, value)| Metric {
+                        epoch,
+                        batch,
+                        value,
+                        nb_epochs,
+                        nb_batches,
+                    }));
+                    tx.send(res)
+                        .await
+                        .unwrap(); // Fix this
+                }
+            }
+            Err(e) => tx.send(Err(e))
+                .await
+                .unwrap() // Fix this
         }
     });
 
@@ -72,19 +81,28 @@ pub async fn stream_module_test(
     config: TestConfig,
     device: Device,
 ) -> Response<ReceiverStream<Result<Metric, Status>>> {
-    let (tx, rx) = mpsc::channel(300);
+    let (tx, rx) = mpsc::channel(1);
     tokio::spawn(async move {
-        let tester = Module::test(module, dataset, config, device).unwrap();
-        let nb_batches = tester.nb_batches() as i32;
-        for res in tester {
-            let res = tcherror_to_status(res.map(|(batch, value)| Metric {
-                epoch: 0,
-                batch,
-                value,
-                nb_epochs: 1,
-                nb_batches,
-            }));
-            tx.send(res).await.unwrap(); // Fix this
+        let tester = tcherror_to_status(Module::test(module, dataset, config, device));
+        match tester {
+            Ok(tester) => {
+                let nb_batches = tester.nb_batches() as i32;
+                for res in tester {
+                    let res = tcherror_to_status(res.map(|(batch, value)| Metric {
+                        epoch: 0,
+                        batch,
+                        value,
+                        nb_epochs: 1,
+                        nb_batches,
+                    }));
+                    tx.send(res)
+                        .await
+                        .unwrap(); // Fix this
+                }
+            }
+            Err(e) => tx.send(Err(e))
+            .await
+            .unwrap() // Fix this
         }
     });
 
