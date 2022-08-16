@@ -57,6 +57,7 @@ run:
 
 clean:
 	@rm -rf $(BIN_DIR)
+	
 fclean:
 	make clean
 	cargo clean

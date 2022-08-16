@@ -23,12 +23,10 @@ RUN apt update && apt install -y \
     unzip \
     lsb-release \
     debhelper \
-    reprepro \
     autoconf \
     automake \
     bison \
     build-essential \
-    curl \
     dpkg-dev \
     expect \
     flex \
@@ -39,20 +37,15 @@ RUN apt update && apt install -y \
     kmod \
     libboost-system-dev \
     libboost-thread-dev \
-    libcurl4-openssl-dev \
     libiptcdata0-dev \
     libjsoncpp-dev \
     liblog4cpp5-dev \
     libprotobuf-dev \
     libssl-dev \
     libtool \
-    libxml2-dev \
-    ocaml \
-    ocamlbuild \
     pkg-config \
     protobuf-compiler \
     python \
-    texinfo \
     uuid-dev \
     patchelf\
     wget \
@@ -67,7 +60,7 @@ RUN wget https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-wit
 
 # -- Rust
 RUN cd /root && \
-    curl 'https://static.rust-lang.org/rustup/dist/x86_64-unknown-linux-gnu/rustup-init' --output /root/rustup-init && \
+    wget -O /root/rustup-init 'https://static.rust-lang.org/rustup/dist/x86_64-unknown-linux-gnu/rustup-init'  && \
     chmod +x /root/rustup-init && \
     echo '1' | /root/rustup-init --default-toolchain $RUST_TOOLCHAIN && \
     echo 'source /root/.cargo/env' >> /root/.bashrc && \
@@ -93,3 +86,48 @@ RUN make -C server SERVER_DIR=/root/server init && \
 EXPOSE 50053
 
 CMD ./bastionai_app
+
+### vscode-dev-env: This image is used for developers to work on blindai with vscode remote containers extension
+
+FROM base-build AS dev-env
+
+# Options for setup script
+ARG INSTALL_ZSH="true"
+ARG UPGRADE_PACKAGES="false"
+ARG USERNAME=vscode
+ARG USER_UID=1000
+ARG USER_GID=$USER_UID
+
+ENV RUST_TOOLCHAIN=stable-x86_64-unknown-linux-gnu
+
+# run VS Code dev container setup script
+COPY ./docker/common-dev.sh /tmp/library-scripts/
+RUN bash /tmp/library-scripts/common-dev.sh "${INSTALL_ZSH}" "${USERNAME}" "${USER_UID}" "${USER_GID}" "${UPGRADE_PACKAGES}" "true" "false" \
+    && apt-get clean -y && rm -rf /var/lib/apt/lists/*  /tmp/library-scripts
+
+USER $USERNAME
+
+
+# install rustup and cargo for vscode user
+RUN cd ~ && \
+    curl 'https://static.rust-lang.org/rustup/dist/x86_64-unknown-linux-gnu/rustup-init' --output ~/rustup-init && \
+    chmod +x ~/rustup-init && \
+    echo '1' | ~/rustup-init --default-toolchain $RUST_TOOLCHAIN && \
+    . ~/.cargo/env && \
+    echo 'source ~/.cargo/env' >> ~/.bashrc && \
+    rustup toolchain install $RUST_TOOLCHAIN && \
+    rustup component add cargo clippy rust-docs rust-src rust-std rustc rustfmt && \
+    rustup component add --toolchain $RUST_TOOLCHAIN cargo clippy rust-docs rust-src rust-std rustc rustfmt && \
+    cargo install xargo && \
+    rm ~/rustup-init
+
+USER root
+
+# install and configure python and pip
+RUN \
+    add-apt-repository ppa:deadsnakes/ppa  && \
+    apt-get update && \
+    apt-get install -y python3.9-dev python3.9-distutils libgl1-mesa-glx && \
+    curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && python3.9 get-pip.py && rm get-pip.py && \
+    update-alternatives --install /usr/bin/python python /usr/bin/python3.9 1 && \
+    pip install virtualenv
