@@ -1,10 +1,11 @@
 import torch
-from bastionai.client import Connection
+from bastionai.client import Connection, SGD
 from bastionai.pb.remote_torch_pb2 import TestConfig, TrainConfig
 from bastionai.psg.nn import Linear
 from torch import Tensor
 from torch.nn import Module
 from bastionai.utils import TensorDataset
+from torch.utils.data import DataLoader
 
 
 class LReg(Module):
@@ -15,20 +16,34 @@ class LReg(Module):
     def forward(self, x: Tensor) -> Tensor:
         return self.fc1(x)
 
+
 lreg_model = LReg()
 
 X = torch.tensor([[0.0], [1.0], [0.5], [0.2]])
 Y = torch.tensor([[0.0], [2.0], [1.0], [0.4]])
-lreg_dataset = TensorDataset([X], Y)
+train_dataset = TensorDataset([X], Y)
+train_dataloader = DataLoader(train_dataset, batch_size=2)
 
-with Connection("localhost", 50051) as client:
-    model_ref = client.send_model(
-        lreg_model, "1D Linear Regression Model", b"secret")
-    print(f"Model ref: {model_ref}")
+X = torch.tensor([[0.1], [-1.0]])
+Y = torch.tensor([[0.2], [-2.0]])
+test_dataset = TensorDataset([X], Y)
+test_dataloader = DataLoader(test_dataset, batch_size=2)
 
-    dataset_ref = client.send_dataset(
-        lreg_dataset, "Dummy 1D Linear Regression Dataset (param is 2)", b'secret')
-    print(f"Dataset ref: {dataset_ref}")
+with Connection("[::1]", 50051, default_secret=b"secret") as client:
+    remote_dataloader = client.RemoteDataLoader(
+        train_dataloader,
+        test_dataloader,
+        "Dummy 1D Linear Regression Dataset (param is 2)",
+    )
+
+    remote_learner = client.RemoteLearner(
+        lreg_model,
+        remote_dataloader,
+        metric="l2",
+        optimizer=SGD(lr=0.1),
+        model_description="1D Linear Regression Model",
+        expand=False,
+    )
 
     print(f"Weight: {lreg_model.fc1.expanded_weight}")
 
@@ -36,33 +51,10 @@ with Connection("localhost", 50051) as client:
 
     print(f"Optimizers: {(client.get_available_optimizers())}")
 
-    client.train(TrainConfig(
-        model=model_ref,
-        dataset=dataset_ref,
-        batch_size=2,
-        epochs=100,
-        device="cpu",
-        metric="l2",
-        differential_privacy=TrainConfig.DpParameters(
-            max_grad_norm=1.,
-            noise_multiplier=0.1
-        ),
-        sgd=TrainConfig.SGD(
-            learning_rate=0.1,
-            weight_decay=0.,
-            momentum=0.,
-            dampening=0.,
-            nesterov=False
-        )
-    ))
+    remote_learner.fit(nb_epochs=100, eps=100.0)
 
-    client.fetch_model_weights(lreg_model, model_ref)
+    lreg_model = remote_learner.get_model()
+
     print(f"Weight: {lreg_model.fc1.expanded_weight}")
 
-    client.test(TestConfig(
-        model=model_ref,
-        dataset=dataset_ref,
-        batch_size=2,
-        device="cpu",
-        metric="l2",
-    ))
+    remote_learner.test()
