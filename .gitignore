@@ -187,3 +187,4 @@ ftenv
 **/examples/models
 **/bastionai/pb
 docs/
+**/libtorch
