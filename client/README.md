@@ -26,3 +26,4 @@ Pull requests are welcome. For major changes, please open an issue first to disc
 
 ## License
 This project is licensed under [Apache 2.0 License.](https://github.com/mithril-security/bastionai/blob/master/LICENSE)
+
