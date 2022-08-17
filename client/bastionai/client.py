@@ -1,9 +1,13 @@
+import ssl
+from bastionai.optimizer_config import *
+from bastionai.psg import expand_weights
 from dataclasses import dataclass
+
 from typing import Any, Dict, List, Optional, Tuple, Union, TYPE_CHECKING
 
 import grpc
-from remote_torch_pb2 import Empty, Reference, TestConfig, TrainConfig, Devices
-from remote_torch_pb2_grpc import RemoteTorchStub
+from bastionai.pb.remote_torch_pb2 import Empty, Reference, TestConfig, TrainConfig, Devices
+from bastionai.pb.remote_torch_pb2_grpc import RemoteTorchStub
 from torch.nn import Module
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
@@ -17,8 +21,6 @@ from bastionai.utils import (
     serialize_dataset,
     serialize_model,
 )
-from bastionai.psg import expand_weights
-from bastionai.optimizer_config import *
 
 if TYPE_CHECKING:
     from bastionai.learner import RemoteLearner, RemoteDataLoader
@@ -155,7 +157,8 @@ class Client:
             config (TrainConfig):
                 Training configuration to pass to BastionAI.
         """
-        metric_tqdm_with_epochs(self.stub.Train(config), name=f"loss ({config.metric})")
+        metric_tqdm_with_epochs(self.stub.Train(
+            config), name=f"loss ({config.metric})")
 
     def test(self, config: TestConfig) -> float:
         """Tests a dataset on a model on BastionAI.
@@ -205,9 +208,24 @@ class Connection:
     port: int
     default_secret: bytes
     channel: Any = None
+    server_name: str = 'bastionai-srv'
 
     def __enter__(self) -> Client:
-        self.channel = grpc.insecure_channel(f"{self.host}:{self.port}")
+        connection_options = (
+            ("grpc.ssl_target_name_override", self.server_name),)
+        server_cert = ssl.get_server_certificate(
+            (self.host, self.port)
+        )
+
+        server_cred = grpc.ssl_channel_credentials(
+            root_certificates=bytes(server_cert, encoding='utf8')
+        )
+
+        server_target = f"{self.host}:{self.port}"
+        self.channel = grpc.secure_channel(
+            server_target,
+            server_cred,
+            options=connection_options)
         return Client(RemoteTorchStub(self.channel), self.default_secret)
 
     def __exit__(self, exc_type: Any, exc_value: Any, exc_traceback: Any) -> None:

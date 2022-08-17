@@ -1,17 +1,21 @@
+from pathlib import Path
 import os
 from setuptools import find_packages, setup
+from setuptools.command.build_py import build_py
 import pkg_resources
 
 PROTO_FILES = ["remote_torch.proto"]
 PROTO_PATH = os.path.join(os.path.dirname(__file__), "../server/protos")
 
-from pathlib import Path
 this_directory = Path(__file__).parent
 long_description = (this_directory / "README.md").read_text()
 
 
 def generate_stub():
     import grpc_tools.protoc
+
+    if not os.path.exists('bastionai/pb'):
+        os.makedirs('bastionai/pb')
 
     proto_include = pkg_resources.resource_filename("grpc_tools", "_proto")
     for file in PROTO_FILES:
@@ -26,16 +30,22 @@ def generate_stub():
             ]
         )
 
-# Create Protobuf files before packaging.
-generate_stub()
+
+class BuildPackage(build_py):
+    def run(self):
+        generate_stub()
+        super(BuildPackage, self).run()
+
 
 setup(
     name='bastionai',
     version="0.1.0",
     packages=find_packages(),
     description="Client SDK for BastionAI Confidential AI Training.",
+    long_description_content_type="text/markdown",
+    keywords="confidential computing training client enclave amd-sev machine learning",
+    cmdclass={"build_py": BuildPackage},
     long_description=long_description,
-    long_description_content_type='text/markdown',
     author='Kwabena Amponsem, Lucas Bourtoule',
     author_email='kwabena.amponsem@mithrilsecurity.io, luacs.bourtoule@nithrilsecurity.io',
     classifiers=["Programming Language :: Python :: 3"],

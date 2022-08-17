@@ -10,7 +10,7 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 from time import sleep
 
-from remote_torch_pb2 import Chunk, Metric
+from bastionai.pb.remote_torch_pb2 import Chunk, Metric
 
 T = TypeVar("T")
 U = TypeVar("U")
@@ -74,7 +74,8 @@ class DataWrapper(Module):
     def __init__(self, columns: List[torch.Tensor], labels: torch.Tensor) -> None:
         super().__init__()
         for i, column in enumerate(columns):
-            self.__setattr__(f"samples_{i}", Parameter(column, requires_grad=False))
+            self.__setattr__(f"samples_{i}", Parameter(
+                column, requires_grad=False))
         self.labels = Parameter(labels, requires_grad=False)
 
 
@@ -261,7 +262,8 @@ def serialize_model(
     ts = torch.jit.script(model)  # type: ignore
     # type: ignore
     return data_chunks_generator(
-        stream_artifacts(iter([ts]), chunk_size, torch.jit.save), description, secret
+        stream_artifacts(iter([ts]), chunk_size,
+                         torch.jit.save), description, secret
     )
 
 
@@ -308,7 +310,8 @@ def metric_tqdm_with_epochs(metric_stream: Iterator[Metric], name: str):
         if metric.batch == metric.nb_batches - 1:
             t.close()
             if metric.epoch < metric.nb_epochs - 1:
-                t = new_tqdm_bar(metric.epoch + 2, metric.nb_epochs, metric.nb_batches)
+                t = new_tqdm_bar(metric.epoch + 2,
+                                 metric.nb_epochs, metric.nb_batches)
 
 
 def metric_tqdm(metric_stream: Iterator[Metric], name: str):

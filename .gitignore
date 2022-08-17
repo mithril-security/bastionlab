@@ -182,7 +182,9 @@ tests/host_server.pem
 ################
 ftenv
 *.pt
+
 **/examples/data
 **/examples/models
 **/bastionai/pb
 docs/
+**/libtorch

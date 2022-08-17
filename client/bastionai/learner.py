@@ -1,6 +1,6 @@
 from typing import Optional, Union
 
-from remote_torch_pb2 import Reference, TestConfig, TrainConfig
+from bastionai.pb.remote_torch_pb2 import Reference, TestConfig, TrainConfig
 from torch.nn import Module
 from torch.utils.data import DataLoader
 import numpy as np
