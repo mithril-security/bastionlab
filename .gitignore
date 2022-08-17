@@ -187,3 +187,4 @@ ftenv
 **/examples/models
 **/bastionai/pb/remote_torch*.py
 docs/
+**/libtorch
