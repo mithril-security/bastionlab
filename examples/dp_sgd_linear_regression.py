@@ -34,6 +34,7 @@ with Connection("localhost", 50051, default_secret=b"secret") as client:
         train_dataloader,
         test_dataloader,
         "Dummy 1D Linear Regression Dataset (param is 2)",
+        'Linear Regression Dataset'
     )
 
     remote_learner = client.RemoteLearner(
@@ -42,6 +43,7 @@ with Connection("localhost", 50051, default_secret=b"secret") as client:
         metric="l2",
         optimizer=SGD(lr=0.1),
         model_description="1D Linear Regression Model",
+        model_name='lreg-model',
         expand=False,
     )
 

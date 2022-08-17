@@ -18,15 +18,18 @@ class RemoteDataLoader:
         train_dataloader: DataLoader,
         test_dataloader: DataLoader,
         description: Optional[str] = None,
+        dataset_name: Optional[str] = None,
         secret: Optional[bytes] = None,
     ) -> None:
         if train_dataloader.batch_size != test_dataloader.batch_size:
-            raise Exception("Train and test dataloaders must use the same batch size.")
+            raise Exception(
+                "Train and test dataloaders must use the same batch size.")
         self.train_dataset_ref = client.send_dataset(
             train_dataloader.dataset,
             description
             if description is not None
             else type(train_dataloader.dataset).__name__,
+            dataset_name,
             secret if secret is not None else client.default_secret,
         )
         self.test_dataset_ref = client.send_dataset(
@@ -34,6 +37,7 @@ class RemoteDataLoader:
             f"[Test set] {description}"
             if description is not None
             else type(test_dataloader.dataset).__name__,
+            dataset_name,
             secret if secret is not None else client.default_secret,
         )
         self.trace_input, _ = train_dataloader.dataset[0]
@@ -53,6 +57,7 @@ class RemoteLearner:
         device: str = "cpu",
         max_grad_norm: float = 4.0,
         model_description: Optional[str] = None,
+        model_name: Optional[str] = None,
         secret: Optional[bytes] = None,
         expand: bool = True,
     ) -> None:
@@ -65,7 +70,8 @@ class RemoteLearner:
                 model = torch.jit.script(model)
             except:
                 model = torch.jit.trace(  # Compile the model with the tracing strategy
-                    model,  # Wrapp the model to use the first output only (and drop the others)
+                    # Wrapp the model to use the first output only (and drop the others)
+                    model,
                     [x.unsqueeze(0) for x in remote_dataloader.trace_input],
                 )
             self.model_ref = client.send_model(
@@ -73,6 +79,8 @@ class RemoteLearner:
                 model_description
                 if model_description is not None
                 else model_class_name,
+                model_name,
+
                 secret if secret is not None else client.default_secret,
             )
         else:
@@ -98,7 +106,8 @@ class RemoteLearner:
         )
         return TrainConfig.DpParameters(
             max_grad_norm=max_grad_norm,
-            noise_multiplier=np.sqrt(2 * np.log(1.25 / delta)) * q * np.sqrt(t) / eps,
+            noise_multiplier=np.sqrt(
+                2 * np.log(1.25 / delta)) * q * np.sqrt(t) / eps,
         )
 
     def _train_config(
@@ -115,7 +124,8 @@ class RemoteLearner:
             epochs=nb_epochs,
             device=self.device,
             metric=self.metric,
-            differential_privacy=self._dp_config(nb_epochs, eps, max_grad_norm),
+            differential_privacy=self._dp_config(
+                nb_epochs, eps, max_grad_norm),
             **self.optimizer.to_msg_dict(lr),
         )
 
@@ -135,7 +145,8 @@ class RemoteLearner:
         max_grad_norm: Optional[float] = None,
         lr: Optional[float] = None,
     ) -> None:
-        self.client.train(self._train_config(nb_epochs, eps, max_grad_norm, lr))
+        self.client.train(self._train_config(
+            nb_epochs, eps, max_grad_norm, lr))
 
     def test(self, metric: Optional[str] = None) -> None:
         self.client.test(self._test_config(metric))

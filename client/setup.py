@@ -11,11 +11,18 @@ this_directory = Path(__file__).parent
 long_description = (this_directory / "README.md").read_text()
 
 
-def generate_stub():
-    import grpc_tools.protoc
-
+def create_stub_module():
     if not os.path.exists('bastionai/pb'):
         os.makedirs('bastionai/pb')
+
+    if not os.path.exists('bastionai/pb/__init__.py'):
+        contents = 'import os\nimport sys\n\nsys.path.append(os.path.join(os.path.dirname(__file__)))'
+        file = open('bastionai/pb/__init__.py', 'w')
+        file.write(contents)
+
+
+def generate_stub():
+    import grpc_tools.protoc
 
     proto_include = pkg_resources.resource_filename("grpc_tools", "_proto")
     for file in PROTO_FILES:
@@ -33,6 +40,7 @@ def generate_stub():
 
 class BuildPackage(build_py):
     def run(self):
+        create_stub_module()
         generate_stub()
         super(BuildPackage, self).run()
 

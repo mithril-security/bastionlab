@@ -113,7 +113,12 @@ impl ModuleTrainer {
         }
     }
 
-    pub fn train_on_batch(&mut self, i: usize, inputs: Vec<Tensor>, labels: Tensor) -> Result<(i32, i32, f32), TchError> {
+    pub fn train_on_batch(
+        &mut self,
+        i: usize,
+        inputs: Vec<Tensor>,
+        labels: Tensor,
+    ) -> Result<(i32, i32, f32), TchError> {
         let inputs = tensors_to_device(inputs, self.device)?;
         let labels = labels.f_to(self.device)?;
         let outputs = self.module.read().unwrap().c_module.forward_ts(&inputs)?;
@@ -179,7 +184,12 @@ impl ModuleTester {
         }
     }
 
-    pub fn test_on_batch(&mut self, i: usize, inputs: Vec<Tensor>, labels: Tensor) -> Result<(i32, f32), TchError> {
+    pub fn test_on_batch(
+        &mut self,
+        i: usize,
+        inputs: Vec<Tensor>,
+        labels: Tensor,
+    ) -> Result<(i32, f32), TchError> {
         let inputs = tensors_to_device(inputs, self.device)?;
         let labels = labels.f_to(self.device)?;
         let outputs = self.module.read().unwrap().c_module.forward_ts(&inputs)?;
@@ -320,7 +330,13 @@ impl Module {
         s.write().unwrap().set_device(device);
 
         let metric = Metric::try_from_name(&config.metric)?;
-        Ok(ModuleTester::new(s, dataset, metric, device, config.batch_size as usize))
+        Ok(ModuleTester::new(
+            s,
+            dataset,
+            metric,
+            device,
+            config.batch_size as usize,
+        ))
     }
 }
 
@@ -374,9 +390,21 @@ impl Iterator for DatasetIter {
         } else {
             let indexes = self.indexes.drain(..self.batch_size);
             let dataset = self.dataset.read().unwrap();
-            let samples_inputs_guards: Vec<_> = dataset.samples_inputs.iter().map(|input| input.lock().unwrap()).collect();
+            let samples_inputs_guards: Vec<_> = dataset
+                .samples_inputs
+                .iter()
+                .map(|input| input.lock().unwrap())
+                .collect();
             let labels_guard = dataset.labels.lock().unwrap();
-            let items = indexes.map(|idx| (samples_inputs_guards.iter().map(|input| input.i(idx)).collect::<Vec<_>>(), labels_guard.i(idx)));
+            let items = indexes.map(|idx| {
+                (
+                    samples_inputs_guards
+                        .iter()
+                        .map(|input| input.i(idx))
+                        .collect::<Vec<_>>(),
+                    labels_guard.i(idx),
+                )
+            });
             let mut batch_inputs = Vec::with_capacity(samples_inputs_guards.len());
             for _ in 0..samples_inputs_guards.len() {
                 batch_inputs.push(Vec::with_capacity(self.batch_size));
@@ -388,7 +416,10 @@ impl Iterator for DatasetIter {
                 }
                 batch_labels.push(label);
             }
-            let batch_inputs: Vec<_> = batch_inputs.iter().map(|input| Tensor::stack(&input, 0)).collect();
+            let batch_inputs: Vec<_> = batch_inputs
+                .iter()
+                .map(|input| Tensor::stack(&input, 0))
+                .collect();
             let batch_labels = Tensor::stack(&batch_labels, 0);
             Some((batch_inputs, batch_labels))
         }
@@ -427,43 +458,46 @@ impl TryFrom<SizedObjectsBytes> for Dataset {
     fn try_from(value: SizedObjectsBytes) -> Result<Self, Self::Error> {
         let mut samples_inputs: Vec<Option<Mutex<Tensor>>> = Vec::new();
         let mut labels: Option<Mutex<Tensor>> = None;
-        
+
         for object in value {
             let data =
                 Tensor::load_multi_from_stream_with_device(Cursor::new(object), Device::Cpu)?;
             for (name, tensor) in data {
                 match &*name {
-                    "labels" => {
-                        match &labels {
-                            Some(labels) => {
-                                let mut labels = labels.lock().unwrap();
-                                *labels = Tensor::f_cat(&[&*labels, &tensor], 0)?;
-                            }
-                            None => {
-                                labels = Some(Mutex::new(tensor));
-                            }
+                    "labels" => match &labels {
+                        Some(labels) => {
+                            let mut labels = labels.lock().unwrap();
+                            *labels = Tensor::f_cat(&[&*labels, &tensor], 0)?;
                         }
-                    }
-                    s => if s.starts_with("samples_") {
-                        let idx: usize = s[8..].parse()
-                            .or(Err(TchError::FileFormat(String::from(format!("Invalid data, unknown field {}.", s)))))?;
-                        if samples_inputs.len() <= idx {
-                            for _ in samples_inputs.len()..(idx + 1) {
-                                samples_inputs.push(None);
-                            }
+                        None => {
+                            labels = Some(Mutex::new(tensor));
                         }
-                        match &samples_inputs[idx] {
-                            Some(samples_input) => {
-                                let mut samples_input = samples_input.lock().unwrap();
-                                *samples_input = Tensor::f_cat(&[&*samples_input, &tensor], 0)?;
+                    },
+                    s => {
+                        if s.starts_with("samples_") {
+                            let idx: usize = s[8..].parse().or(Err(TchError::FileFormat(
+                                String::from(format!("Invalid data, unknown field {}.", s)),
+                            )))?;
+                            if samples_inputs.len() <= idx {
+                                for _ in samples_inputs.len()..(idx + 1) {
+                                    samples_inputs.push(None);
+                                }
                             }
-                            None => {
-                                samples_inputs[idx] = Some(Mutex::new(tensor));
+                            match &samples_inputs[idx] {
+                                Some(samples_input) => {
+                                    let mut samples_input = samples_input.lock().unwrap();
+                                    *samples_input = Tensor::f_cat(&[&*samples_input, &tensor], 0)?;
+                                }
+                                None => {
+                                    samples_inputs[idx] = Some(Mutex::new(tensor));
+                                }
                             }
+                        } else {
+                            return Err(TchError::FileFormat(String::from(format!(
+                                "Invalid data, unknown field {}.",
+                                s
+                            ))));
                         }
-                        
-                    } else {
-                        return Err(TchError::FileFormat(String::from(format!("Invalid data, unknown field {}.", s))))
                     }
                 };
             }
@@ -481,8 +515,16 @@ impl TryFrom<&Dataset> for SizedObjectsBytes {
     fn try_from(value: &Dataset) -> Result<Self, Self::Error> {
         let mut dataset_bytes = SizedObjectsBytes::new();
         let mut buf = Vec::new();
-        let guards: Vec<_> = value.samples_inputs.iter().map(|input| input.lock().unwrap()).collect();
-        let mut named_tensors: Vec<_> = guards.iter().enumerate().map(|(i, input)| (format!("samples_{}", i), input.deref())).collect();
+        let guards: Vec<_> = value
+            .samples_inputs
+            .iter()
+            .map(|input| input.lock().unwrap())
+            .collect();
+        let mut named_tensors: Vec<_> = guards
+            .iter()
+            .enumerate()
+            .map(|(i, input)| (format!("samples_{}", i), input.deref()))
+            .collect();
         let labels = &*value.labels.lock().unwrap();
         named_tensors.push((String::from("labels"), labels));
         Tensor::save_multi_to_stream(&named_tensors, &mut buf)?;
@@ -513,8 +555,21 @@ impl Metric {
                     })
                 }),
                 "l2" => Box::new(|output, label| l2_loss(output, label)),
-                "cross_entropy" => Box::new(|output, label| output.f_cross_entropy_loss::<Tensor>(label, None, tch::Reduction::Mean, -100, 0.)),
-                s => return Err(TchError::FileFormat(String::from(format!("Invalid loss name, unknown loss {}.", s)))),
+                "cross_entropy" => Box::new(|output, label| {
+                    output.f_cross_entropy_loss::<Tensor>(
+                        label,
+                        None,
+                        tch::Reduction::Mean,
+                        -100,
+                        0.,
+                    )
+                }),
+                s => {
+                    return Err(TchError::FileFormat(String::from(format!(
+                        "Invalid loss name, unknown loss {}.",
+                        s
+                    ))))
+                }
             },
             value: 0.0,
             nb_samples: 1,

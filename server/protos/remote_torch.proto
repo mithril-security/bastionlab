@@ -25,7 +25,10 @@ message Chunk {
     // Chunk of data sent from and to the BastionAI server.
     bytes data = 1;
     string description = 2;
-    bytes secret = 3;
+    string dataset_name = 3;
+    string model_name = 4;
+    bytes secret = 5;
+    ClientInfo client_info = 6;
 }
 
 message Empty {
@@ -113,6 +116,16 @@ message Metric {
     int32 epoch = 3;
     int32 nb_epochs = 4;
     int32 nb_batches = 5;
+}
+
+message ClientInfo {
+    string uid = 1;
+    string platform_name = 2;
+    string platform_arch = 3;
+    string platform_version = 4;
+    string platform_release = 5;
+    string user_agent = 6;
+    string user_agent_version = 7;
 }
 
 service RemoteTorch {

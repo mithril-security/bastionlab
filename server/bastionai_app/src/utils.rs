@@ -1,12 +1,12 @@
 use super::Chunk;
-use crate::remote_torch::{Metric, TestConfig, TrainConfig};
+use crate::remote_torch::{ClientInfo, Metric, TestConfig, TrainConfig};
 use crate::storage::{Artifact, Dataset, Module, SizedObjectsBytes};
 use crate::Reference;
 use std::sync::{Arc, RwLock};
 use tch::{Device, TchError};
 use tokio::sync::mpsc;
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
-use tonic::{Response, Status};
+use tonic::{client, Response, Status};
 use uuid::Uuid;
 
 pub fn read_le_usize(input: &mut &[u8]) -> usize {
@@ -21,23 +21,42 @@ pub fn tcherror_to_status<T>(input: Result<T, TchError>) -> Result<T, Status> {
 
 pub async fn unstream_data(
     mut stream: tonic::Streaming<Chunk>,
-) -> Result<Artifact<SizedObjectsBytes>, Status> {
+) -> Result<
+    (
+        Artifact<SizedObjectsBytes>,
+        Option<ClientInfo>,
+        String,
+        String,
+    ),
+    Status,
+> {
     let mut data_bytes: Vec<u8> = Vec::new();
     let mut description: String = String::new();
     let mut secret: Vec<u8> = Vec::new();
+    let mut client_info: Option<ClientInfo> = None;
+    let mut dataset_name: String = String::new();
+    let mut model_name: String = String::new();
 
     while let Some(chunk) = stream.next().await {
         let mut chunk = chunk?;
         data_bytes.append(&mut chunk.data);
         if chunk.description.len() != 0 {
             description = chunk.description;
+            client_info = chunk.client_info;
+            dataset_name = chunk.dataset_name;
+            model_name = chunk.model_name;
         }
         if chunk.secret.len() != 0 {
             secret = chunk.secret;
         }
     }
 
-    Ok(Artifact::new(data_bytes.into(), description, &secret))
+    Ok((
+        Artifact::new(data_bytes.into(), description, &secret),
+        client_info,
+        dataset_name,
+        model_name,
+    ))
 }
 
 pub async fn stream_module_train(
@@ -61,14 +80,10 @@ pub async fn stream_module_train(
                         nb_epochs,
                         nb_batches,
                     }));
-                    tx.send(res)
-                        .await
-                        .unwrap(); // Fix this
+                    tx.send(res).await.unwrap(); // Fix this
                 }
             }
-            Err(e) => tx.send(Err(e))
-                .await
-                .unwrap() // Fix this
+            Err(e) => tx.send(Err(e)).await.unwrap(), // Fix this
         }
     });
 
@@ -95,14 +110,10 @@ pub async fn stream_module_test(
                         nb_epochs: 1,
                         nb_batches,
                     }));
-                    tx.send(res)
-                        .await
-                        .unwrap(); // Fix this
+                    tx.send(res).await.unwrap(); // Fix this
                 }
             }
-            Err(e) => tx.send(Err(e))
-            .await
-            .unwrap() // Fix this
+            Err(e) => tx.send(Err(e)).await.unwrap(), // Fix this
         }
     });
 
@@ -130,7 +141,10 @@ pub async fn stream_data(
                 } else {
                     String::from("")
                 },
+                dataset_name: "".to_string(),
+                model_name: "".to_string(),
                 secret: vec![],
+                client_info: Some(ClientInfo::default()),
             }))
             .await
             .unwrap(); // Fix this

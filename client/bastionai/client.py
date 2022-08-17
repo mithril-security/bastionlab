@@ -1,3 +1,7 @@
+import getpass
+from hashlib import sha256
+import platform
+import socket
 import ssl
 from bastionai.optimizer_config import *
 from bastionai.psg import expand_weights
@@ -6,7 +10,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Union, TYPE_CHECKING
 
 import grpc
-from bastionai.pb.remote_torch_pb2 import Empty, Reference, TestConfig, TrainConfig, Devices
+from bastionai.pb.remote_torch_pb2 import Empty, Reference, TestConfig, TrainConfig, Devices, ClientInfo
 from bastionai.pb.remote_torch_pb2_grpc import RemoteTorchStub
 from torch.nn import Module
 from torch.utils.data import Dataset, DataLoader
@@ -22,6 +26,8 @@ from bastionai.utils import (
     serialize_model,
 )
 
+from bastionai.version import __version__ as app_version
+
 if TYPE_CHECKING:
     from bastionai.learner import RemoteLearner, RemoteDataLoader
 
@@ -32,9 +38,10 @@ class Client:
 
     stub: RemoteTorchStub
     default_secret: bytes
+    client_info: ClientInfo
 
     def send_model(
-        self, model: Module, description: str, secret: bytes, chunk_size=100_000_000
+        self, model: Module, description: str, model_name: str, secret: bytes, chunk_size=100_000_000
     ) -> Reference:
         """Uploads Pytorch Modules to BastionAI
 
@@ -55,7 +62,12 @@ class Client:
         """
         return self.stub.SendModel(
             serialize_model(
-                model, description=description, secret=secret, chunk_size=chunk_size
+                model,
+                description=description,
+                model_name=model_name,
+                secret=secret,
+                chunk_size=chunk_size,
+                client_info=self.client_info
             )
         )
 
@@ -63,6 +75,7 @@ class Client:
         self,
         dataset: Dataset,
         description: str,
+        dataset_name: str,
         secret: bytes,
         chunk_size=100_000_000,
         batch_size=1024,
@@ -85,9 +98,11 @@ class Client:
             serialize_dataset(
                 dataset,
                 description=description,
+                dataset_name=dataset_name,
                 secret=secret,
                 chunk_size=chunk_size,
                 batch_size=batch_size,
+                client_info=self.client_info
             )
         )
 
@@ -211,6 +226,20 @@ class Connection:
     server_name: str = 'bastionai-srv'
 
     def __enter__(self) -> Client:
+        uname = platform.uname()
+        client_info = ClientInfo(
+            uid=sha256((socket.gethostname() + "-" +
+                       getpass.getuser()).encode("utf-8"))
+            .digest()
+            .hex(),
+            platform_name=uname.system,
+            platform_arch=uname.machine,
+            platform_version=uname.version,
+            platform_release=uname.release,
+            user_agent="bastionai_python",
+            user_agent_version=app_version,
+        )
+
         connection_options = (
             ("grpc.ssl_target_name_override", self.server_name),)
         server_cert = ssl.get_server_certificate(
@@ -226,7 +255,7 @@ class Connection:
             server_target,
             server_cred,
             options=connection_options)
-        return Client(RemoteTorchStub(self.channel), self.default_secret)
+        return Client(RemoteTorchStub(self.channel), self.default_secret, client_info)
 
     def __exit__(self, exc_type: Any, exc_value: Any, exc_traceback: Any) -> None:
         self.channel.close()
