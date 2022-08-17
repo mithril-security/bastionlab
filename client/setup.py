@@ -14,6 +14,9 @@ long_description = (this_directory / "README.md").read_text()
 def generate_stub():
     import grpc_tools.protoc
 
+    if not os.path.exists('bastionai/pb'):
+        os.makedirs('bastionai/pb')
+
     proto_include = pkg_resources.resource_filename("grpc_tools", "_proto")
     for file in PROTO_FILES:
         grpc_tools.protoc.main(
