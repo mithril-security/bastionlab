@@ -1,11 +1,16 @@
+import ssl
+from bastionai.optimizer_config import *
+from bastionai.psg import expand_weights
 from dataclasses import dataclass
-from typing import Any, List
+
+from typing import Any, Dict, List, Optional, Tuple, Union, TYPE_CHECKING
 
 import grpc
-from remote_torch_pb2 import Empty, Reference, TestConfig, TrainConfig, Devices
-from remote_torch_pb2_grpc import RemoteTorchStub
+from bastionai.pb.remote_torch_pb2 import Empty, Reference, TestConfig, TrainConfig, Devices
+from bastionai.pb.remote_torch_pb2_grpc import RemoteTorchStub
 from torch.nn import Module
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
+import numpy as np
 
 from bastionai.utils import (
     TensorDataset,
@@ -17,12 +22,16 @@ from bastionai.utils import (
     serialize_model,
 )
 
+if TYPE_CHECKING:
+    from bastionai.learner import RemoteLearner, RemoteDataLoader
+
 
 @dataclass
 class Client:
     """BastionAI client class."""
 
     stub: RemoteTorchStub
+    default_secret: bytes
 
     def send_model(
         self, model: Module, description: str, secret: bytes, chunk_size=100_000_000
@@ -148,7 +157,8 @@ class Client:
             config (TrainConfig):
                 Training configuration to pass to BastionAI.
         """
-        metric_tqdm_with_epochs(self.stub.Train(config), name=f"loss ({config.metric})")
+        metric_tqdm_with_epochs(self.stub.Train(
+            config), name=f"loss ({config.metric})")
 
     def test(self, config: TestConfig) -> float:
         """Tests a dataset on a model on BastionAI.
@@ -179,6 +189,16 @@ class Client:
         """
         self.stub.DeleteModule(ref)
 
+    def RemoteDataLoader(self, *args, **kwargs) -> "RemoteDataLoader":
+        from bastionai.learner import RemoteDataLoader
+
+        return RemoteDataLoader(self, *args, **kwargs)
+
+    def RemoteLearner(self, *args, **kwargs) -> "RemoteLearner":
+        from bastionai.learner import RemoteLearner
+
+        return RemoteLearner(self, *args, **kwargs)
+
 
 @dataclass
 class Connection:
@@ -186,11 +206,27 @@ class Connection:
 
     host: str
     port: int
+    default_secret: bytes
     channel: Any = None
+    server_name: str = 'bastionai-srv'
 
     def __enter__(self) -> Client:
-        self.channel = grpc.insecure_channel(f"{self.host}:{self.port}")
-        return Client(RemoteTorchStub(self.channel))
+        connection_options = (
+            ("grpc.ssl_target_name_override", self.server_name),)
+        server_cert = ssl.get_server_certificate(
+            (self.host, self.port)
+        )
+
+        server_cred = grpc.ssl_channel_credentials(
+            root_certificates=bytes(server_cert, encoding='utf8')
+        )
+
+        server_target = f"{self.host}:{self.port}"
+        self.channel = grpc.secure_channel(
+            server_target,
+            server_cred,
+            options=connection_options)
+        return Client(RemoteTorchStub(self.channel), self.default_secret)
 
     def __exit__(self, exc_type: Any, exc_value: Any, exc_traceback: Any) -> None:
         self.channel.close()

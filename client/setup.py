@@ -1,10 +1,14 @@
+from pathlib import Path
 import os
 from setuptools import find_packages, setup
 from setuptools.command.build_py import build_py
 import pkg_resources
 
 PROTO_FILES = ["remote_torch.proto"]
-PROTO_PATH = os.path.join(os.path.dirname(__file__), "protos")
+PROTO_PATH = os.path.join(os.path.dirname(__file__), "../server/protos")
+
+this_directory = Path(__file__).parent
+long_description = (this_directory / "README.md").read_text()
 
 
 def generate_stub():
@@ -38,21 +42,18 @@ setup(
     long_description_content_type="text/markdown",
     keywords="confidential computing training client enclave amd-sev machine learning",
     cmdclass={"build_py": BuildPackage},
-    python_requires=">=3.6.8",
+    long_description=long_description,
+    author='Kwabena Amponsem, Lucas Bourtoule',
+    author_email='kwabena.amponsem@mithrilsecurity.io, luacs.bourtoule@nithrilsecurity.io',
+    classifiers=["Programming Language :: Python :: 3"],
     install_requires=[
-        "grpcio==1.47",
-        "grpcio-tools==1.47",
+        "grpcio==1.47.0",
+        "grpcio-tools==1.47.0",
+        "protobuf==3.20.1",
+        "six==1.16.0",
+        "torch==1.12.0",
+        "numpy==1.23.1",
         "typing-extensions==4.3.0",
-    ],
-    extras_require={
-        "dev": [
-            "setuptools",
-            "wheel",
-            "check-wheel-contents",
-            "auditwheel",
-            "grpcio-tools==1.47",
-            "grpcio==1.47",
-        ]
-    },
-    classifiers=["Programming Language :: Python :: 3"]
+        "tqdm==4.64.0"
+    ]
 )

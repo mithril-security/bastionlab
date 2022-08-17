@@ -9,20 +9,12 @@ from torch.utils.data import Dataset
 
 from tqdm import tqdm
 from time import sleep
-from enum import Enum
-from pb.remote_torch_pb2 import Chunk, Metric, Reference, Empty, TestConfig, TrainConfig
 
-T = TypeVar('T')
-U = TypeVar('U')
+from bastionai.pb.remote_torch_pb2 import Chunk, Metric
+
+T = TypeVar("T")
+U = TypeVar("U")
 SIZE_LEN = 8
-
-
-class Optimizers(Enum):
-    SGD = 'SGD'
-    Adam = 'Adam'
-
-    def __str__(self):
-        return str(self.value)
 
 
 def parametrized_modules(module: Module) -> Iterable[Module]:
@@ -47,7 +39,7 @@ def parametrized_modules(module: Module) -> Iterable[Module]:
 def trainable_modules(module: Module) -> Iterable[Tuple[str, Module]]:
     """Recursively iterates over all submodules.
 
-    The method returns submodules that have parameters and are trainable. 
+    The method returns submodules that have parameters and are trainable.
 
     Args:
         module (Module): torch.nn.Module
@@ -79,42 +71,62 @@ def trainable_parameters(module: Module) -> Iterable[Tuple[str, Parameter]]:
 
 
 class DataWrapper(Module):
-    def __init__(self, samples: torch.Tensor, labels: torch.Tensor) -> None:
+    def __init__(self, columns: List[torch.Tensor], labels: torch.Tensor) -> None:
         super().__init__()
-        self.samples = Parameter(samples)
-        self.labels = Parameter(labels)
+        for i, column in enumerate(columns):
+            self.__setattr__(f"samples_{i}", Parameter(
+                column, requires_grad=False))
+        self.labels = Parameter(labels, requires_grad=False)
 
 
-class ArtifactDataset:
-    def __init__(self, chunks: Iterator[Chunk]) -> None:
-        wrapper = list(unstream_artifacts(
-            (chunk.data for chunk in chunks),
-            deserialization_fn=torch.jit.load
-        ))[0]  # type: ignore
-        self.samples = None
-        self.labels = None
-        for name, param in wrapper.named_parameters():
-            if name == "samples":
-                self.samples = param
-            elif name == "labels":
-                self.labels = param
-            else:
-                raise Exception(f"Unknown field {name} in data wrapper.")
-        if self.samples is None:
-            raise Exception(f"Data wrapper must contain a samples field.")
+class TensorDataset(Dataset):
+    def __init__(self, columns: List[torch.Tensor], labels: torch.Tensor) -> None:
+        super().__init__()
+        self.columns = columns
+        self.labels = labels
 
     def __len__(self) -> int:
-        return len(self.samples)
+        return len(self.labels)
 
-    def __getitem__(self, index: int) -> Any:
-        return (self.samples[index], self.labels[index])
+    def __getitem__(self, idx: int) -> Tuple[List[torch.Tensor], torch.Tensor]:
+        return ([column[idx] for column in self.columns], self.labels[idx])
 
 
-def chunks(it: Iterator[T], chunk_size: int, cat_fn: Callable[[List[T]], U] = lambda x: x) -> Iterator[U]:
+def dataset_from_chunks(chunks: Iterator[Chunk]) -> TensorDataset:
+    wrapper = list(
+        unstream_artifacts(
+            (chunk.data for chunk in chunks), deserialization_fn=torch.jit.load
+        )
+    )[
+        0
+    ]  # type: ignore
+    columns = []
+    labels = None
+    for name, param in wrapper.named_parameters():
+        if name == "labels":
+            labels = param
+        elif name.startswith("samples_"):
+            idx = int(name[8:])
+            if len(columns) < idx:
+                columns += [None] * (idx + 1 - len(columns))
+            columns[idx] = param
+        else:
+            raise Exception(f"Unknown field {name} in data wrapper")
+    if len(columns) == 0:
+        raise Exception(f"Data wrapper must contain at least one column.")
+    if any([x is None for x in columns]):
+        raise Exception(f"Missing column in data wrapper.")
+
+    return TensorDataset(columns, labels)
+
+
+def chunks(
+    it: Iterator[T], chunk_size: int, cat_fn: Callable[[List[T]], U] = lambda x: x
+) -> Iterator[U]:
     chunk = []
     for x in it:
         if len(chunk) == chunk_size:
-            yield chunk
+            yield cat_fn(chunk)
             chunk = [x]
         else:
             chunk.append(x)
@@ -137,11 +149,15 @@ def bytes_to_tensor(bs: bytes) -> Tensor:
     return tensor
 
 
-def serialize_batch(data: Tuple[torch.Tensor, torch.Tensor], buff):
+def serialize_batch(data: Tuple[List[torch.Tensor], torch.Tensor], buff):
     torch.jit.save(torch.jit.script(DataWrapper(*data)), buff)
 
 
-def stream_artifacts(artifacts: Iterator[T], chunk_size: int, serialization_fn: Callable[[T, io.BytesIO], None] = torch.save) -> Iterator[bytes]:
+def stream_artifacts(
+    artifacts: Iterator[T],
+    chunk_size: int,
+    serialization_fn: Callable[[T, io.BytesIO], None] = torch.save,
+) -> Iterator[bytes]:
     eoi = False
     buff = io.BytesIO()
     while not eoi:
@@ -153,8 +169,9 @@ def stream_artifacts(artifacts: Iterator[T], chunk_size: int, serialization_fn: 
                 serialization_fn(artifact, buff)
                 end = buff.tell()
                 buff.seek(header)
-                buff_len = (end - header - SIZE_LEN).to_bytes(SIZE_LEN,
-                                                              byteorder="little")
+                buff_len = (end - header - SIZE_LEN).to_bytes(
+                    SIZE_LEN, byteorder="little"
+                )
                 buff.write(buff_len)
                 buff.seek(end)
             except StopIteration:
@@ -171,7 +188,9 @@ def stream_artifacts(artifacts: Iterator[T], chunk_size: int, serialization_fn: 
             buff.write(tail)
 
 
-def unstream_artifacts(stream: Iterator[bytes], deserialization_fn: Callable[[io.BytesIO], T] = torch.load) -> Iterator[T]:
+def unstream_artifacts(
+    stream: Iterator[bytes], deserialization_fn: Callable[[io.BytesIO], T] = torch.load
+) -> Iterator[T]:
     buff = io.BytesIO()
     init_chunk = stream.__next__()
     size = int.from_bytes(init_chunk[:8], "little")
@@ -200,7 +219,9 @@ def unstream_artifacts(stream: Iterator[bytes], deserialization_fn: Callable[[io
             buff.write(tail)
 
 
-def data_chunks_generator(stream: Iterator[bytes], description: str, secret: bytes) -> Iterator[Chunk]:
+def data_chunks_generator(
+    stream: Iterator[bytes], description: str, secret: bytes
+) -> Iterator[Chunk]:
     first = True
     for x in stream:
         if first:
@@ -210,33 +231,50 @@ def data_chunks_generator(stream: Iterator[bytes], description: str, secret: byt
             yield Chunk(data=x, description="", secret=bytes())
 
 
-def make_batch(data: List[Tuple[Tensor, Tensor]]) -> Tuple[Tensor, Tensor]:
-    return (torch.stack([x[0] for x in data]), torch.stack([x[1] for x in data]))
+def make_batch(data: List[Tuple[List[Tensor], Tensor]]) -> Tuple[Tensor, Tensor]:
+    return (
+        [torch.stack([x[0][i] for x in data]) for i in range(len(data[0][0]))],
+        torch.stack([x[1] for x in data]),
+    )
 
 
-def serialize_dataset(dataset: Dataset, description: str, secret: bytes, chunk_size=1000, batch_size=1024) -> Iterator[Chunk]:
+def serialize_dataset(
+    dataset: Dataset,
+    description: str,
+    secret: bytes,
+    chunk_size=100_000_000,
+    batch_size=1024,
+) -> Iterator[Chunk]:
     return data_chunks_generator(
         stream_artifacts(
             chunks(iter(dataset), batch_size, cat_fn=make_batch),
             chunk_size,
-            serialization_fn=serialize_batch
+            serialization_fn=serialize_batch,
         ),
         description,
-        secret
+        secret,
     )
 
 
-def serialize_model(model: Module, description: str, secret: bytes, chunk_size=1000) -> Iterator[Chunk]:
+def serialize_model(
+    model: Module, description: str, secret: bytes, chunk_size=100_000_000
+) -> Iterator[Chunk]:
     ts = torch.jit.script(model)  # type: ignore
     # type: ignore
-    return data_chunks_generator(stream_artifacts(iter([ts]), chunk_size, torch.jit.save), description, secret)
+    return data_chunks_generator(
+        stream_artifacts(iter([ts]), chunk_size,
+                         torch.jit.save), description, secret
+    )
 
 
 def deserialize_weights_to_model(model: Module, chunks: Iterator[Chunk]) -> None:
-    wrapper = list(unstream_artifacts(
-        (chunk.data for chunk in chunks),
-        deserialization_fn=torch.jit.load
-    ))[0]  # type: ignore
+    wrapper = list(
+        unstream_artifacts(
+            (chunk.data for chunk in chunks), deserialization_fn=torch.jit.load
+        )
+    )[
+        0
+    ]  # type: ignore
     for name, value in wrapper.named_parameters():
         param = model
         parent = None
@@ -269,7 +307,7 @@ def metric_tqdm_with_epochs(metric_stream: Iterator[Metric], name: str):
             t = new_tqdm_bar(1, metric.nb_epochs, metric.nb_batches)
         t.update()
         t.set_postfix(**{name: "{:.4f}".format(metric.value)})
-        if metric.batch == 1:
+        if metric.batch == metric.nb_batches - 1:
             t.close()
             if metric.epoch < metric.nb_epochs - 1:
                 t = new_tqdm_bar(metric.epoch + 2,
@@ -290,84 +328,12 @@ def metric_tqdm(metric_stream: Iterator[Metric], name: str):
             t.set_postfix(**{name: "{:.4f}".format(metric.value)})
 
 
-def create_training_config(model: Reference,
-                           dataset: Reference,
-                           batch_size: int,
-                           epochs: int,
-                           learning_rate: float,
-                           weight_decay: float,
-                           extra_args: Dict,
-                           with_dp: bool = True,
-                           device: str = "cpu",
-                           metric: str = "l2",
-                           max_grad_norm: float = 0.,
-                           noise_multiplier: float = 0.,
-                           optimizer: Optimizers = Optimizers.SGD
-                           ) -> TrainConfig:
+class MultipleOutputWrapper(Module):
+    def __init__(self, module: Module, output: int = 0) -> None:
+        super().__init__()
+        self.inner = module
+        self.output = output
 
-    def comapare_args(l1: List, l2: List):
-        l1.sort()
-        l2.sort()
-        return l1 == l2
-
-    def get_config():
-        if optimizer == Optimizers.SGD:
-            optim = TrainConfig.SGD(
-                learning_rate=learning_rate,
-                weight_decay=weight_decay,
-            )
-            if not comapare_args(list(extra_args.keys()), ["momentum", "dampening", "nesterov"]):
-                raise Exception("SGD Optimizer missing arguments")
-
-            for (k, v) in extra_args.items():
-                optim.__setattr__(k, v)
-            return TrainConfig(
-                model=model,
-                dataset=dataset,
-                batch_size=batch_size,
-                epochs=epochs,
-                device=device,
-                metric=metric,
-                sgd=optim
-            )
-        elif optimizer == Optimizers.Adam:
-            optim = TrainConfig.Adam(
-                learning_rate=learning_rate,
-                weight_decay=weight_decay,
-            )
-            if not comapare_args(list(extra_args.keys()), ["beta_1", "beta_2", "amsgrad", "epsilon"]):
-                raise Exception("Adam Optimizer missing arguments")
-
-            for (k, v) in extra_args.items():
-                optim.__setattr__(k, v)
-
-            return TrainConfig(
-                model=model,
-                dataset=dataset,
-                batch_size=batch_size,
-                epochs=epochs,
-                device=device,
-                metric=metric,
-                adam=optim)
-
-    dp = TrainConfig.DpParameters(
-        max_grad_norm=max_grad_norm, noise_multiplier=noise_multiplier)
-
-    train_config = get_config()
-
-    if with_dp:
-        train_config.differential_privacy.CopyFrom(dp)
-    else:
-        train_config.standard.CopyFrom(Empty())
-
-    return train_config
-
-
-def create_test_config(model: Reference, dataset: Reference, batch_size: int, device: str = "cpu", metric: str = "l2") -> TestConfig:
-    return TestConfig(
-        model=model,
-        dataset=dataset,
-        batch_size=batch_size,
-        device=device,
-        metric=metric
-    )
+    def forward(self, *args, **kwargs) -> Tensor:
+        output = self.inner.forward(*args, **kwargs)
+        return output[self.output]
