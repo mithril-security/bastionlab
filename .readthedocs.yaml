@@ -18,6 +18,5 @@ mkdocs:
 python:
     install:
     - requirements: docs/requirements.txt
-    - requirements: client/requirements.txt
     - method: pip
       path: client
