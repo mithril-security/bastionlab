@@ -200,6 +200,7 @@ pub async fn stream_module_test(
 pub async fn stream_data(
     artifact: Artifact<SizedObjectsBytes>,
     chunk_size: usize,
+    stream_type: String,
 ) -> Response<ReceiverStream<Result<Chunk, Status>>> {
     let (tx, rx) = mpsc::channel(4);
 
@@ -208,6 +209,7 @@ pub async fn stream_data(
         .into_inner()
         .unwrap()
         .into();
+    let start_time = Instant::now();
     tokio::spawn(async move {
         for (i, bytes) in raw_bytes.chunks(chunk_size).enumerate() {
             tx.send(Ok(Chunk {
@@ -229,6 +231,13 @@ pub async fn stream_data(
             .unwrap(); // Fix this
         }
     });
+
+    info!(
+    target: "BastionAI",
+            "{}",
+                format!("{} fetched successfully in {}ms", stream_type,
+                start_time.elapsed().as_millis())
+            );
 
     Response::new(ReceiverStream::new(rx))
 }
