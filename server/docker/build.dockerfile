@@ -83,7 +83,7 @@ RUN make -C server SERVER_DIR=/root/server init && \
     cp ./server/tools/config.toml . &&\
     cp -r ./server/bin/* .
 
-EXPOSE 50053
+EXPOSE 50051
 
 CMD ./bastionai_app
 
