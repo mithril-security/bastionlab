@@ -20,12 +20,14 @@ pub enum TelemetryEventProps {
     },
     SendDataset {
         dataset_name: Option<String>,
+        dataset_hash: Option<String>,
         dataset_size: usize,
         time_taken: f64,
     },
     TrainerLog {
         log_type: Option<String>,
         model_hash: Option<String>,
+        dataset_hash: Option<String>,
         time: u128,
     },
 }

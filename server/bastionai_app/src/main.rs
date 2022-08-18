@@ -40,6 +40,8 @@ struct BastionAIServer {
     modules: RwLock<HashMap<Uuid, Artifact<Module>>>,
     modules_hashes: RwLock<HashMap<Uuid, Arc<(String, Option<ClientInfo>)>>>,
     datasets: RwLock<HashMap<Uuid, Artifact<Dataset>>>,
+    datasets_hashes: RwLock<HashMap<Uuid, Arc<(String, Option<ClientInfo>)>>>,
+
 }
 
 impl BastionAIServer {
@@ -48,6 +50,7 @@ impl BastionAIServer {
             modules: RwLock::new(HashMap::new()),
             modules_hashes: RwLock::new(HashMap::new()),
             datasets: RwLock::new(HashMap::new()),
+            datasets_hashes: RwLock::new(HashMap::new())
         }
     }
 }
@@ -72,10 +75,11 @@ impl RemoteTorch for BastionAIServer {
             _,
         ) = unstream_data(request.into_inner()).await?;
 
-        let dataset_size = {
+        let (dataset_hash, dataset_size) = {
             let lock = artifact.data.read().unwrap();
             let data = lock.get();
-            data.len()
+            let hash = hex::encode(digest::digest(&digest::SHA256, &data).as_ref());
+            (hash, data.len())
         };
 
         let dataset: Artifact<Dataset> = tcherror_to_status((artifact).deserialize())?;
@@ -87,6 +91,10 @@ impl RemoteTorch for BastionAIServer {
             .unwrap()
             .insert(identifier.clone(), dataset);
 
+            self.datasets_hashes.write().unwrap().insert(
+                identifier.clone(),
+                Arc::new((dataset_hash.clone(), client_info.clone())),
+            );
         let elapsed = start_time.elapsed();
         info!(
         target: "BastionAI",
@@ -98,6 +106,7 @@ impl RemoteTorch for BastionAIServer {
                 dataset_name: Some(dataset_name),
                 dataset_size,
                 time_taken: elapsed.as_millis() as f64,
+                dataset_hash: Some(dataset_hash.clone())
             },
             client_info,
         );
@@ -234,12 +243,22 @@ impl RemoteTorch for BastionAIServer {
         };
         let model_client_info = {
             let modules_hashes = self.modules_hashes.read().unwrap();
-            let model = modules_hashes
+
+            let model_hash = modules_hashes
                 .get(&module_id)
                 .ok_or(Status::not_found("Not found"))?;
-            Arc::clone(&model)
+
+            Arc::clone(&model_hash)
         };
 
+        let dataset_client_info = {
+            let datasets_hashes = self.datasets_hashes.read().unwrap();
+
+            let dataset_hash = datasets_hashes
+            .get(&dataset_id) 
+            .ok_or(Status::not_found("Not found"))?;
+            Arc::clone(&dataset_hash)
+        };
         let dataset = {
             let datasets = self.datasets.read().unwrap();
             let dataset = datasets
@@ -247,7 +266,7 @@ impl RemoteTorch for BastionAIServer {
                 .ok_or(Status::not_found("Not found"))?;
             Arc::clone(&dataset.data)
         };
-        Ok(stream_module_train(module, dataset, config, device, model_client_info).await)
+        Ok(stream_module_train(module, dataset, config, device, model_client_info, dataset_client_info).await)
     }
 
     async fn test(
@@ -275,6 +294,24 @@ impl RemoteTorch for BastionAIServer {
                 .ok_or(Status::not_found("Not found"))?;
             Arc::clone(&module.data)
         };
+        let model_client_info = {
+            let modules_hashes = self.modules_hashes.read().unwrap();
+
+            let model_hash = modules_hashes
+                .get(&module_id)
+                .ok_or(Status::not_found("Not found"))?;
+
+            Arc::clone(&model_hash)
+        };
+
+        let dataset_client_info = {
+            let datasets_hashes = self.datasets_hashes.read().unwrap();
+
+            let dataset_hash = datasets_hashes
+            .get(&dataset_id) 
+            .ok_or(Status::not_found("Not found"))?;
+            Arc::clone(&dataset_hash)
+        };
         let dataset = {
             let datasets = self.datasets.read().unwrap();
             let dataset = datasets
@@ -282,7 +319,7 @@ impl RemoteTorch for BastionAIServer {
                 .ok_or(Status::not_found("Not found"))?;
             Arc::clone(&dataset.data)
         };
-        Ok(stream_module_test(module, dataset, config, device).await)
+        Ok(stream_module_test(module, dataset, config, device, model_client_info, dataset_client_info).await)
     }
 
     async fn available_models(

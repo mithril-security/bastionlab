@@ -72,6 +72,7 @@ pub async fn stream_module_train(
     config: TrainConfig,
     device: Device,
     model_client_info: Arc<(String, Option<ClientInfo>)>,
+    dataset_client_info: Arc<(String, Option<ClientInfo>)>,
 ) -> Response<ReceiverStream<Result<Metric, Status>>> {
     let (tx, rx) = mpsc::channel(1);
     tokio::spawn(async move {
@@ -81,11 +82,13 @@ pub async fn stream_module_train(
                 let nb_epochs = trainer.nb_epochs() as i32;
                 let nb_batches = trainer.nb_batches() as i32;
                 let (model_hash, client_info) = &*model_client_info;
+                let (dataset_hash, _) = &*dataset_client_info;
                 let start_time = Instant::now();
                 telemetry::add_event(
                     TelemetryEventProps::TrainerLog {
                         log_type: Some("start_training".to_string()),
                         model_hash: Some(model_hash.clone()),
+                        dataset_hash: Some(dataset_hash.clone()),
                         time: SystemTime::now()
                             .duration_since(UNIX_EPOCH)
                             .unwrap()
@@ -108,6 +111,7 @@ pub async fn stream_module_train(
                     TelemetryEventProps::TrainerLog {
                         log_type: Some("end_training".to_string()),
                         model_hash: Some(model_hash.clone()),
+                        dataset_hash: Some(dataset_hash.clone()),
                         time: SystemTime::now()
                             .duration_since(UNIX_EPOCH)
                             .unwrap()
@@ -133,6 +137,8 @@ pub async fn stream_module_test(
     dataset: Arc<RwLock<Dataset>>,
     config: TestConfig,
     device: Device,
+    model_client_info: Arc<(String, Option<ClientInfo>)>,
+    dataset_client_info: Arc<(String, Option<ClientInfo>)>,
 ) -> Response<ReceiverStream<Result<Metric, Status>>> {
     let (tx, rx) = mpsc::channel(1);
     tokio::spawn(async move {
@@ -140,6 +146,22 @@ pub async fn stream_module_test(
         match tester {
             Ok(tester) => {
                 let nb_batches = tester.nb_batches() as i32;
+                let (model_hash, client_info) = &*model_client_info;
+                let (dataset_hash, _) = &*dataset_client_info;
+
+                let start_time = Instant::now();
+                telemetry::add_event(
+                    TelemetryEventProps::TrainerLog {
+                        log_type: Some("start_testing".to_string()),
+                        model_hash: Some(model_hash.clone()),
+                        dataset_hash: Some(dataset_hash.clone()),
+                        time: SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap()
+                            .as_millis(),
+                    },
+                    client_info.clone(),
+                );
                 for res in tester {
                     let res = tcherror_to_status(res.map(|(batch, value)| Metric {
                         epoch: 0,
@@ -150,6 +172,23 @@ pub async fn stream_module_test(
                     }));
                     tx.send(res).await.unwrap(); // Fix this
                 }
+                telemetry::add_event(
+                    TelemetryEventProps::TrainerLog {
+                        log_type: Some("end_testing".to_string()),
+                        model_hash: Some(model_hash.clone()),
+                        dataset_hash: Some(dataset_hash.clone()),
+                        time: SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap()
+                            .as_millis(),
+                    },
+                    client_info.clone(),
+                );
+                info!(
+                target: "BastionAI",
+                            "Model tested successfully in {}ms",
+                            start_time.elapsed().as_millis()
+                        );
             }
             Err(e) => tx.send(Err(e)).await.unwrap(), // Fix this
         }
