@@ -1,8 +1,11 @@
 use super::Chunk;
 use crate::remote_torch::{ClientInfo, Metric, TestConfig, TrainConfig};
 use crate::storage::{Artifact, Dataset, Module, SizedObjectsBytes};
-use crate::Reference;
+use crate::telemetry::TelemetryEventProps;
+use crate::{telemetry, Reference};
+use log::info;
 use std::sync::{Arc, RwLock};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tch::{Device, TchError};
 use tokio::sync::mpsc;
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
@@ -68,6 +71,7 @@ pub async fn stream_module_train(
     dataset: Arc<RwLock<Dataset>>,
     config: TrainConfig,
     device: Device,
+    model_client_info: Arc<(String, Option<ClientInfo>)>,
 ) -> Response<ReceiverStream<Result<Metric, Status>>> {
     let (tx, rx) = mpsc::channel(1);
     tokio::spawn(async move {
@@ -76,6 +80,19 @@ pub async fn stream_module_train(
             Ok(trainer) => {
                 let nb_epochs = trainer.nb_epochs() as i32;
                 let nb_batches = trainer.nb_batches() as i32;
+                let (model_hash, client_info) = &*model_client_info;
+                let start_time = Instant::now();
+                telemetry::add_event(
+                    TelemetryEventProps::TrainerLog {
+                        log_type: Some("start_training".to_string()),
+                        model_hash: Some(model_hash.clone()),
+                        time: SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap()
+                            .as_millis(),
+                    },
+                    client_info.clone(),
+                );
                 for res in trainer {
                     let res = tcherror_to_status(res.map(|(epoch, batch, value)| Metric {
                         epoch,
@@ -86,6 +103,23 @@ pub async fn stream_module_train(
                     }));
                     tx.send(res).await.unwrap(); // Fix this
                 }
+
+                telemetry::add_event(
+                    TelemetryEventProps::TrainerLog {
+                        log_type: Some("end_training".to_string()),
+                        model_hash: Some(model_hash.clone()),
+                        time: SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap()
+                            .as_millis(),
+                    },
+                    client_info.clone(),
+                );
+                info!(
+                target: "BastionAI",
+                            "Model trained successfully in {}ms",
+                            start_time.elapsed().as_millis()
+                        );
             }
             Err(e) => tx.send(Err(e)).await.unwrap(), // Fix this
         }

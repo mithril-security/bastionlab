@@ -2,8 +2,7 @@
 
 use env_logger::Env;
 use log::info;
-use private_learning::Parameters;
-use std::collections::{hash_map::DefaultHasher, HashMap};
+use std::collections::HashMap;
 use std::fs;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
@@ -39,6 +38,7 @@ use crate::storage::SizedObjectsBytes;
 
 struct BastionAIServer {
     modules: RwLock<HashMap<Uuid, Artifact<Module>>>,
+    modules_hashes: RwLock<HashMap<Uuid, Arc<(String, Option<ClientInfo>)>>>,
     datasets: RwLock<HashMap<Uuid, Artifact<Dataset>>>,
 }
 
@@ -46,6 +46,7 @@ impl BastionAIServer {
     pub fn new() -> Self {
         BastionAIServer {
             modules: RwLock::new(HashMap::new()),
+            modules_hashes: RwLock::new(HashMap::new()),
             datasets: RwLock::new(HashMap::new()),
         }
     }
@@ -87,7 +88,10 @@ impl RemoteTorch for BastionAIServer {
             .insert(identifier.clone(), dataset);
 
         let elapsed = start_time.elapsed();
-        info!("Upload Dataset successful in {}ms", elapsed.as_millis());
+        info!(
+        target: "BastionAI",
+            
+            "Upload Dataset successful in {}ms", elapsed.as_millis());
 
         telemetry::add_event(
             TelemetryEventProps::SendDataset {
@@ -134,7 +138,15 @@ impl RemoteTorch for BastionAIServer {
             .insert(identifier.clone(), module);
         let elapsed = start_time.elapsed();
 
-        info!("Upload Model successful in {}ms", elapsed.as_millis());
+        self.modules_hashes.write().unwrap().insert(
+            identifier.clone(),
+            Arc::new((model_hash.clone(), client_info.clone())),
+        );
+
+        info!(
+        target: "BastionAI",
+            
+            "Upload Model successful in {}ms", elapsed.as_millis());
 
         telemetry::add_event(
             TelemetryEventProps::SendModel {
@@ -220,6 +232,14 @@ impl RemoteTorch for BastionAIServer {
                 .ok_or(Status::not_found("Not found"))?;
             Arc::clone(&module.data)
         };
+        let model_client_info = {
+            let modules_hashes = self.modules_hashes.read().unwrap();
+            let model = modules_hashes
+                .get(&module_id)
+                .ok_or(Status::not_found("Not found"))?;
+            Arc::clone(&model)
+        };
+
         let dataset = {
             let datasets = self.datasets.read().unwrap();
             let dataset = datasets
@@ -227,7 +247,7 @@ impl RemoteTorch for BastionAIServer {
                 .ok_or(Status::not_found("Not found"))?;
             Arc::clone(&dataset.data)
         };
-        Ok(stream_module_train(module, dataset, config, device).await)
+        Ok(stream_module_train(module, dataset, config, device, model_client_info).await)
     }
 
     async fn test(
@@ -356,6 +376,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     telemetry::setup("Linux".to_string(), Uuid::new_v4().to_string())?;
     telemetry::add_event(TelemetryEventProps::Started {}, None);
     info!(
+        target: "BastionAI",
         "BastionAI listening on {}",
         network_config.client_to_enclave_untrusted_socket()?
     );

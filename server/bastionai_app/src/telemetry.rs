@@ -23,6 +23,11 @@ pub enum TelemetryEventProps {
         dataset_size: usize,
         time_taken: f64,
     },
+    TrainerLog {
+        log_type: Option<String>,
+        model_hash: Option<String>,
+        time: u128,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -40,6 +45,7 @@ impl TelemetryEventProps {
             TelemetryEventProps::Started { .. } => "started",
             TelemetryEventProps::SendModel { .. } => "send_model",
             TelemetryEventProps::SendDataset { .. } => "send_dataset",
+            TelemetryEventProps::TrainerLog { .. } => "trainer_log",
         }
     }
     fn user_event_type(&self) -> Option<&'static str> {
@@ -47,6 +53,7 @@ impl TelemetryEventProps {
             TelemetryEventProps::Started { .. } => None,
             TelemetryEventProps::SendModel { .. } => Some("client_send_model"),
             TelemetryEventProps::SendDataset { .. } => Some("client_send_dataset"),
+            TelemetryEventProps::TrainerLog { .. } => None,
         }
     }
 }
