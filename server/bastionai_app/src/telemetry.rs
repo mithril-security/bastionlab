@@ -14,7 +14,7 @@ pub enum TelemetryEventProps {
     Started {},
     SendModel {
         model_name: Option<String>,
-        hash_model_arch: Option<String>,
+        model_hash: Option<String>,
         model_size: usize,
         time_taken: f64,
     },

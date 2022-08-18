@@ -2,7 +2,8 @@
 
 use env_logger::Env;
 use log::info;
-use std::collections::HashMap;
+use private_learning::Parameters;
+use std::collections::{hash_map::DefaultHasher, HashMap};
 use std::fs;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
@@ -10,6 +11,8 @@ use std::{fs::File, io::Read};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Identity;
 use tonic::transport::ServerTlsConfig;
+
+use ring::digest;
 
 use tonic::{transport::Server, Request, Response, Status, Streaming};
 use uuid::Uuid;
@@ -67,6 +70,13 @@ impl RemoteTorch for BastionAIServer {
             String,
             _,
         ) = unstream_data(request.into_inner()).await?;
+
+        let dataset_size = {
+            let lock = artifact.data.read().unwrap();
+            let data = lock.get();
+            data.len()
+        };
+
         let dataset: Artifact<Dataset> = tcherror_to_status((artifact).deserialize())?;
         let description = String::from(dataset.description.clone());
         let identifier = Uuid::new_v4();
@@ -82,7 +92,7 @@ impl RemoteTorch for BastionAIServer {
         telemetry::add_event(
             TelemetryEventProps::SendDataset {
                 dataset_name: Some(dataset_name),
-                dataset_size: 20,
+                dataset_size,
                 time_taken: elapsed.as_millis() as f64,
             },
             client_info,
@@ -105,7 +115,16 @@ impl RemoteTorch for BastionAIServer {
             _,
             String,
         ) = unstream_data(request.into_inner()).await?;
+
+        let (model_hash, model_size) = {
+            let lock = artifact.data.read().unwrap();
+            let data = lock.get();
+            let hash = hex::encode(digest::digest(&digest::SHA256, &data).as_ref());
+            (hash, data.len())
+        };
+
         let module: Artifact<Module> = tcherror_to_status(artifact.deserialize())?;
+
         let description = String::from(module.description.clone());
         let identifier = Uuid::new_v4();
 
@@ -114,13 +133,14 @@ impl RemoteTorch for BastionAIServer {
             .unwrap()
             .insert(identifier.clone(), module);
         let elapsed = start_time.elapsed();
+
         info!("Upload Model successful in {}ms", elapsed.as_millis());
 
         telemetry::add_event(
             TelemetryEventProps::SendModel {
                 model_name: Some(model_name),
-                hash_model_arch: None,
-                model_size: 0,
+                model_hash: Some(model_hash),
+                model_size,
                 time_taken: elapsed.as_millis() as f64,
             },
             client_info,
@@ -334,7 +354,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let network_config: bastionai_common::NetworkConfig = toml::from_str(&contents)?;
 
     telemetry::setup("Linux".to_string(), Uuid::new_v4().to_string())?;
-
+    telemetry::add_event(TelemetryEventProps::Started {}, None);
     info!(
         "BastionAI listening on {}",
         network_config.client_to_enclave_untrusted_socket()?

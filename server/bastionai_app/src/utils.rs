@@ -36,6 +36,8 @@ pub async fn unstream_data(
     let mut client_info: Option<ClientInfo> = None;
     let mut dataset_name: String = String::new();
     let mut model_name: String = String::new();
+    let mut dataset_size: usize = 0;
+    let mut model_size: usize = 0;
 
     while let Some(chunk) = stream.next().await {
         let mut chunk = chunk?;
@@ -45,6 +47,8 @@ pub async fn unstream_data(
             client_info = chunk.client_info;
             dataset_name = chunk.dataset_name;
             model_name = chunk.model_name;
+            model_size = chunk.model_size as usize;
+            dataset_size = chunk.dataset_size as usize;
         }
         if chunk.secret.len() != 0 {
             secret = chunk.secret;
@@ -142,7 +146,9 @@ pub async fn stream_data(
                     String::from("")
                 },
                 dataset_name: "".to_string(),
+                dataset_size: 0,
                 model_name: "".to_string(),
+                model_size: 0,
                 secret: vec![],
                 client_info: Some(ClientInfo::default()),
             }))
