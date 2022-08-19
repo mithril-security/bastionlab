@@ -12,6 +12,8 @@ use tonic::transport::ServerTlsConfig;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
 use uuid::Uuid;
 
+use bastionai_learning::{data::Dataset, nn::Module};
+
 mod remote_torch {
     tonic::include_proto!("remote_torch");
 }
@@ -21,10 +23,16 @@ use remote_torch::{
 };
 
 mod storage;
-use storage::{Artifact, Dataset, Module};
+use storage::Artifact;
 
 mod utils;
 use utils::*;
+
+mod learning;
+use learning::*;
+
+mod serialization;
+use serialization::*;
 
 struct BastionAIServer {
     modules: RwLock<HashMap<Uuid, Artifact<Module>>>,
