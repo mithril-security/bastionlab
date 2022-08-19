@@ -3,9 +3,10 @@ name: build client
 on:
   push:
     branches: [ master ]
+    paths: ['client/**']
   pull_request:
     branches: [ master ]
-  paths: 'client/**'
+    paths: ['client/**']
 
 jobs:
   python_ci:
