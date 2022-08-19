@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
-from bastionai.pb.remote_torch_pb2 import TrainConfig
+from bastionai.pb.remote_torch_pb2 import TrainConfig  # type: ignore [import]
+
 
 @dataclass
 class OptimizerConfig:
@@ -48,4 +49,3 @@ class Adam(OptimizerConfig):
                 amsgrad=self.amsgrad,
             )
         }
-

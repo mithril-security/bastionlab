@@ -1,16 +1,14 @@
 import ssl
 from bastionai.optimizer_config import *
-from bastionai.psg import expand_weights
 from dataclasses import dataclass
 
-from typing import Any, Dict, List, Optional, Tuple, Union, TYPE_CHECKING
+from typing import Any, List, TYPE_CHECKING
 
-import grpc
-from bastionai.pb.remote_torch_pb2 import Empty, Reference, TestConfig, TrainConfig, Devices
-from bastionai.pb.remote_torch_pb2_grpc import RemoteTorchStub
+import grpc  # type: ignore [import]
+from bastionai.pb.remote_torch_pb2 import Empty, Metric, Reference, TestConfig, TrainConfig  # type: ignore [import]
+from bastionai.pb.remote_torch_pb2_grpc import RemoteTorchStub  # type: ignore [import]
 from torch.nn import Module
-from torch.utils.data import Dataset, DataLoader
-import numpy as np
+from torch.utils.data import Dataset
 
 from bastionai.utils import (
     TensorDataset,
@@ -26,12 +24,16 @@ if TYPE_CHECKING:
     from bastionai.learner import RemoteLearner, RemoteDataLoader
 
 
-@dataclass
 class Client:
     """BastionAI client class."""
 
-    stub: RemoteTorchStub
-    default_secret: bytes
+    def __init__(
+        self, stub: RemoteTorchStub, default_secret: bytes, progress: bool = True
+    ) -> None:
+        self.stub = stub
+        self.default_secret = default_secret
+        self.progress = progress
+        self.log: List[Metric] = []
 
     def send_model(
         self, model: Module, description: str, secret: bytes, chunk_size=100_000_000
@@ -157,20 +159,23 @@ class Client:
             config (TrainConfig):
                 Training configuration to pass to BastionAI.
         """
-        metric_tqdm_with_epochs(self.stub.Train(
-            config), name=f"loss ({config.metric})")
+        train_progress = self.stub.Train(config)
+        if self.progress:
+            metric_tqdm_with_epochs(train_progress, name=f"loss ({config.metric})")
+        else:
+            self.log += list(train_progress)
 
-    def test(self, config: TestConfig) -> float:
+    def test(self, config: TestConfig) -> None:
         """Tests a dataset on a model on BastionAI.
 
         Args:
             config (TestConfig): Configuration for testing on BastionAI.
-
-        Returns:
-            float:
-                The evaluation of the model on the datatset.
         """
-        metric_tqdm(self.stub.Test(config), name=f"metric ({config.metric})")
+        test_progress = self.stub.Test(config)
+        if self.progress:
+            metric_tqdm(test_progress, name=f"metric ({config.metric})")
+        else:
+            self.log += list(test_progress)
 
     def delete_dataset(self, ref: Reference) -> None:
         """Deletes a dataset with reference on BastionAI.
@@ -208,24 +213,20 @@ class Connection:
     port: int
     default_secret: bytes
     channel: Any = None
-    server_name: str = 'bastionai-srv'
+    server_name: str = "bastionai-srv"
 
     def __enter__(self) -> Client:
-        connection_options = (
-            ("grpc.ssl_target_name_override", self.server_name),)
-        server_cert = ssl.get_server_certificate(
-            (self.host, self.port)
-        )
+        connection_options = (("grpc.ssl_target_name_override", self.server_name),)
+        server_cert = ssl.get_server_certificate((self.host, self.port))
 
         server_cred = grpc.ssl_channel_credentials(
-            root_certificates=bytes(server_cert, encoding='utf8')
+            root_certificates=bytes(server_cert, encoding="utf8")
         )
 
         server_target = f"{self.host}:{self.port}"
         self.channel = grpc.secure_channel(
-            server_target,
-            server_cred,
-            options=connection_options)
+            server_target, server_cred, options=connection_options
+        )
         return Client(RemoteTorchStub(self.channel), self.default_secret)
 
     def __exit__(self, exc_type: Any, exc_value: Any, exc_traceback: Any) -> None:
