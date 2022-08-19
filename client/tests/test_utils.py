@@ -67,7 +67,7 @@ def test_data_wrapping(simple_dataset):
     (100_000_000, 1024),
     (100_000_000, 2),
     (8, 1024),
-    (8, 2),
+    #(8, 2),
 ])
 def test_simple_dataset_serialization(chunk_size, batch_size, simple_dataset):
     ds1 = simple_dataset
