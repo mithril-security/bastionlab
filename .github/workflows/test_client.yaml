@@ -1,13 +1,9 @@
 name: test client
 
-on: workflow_dispatch
-# on:
-#   push:
-#     branches: [ master ]
-#     paths: ['client/**']
-#   pull_request:
-#     branches: [ master ]
-#     paths: ['client/**']
+on:
+  pull_request:
+    branches: [ master ]
+    paths: ['client/**', '.github/**']
 
 jobs:
   python_ci:
