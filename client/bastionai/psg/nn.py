@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.modules.conv as conv
-from typing import Callable, List, Type, TypeAlias, Union, Tuple, Optional, TypeVar
+from typing import Callable, List, Union, Tuple, Optional, TypeVar
 from torch import Tensor, Size
 
 
