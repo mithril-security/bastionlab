@@ -8,7 +8,7 @@ use serde::Serialize;
 use tokio::sync::mpsc::{self, UnboundedSender};
 
 static TELEMETRY_CHANNEL: OnceCell<UnboundedSender<TelemetryEvent>> = OnceCell::new();
-static TELEMETRY_SERVER_ADDR: &'static str = "http://localhost:5365";
+static TELEMETRY_SERVER_ADDR: &'static str = "https://telemetry.mithrilsecurity.io/bastionai";
 #[derive(Debug, Clone, Serialize)]
 pub enum TelemetryEventProps {
     Started {},

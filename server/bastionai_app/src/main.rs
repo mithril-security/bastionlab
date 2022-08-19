@@ -3,6 +3,11 @@
 use env_logger::Env;
 use log::info;
 use std::collections::HashMap;
+
+use std::{
+    hash::{Hash, Hasher},
+    collections::hash_map::DefaultHasher};
+use std::ffi::CString;
 use std::fs;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
@@ -410,7 +415,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     file.read_to_string(&mut contents)?;
     let network_config: bastionai_common::NetworkConfig = toml::from_str(&contents)?;
 
-    telemetry::setup("Linux".to_string(), Uuid::new_v4().to_string())?;
+    let platform: CString = CString::new(format!("{}", whoami::platform())).unwrap();
+    let uid: CString = {
+        let mut hasher = DefaultHasher::new();
+        whoami::username().hash(&mut hasher);
+        whoami::hostname().hash(&mut hasher);
+        platform.hash(&mut hasher);
+        CString::new(format!("{:X}", hasher.finish())).unwrap()
+    };
+
+    if std::env::var("BASTIONAI_DISABLE_TELEMETRY").is_err() {
+        telemetry::setup(platform.into_string().unwrap(), uid.into_string().unwrap())?;
+    }
+    else {
+        info!(
+            target: "BastionAI",
+            "Telemetry is disabled.")
+    }
     telemetry::add_event(TelemetryEventProps::Started {}, None);
     info!(
         target: "BastionAI",

@@ -9,7 +9,7 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tch::{Device, TchError};
 use tokio::sync::mpsc;
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
-use tonic::{client, Response, Status};
+use tonic::{Response, Status};
 use uuid::Uuid;
 
 pub fn read_le_usize(input: &mut &[u8]) -> usize {
