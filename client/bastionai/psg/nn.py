@@ -2,10 +2,26 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.modules.conv as conv
-from torch.nn.common_types import _size_1_t, _size_2_t, _size_3_t
-from torch.nn.modules.utils import _single, _pair, _triple
-from typing import Callable, List, Type, Union, Tuple, Optional, TypeVar
+from typing import Callable, List, Type, TypeAlias, Union, Tuple, Optional, TypeVar
 from torch import Tensor, Size
+
+
+def _single(x: Union[int, Tuple[int]]) -> Tuple[int]:
+    if isinstance(x, tuple):
+        return x
+    return (x,)
+
+
+def _pair(x: Union[int, Tuple[int, int]]) -> Tuple[int, int]:
+    if isinstance(x, tuple):
+        return x
+    return (x, x)
+
+
+def _triple(x: Union[int, Tuple[int, int, int]]) -> Tuple[int, int, int]:
+    if isinstance(x, tuple):
+        return x
+    return (x, x, x)
 
 
 def _gconv_size(tensor: Tensor, drop_first: bool = False) -> List[int]:
@@ -23,9 +39,9 @@ def _std_size(tensor: Tensor, max_batch_size: int) -> List[int]:
 
 
 def _reassign_parameter_as_buffer(module: nn.Module, name: str, value: Tensor) -> None:
-    x = module.__getattr__(name).detach()
-    module.__dict__.get("_parameters").pop(name)
-    module.__dict__.get("_buffers")[name] = value
+    x = module.__getattr__(name).detach()  # type: ignore [operator]
+    module.__dict__.get("_parameters").pop(name)  # type: ignore [union-attr]
+    module.__dict__.get("_buffers")[name] = value  # type: ignore [index]
 
 
 def _repeat_int_list(l: List[int], repeats: int) -> List[int]:
@@ -52,7 +68,7 @@ class _ConvNd(conv._ConvNd):
         kernel_size: Tuple[int, ...],
         max_batch_size: int,
         stride: Tuple[int, ...],
-        padding: Tuple[int, ...],
+        padding: Union[str, Tuple[int, ...]],
         dilation: Tuple[int, ...],
         transposed: bool,
         output_padding: Tuple[int, ...],
@@ -67,7 +83,7 @@ class _ConvNd(conv._ConvNd):
             out_channels,
             kernel_size,
             stride,
-            padding,
+            padding,  # type: ignore [arg-type]
             dilation,
             transposed,
             output_padding,
@@ -83,9 +99,9 @@ class _ConvNd(conv._ConvNd):
             self.weight.expand(max_batch_size, *self.weight.size())
         )
         if bias:
-            _reassign_parameter_as_buffer(self, "bias", self.bias.detach())
+            _reassign_parameter_as_buffer(self, "bias", self.bias.detach())  # type: ignore [union-attr]
             self.expanded_bias = nn.Parameter(
-                self.bias.expand(max_batch_size, *self.bias.size())
+                self.bias.expand(max_batch_size, *self.bias.size())  # type: ignore [union-attr]
             )
         else:
             del self.bias
@@ -100,32 +116,35 @@ class _ConvNd(conv._ConvNd):
         )
 
 
-def expanded_convolution(
-    conv_fn: Callable, tuple_type: Type, tuple_fn: Callable
-) -> Callable:
-    def inner(cls: Callable) -> Callable:
-        T = TypeVar("T", bound=tuple_type)
+T = TypeVar("T")
 
-        def init(
-            _self,
+
+def expanded_convolution(
+    conv_fn: Callable, tuple_fn: Callable[[T], Tuple[int, ...]]
+) -> Callable:
+    class ConvNd(_ConvNd):
+        def __init__(
+            self,
             in_channels: int,
             out_channels: int,
             kernel_size: T,
             max_batch_size: int,
-            stride: T = 1,
-            padding: Union[str, T] = 0,
-            dilation: T = 1,
+            stride: T = 1,  # type: ignore [assignment]
+            padding: Union[str, T] = 0,  # type: ignore [assignment]
+            dilation: T = 1,  # type: ignore [assignment]
             groups: int = 1,
             bias: bool = True,
             padding_mode: str = "zeros",
             device: Optional[Union[torch.device, str]] = None,
             dtype: Optional[torch.dtype] = None,
         ):
-            kernel_size_ = tuple_fn(kernel_size)
-            stride_ = tuple_fn(stride)
-            padding_ = padding if isinstance(padding, str) else tuple_fn(padding)
-            dilation_ = tuple_fn(dilation)
-            super(cls, _self).__init__(
+            kernel_size_: Tuple[int, ...] = tuple_fn(kernel_size)
+            stride_: Tuple[int, ...] = tuple_fn(stride)
+            padding_: Union[str, Tuple[int, ...]] = (
+                padding if isinstance(padding, str) else tuple_fn(padding)
+            )
+            dilation_: Tuple[int, ...] = tuple_fn(dilation)
+            super().__init__(
                 in_channels,
                 out_channels,
                 kernel_size_,
@@ -134,76 +153,59 @@ def expanded_convolution(
                 padding_,
                 dilation_,
                 False,
-                tuple_fn(0),
+                tuple_fn(0),  # type: ignore [arg-type]
                 groups,
                 bias,
                 padding_mode,
                 device,
                 dtype,
             )
+            self._zero_padding: Tuple[int, ...] = tuple_fn(0)  # type: ignore [arg-type]
 
-        def _conv_forward(_self, x: Tensor, weight: Tensor, bias: Optional[Tensor]):
+        def _conv_forward(self, x: Tensor, weight: Tensor, bias: Optional[Tensor]):
             batch_size = x.size(0)
-            # batch_padding = [0, 0] * (len(_self.kernel_size) + 1) + [0, _self.max_batch_size - batch_size]
-            # x = F.pad(x, batch_padding, "constant", 0.)
-            x = _pad_input(x, _self.max_batch_size)
+            x = _pad_input(x, self.max_batch_size)
             x = x.view(_gconv_size(x))
             weight = weight.reshape(_gconv_size(weight, drop_first=True))
             if bias is not None:
                 bias = bias.reshape(_gconv_size(bias, drop_first=True))
 
-            if _self.padding_mode != "zeros":
+            if self.padding_mode != "zeros":
                 x = conv_fn(
                     F.pad(
                         x,
-                        _self._reversed_padding_repeated_twice,
-                        mode=_self.padding_mode,
+                        self._reversed_padding_repeated_twice,
+                        mode=self.padding_mode,
                     ),
                     weight,
                     bias,
-                    _self.stride,
-                    tuple_fn(0),
-                    _self.dilation,
-                    _self.groups * _self.max_batch_size,
+                    self.stride,
+                    self._zero_padding,
+                    self.dilation,
+                    self.groups * self.max_batch_size,
                 )
             x = conv_fn(
                 x,
                 weight,
                 bias,
-                _self.stride,
-                _self.padding,
-                _self.dilation,
-                _self.groups * _self.max_batch_size,
+                self.stride,
+                self.padding,
+                self.dilation,
+                self.groups * self.max_batch_size,
             )
 
-            x = x.view(_std_size(x, _self.max_batch_size))
+            x = x.view(_std_size(x, self.max_batch_size))
             return x[:batch_size]
 
-        def forward(_self, x: Tensor) -> Tensor:
-            return _self._conv_forward(x, _self.expanded_weight, _self.expanded_bias)
+        def forward(self, x: Tensor) -> Tensor:
+            return self._conv_forward(x, self.expanded_weight, self.expanded_bias)
 
-        cls.__init__ = init
-        cls._conv_forward = _conv_forward
-        cls.forward = forward
-
-        return cls
-
-    return inner
+    return ConvNd
 
 
-@expanded_convolution(F.conv1d, _size_1_t, _single)
-class Conv1d(_ConvNd):
-    pass
-
-
-@expanded_convolution(F.conv2d, _size_2_t, _pair)
-class Conv2d(_ConvNd):
-    pass
-
-
-@expanded_convolution(F.conv3d, _size_3_t, _triple)
-class Conv3d(_ConvNd):
-    pass
+Conv1d = expanded_convolution(F.conv1d, _single)
+Conv2d = expanded_convolution(F.conv2d, _pair)
+Conv3d = expanded_convolution(F.conv3d, _triple)
 
 
 class ConvLinear(nn.Module):
@@ -262,7 +264,7 @@ class Linear(nn.Linear):
             )
         else:
             del self.bias
-            self.bias = None
+            self.bias = None  # type: ignore [assignment]
             self.register_parameter("expanded_bias", None)
 
     def extra_repr(self):

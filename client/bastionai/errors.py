@@ -1,4 +1,4 @@
-import grpc
+import grpc  # type: ignore [import]
 
 
 def check_rpc_exception(rpc_error):
@@ -18,6 +18,7 @@ def check_rpc_exception(rpc_error):
             f"Received RPC error: code={rpc_error.code()} message={rpc_error.details()}"
         )
 
+
 def check_socket_exception(socket_error):
     if len(socket_error.args) >= 2:
         error_code = socket_error.args[0]
@@ -30,4 +31,3 @@ def check_socket_exception(socket_error):
 
     else:
         return "Failed To connect to the server due to Socket error "
-

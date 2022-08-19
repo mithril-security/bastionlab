@@ -2,7 +2,7 @@ import torch
 from .nn import LayerNorm, Linear, Embedding
 
 
-def expand_weights(module, max_batch_size):
+def expand_weights(module: torch.nn.Module, max_batch_size: int) -> None:
     """
     Recursively put desired batch norm in nn.module module.
 
@@ -16,19 +16,19 @@ def expand_weights(module, max_batch_size):
             out_features = target_attr.out_features
             bias = target_attr.bias is not None
 
-            new_layer = Linear(in_features, out_features, max_batch_size, bias)
+            linear_layer = Linear(in_features, out_features, max_batch_size, bias)
 
             # Set weight to pretrained value
-            torch.nn.init.zeros_(new_layer.weight)
+            torch.nn.init.zeros_(linear_layer.weight)
             with torch.no_grad():
-                new_layer.weight.add_(target_attr.weight)
+                linear_layer.weight.add_(target_attr.weight)
 
             # Set bias to pretrained value
-            torch.nn.init.zeros_(new_layer.bias)
+            torch.nn.init.zeros_(linear_layer.bias)
             with torch.no_grad():
-                new_layer.bias.add_(target_attr.bias)
+                linear_layer.bias.add_(target_attr.bias)
 
-            setattr(module, attr_str, new_layer)
+            setattr(module, attr_str, linear_layer)
         elif type(target_attr) == torch.nn.Embedding:
             num_embeddings = target_attr.num_embeddings
             embedding_dim = target_attr.embedding_dim
@@ -38,7 +38,7 @@ def expand_weights(module, max_batch_size):
             scale_grad_by_freq = target_attr.scale_grad_by_freq
             sparse = target_attr.sparse
 
-            new_layer = Embedding(
+            embedding_layer = Embedding(
                 num_embeddings,
                 embedding_dim,
                 max_batch_size,
@@ -50,18 +50,18 @@ def expand_weights(module, max_batch_size):
             )
 
             # Set weight to pretrained value
-            torch.nn.init.zeros_(new_layer.weight)
+            torch.nn.init.zeros_(embedding_layer.weight)
             with torch.no_grad():
-                new_layer.weight.add_(target_attr.weight)
+                embedding_layer.weight.add_(target_attr.weight)
 
-            setattr(module, attr_str, new_layer)
+            setattr(module, attr_str, embedding_layer)
         elif type(target_attr) == torch.nn.LayerNorm:
             normalized_shape = target_attr.normalized_shape
             eps = target_attr.eps
             elementwise_affine = target_attr.elementwise_affine
 
-            new_layer = LayerNorm(
-                normalized_shape,
+            norm_layer = LayerNorm(
+                list(normalized_shape),
                 max_batch_size,
                 eps,
                 elementwise_affine,
@@ -69,16 +69,16 @@ def expand_weights(module, max_batch_size):
 
             if elementwise_affine:
                 # Set weight to pretrained value
-                torch.nn.init.zeros_(new_layer.weight)
+                torch.nn.init.zeros_(norm_layer.weight)
                 with torch.no_grad():
-                    new_layer.weight.add_(target_attr.weight)
+                    norm_layer.weight.add_(target_attr.weight)
 
                 # Set bias to pretrained value
-                torch.nn.init.zeros_(new_layer.bias)
+                torch.nn.init.zeros_(norm_layer.bias)
                 with torch.no_grad():
-                    new_layer.bias.add_(target_attr.bias)
+                    norm_layer.bias.add_(target_attr.bias)
 
-            setattr(module, attr_str, new_layer)
+            setattr(module, attr_str, norm_layer)
 
     # iterate through immediate child modules. Note, the recursion is done by our code no need to use named_modules()
     for _, immediate_child_module in module.named_children():
