@@ -17,59 +17,6 @@ U = TypeVar("U")
 SIZE_LEN = 8
 
 
-def parametrized_modules(module: Module) -> Iterable[Module]:
-    """Recursively iterates over all submodules.
-
-    The method returns submodules that have parameters
-    (as opposed to "wrapper modules" that just organize modules).
-
-    Args:
-        module (Module): torch.nn.Module
-
-    Returns:
-        Iterable[Module]:
-    """
-    yield from (
-        (m_name, m)  # type: ignore
-        for (m_name, m) in module.named_modules()
-        if any(p is not None for p in m.parameters(recurse=False))
-    )
-
-
-def trainable_modules(module: Module) -> Iterable[Tuple[str, Module]]:
-    """Recursively iterates over all submodules.
-
-    The method returns submodules that have parameters and are trainable.
-
-    Args:
-        module (Module): torch.nn.Module
-
-    Returns:
-        Iterable[Tuple[str, Module]]:
-    """
-    yield from (
-        (m_name, m)
-        for (m_name, m) in parametrized_modules(module)  # type: ignore
-        if any(p.requires_grad for p in m.parameters(recurse=False))
-    )
-
-
-def trainable_parameters(module: Module) -> Iterable[Tuple[str, Parameter]]:
-    """Recursively iterates over all parameters.
-
-    It returns submodules that are trainable (ie they want a grad).
-
-    Args:
-        module (Module): torch.nn.Module
-
-    Returns:
-        Iterable[Tuple[str, Parameter]]:
-    """
-    yield from (
-        (p_name, p) for (p_name, p) in module.named_parameters() if p.requires_grad
-    )
-
-
 class DataWrapper(Module):
     def __init__(self, columns: List[torch.Tensor], labels: torch.Tensor) -> None:
         super().__init__()
@@ -92,14 +39,7 @@ class TensorDataset(Dataset):
         return ([column[idx] for column in self.columns], self.labels[idx])
 
 
-def dataset_from_chunks(chunks: Iterator[Chunk]) -> TensorDataset:
-    wrapper = list(
-        unstream_artifacts(
-            (chunk.data for chunk in chunks), deserialization_fn=torch.jit.load
-        )
-    )[
-        0
-    ]  # type: ignore
+def data_from_wrapper(wrapper: DataWrapper) -> Tuple[List[Tensor], Tensor]:
     columns = []
     labels = None
     for name, param in wrapper.named_parameters():
@@ -107,7 +47,8 @@ def dataset_from_chunks(chunks: Iterator[Chunk]) -> TensorDataset:
             labels = param
         elif name.startswith("samples_"):
             idx = int(name[8:])
-            if len(columns) < idx:
+            print(idx)
+            if len(columns) <= idx:
                 columns += [None] * (idx + 1 - len(columns))
             columns[idx] = param
         else:
@@ -116,6 +57,18 @@ def dataset_from_chunks(chunks: Iterator[Chunk]) -> TensorDataset:
         raise Exception(f"Data wrapper must contain at least one column.")
     if any([x is None for x in columns]):
         raise Exception(f"Missing column in data wrapper.")
+
+    return (columns, labels)
+
+def dataset_from_chunks(chunks: Iterator[Chunk]) -> TensorDataset:
+    wrappers = unstream_artifacts(
+        (chunk.data for chunk in chunks), deserialization_fn=torch.jit.load
+    ) # type: ignore
+
+    data = [data_from_wrapper(wrapper) for wrapper in wrappers]
+
+    columns = [torch.cat([x[i] for x, _ in data]) for i in range(len(data[0][0]))]
+    labels = torch.cat([y for _, y in data])
 
     return TensorDataset(columns, labels)
 
@@ -132,21 +85,6 @@ def chunks(
             chunk.append(x)
     if len(chunk) > 0:
         yield cat_fn(chunk)
-
-
-def tensor_to_bytes(tensor: Tensor) -> bytes:
-    buff = io.BytesIO()
-    torch.save(tensor, buff)
-    buff.seek(0)
-    return buff.read()
-
-
-def bytes_to_tensor(bs: bytes) -> Tensor:
-    buff = io.BytesIO()
-    buff.write(bs)
-    buff.seek(0)
-    tensor = torch.load(buff)
-    return tensor
 
 
 def serialize_batch(data: Tuple[List[torch.Tensor], torch.Tensor], buff):

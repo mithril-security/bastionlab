@@ -25,13 +25,14 @@ from bastionai.utils import (
 if TYPE_CHECKING:
     from bastionai.learner import RemoteLearner, RemoteDataLoader
 
-
-@dataclass
 class Client:
     """BastionAI client class."""
 
-    stub: RemoteTorchStub
-    default_secret: bytes
+    def __init__(self, stub: RemoteTorchStub, default_secret: bytes, progress: bool = True) -> None:
+        self.stub = stub
+        self.default_secret = default_secret
+        self.progress = progress
+        self.log = []
 
     def send_model(
         self, model: Module, description: str, secret: bytes, chunk_size=100_000_000
@@ -157,8 +158,11 @@ class Client:
             config (TrainConfig):
                 Training configuration to pass to BastionAI.
         """
-        metric_tqdm_with_epochs(self.stub.Train(
-            config), name=f"loss ({config.metric})")
+        train_progress = self.stub.Train(config)
+        if self.progress:
+            metric_tqdm_with_epochs(train_progress, name=f"loss ({config.metric})")
+        else:
+            self.log += list(train_progress)
 
     def test(self, config: TestConfig) -> float:
         """Tests a dataset on a model on BastionAI.
@@ -170,7 +174,11 @@ class Client:
             float:
                 The evaluation of the model on the datatset.
         """
-        metric_tqdm(self.stub.Test(config), name=f"metric ({config.metric})")
+        test_progress = self.stub.Test(config)
+        if self.progress:
+            metric_tqdm(test_progress, name=f"metric ({config.metric})")
+        else:
+            self.log += list(test_progress)
 
     def delete_dataset(self, ref: Reference) -> None:
         """Deletes a dataset with reference on BastionAI.
