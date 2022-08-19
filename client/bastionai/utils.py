@@ -220,7 +220,7 @@ def unstream_artifacts(
 
 
 def data_chunks_generator(
-    stream: Iterator[bytes], description: str, secret: bytes, client_info: ClientInfo, dataset_size: int = 0, model_size: int = 0, dataset_name: str = '', model_name: str = ''
+    stream: Iterator[bytes], description: str, secret: bytes, client_info: ClientInfo,  dataset_name: str = '', model_name: str = ''
 ) -> Iterator[Chunk]:
     first = True
     for x in stream:
@@ -230,9 +230,7 @@ def data_chunks_generator(
                 data=x,
                 description=description,
                 dataset_name=dataset_name,
-                dataset_size=dataset_size,
                 model_name=model_name,
-                model_size=model_size,
                 secret=secret,
                 client_info=client_info)
         else:
@@ -242,8 +240,6 @@ def data_chunks_generator(
                         client_info=(),
                         dataset_name='',
                         model_name='',
-                        dataset_size=0,
-                        model_size=0,
                         )
 
 
@@ -273,7 +269,6 @@ def serialize_dataset(
         secret,
         client_info,
         dataset_name=dataset_name,
-        dataset_size=len(dataset)
     )
 
 

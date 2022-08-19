@@ -26,11 +26,9 @@ message Chunk {
     bytes data = 1;
     string description = 2;
     string dataset_name = 3;
-    int32 dataset_size = 4;
-    string model_name = 5;
-    int32 model_size = 6;
-    bytes secret = 7;
-    ClientInfo client_info = 8;
+    string model_name = 4;
+    bytes secret = 5;
+    ClientInfo client_info = 6;
 }
 
 message Empty {
