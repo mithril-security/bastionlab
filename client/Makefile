@@ -16,7 +16,7 @@ install: venv
 
 test: venv
 	./$(VENV)/bin/pip install -r ./tests/requirements.txt
-	pytest .
+	pytest --cov .
 
 clean:
 	rm -rf $(VENV)

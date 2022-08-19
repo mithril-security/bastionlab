@@ -31,7 +31,8 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m pip install flake8 pytest pytest-cov mypy
+        python -m pip install flake8 mypy
+        python -m pip install -r tests/requirements.txt
       
     - name: Install bastionai
       run: |
