@@ -1,6 +1,6 @@
 from typing import Optional, Union
 
-from bastionai.pb.remote_torch_pb2 import Reference, TestConfig, TrainConfig
+from bastionai.pb.remote_torch_pb2 import Reference, TestConfig, TrainConfig  # type: ignore [import]
 from torch.nn import Module
 from torch.utils.data import DataLoader
 import numpy as np
@@ -41,8 +41,10 @@ class RemoteDataLoader:
         )
         self.trace_input, _ = train_dataloader.dataset[0]
         self.client = client
-        self.batch_size = train_dataloader.batch_size
-        self.nb_samples = len(train_dataloader.dataset)
+        if train_dataloader.batch_size is None:
+            raise Exception("A batch size must be provided to the dataloader.")
+        self.batch_size: int = train_dataloader.batch_size
+        self.nb_samples = len(train_dataloader.dataset)  # type: ignore [arg-type]
 
 
 class RemoteLearner:

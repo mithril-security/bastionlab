@@ -1,8 +1,0 @@
-torch
-grpcio
-grpcio-tools
-cibuildwheel
-setuptools
-wheel
-check-wheel-contents
-auditwheel

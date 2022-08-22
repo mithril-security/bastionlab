@@ -8,9 +8,9 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 import numpy as np
 
-# file_path = "./tests/data/SMSSpamCollection"
+# file_path = "examples/data/SMSSpamCollection"
 
-# Load data
+# # Load data
 # df = pd.DataFrame({ "label": int(), "text": str() }, index = [])
 # with open(file_path) as f:
 #   for line in f.readlines():
@@ -22,7 +22,7 @@ import numpy as np
 
 # tokenizer = DistilBertTokenizer.from_pretrained("distilbert-base-uncased")
 
-# Preprocessing
+# # Preprocessing
 # token_id = []
 # attention_masks = []
 # for sample in df.text.values:
@@ -41,13 +41,13 @@ import numpy as np
 # attention_masks = torch.cat(attention_masks, dim = 0)
 # labels = torch.tensor(df.label.values)
 
-# torch.save(token_id, "tests/data/token_id.pt")
-# torch.save(attention_masks, "tests/data/attention_masks.pt")
-# torch.save(labels, "tests/data/labels.pt")
+# torch.save(token_id, "examples/data/token_id.pt")
+# torch.save(attention_masks, "examples/data/attention_masks.pt")
+# torch.save(labels, "examples/data/labels.pt")
 
-token_id = torch.load("tests/data/token_id.pt")
-attention_masks = torch.load("tests/data/attention_masks.pt")
-labels = torch.load("tests/data/labels.pt")
+token_id = torch.load("examples/data/token_id.pt")
+attention_masks = torch.load("examples/data/attention_masks.pt")
+labels = torch.load("examples/data/labels.pt")
 
 # Make training and testing datasets
 val_ratio = 0.2

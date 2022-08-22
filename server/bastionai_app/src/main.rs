@@ -21,6 +21,8 @@ use ring::digest;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
 use uuid::Uuid;
 
+use bastionai_learning::{data::Dataset, nn::Module};
+
 mod remote_torch {
     tonic::include_proto!("remote_torch");
 }
@@ -34,12 +36,19 @@ mod telemetry;
 use telemetry::TelemetryEventProps;
 
 mod storage;
-use storage::{Artifact, Dataset, Module};
+use storage::Artifact;
 
 mod utils;
 use utils::*;
 
-use crate::storage::SizedObjectsBytes;
+mod learning;
+use learning::*;
+
+mod serialization;
+use serialization::*;
+
+use bastionai_learning::serialization::SizedObjectsBytes;
+
 
 struct BastionAIServer {
     modules: RwLock<HashMap<Uuid, Artifact<Module>>>,

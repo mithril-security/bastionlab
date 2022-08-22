@@ -18,7 +18,7 @@ tokio-stream = "0.1"
 # http = "0.2.8"
 anyhow = "1.0.58"
 ring = "0.16.20"
-private_learning = { path = "../../private_learning" }
+bastionai_learning = { path = "../bastionai_learning" }
 bastionai_common = { path = "../bastionai_common" }
 rand = "0.8.5"
 toml = "0.5.9"
