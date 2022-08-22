@@ -17,7 +17,7 @@ WORKDIR /root
 ### base-build: This image has the common build-time dependencies
 FROM base AS base-build
 
-ENV RUST_TOOLCHAIN=stable-x86_64-unknown-linux-gnu
+ENV RUST_TOOLCHAIN=nightly-x86_64-unknown-linux-gnu
 
 RUN apt update && apt install -y \
     unzip \
