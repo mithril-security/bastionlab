@@ -175,7 +175,6 @@ def data_chunks_generator(
     description: str,
     secret: bytes,
     client_info: ClientInfo,
-    dataset_name: str = "",
 ) -> Iterator[Chunk]:
     first = True
     for x in stream:
@@ -184,8 +183,6 @@ def data_chunks_generator(
             yield Chunk(
                 data=x,
                 description=description,
-                dataset_name=dataset_name,
-                model_name=description,
                 secret=secret,
                 client_info=client_info,
             )
@@ -195,8 +192,6 @@ def data_chunks_generator(
                 description="",
                 secret=bytes(),
                 client_info=ClientInfo(),
-                dataset_name="",
-                model_name="",
             )
 
 
@@ -224,7 +219,6 @@ def serialize_dataset(
         description,
         secret,
         client_info,
-        dataset_name=description,
     )
 
 

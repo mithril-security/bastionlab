@@ -15,9 +15,7 @@ pub async fn unstream_data(
 ) -> Result<
     (
         Artifact<SizedObjectsBytes>,
-        Option<ClientInfo>,
-        String,
-        String,
+        Option<ClientInfo>
     ),
     Status,
 > {
@@ -25,8 +23,6 @@ pub async fn unstream_data(
     let mut description: String = String::new();
     let mut secret: Vec<u8> = Vec::new();
     let mut client_info: Option<ClientInfo> = None;
-    let mut dataset_name: String = String::new();
-    let mut model_name: String = String::new();
 
     while let Some(chunk) = stream.next().await {
         let mut chunk = chunk?;
@@ -34,8 +30,6 @@ pub async fn unstream_data(
         if chunk.description.len() != 0 {
             description = chunk.description;
             client_info = chunk.client_info;
-            dataset_name = chunk.dataset_name;
-            model_name = chunk.model_name;
         }
         if chunk.secret.len() != 0 {
             secret = chunk.secret;
@@ -45,8 +39,6 @@ pub async fn unstream_data(
     Ok((
         Artifact::new(data_bytes.into(), description, &secret),
         client_info,
-        dataset_name,
-        model_name,
     ))
 }
 
@@ -73,8 +65,6 @@ pub async fn stream_data(
                 } else {
                     String::from("")
                 },
-                dataset_name: "".to_string(),
-                model_name: "".to_string(),
                 secret: vec![],
                 client_info: Some(ClientInfo::default()),
             }))

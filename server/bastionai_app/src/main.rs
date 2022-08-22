@@ -82,11 +82,9 @@ impl RemoteTorch for BastionAIServer {
     ) -> Result<Response<Reference>, Status> {
         let start_time = Instant::now();
 
-        let (artifact, client_info, dataset_name, _): (
+        let (artifact, client_info): (
             Artifact<SizedObjectsBytes>,
-            Option<ClientInfo>,
-            String,
-            _,
+            Option<ClientInfo>
         ) = unstream_data(request.into_inner()).await?;
 
         let (dataset_hash, dataset_size) = {
@@ -117,7 +115,7 @@ impl RemoteTorch for BastionAIServer {
 
         telemetry::add_event(
             TelemetryEventProps::SendDataset {
-                dataset_name: Some(dataset_name),
+                dataset_name: Some(description.clone()),
                 dataset_size,
                 time_taken: elapsed.as_millis() as f64,
                 dataset_hash: Some(dataset_hash.clone())
@@ -136,11 +134,9 @@ impl RemoteTorch for BastionAIServer {
     ) -> Result<Response<Reference>, Status> {
         let start_time = Instant::now();
 
-        let (artifact, client_info, _, model_name): (
+        let (artifact, client_info): (
             Artifact<SizedObjectsBytes>,
-            Option<ClientInfo>,
-            _,
-            String,
+            Option<ClientInfo>
         ) = unstream_data(request.into_inner()).await?;
 
         let (model_hash, model_size) = {
@@ -173,7 +169,7 @@ impl RemoteTorch for BastionAIServer {
 
         telemetry::add_event(
             TelemetryEventProps::SendModel {
-                model_name: Some(model_name),
+                model_name: Some(description.clone()),
                 model_hash: Some(model_hash),
                 model_size,
                 time_taken: elapsed.as_millis() as f64,
@@ -182,7 +178,7 @@ impl RemoteTorch for BastionAIServer {
         );
         Ok(Response::new(Reference {
             identifier: format!("{}", identifier),
-            description,
+            description: description.clone(),
         }))
     }
 

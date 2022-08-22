@@ -25,10 +25,8 @@ message Chunk {
     // Chunk of data sent from and to the BastionAI server.
     bytes data = 1;
     string description = 2;
-    string dataset_name = 3;
-    string model_name = 4;
-    bytes secret = 5;
-    ClientInfo client_info = 6;
+    bytes secret = 3;
+    ClientInfo client_info = 4;
 }
 
 message Empty {
