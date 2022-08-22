@@ -90,6 +90,7 @@ To build and run the server, first make sure you have [Pytorch's C++ libtorch li
 
 ```shell
 cd server
+make init
 make LIBTORCH_PATH=/path/to/libtorch MODE=[debug|release]
 make run
 ```

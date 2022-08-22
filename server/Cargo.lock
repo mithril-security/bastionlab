@@ -97,6 +97,36 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a32fd6af2b5827bce66c29053ba0e7c42b9dcab01835835058558c10851a46b"
 
 [[package]]
+name = "bastionai_app"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bastionai_common",
+ "bastionai_learning",
+ "env_logger",
+ "futures",
+ "futures-core",
+ "hex",
+ "log",
+ "once_cell",
+ "prost",
+ "rand",
+ "reqwest",
+ "ring",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "tch",
+ "tokio",
+ "tokio-stream",
+ "toml",
+ "tonic",
+ "tonic-build",
+ "uuid",
+ "whoami",
+]
+
+[[package]]
 name = "bastionai_common"
 version = "0.1.0"
 dependencies = [
@@ -1216,36 +1246,6 @@ dependencies = [
  "itoa",
  "ryu",
  "serde",
-]
-
-[[package]]
-name = "server"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bastionai_common",
- "bastionai_learning",
- "env_logger",
- "futures",
- "futures-core",
- "hex",
- "log",
- "once_cell",
- "prost",
- "rand",
- "reqwest",
- "ring",
- "serde",
- "serde_derive",
- "serde_json",
- "tch",
- "tokio",
- "tokio-stream",
- "toml",
- "tonic",
- "tonic-build",
- "uuid",
- "whoami",
 ]
 
 [[package]]
