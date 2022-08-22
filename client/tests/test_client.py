@@ -10,6 +10,7 @@ class MockStub:
     def __init__(self):
         self.data_chunks = []
         self.counter = 0
+        self.client_info = ClientInfo()
 
     def _store(self, chunks: Iterator[Chunk]) -> Reference:
         self.data_chunks.append(chunks)
@@ -21,7 +22,7 @@ class MockStub:
         model = list(unstream_artifacts(
             (chunk.data for chunk in chunks), deserialization_fn=torch.jit.load
         ))[0]
-        chunks = serialize_model(Params(model), "", b"")
+        chunks = serialize_model(Params(model), "", b"", self.client_info)
         return self._store(chunks)
     
     def SendDataset(self, chunks: Iterator[Chunk]) -> Reference:
@@ -43,7 +44,7 @@ class MockStub:
 def test_api(simple_dataset):
     model = DummyModule()
 
-    client = Client(MockStub(), b"", progress=False)
+    client = Client(MockStub(), b"", client_info=ClientInfo(), progress=False)
 
     dl = DataLoader(simple_dataset, batch_size=2)
     remote_dataloader = client.RemoteDataLoader(dl, dl)

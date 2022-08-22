@@ -191,7 +191,7 @@ def data_chunks_generator(
             yield Chunk(data=x,
                         description="",
                         secret=bytes(),
-                        client_info=(),
+                        client_info=ClientInfo(),
                         dataset_name='',
                         model_name='',
                         )
