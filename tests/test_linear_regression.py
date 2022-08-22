@@ -19,14 +19,14 @@ logging.basicConfig(level=logging.INFO)
 class LinRegTest(unittest.TestCase):
 
     def test_model_upload(self):
-        with Connection('localhost', 50053) as client:
+        with Connection('localhost', 50051) as client:
             ref = client.send_model(
                 model, "A simple linear regression model", b"secret")
 
         self.assertEqual(ref.description, "A simple linear regression model")
 
     def test_dataset_upload(self):
-        with Connection('localhost', 50053) as client:
+        with Connection('localhost', 50051) as client:
             ref = client.send_dataset(
                 dataset, "A simple linear regression model", b"secret")
 
