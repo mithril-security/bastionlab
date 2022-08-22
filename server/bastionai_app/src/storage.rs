@@ -1,7 +1,7 @@
+use bastionai_learning::serialization::SizedObjectsBytes;
 use ring::hmac;
 use std::convert::TryInto;
 use std::sync::{Arc, RwLock};
-use bastionai_learning::serialization::SizedObjectsBytes;
 use tch::TchError;
 
 /// Stored object with encryption and owner key

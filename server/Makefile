@@ -1,6 +1,6 @@
-SERVER_DIR:=./
+SERVER_DIR := $(shell pwd)
 BIN_DIR := $(SERVER_DIR)/bin
-SERVER_NAME := server
+SERVER_NAME := bastionai_app
 TOOLS_DIR := $(SERVER_DIR)/tools
 BUILD_TYPE :=
 # Check that given variables are set and all have non-empty values,
@@ -33,10 +33,13 @@ endif
 
 all: compile
 
+init:
+# Create server tls config
+	@echo Server Directory: $(SERVER_DIR)
+	@bash $(TOOLS_DIR)/create_tls_config.sh $(BIN_DIR)
+
 compile:
 	$(call check_defined, LIBTORCH_PATH)
-# Create server tls config
-	@bash $(TOOLS_DIR)/create_tls_config.sh $(BIN_DIR)
 
 	@mkdir -p $(BIN_DIR)
 	@cd $(SERVER_DIR) && cargo build $(BUILD_TYPE)
@@ -45,9 +48,8 @@ compile:
 	@patchelf --replace-needed libtorch_cpu.so $(LIBTORCH_PATH)/lib/libtorch_cpu.so $(TARGET_DIR)/$(SERVER_NAME)
 	@patchelf --replace-needed libc10.so $(LIBTORCH_PATH)/lib/libc10.so $(TARGET_DIR)/$(SERVER_NAME)
 
-# Copy $(TOOL_DIR)/config.toml to $(BIN_DIR)
+copy-bin:
 	@cp $(TOOLS_DIR)/config.toml $(BIN_DIR)
-# Copy $(TARGET_DIR)/server to $(BIN_DIR)
 	@cp $(TARGET_DIR)/server $(BIN_DIR)
 	
 run:
@@ -55,6 +57,7 @@ run:
 
 clean:
 	@rm -rf $(BIN_DIR)
+	
 fclean:
 	make clean
 	cargo clean

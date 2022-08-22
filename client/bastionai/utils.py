@@ -9,7 +9,7 @@ from torch.utils.data import Dataset
 
 from tqdm import tqdm  # type: ignore [import]
 
-from bastionai.pb.remote_torch_pb2 import Chunk, Metric  # type: ignore [import]
+from bastionai.pb.remote_torch_pb2 import Chunk, Metric, ClientInfo  # type: ignore [import]
 
 T = TypeVar("T")
 U = TypeVar("U")
@@ -171,15 +171,28 @@ def unstream_artifacts(
 
 
 def data_chunks_generator(
-    stream: Iterator[bytes], description: str, secret: bytes
+    stream: Iterator[bytes],
+    description: str,
+    secret: bytes,
+    client_info: ClientInfo,
 ) -> Iterator[Chunk]:
     first = True
     for x in stream:
         if first:
             first = False
-            yield Chunk(data=x, description=description, secret=secret)
+            yield Chunk(
+                data=x,
+                description=description,
+                secret=secret,
+                client_info=client_info,
+            )
         else:
-            yield Chunk(data=x, description="", secret=bytes())
+            yield Chunk(
+                data=x,
+                description="",
+                secret=bytes(),
+                client_info=ClientInfo(),
+            )
 
 
 def make_batch(data: List[Tuple[List[Tensor], Tensor]]) -> Tuple[List[Tensor], Tensor]:
@@ -193,6 +206,7 @@ def serialize_dataset(
     dataset: Dataset,
     description: str,
     secret: bytes,
+    client_info: ClientInfo,
     chunk_size=100_000_000,
     batch_size=1024,
 ) -> Iterator[Chunk]:
@@ -204,15 +218,23 @@ def serialize_dataset(
         ),
         description,
         secret,
+        client_info,
     )
 
 
 def serialize_model(
-    model: Module, description: str, secret: bytes, chunk_size=100_000_000
+    model: Module,
+    description: str,
+    secret: bytes,
+    client_info: ClientInfo,
+    chunk_size=100_000_000,
 ) -> Iterator[Chunk]:
     ts = torch.jit.script(model)
     return data_chunks_generator(
-        stream_artifacts(iter([ts]), chunk_size, torch.jit.save), description, secret
+        stream_artifacts(iter([ts]), chunk_size, torch.jit.save),
+        description,
+        secret,
+        client_info=client_info,
     )
 
 
