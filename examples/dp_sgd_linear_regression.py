@@ -30,7 +30,6 @@ test_dataset = TensorDataset([X], Y)
 test_dataloader = DataLoader(test_dataset, batch_size=2)
 
 with Connection("localhost", 50051, default_secret=b"secret") as client:
-    print(client)
     remote_dataloader = client.RemoteDataLoader(
         train_dataloader,
         test_dataloader,
