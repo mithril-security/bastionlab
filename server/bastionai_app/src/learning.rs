@@ -138,7 +138,7 @@ pub async fn stream_module_train(
                 );
                 info!(
                 target: "BastionAI",
-                            "Model tested successfully in {}ms",
+                            "Model trained successfully in {}ms",
                             start_time.elapsed().as_millis()
                         );
             }

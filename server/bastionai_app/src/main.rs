@@ -124,7 +124,7 @@ impl RemoteTorch for BastionAIServer {
         );
         Ok(Response::new(Reference {
             identifier: format!("{}", identifier),
-            description: description.clone(),
+            description,
         }))
     }
 
@@ -178,7 +178,7 @@ impl RemoteTorch for BastionAIServer {
         );
         Ok(Response::new(Reference {
             identifier: format!("{}", identifier),
-            description: description.clone(),
+            description,
         }))
     }
 
