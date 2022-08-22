@@ -22,8 +22,8 @@ clean:
 	rm -rf $(VENV)
 	rm -rf build
 	rm -rf dist
-	rm -rf src/bastionai/pb
-	rm -rf src/bastionai.egg-info
+	rm -rf bastionai/pb
+	rm -rf bastionai.egg-info
 	find . -type f -name '*.pyc' -delete
 	find . -type d -name '__pycache__' -delete
 

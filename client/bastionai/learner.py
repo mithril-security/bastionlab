@@ -5,7 +5,6 @@ from torch.nn import Module
 from torch.utils.data import DataLoader
 import numpy as np
 import torch
-
 from bastionai.psg import expand_weights
 from bastionai.client import Client
 from bastionai.optimizer_config import *
@@ -60,6 +59,7 @@ class RemoteLearner:
     ) -> None:
         if isinstance(model, Module):
             model_class_name = type(model).__name__
+
             if expand:
                 expand_weights(model, remote_dataloader.batch_size)
             self.model = model
@@ -67,7 +67,8 @@ class RemoteLearner:
                 model = torch.jit.script(model)
             except:
                 model = torch.jit.trace(  # Compile the model with the tracing strategy
-                    model,  # Wrapp the model to use the first output only (and drop the others)
+                    # Wrapp the model to use the first output only (and drop the others)
+                    model,
                     [x.unsqueeze(0) for x in remote_dataloader.trace_input],
                 )
             self.model_ref = client.send_model(

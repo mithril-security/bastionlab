@@ -1,38 +1,51 @@
-use super::Chunk;
+use super::{Chunk, ClientInfo};
 use crate::storage::Artifact;
 use crate::Reference;
-use std::sync::Arc;
+use bastionai_learning::serialization::SizedObjectsBytes;
+use log::info;
+use std::{sync::Arc, time::Instant};
 use tch::Device;
 use tokio::sync::mpsc;
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use tonic::{Response, Status};
 use uuid::Uuid;
-use bastionai_learning::serialization::SizedObjectsBytes;
 
 pub async fn unstream_data(
     mut stream: tonic::Streaming<Chunk>,
-) -> Result<Artifact<SizedObjectsBytes>, Status> {
+) -> Result<
+    (
+        Artifact<SizedObjectsBytes>,
+        Option<ClientInfo>
+    ),
+    Status,
+> {
     let mut data_bytes: Vec<u8> = Vec::new();
     let mut description: String = String::new();
     let mut secret: Vec<u8> = Vec::new();
+    let mut client_info: Option<ClientInfo> = None;
 
     while let Some(chunk) = stream.next().await {
         let mut chunk = chunk?;
         data_bytes.append(&mut chunk.data);
         if chunk.description.len() != 0 {
             description = chunk.description;
+            client_info = chunk.client_info;
         }
         if chunk.secret.len() != 0 {
             secret = chunk.secret;
         }
     }
 
-    Ok(Artifact::new(data_bytes.into(), description, &secret))
+    Ok((
+        Artifact::new(data_bytes.into(), description, &secret),
+        client_info,
+    ))
 }
 
 pub async fn stream_data(
     artifact: Artifact<SizedObjectsBytes>,
     chunk_size: usize,
+    stream_type: String,
 ) -> Response<ReceiverStream<Result<Chunk, Status>>> {
     let (tx, rx) = mpsc::channel(4);
 
@@ -41,6 +54,7 @@ pub async fn stream_data(
         .into_inner()
         .unwrap()
         .into();
+    let start_time = Instant::now();
     tokio::spawn(async move {
         for (i, bytes) in raw_bytes.chunks(chunk_size).enumerate() {
             tx.send(Ok(Chunk {
@@ -52,11 +66,19 @@ pub async fn stream_data(
                     String::from("")
                 },
                 secret: vec![],
+                client_info: Some(ClientInfo::default()),
             }))
             .await
             .unwrap(); // Fix this
         }
     });
+
+    info!(
+    target: "BastionAI",
+            "{}",
+                format!("{} fetched successfully in {}ms", stream_type,
+                start_time.elapsed().as_millis())
+            );
 
     Response::new(ReceiverStream::new(rx))
 }
