@@ -1,7 +1,18 @@
 <p align="center">
   <img src="assets/logo.png" alt="BastionAI" width="200" height="200" />
 </p>
+
 <h1 style="font-size: 35px; font-weight: 600" align="center">Mithril Security – BastionAI</h1>
+
+<h4 align="center">
+  <a href="https://www.mithrilsecurity.io">Website</a> |
+  <a href="https://bastionai.readthedocs.io">Documentation</a> |
+  <a href="https://blog.mithrilsecurity.io/">Blog</a> |
+  <a href="https://hub.docker.com/u/mithrilsecuritysas">Docker Hub</a> |
+  <a href="https://www.linkedin.com/company/mithril-security-company">LinkedIn</a> | 
+  <a href="https://www.twitter.com/mithrilsecurity">Twitter</a> | 
+  <a href="https://discord.gg/TxEHagpWd4">Discord</a>
+</h4>
 
 **BastionAI** is a confidential AI training server. It introduces a new paradigm which is a merger between trusted computing and centralized learning. It provides the platform for collaborative training just like in Federated Learning (FL) settings, but with models being trained centrally in a secure, trusted computing environment. This solution makes possible for multiple parties to collectively train models without exposing either the data or the model to any of the parties. Also, Cloud providers won't be able to access either data or model in the clear thanks to the security guarantees provided by the trusted execution environment.
 
