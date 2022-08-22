@@ -9,8 +9,7 @@ from torch.utils.data import Dataset
 
 from tqdm import tqdm  # type: ignore [import]
 
-# type: ignore [import]
-from bastionai.pb.remote_torch_pb2 import Chunk, Metric, ClientInfo
+from bastionai.pb.remote_torch_pb2 import Chunk, Metric, ClientInfo  # type: ignore [import]
 
 T = TypeVar("T")
 U = TypeVar("U")
@@ -21,8 +20,7 @@ class DataWrapper(Module):
     def __init__(self, columns: List[Tensor], labels: Optional[Tensor]) -> None:
         super().__init__()
         for i, column in enumerate(columns):
-            self.__setattr__(f"samples_{i}", Parameter(
-                column, requires_grad=False))
+            self.__setattr__(f"samples_{i}", Parameter(column, requires_grad=False))
         if labels is not None:
             self.labels = Parameter(labels, requires_grad=False)
 
@@ -73,8 +71,7 @@ def dataset_from_chunks(chunks: Iterator[Chunk]) -> TensorDataset:
 
     data = [data_from_wrapper(wrapper) for wrapper in wrappers]
 
-    columns = [torch.cat([x[i] for x, _ in data])
-               for i in range(len(data[0][0]))]
+    columns = [torch.cat([x[i] for x, _ in data]) for i in range(len(data[0][0]))]
     labels = (
         torch.cat([y for _, y in data if y is not None])
         if data[0][1] is not None
@@ -174,7 +171,11 @@ def unstream_artifacts(
 
 
 def data_chunks_generator(
-    stream: Iterator[bytes], description: str, secret: bytes, client_info: ClientInfo,  dataset_name: str = '',
+    stream: Iterator[bytes],
+    description: str,
+    secret: bytes,
+    client_info: ClientInfo,
+    dataset_name: str = "",
 ) -> Iterator[Chunk]:
     first = True
     for x in stream:
@@ -186,15 +187,17 @@ def data_chunks_generator(
                 dataset_name=dataset_name,
                 model_name=description,
                 secret=secret,
-                client_info=client_info)
+                client_info=client_info,
+            )
         else:
-            yield Chunk(data=x,
-                        description="",
-                        secret=bytes(),
-                        client_info=ClientInfo(),
-                        dataset_name='',
-                        model_name='',
-                        )
+            yield Chunk(
+                data=x,
+                description="",
+                secret=bytes(),
+                client_info=ClientInfo(),
+                dataset_name="",
+                model_name="",
+            )
 
 
 def make_batch(data: List[Tuple[List[Tensor], Tensor]]) -> Tuple[List[Tensor], Tensor]:
@@ -226,11 +229,19 @@ def serialize_dataset(
 
 
 def serialize_model(
-    model: Module, description: str, secret: bytes, client_info: ClientInfo, chunk_size=100_000_000,
+    model: Module,
+    description: str,
+    secret: bytes,
+    client_info: ClientInfo,
+    chunk_size=100_000_000,
 ) -> Iterator[Chunk]:
     ts = torch.jit.script(model)
     return data_chunks_generator(
-        stream_artifacts(iter([ts]), chunk_size, torch.jit.save), description, secret, client_info=client_info)
+        stream_artifacts(iter([ts]), chunk_size, torch.jit.save),
+        description,
+        secret,
+        client_info=client_info,
+    )
 
 
 def deserialize_weights_to_model(model: Module, chunks: Iterator[Chunk]) -> None:
@@ -274,8 +285,7 @@ def metric_tqdm_with_epochs(metric_stream: Iterator[Metric], name: str):
         if metric.batch == metric.nb_batches - 1:
             t.close()
             if metric.epoch < metric.nb_epochs - 1:
-                t = new_tqdm_bar(metric.epoch + 2,
-                                 metric.nb_epochs, metric.nb_batches)
+                t = new_tqdm_bar(metric.epoch + 2, metric.nb_epochs, metric.nb_batches)
 
 
 def metric_tqdm(metric_stream: Iterator[Metric], name: str):

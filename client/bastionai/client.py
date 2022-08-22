@@ -9,10 +9,10 @@ from dataclasses import dataclass
 from typing import Any, List, TYPE_CHECKING
 
 import grpc  # type: ignore [import]
-# type: ignore [import]
-from bastionai.pb.remote_torch_pb2 import Empty, Metric, Reference, TestConfig, TrainConfig, ClientInfo
-# type: ignore [import]
-from bastionai.pb.remote_torch_pb2_grpc import RemoteTorchStub
+
+from bastionai.pb.remote_torch_pb2 import Empty, Metric, Reference, TestConfig, TrainConfig, ClientInfo  # type: ignore [import]
+
+from bastionai.pb.remote_torch_pb2_grpc import RemoteTorchStub  # type: ignore [import]
 from torch.nn import Module
 from torch.utils.data import Dataset
 
@@ -36,7 +36,11 @@ class Client:
     """BastionAI client class."""
 
     def __init__(
-        self, stub: RemoteTorchStub, default_secret: bytes, client_info: ClientInfo, progress: bool = True
+        self,
+        stub: RemoteTorchStub,
+        default_secret: bytes,
+        client_info: ClientInfo,
+        progress: bool = True,
     ) -> None:
         self.stub = stub
         self.default_secret = default_secret
@@ -45,7 +49,7 @@ class Client:
         self.log: List[Metric] = []
 
     def send_model(
-        self, model: Module, description: str, model_name: str, secret: bytes, chunk_size=100_000_000
+        self, model: Module, description: str, secret: bytes, chunk_size=100_000_000
     ) -> Reference:
         """Uploads Pytorch Modules to BastionAI
 
@@ -70,7 +74,7 @@ class Client:
                 description=description,
                 secret=secret,
                 chunk_size=chunk_size,
-                client_info=self.client_info
+                client_info=self.client_info,
             )
         )
 
@@ -78,7 +82,6 @@ class Client:
         self,
         dataset: Dataset,
         description: str,
-        dataset_name: str,
         secret: bytes,
         chunk_size=100_000_000,
         batch_size=1024,
@@ -104,7 +107,7 @@ class Client:
                 secret=secret,
                 chunk_size=chunk_size,
                 batch_size=batch_size,
-                client_info=self.client_info
+                client_info=self.client_info,
             )
         )
 
@@ -176,8 +179,7 @@ class Client:
         """
         train_progress = self.stub.Train(config)
         if self.progress:
-            metric_tqdm_with_epochs(
-                train_progress, name=f"loss ({config.metric})")
+            metric_tqdm_with_epochs(train_progress, name=f"loss ({config.metric})")
         else:
             self.log += list(train_progress)
 
@@ -234,8 +236,7 @@ class Connection:
     def __enter__(self) -> Client:
         uname = platform.uname()
         client_info = ClientInfo(
-            uid=sha256((socket.gethostname() + "-" +
-                       getpass.getuser()).encode("utf-8"))
+            uid=sha256((socket.gethostname() + "-" + getpass.getuser()).encode("utf-8"))
             .digest()
             .hex(),
             platform_name=uname.system,
@@ -245,8 +246,7 @@ class Connection:
             user_agent="bastionai_python",
             user_agent_version=app_version,
         )
-        connection_options = (
-            ("grpc.ssl_target_name_override", self.server_name),)
+        connection_options = (("grpc.ssl_target_name_override", self.server_name),)
         server_cert = ssl.get_server_certificate((self.host, self.port))
 
         server_cred = grpc.ssl_channel_credentials(
