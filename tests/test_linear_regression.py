@@ -32,7 +32,7 @@ class LinRegTest(unittest.TestCase):
                 model_description="1D Linear Regression Model",
                 expand=False,
             )
-
+            
         self.assertEqual(remote_learner.client, client)
 
     def test_weights_before_and_after_upload(self):
@@ -69,7 +69,7 @@ def setUpModule():
             return self.fc1(x)
 
     lreg_model = LReg()
-    
+
     X = torch.tensor([[0.0], [1.0], [0.5], [0.2]])
     Y = torch.tensor([[0.0], [2.0], [1.0], [0.4]])
     train_dataset = TensorDataset([X], Y)

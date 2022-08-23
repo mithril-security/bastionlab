@@ -14,11 +14,14 @@ long_description = (this_directory / "README.md").read_text()
 def generate_stub():
     import grpc_tools.protoc
 
-    if not os.path.exists('bastionai/pb'):
-        os.makedirs('bastionai/pb')
-    
-    if os.path.exists('bastionai/pb'):
-        with open('bastionai/pb/__init__.py', mode='a'): pass
+    if not os.path.exists("bastionai/pb"):
+        os.makedirs("bastionai/pb")
+
+    if os.path.exists("bastionai/pb"):
+        with open("bastionai/pb/__init__.py", mode="a") as f:
+            f.write(
+                "import os\nimport sys\n\nsys.path.append(os.path.join(os.path.dirname(__file__)))"
+            )
 
     proto_include = pkg_resources.resource_filename("grpc_tools", "_proto")
     for file in PROTO_FILES:
@@ -33,7 +36,6 @@ def generate_stub():
             ]
         )
 
-
 class BuildPackage(build_py):
     def run(self):
         generate_stub()
@@ -41,7 +43,7 @@ class BuildPackage(build_py):
 
 
 setup(
-    name='bastionai',
+    name="bastionai",
     version="0.1.0",
     packages=find_packages(),
     description="Client SDK for BastionAI Confidential AI Training.",
@@ -49,8 +51,8 @@ setup(
     keywords="confidential computing training client enclave amd-sev machine learning",
     cmdclass={"build_py": BuildPackage},
     long_description=long_description,
-    author='Kwabena Amponsem, Lucas Bourtoule',
-    author_email='kwabena.amponsem@mithrilsecurity.io, luacs.bourtoule@nithrilsecurity.io',
+    author="Kwabena Amponsem, Lucas Bourtoule",
+    author_email="kwabena.amponsem@mithrilsecurity.io, luacs.bourtoule@nithrilsecurity.io",
     classifiers=["Programming Language :: Python :: 3"],
     install_requires=[
         "grpcio==1.47.0",
@@ -60,6 +62,6 @@ setup(
         "torch==1.12.0",
         "numpy==1.23.1",
         "typing-extensions==4.3.0",
-        "tqdm==4.64.0"
-    ]
+        "tqdm==4.64.0",
+    ],
 )
