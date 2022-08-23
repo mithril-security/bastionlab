@@ -16,6 +16,9 @@ def generate_stub():
 
     if not os.path.exists('bastionai/pb'):
         os.makedirs('bastionai/pb')
+    
+    if os.path.exists('bastionai/pb'):
+        with open('bastionai/pb/__init__.py', mode='a'): pass
 
     proto_include = pkg_resources.resource_filename("grpc_tools", "_proto")
     for file in PROTO_FILES:
