@@ -49,7 +49,10 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Check types with mypy
-      run: mypy bastionai
+      run: |
+        rm -rf bastaionai/pb/remote_torch*
+        mypy bastionai
+        python -m pip install -e .
    
 
 

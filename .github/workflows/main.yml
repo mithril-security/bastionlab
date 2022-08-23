@@ -159,8 +159,8 @@ jobs:
         env:
           BASTIONAI_TEST_NO_LAUNCH_SERVER: "true"
        
-      - name: Install Jupyter and related test tools
-        run: python -m pip install pytest nbmake
+      # - name: Install Jupyter and related test tools
+      #   run: python -m pip install pytest nbmake
 
-      - name: Test Jupyter notebooks
-        run: pytest --nbmake-timeout=40 --nbmake-kernel=python3 --nbmake examples/*.ipynb || (docker logs app; false)
+      # - name: Test Jupyter notebooks
+      #   run: pytest --nbmake-timeout=40 --nbmake-kernel=python3 --nbmake examples/*.ipynb || (docker logs app; false)
