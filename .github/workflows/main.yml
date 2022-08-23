@@ -163,4 +163,4 @@ jobs:
         run: python -m pip install pytest nbmake
 
       - name: Test Jupyter notebooks
-        run: pytest --nbmake-timeout=40 --nbmake-kernel=python3 --nbmake examples/**/*.ipynb || (docker logs app; false)
+        run: pytest --nbmake-timeout=40 --nbmake-kernel=python3 --nbmake examples/*.ipynb || (docker logs app; false)
