@@ -11,8 +11,6 @@ from torch.utils.data import DataLoader
 
 import logging
 from bastionai.utils import TensorDataset # type: ignore [import]
-
-
 from server import launch_server # type: ignore [import]
 
 logging.basicConfig(level=logging.INFO)
