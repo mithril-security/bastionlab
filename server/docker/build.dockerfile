@@ -87,7 +87,7 @@ EXPOSE 50051
 
 CMD ./bastionai_app
 
-### vscode-dev-env: This image is used for developers to work on blindai with vscode remote containers extension
+### vscode-dev-env: This image is used for developers to work on bastionai with vscode remote containers extension
 
 FROM base-build AS dev-env
 
