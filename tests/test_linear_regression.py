@@ -69,7 +69,7 @@ def setUpModule():
             return self.fc1(x)
 
     lreg_model = LReg()
-
+    
     X = torch.tensor([[0.0], [1.0], [0.5], [0.2]])
     Y = torch.tensor([[0.0], [2.0], [1.0], [0.4]])
     train_dataset = TensorDataset([X], Y)

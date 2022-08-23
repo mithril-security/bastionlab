@@ -139,6 +139,10 @@ jobs:
         with:
           name: client-artifacts
           path: /tmp/client-artifacts
+          
+      - name: Show artifacts
+        run: ls -l /tmp/client-artifacts
+
       - name: Load package
         run: python -m pip install /tmp/client-artifacts/*.whl
 
