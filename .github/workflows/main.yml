@@ -83,6 +83,11 @@ jobs:
         env:
           CIBW_BUILD: "cp39-manylinux_*" # force python 3.9 and manylinux for this build
           CIBW_ARCHS: x86_64 # ignore i686/x86 (32bit) for now, as well as arm and stuff
+          
+      # List wheels
+      - name: List wheels
+        run: |
+          ls -l client/wheelhouse
 
       # Outputs
 
