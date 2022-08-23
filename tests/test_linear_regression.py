@@ -15,7 +15,6 @@ from server import launch_server # type: ignore [import]
 
 logging.basicConfig(level=logging.INFO)
 
-
 class LinRegTest(unittest.TestCase):
     def test_model_and_data_upload(self):
         with Connection("localhost", 50051, default_secret=b"") as client:
