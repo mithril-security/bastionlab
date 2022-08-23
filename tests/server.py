@@ -7,7 +7,7 @@ from time import time as now, sleep
 import atexit
 
 server_process = None
-server_name = 'server'
+server_name = "server"
 
 
 def launch_server():
@@ -18,11 +18,13 @@ def launch_server():
     try:
         if (
             server_process is None
+            and os.getenv("BASTIONAI_TEST_NO_LAUNCH_SERVER") is None
         ):
             server_dir = os.path.join(os.path.dirname(__file__), "../server")
             bin_dir = os.path.join(server_dir, "bin")
             server_process = subprocess.Popen(
-                [f'{server_name}'],
+                [f"{server_name}"],
+                cwd=bin_dir,
                 executable=os.path.join(bin_dir, f"{server_name}"),
                 stdout=sys.stdout,
                 stderr=sys.stderr,
@@ -75,5 +77,6 @@ def close_server():
     server_process = None
 
     print("[TESTS] The server is stopped")
+
 
 atexit.register(close_server)

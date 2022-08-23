@@ -99,6 +99,7 @@ ARG USER_UID=1000
 ARG USER_GID=$USER_UID
 
 ENV RUST_TOOLCHAIN=stable-x86_64-unknown-linux-gnu
+ENV BASTIONAI_DISABLE_TELEMETRY=1
 
 # run VS Code dev container setup script
 COPY ./docker/common-dev.sh /tmp/library-scripts/
