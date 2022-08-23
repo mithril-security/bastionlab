@@ -18,14 +18,14 @@ def generate_stub():
         os.makedirs("bastionai/pb")
 
     if os.path.exists("bastionai/pb"):
-        with open("bastionai/pb/__init__.py", mode="a") as f:
+        with open("bastionai/pb/__init__.py", mode="w") as f:
             f.write(
                 "import os\nimport sys\n\nsys.path.append(os.path.join(os.path.dirname(__file__)))"
             )
 
     proto_include = pkg_resources.resource_filename("grpc_tools", "_proto")
     for file in PROTO_FILES:
-        grpc_tools.protoc.main(
+        res = grpc_tools.protoc.main(
             [
                 "grpc_tools.protoc",
                 "-I{}".format(proto_include),
@@ -35,6 +35,10 @@ def generate_stub():
                 "{}".format(file),
             ]
         )
+        if res != 0:
+            print(f"Proto file generation failed. Cannot continue. Error code: {res}")
+            exit(1)
+
 
 class BuildPackage(build_py):
     def run(self):

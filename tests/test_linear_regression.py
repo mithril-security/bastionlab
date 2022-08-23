@@ -32,7 +32,7 @@ class LinRegTest(unittest.TestCase):
                 model_description="1D Linear Regression Model",
                 expand=False,
             )
-            
+        
         self.assertEqual(remote_learner.client, client)
 
     def test_weights_before_and_after_upload(self):

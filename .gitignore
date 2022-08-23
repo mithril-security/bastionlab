@@ -172,10 +172,6 @@ ex.c
 # *proof.json
 
 # temp test files
-tests/distilbert-base-uncased.onnx
-tests/*proof.json
-tests/policy.toml
-tests/host_server.pem
 
 ################
 # Custom stuff #
