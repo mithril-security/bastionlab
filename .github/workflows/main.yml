@@ -74,8 +74,8 @@ jobs:
         with:
           path: |
             ./client/build
-            ./client/blindai.egg-info
-            ./client/blindai/lib
+            ./client/bastionai.egg-info
+            ./client/bastionai/lib
           key: client/build-${{ env.pythonLocation }}-${{ hashFiles('client/setup.py') }}
 
       - name: Building the client

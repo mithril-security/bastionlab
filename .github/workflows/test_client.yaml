@@ -49,9 +49,4 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Check types with mypy
-      run: |
-        rm -rf bastionai/pb
-        mypy bastionai
-        python -m pip install -e .
-
-
+      run: mypy bastionai
