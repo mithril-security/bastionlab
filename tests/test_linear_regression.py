@@ -4,16 +4,17 @@ from typing import Tuple
 import unittest
 from torch import Tensor
 import torch
-from bastionai.client import Connection, SGD # type: ignore [import]
+from bastionai.client import Connection, SGD  # type: ignore [import]
 from torch.nn import Module
-from bastionai.psg.nn import Linear # type: ignore [import]
+from bastionai.psg.nn import Linear  # type: ignore [import]
 from torch.utils.data import DataLoader
 
 import logging
-from bastionai.utils import TensorDataset # type: ignore [import]
-from server import launch_server # type: ignore [import]
+from bastionai.utils import TensorDataset  # type: ignore [import]
+from server import launch_server  # type: ignore [import]
 
 logging.basicConfig(level=logging.INFO)
+
 
 class LinRegTest(unittest.TestCase):
     def test_model_and_data_upload(self):

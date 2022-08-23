@@ -120,7 +120,7 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
-        run: cd client && pip install -e .
+        run: cd client && python -m pip install -e .
 
       # Get server
 
@@ -140,7 +140,7 @@ jobs:
           name: client-artifacts
           path: /tmp/client-artifacts
       - name: Load package
-        run: pip install /tmp/client-artifacts/*.whl
+        run: python -m pip install /tmp/client-artifacts/*.whl
 
       # Run tests
 
@@ -154,7 +154,7 @@ jobs:
           BASTIONAI_TEST_NO_LAUNCH_SERVER: "true"
        
       - name: Install Jupyter and related test tools
-        run: pip install pytest nbmake
+        run: python -m pip install pytest nbmake
 
       - name: Test Jupyter notebooks
         run: pytest --nbmake-timeout=40 --nbmake-kernel=python3 --nbmake examples/**/*.ipynb || (docker logs app; false)
