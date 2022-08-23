@@ -50,7 +50,7 @@ jobs:
 
     - name: Check types with mypy
       run: |
-        rm -rf bastaionai/pb/remote_torch*
+        rm -rf bastionai/pb/remote_torch*
         mypy bastionai
         python -m pip install -e .
    
