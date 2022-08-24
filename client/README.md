@@ -16,7 +16,7 @@ $ pip install bastionai
 
 Execute the following command to install BastionAI locally.
 ```shell
-python setup.py install
+pip install -e .
 ```
 
 ## Usage
