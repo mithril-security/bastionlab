@@ -33,6 +33,7 @@ with Connection("localhost", 50051, default_secret=b"secret") as client:
     remote_dataloader = client.RemoteDataLoader(
         train_dataloader,
         test_dataloader,
+        0.2,
         "Dummy 1D Linear Regression Dataset (param is 2)",
     )
 

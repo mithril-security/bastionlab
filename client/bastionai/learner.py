@@ -16,6 +16,7 @@ class RemoteDataLoader:
         client: Client,
         train_dataloader: DataLoader,
         test_dataloader: DataLoader,
+        privacy_limit: float,
         description: Optional[str] = None,
         secret: Optional[bytes] = None,
     ) -> None:
@@ -27,6 +28,7 @@ class RemoteDataLoader:
             if description is not None
             else type(train_dataloader.dataset).__name__,
             secret if secret is not None else client.default_secret,
+            privacy_limit,
         )
         self.test_dataset_ref = client.send_dataset(
             test_dataloader.dataset,
@@ -34,6 +36,7 @@ class RemoteDataLoader:
             if description is not None
             else type(test_dataloader.dataset).__name__,
             secret if secret is not None else client.default_secret,
+            privacy_limit,
         )
         self.trace_input, _ = train_dataloader.dataset[0]
         self.client = client

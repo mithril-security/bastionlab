@@ -27,6 +27,8 @@ message Chunk {
     string description = 2;
     bytes secret = 3;
     ClientInfo client_info = 4;
+    // Privacy budget tracker.
+    float privacy_limit = 5;
 }
 
 message Empty {

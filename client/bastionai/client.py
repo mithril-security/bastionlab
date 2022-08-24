@@ -83,6 +83,7 @@ class Client:
         dataset: Dataset,
         description: str,
         secret: bytes,
+        privacy_limit: float,
         chunk_size=100_000_000,
         batch_size=1024,
     ) -> Reference:
@@ -108,6 +109,7 @@ class Client:
                 chunk_size=chunk_size,
                 batch_size=batch_size,
                 client_info=self.client_info,
+                privacy_limit=privacy_limit
             )
         )
 
