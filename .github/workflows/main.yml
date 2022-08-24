@@ -120,7 +120,8 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
-        run: cd client && python -m pip install -e .
+        run: |
+          cd client && cp -rf ../server/protos/ . && python -m pip install -e .
 
       # Get server
 
