@@ -10,9 +10,15 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-      - run: |
-          cd client
-          python3 -m pip install --upgrade build && python3 -m build
+          
+      - name: Building the client
+        if: ${{ steps.cache-wheels.outputs.cache-hit != 'true' }}
+        run: |
+          cd client && python -m pip wheel -w ./wheelhouse .
+        env:
+          CIBW_BUILD: "cp39-manylinux_*" # force python 3.9 and manylinux for this build
+          CIBW_ARCHS: x86_64 # ignore i686/x86 (32bit) for now, as well as arm and stuff
+
       - name: Publish package
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
