@@ -1,6 +1,6 @@
 # BastionAI Client
 
-BastionAI Client is a python library to create client applications for BastionAI Server (Mithril-security's confidential training server). 
+BastionAI Client is a python library to create client applications for BastionAI Server (Mithril Security's confidential training server). 
 
 **If you wish to know more about BastionAI, please have a look to the project [Github repository](https://github.com/mithril-security/bastionai/).**
 
