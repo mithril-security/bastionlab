@@ -59,4 +59,5 @@ setup(
         "typing-extensions==4.3.0",
         "tqdm==4.64.0",
     ],
+    package_data={'': ['protos']}
 )
