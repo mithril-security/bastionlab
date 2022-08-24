@@ -78,7 +78,7 @@ FROM base-build as base-cpu
 
 COPY . ./server
 RUN make -C server SERVER_DIR=/root/server init && \
-    make -C server LIBTORCH_PATH=/root/libtorch MODE=release SERVER_DIR=/root/server &&\
+    make -C server LIBTORCH_PATH=/root/libtorch MODE=release SERVER_DIR=/root/server compile &&\
     cp -r ./server/target/release/bastionai_app . &&\
     cp ./server/tools/config.toml . &&\
     cp -r ./server/bin/* .

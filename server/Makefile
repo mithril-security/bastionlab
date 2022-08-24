@@ -31,7 +31,7 @@ else
 endif
 
 
-all: compile
+all: init compile copy-bin
 
 init:
 # Create server tls config
