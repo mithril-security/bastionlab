@@ -74,6 +74,10 @@ with Connection("localhost", 50051, default_secret=b"") as client:
         model_description="1D Linear Regression Model",
         expand=False,
     )
+
+    remote_learner.fit(nb_epochs=100, eps=100.0)
+
+    lreg_model = remote_learner.get_model() # Gets trained model from BastionAI server.
 ```
 
 
