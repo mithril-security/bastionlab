@@ -56,7 +56,7 @@ def test_api(simple_dataset):
     client = Client(MockStub(), b"", client_info=ClientInfo(), progress=False)
 
     dl = DataLoader(simple_dataset, batch_size=2)
-    remote_dataloader = client.RemoteDataLoader(dl, dl)
+    remote_dataloader = client.RemoteDataLoader(dl, dl, 0.)
 
     t = tqdm([])
 

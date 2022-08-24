@@ -33,6 +33,7 @@ class Params(Module):
 
 EPS = 1e-8
 empty_client_info = ClientInfo()
+default_budget = 0.0
 
 
 def tensor_eq(a: Tensor, b: Tensor) -> bool:
@@ -94,6 +95,7 @@ def test_simple_dataset_serialization(chunk_size, batch_size, simple_dataset):
         chunk_size=chunk_size,
         batch_size=batch_size,
         client_info=empty_client_info,
+        privacy_limit=default_budget
     )
     ds2 = dataset_from_chunks(chunks)
 
@@ -118,6 +120,7 @@ def test_real_dataset_serialization(sms_spam_collection):
         secret=b"",
         batch_size=10_000,
         client_info=empty_client_info,
+        privacy_limit=default_budget
     )
     ds2 = dataset_from_chunks(chunks)
 
