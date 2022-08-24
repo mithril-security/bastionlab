@@ -10,10 +10,11 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          
+
       - name: Building the client
         if: ${{ steps.cache-wheels.outputs.cache-hit != 'true' }}
         run: |
+          ls -l server
           cd client && python -m pip wheel -w ./wheelhouse .
         env:
           CIBW_BUILD: "cp39-manylinux_*" # force python 3.9 and manylinux for this build
