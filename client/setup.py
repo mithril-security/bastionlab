@@ -39,7 +39,7 @@ class BuildPackage(build_py):
 
 setup(
     name="bastionai",
-    version="0.1.0",
+    version="0.1.1",
     packages=find_packages(),
     description="Client SDK for BastionAI Confidential AI Training.",
     long_description_content_type="text/markdown",
