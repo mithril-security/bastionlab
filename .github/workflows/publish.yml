@@ -17,12 +17,11 @@ jobs:
           ls -l server
           cd client && cp -rf ../server/protos/ . 
           python3 -m pip install --upgrade build && python3 -m build --wheel
-        env:
-          CIBW_BUILD: "cp39-manylinux_*" # force python 3.9 and manylinux for this build
-          CIBW_ARCHS: x86_64 # ignore i686/x86 (32bit) for now, as well as arm and stuff
+
 
       - name: Publish package
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
           repository_url: https://test.pypi.org/legacy/
+          packages_dir: client/dist
