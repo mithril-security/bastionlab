@@ -15,6 +15,7 @@ jobs:
         if: ${{ steps.cache-wheels.outputs.cache-hit != 'true' }}
         run: |
           ls -l server
+          cp -rf ../server/protos/ .
           cd client && python -m pip wheel -w ./wheelhouse .
         env:
           CIBW_BUILD: "cp39-manylinux_*" # force python 3.9 and manylinux for this build
