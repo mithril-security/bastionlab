@@ -21,7 +21,7 @@ pip install -e .
 
 ## Usage
 
-# Uploading a model and datasets to BastionAI
+### Uploading a model and datasets to BastionAI
 The snippet below sets up a **very simple** linear regression model and dataset to train the model with.
 ```python
 import torch
@@ -50,6 +50,8 @@ Y = torch.tensor([[0.2], [-2.0]])
 test_dataset = TensorDataset([X], Y)
 test_dataloader = DataLoader(test_dataset, batch_size=2)
 ```
+
+### Training a model on BastionAI
 
 With this snippet below, BastionAI is used to securely and remotely train the model. 
 
