@@ -52,7 +52,7 @@ class LinRegTest(unittest.TestCase):
 
             bastion_lreg_model = remote_learner.get_model()
         self.assertEqual(bastion_lreg_model, lreg_model)
-        
+
 
 def setUpModule():
     global train_dataloader, test_dataloader, lreg_model

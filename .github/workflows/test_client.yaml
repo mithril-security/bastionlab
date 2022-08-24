@@ -32,6 +32,7 @@ jobs:
       
     - name: Install bastionai
       run: |
+        cp -rf ../server/protos/ .
         python -m pip install -e .
     
     - name: Lint with flake8
@@ -52,7 +53,6 @@ jobs:
       run: |
         rm -rf bastionai/pb/remote_torch*
         mypy bastionai
-        python -m pip install -e .
    
 
 

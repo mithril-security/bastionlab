@@ -5,7 +5,7 @@ from setuptools.command.build_py import build_py
 import pkg_resources
 
 PROTO_FILES = ["remote_torch.proto"]
-PROTO_PATH = os.path.join(os.path.dirname(__file__), "../server/protos")
+PROTO_PATH = os.path.join(os.path.dirname(__file__), "protos")
 
 this_directory = Path(__file__).parent
 long_description = (this_directory / "README.md").read_text()
