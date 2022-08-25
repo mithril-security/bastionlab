@@ -126,6 +126,7 @@ service RemoteTorch {
     rpc AvailableDatasets(Empty) returns (References) {}
     rpc AvailableDevices(Empty) returns (Devices) {}
     rpc AvailableOptimizers(Empty) returns (Optimizers) {}
-    rpc Train (TrainConfig) returns (stream Metric) {}
-    rpc Test (TestConfig) returns (stream Metric) {}
+    rpc Train (TrainConfig) returns (Reference) {}
+    rpc Test (TestConfig) returns (Reference) {}
+    rpc GetMetric (Reference) returns (Metric) {}
 }

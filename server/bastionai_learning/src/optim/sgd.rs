@@ -11,19 +11,19 @@ use super::{initialize_statistics, Optimizer};
 /// It is a reimplementation of Pytorch's [SGD] in Rust.
 /// 
 /// [SGD]: https://pytorch.org/docs/stable/generated/torch.optim.SGD.html
-pub struct SGD {
+pub struct SGD<'a> {
     learning_rate: f64,
     weight_decay: f64,
     momentum: f64,
     dampening: f64,
     nesterov: bool,
     statistics: Vec<Option<Tensor>>,
-    pub parameters: Parameters,
+    pub parameters: Parameters<'a>,
 }
 
-impl SGD {
+impl<'a> SGD<'a> {
     /// Returns a new SGD optimizer to update given `parameters` using given `learning_rate`.
-    pub fn new(parameters: Parameters, learning_rate: f64) -> Self {
+    pub fn new(parameters: Parameters<'a>, learning_rate: f64) -> Self {
         SGD {
             learning_rate: learning_rate,
             weight_decay: 0.,
@@ -56,7 +56,7 @@ impl SGD {
     }
 }
 
-impl Optimizer for SGD {
+impl<'a> Optimizer for SGD<'a> {
     fn zero_grad(&mut self) -> Result<(), TchError> {
         self.parameters.zero_grad();
         Ok(())
