@@ -40,25 +40,15 @@ message TrainConfig {
     int32 epochs = 4;
     string device = 5;
     string metric = 6;
-
-    oneof privacy {
-        // Privacy parameters.
-        Empty standard = 7;
-        DpParameters differential_privacy = 8;
-    }
+    float eps = 7;
+    float max_grad_norm = 8;
+    float metric_eps = 9;
     
     oneof optimizer {
         // The type of optimizer to be used during training.
         // Currently, only SGD and Adam are supported.
-        SGD sgd = 9;
-        Adam adam = 10;
-    }
-
-    message DpParameters {
-        // Differential privacy parameters.
-
-        float max_grad_norm = 1;
-        float noise_multiplier = 2;
+        SGD sgd = 10;
+        Adam adam = 11;
     }
 
     message SGD {
@@ -89,11 +79,12 @@ message TestConfig {
     int32 batch_size = 3;
     string device = 4;
     string metric = 5;
+    float metric_eps = 6;
 }
 
 message References {
     repeated Reference list = 1;
-}  
+}
 
 message Accuracy {
     float value = 1;

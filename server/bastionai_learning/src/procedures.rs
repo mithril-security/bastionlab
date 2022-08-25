@@ -158,6 +158,7 @@ impl<'a> Iterator for Tester<'a> {
 /// A loss function with average statistics
 pub struct Metric {
     loss_fn: Box<dyn Fn(&PrivacyGuard<Tensor>, &PrivacyGuard<Tensor>) -> Result<PrivacyGuard<Tensor>, TchError> + Send>,
+    clipping: (f64, f64),
     value: Option<PrivacyGuard<Tensor>>,
     nb_samples: usize,
 }
@@ -165,29 +166,31 @@ pub struct Metric {
 impl Metric {
     /// Returns a `Metric` corresponding to given name, if not available raises an error.
     pub fn try_from_name(loss_name: &str) -> Result<Self, TchError> {
+        let (loss_fn, clipping): (Box<dyn Fn(&PrivacyGuard<Tensor>, &PrivacyGuard<Tensor>) -> Result<PrivacyGuard<Tensor>, TchError> + Send>, _) = match loss_name {
+            "accuracy" => (Box::new(|output, label| {
+                let prediction = output.f_argmax(-1, false)?;
+                prediction
+                    .f_sub(label)?
+                    .f_clamp(0.0, 1.0)?
+                    .f_sum(Kind::Float)
+            }), (0.0, 1.0)),
+            "l2" => (Box::new(|output, label| output.f_mse_loss(label, tch::Reduction::Mean)), (0.0, 10.0)),
+            "cross_entropy" => {
+                (Box::new(|output, label| {
+                    let weight: Option<Tensor> = None;
+                    output.f_cross_entropy_loss(label, weight, tch::Reduction::Mean, -100, 0.)
+                }), (0.0, 10.0))
+            }
+            s => {
+                return Err(TchError::FileFormat(String::from(format!(
+                    "Invalid loss name, unknown loss {}.",
+                    s
+                ))))
+            }
+        };
         Ok(Metric {
-            loss_fn: match loss_name {
-                "accuracy" => Box::new(|output, label| {
-                    let prediction = output.f_argmax(-1, false)?;
-                    prediction
-                        .f_sub(label)?
-                        .f_clamp(0.0, 1.0)?
-                        .f_sum(Kind::Float)
-                }),
-                "l2" => Box::new(|output, label| output.f_mse_loss(label, tch::Reduction::Mean)),
-                "cross_entropy" => {
-                    Box::new(|output, label| {
-                        let weight: Option<Tensor> = None;
-                        output.f_cross_entropy_loss(label, weight, tch::Reduction::Mean, -100, 0.)
-                    })
-                }
-                s => {
-                    return Err(TchError::FileFormat(String::from(format!(
-                        "Invalid loss name, unknown loss {}.",
-                        s
-                    ))))
-                }
-            },
+            loss_fn,
+            clipping,
             value: None,
             nb_samples: 0,
         })
@@ -212,7 +215,7 @@ impl Metric {
         // clip here
         // unwrap_or(0.0)
         match &self.value {
-            Some(x) => Ok(x.f_clone()?.get_private(budget)?.f_double_value(&[])? as f32),
+            Some(x) => Ok(x.f_clone()?.f_clamp(self.clipping.0, self.clipping.1)?.get_private(budget)?.f_double_value(&[])? as f32),
             None => Ok(0.0),
         }
     }

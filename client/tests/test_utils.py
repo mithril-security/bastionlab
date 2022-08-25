@@ -71,7 +71,7 @@ def test_data_wrapping(simple_dataset):
 ])
 def test_simple_dataset_serialization(chunk_size, batch_size, simple_dataset):
     ds1 = simple_dataset
-    chunks = serialize_dataset(ds1, "", b"", chunk_size, batch_size)
+    chunks = serialize_dataset(ds1, "", b"", chunk_size=chunk_size, batch_size=batch_size)
     ds2 = dataset_from_chunks(chunks)
 
     assert len(ds1) == len(ds2)

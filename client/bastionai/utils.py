@@ -1,5 +1,6 @@
 import io
 from typing import Callable, Iterator, List, Tuple, TypeVar, Optional
+from dataclasses import dataclass
 
 import torch
 from torch import Tensor
@@ -16,13 +17,32 @@ U = TypeVar("U")
 SIZE_LEN = 8
 
 
+class PrivacyBudget:
+    def into_float(self) -> float:
+        raise NotImplemented
+
+
+@dataclass
+class Private(PrivacyBudget):
+    value: float
+    def into_float(self) -> float:
+        return self.value
+
+
+@dataclass
+class NotPrivate(PrivacyBudget):
+    def into_float(self) -> float:
+        return -1.0
+
+
 class DataWrapper(Module):
-    def __init__(self, columns: List[Tensor], labels: Optional[Tensor]) -> None:
+    def __init__(self, columns: List[Tensor], labels: Optional[Tensor], privacy_limit: PrivacyBudget = NotPrivate()) -> None:
         super().__init__()
         for i, column in enumerate(columns):
             self.__setattr__(f"samples_{i}", Parameter(column, requires_grad=False))
         if labels is not None:
             self.labels = Parameter(labels, requires_grad=False)
+        self.privacy_limit = Parameter(torch.tensor([privacy_limit.into_float()]))
 
 
 class TensorDataset(Dataset):
@@ -54,7 +74,8 @@ def data_from_wrapper(wrapper: DataWrapper) -> Tuple[List[Tensor], Optional[Tens
                 opt_columns += [None] * (idx + 1 - len(opt_columns))
             opt_columns[idx] = param
         else:
-            raise Exception(f"Unknown field {name} in data wrapper")
+            if name not in ["privacy_limit"]:
+                raise Exception(f"Unknown field {name} in data wrapper")
     if len(opt_columns) == 0:
         raise Exception(f"Data wrapper must contain at least one column.")
     if any([x is None for x in opt_columns]):
@@ -99,9 +120,10 @@ def chunks(
     if len(chunk) > 0:
         yield cat_fn(chunk)
 
-
-def serialize_batch(data: Tuple[List[Tensor], Tensor], buff: io.BytesIO) -> None:
-    torch.jit.save(torch.jit.script(DataWrapper(*data)), buff)
+def serialize_batch(privacy_limit: PrivacyBudget = NotPrivate()) -> Callable[[Tuple[List[Tensor], Tensor], io.BytesIO], None]:
+    def inner(data: Tuple[List[Tensor], Tensor], buff: io.BytesIO) -> None:
+        torch.jit.save(torch.jit.script(DataWrapper(*data, privacy_limit)), buff)
+    return inner
 
 
 def stream_artifacts(
@@ -171,7 +193,7 @@ def unstream_artifacts(
 
 
 def data_chunks_generator(
-    stream: Iterator[bytes], description: str, secret: bytes
+    stream: Iterator[bytes], description: str, secret: bytes,
 ) -> Iterator[Chunk]:
     first = True
     for x in stream:
@@ -193,6 +215,7 @@ def serialize_dataset(
     dataset: Dataset,
     description: str,
     secret: bytes,
+    privacy_limit: PrivacyBudget = NotPrivate(),
     chunk_size=100_000_000,
     batch_size=1024,
 ) -> Iterator[Chunk]:
@@ -200,7 +223,7 @@ def serialize_dataset(
         stream_artifacts(
             chunks(iter(dataset), batch_size, cat_fn=make_batch),
             chunk_size,
-            serialization_fn=serialize_batch,
+            serialization_fn=serialize_batch(privacy_limit),
         ),
         description,
         secret,
@@ -236,42 +259,6 @@ def deserialize_weights_to_model(model: Module, chunks: Iterator[Chunk]) -> None
                 name_buf = []
 
         parent.__setattr__(name, torch.nn.Parameter(value))
-
-
-def metric_tqdm_with_epochs(metric_stream: Iterator[Metric], name: str):
-    def new_tqdm_bar(epoch: int, nb_epochs, nb_batches):
-        t = tqdm(
-            total=nb_batches,
-            unit="batch",
-            bar_format="{l_bar}{bar:20}{r_bar}",
-        )
-        t.set_description("Epoch {}/{} - train".format(epoch, nb_epochs))
-        return t
-
-    t = None
-    for metric in metric_stream:
-        if t is None:
-            t = new_tqdm_bar(1, metric.nb_epochs, metric.nb_batches)
-        t.update()
-        t.set_postfix(**{name: "{:.4f}".format(metric.value)})
-        if metric.batch == metric.nb_batches - 1:
-            t.close()
-            if metric.epoch < metric.nb_epochs - 1:
-                t = new_tqdm_bar(metric.epoch + 2, metric.nb_epochs, metric.nb_batches)
-
-
-def metric_tqdm(metric_stream: Iterator[Metric], name: str):
-    with tqdm(
-        metric_stream,
-        unit="batch",
-        bar_format="{l_bar}{bar:20}{r_bar}",
-    ) as t:
-        t.set_description("Test")
-
-        for metric in t:
-            if t.total is None:
-                t.total = metric.nb_batches
-            t.set_postfix(**{name: "{:.4f}".format(metric.value)})
 
 
 class MultipleOutputWrapper(Module):

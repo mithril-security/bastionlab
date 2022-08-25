@@ -64,14 +64,14 @@ impl<'a> Iterator for DatasetIter<'a> {
                 .iter()
                 .map(|input| {
                     PrivacyGuard::new(
-                        Tensor::stack(&input, 0),
+                        Tensor::f_stack(&input, 0).unwrap(),
                         BatchDependence::Independent(vec![batch_id]),
                         Arc::clone(&self.dataset.privacy_context),
                     )
                 })
                 .collect();
             let batch_labels = PrivacyGuard::new(
-                Tensor::stack(&batch_labels, 0),
+                Tensor::f_stack(&batch_labels, 0).unwrap(),
                 BatchDependence::Independent(vec![batch_id]),
                 Arc::clone(&self.dataset.privacy_context),
             );
@@ -114,6 +114,8 @@ impl TryFrom<SizedObjectsBytes> for Dataset {
     fn try_from(value: SizedObjectsBytes) -> Result<Self, Self::Error> {
         let mut samples_inputs: Vec<Option<Mutex<Tensor>>> = Vec::new();
         let mut labels: Option<Mutex<Tensor>> = None;
+        #[allow(unused_variables)]
+        let mut privacy_limit = PrivacyBudget::Private(0.0);
 
         for object in value {
             let data =
@@ -127,6 +129,17 @@ impl TryFrom<SizedObjectsBytes> for Dataset {
                         }
                         None => {
                             labels = Some(Mutex::new(tensor));
+                        }
+                    },
+                    "privacy_limit" => {
+                        let limit = tensor.f_double_value(&[])? as f32;
+                        #[allow(unused_assignments)]
+                        {
+                            privacy_limit = if limit < 0.0 {
+                                PrivacyBudget::NotPrivate
+                            } else {
+                                PrivacyBudget::Private(limit)
+                            };
                         }
                     },
                     s => {
@@ -159,12 +172,19 @@ impl TryFrom<SizedObjectsBytes> for Dataset {
             }
         }
         let labels = labels.unwrap();
-        let nb_samples = labels.lock().unwrap().size1()?;
+        let label_size = labels.lock().unwrap().size();
+        let nb_samples = if label_size.len() > 0 {
+            Ok(label_size[0])
+        } else {
+            Err(TchError::Kind(String::from(
+                "Labels tensor has no dimmensions, cannot infer dataset size.",
+            )))
+        }?;
         Ok(Dataset {
             samples_inputs: samples_inputs.into_iter().map(|opt| opt.unwrap()).collect(),
             labels,
             privacy_context: Arc::new(RwLock::new(PrivacyContext::new(
-                PrivacyBudget::Private(0.0),
+                privacy_limit,
                 nb_samples as usize,
             ))),
         })

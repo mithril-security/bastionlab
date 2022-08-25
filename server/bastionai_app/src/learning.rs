@@ -17,23 +17,36 @@ pub enum Run {
     Pending,
 }
 
-fn build_train_context<'a>(module: &'a mut Module, config: TrainConfig,) -> Result<(Forward<'a>, Box<dyn Optimizer + 'a>, procedures::Metric), TchError> {
-    let (forward, parameters) = match config
-            .privacy
-            .ok_or(TchError::FileFormat(String::from("Invalid privacy option")))?
-        {
-            train_config::Privacy::Standard(_) => module.parameters(),
-            train_config::Privacy::DifferentialPrivacy(train_config::DpParameters {
-                max_grad_norm,
-                noise_multiplier,
-            }) => module.private_parameters(
-                max_grad_norm,
-                noise_multiplier,
+fn build_shared_context(metric: &str, metric_eps: f32) -> Result<(procedures::Metric, PrivacyBudget), TchError> {
+    let metric = procedures::Metric::try_from_name(metric)?;
+    let metric_budget = if metric_eps < 0.0 {
+        PrivacyBudget::NotPrivate
+    } else {
+        PrivacyBudget::Private(metric_eps)
+    };
+
+    Ok((metric, metric_budget))
+}
+
+fn build_test_context<'a>(module: &'a Module, config: TestConfig) -> Result<(Forward<'a>, procedures::Metric, PrivacyBudget), TchError> {
+    let forward = module.forward_fn();
+    let (metric, metric_budget) = build_shared_context(&config.metric, config.metric_eps)?;
+
+    Ok((forward, metric, metric_budget))
+}
+
+fn build_train_context<'a>(module: &'a mut Module, config: TrainConfig,) -> Result<(Forward<'a>, Box<dyn Optimizer + 'a>, procedures::Metric, PrivacyBudget), TchError> {
+    let (forward, parameters) = if config.eps < 0.0 {
+            module.parameters()
+        } else {
+            module.private_parameters(
+                config.eps,
+                config.max_grad_norm,
                 LossType::Mean(config.batch_size as i64),
-            ),
+            )
         };
-        
-        let optimizer = match config
+
+        let optimizer = match config.clone()
             .optimizer
             .ok_or(TchError::FileFormat(String::from("Invalid optimizer")))?
         {
@@ -67,18 +80,18 @@ fn build_train_context<'a>(module: &'a mut Module, config: TrainConfig,) -> Resu
             ) as Box<dyn Optimizer + 'a>,
         };
         
-        let metric = procedures::Metric::try_from_name(&config.metric)?;
+        let (metric, metric_budget) = build_shared_context(&config.metric, config.metric_eps)?;
 
-        Ok((forward, optimizer, metric))
+        Ok((forward, optimizer, metric, metric_budget))
 }
 
-pub async fn module_train(
+pub fn module_train(
     module: Arc<RwLock<Module>>,
     dataset: Arc<RwLock<Dataset>>,
     run: Arc<RwLock<Run>>,
     config: TrainConfig,
     device: Device,
-) -> Result<(), Status> {
+) {
     tokio::spawn(async move {
         let epochs = config.epochs;
         let batch_size = config.batch_size;
@@ -86,8 +99,8 @@ pub async fn module_train(
         let dataset = dataset.read().unwrap();
         let module_ref = module.deref_mut();
         match tcherror_to_status(build_train_context(module_ref, config)) {
-            Ok((forward, optimizer, metric)) => {
-                let trainer = Trainer::new(forward, &dataset, optimizer, metric, PrivacyBudget::Private(0.0), device, epochs as usize, batch_size as usize);
+            Ok((forward, optimizer, metric, metric_budget)) => {
+                let trainer = Trainer::new(forward, &dataset, optimizer, metric, metric_budget, device, epochs as usize, batch_size as usize);
                 let nb_epochs = trainer.nb_epochs() as i32;
                 let nb_batches = trainer.nb_batches() as i32;
                 for res in trainer {
@@ -106,24 +119,22 @@ pub async fn module_train(
             Err(e) => *run.write().unwrap() = Run::Error(e),
         };
     });
-
-    Ok(())
 }
 
-pub async fn module_test(
+pub fn module_test(
     module: Arc<RwLock<Module>>,
     dataset: Arc<RwLock<Dataset>>,
     run: Arc<RwLock<Run>>,
     config: TestConfig,
     device: Device,
-) -> Result<(), Status> {
+) {
     tokio::spawn(async move {
         let module = module.write().unwrap();
         let dataset = dataset.read().unwrap();
-        let metric = tcherror_to_status(procedures::Metric::try_from_name(&config.metric));
-        match metric {
-            Ok(metric) => {
-                let tester = Tester::new(module.forward_fn(), &dataset, metric, PrivacyBudget::Private(0.0), device, config.batch_size as usize);
+        let batch_size = config.batch_size as usize;
+        match tcherror_to_status(build_test_context(&module, config)) {
+            Ok((forward, metric, metric_budget)) => {
+                let tester = Tester::new(forward, &dataset, metric, metric_budget, device, batch_size);
                 let nb_batches = tester.nb_batches() as i32;
                 for res in tester {
                     *run.write().unwrap() = match tcherror_to_status(res.map(|(batch, value)| Metric {
@@ -141,6 +152,4 @@ pub async fn module_test(
             Err(e) => *run.write().unwrap() = Run::Error(e),
         }
     });
-
-    Ok(())
 }

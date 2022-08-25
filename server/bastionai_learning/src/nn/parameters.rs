@@ -1,9 +1,7 @@
 use std::marker::PhantomData;
 
 use super::{module::DpSGDContext, Module};
-use crate::data::privacy_guard::{
-    compute_sigma, generate_noise_like, PrivacyBudget, PrivacyContext,
-};
+use crate::data::privacy_guard::{compute_sigma, generate_noise_like, PrivacyBudget};
 use std::sync::{Arc, RwLock};
 use tch::{nn::VarStore, IndexOp, TchError, Tensor};
 
@@ -172,10 +170,15 @@ impl<'a> Parameters<'a> {
                 let t = *steps as f32;
                 *steps += 1;
                 let delta = dp_sgd_context.read().unwrap().as_ref().unwrap().delta();
-                let batch_sampling_rate = dp_sgd_context.read().unwrap().as_ref().unwrap().batch_sampling_rate();
+                let batch_sampling_rate = dp_sgd_context
+                    .read()
+                    .unwrap()
+                    .as_ref()
+                    .unwrap()
+                    .batch_sampling_rate();
                 let budget_update = *eps * batch_sampling_rate * ((t + 1.0).sqrt() - t.sqrt());
                 let sigma = compute_sigma(*eps, delta, *max_grad_norm) as f64;
-                
+
                 if !dp_sgd_context
                     .read()
                     .unwrap()
@@ -194,7 +197,7 @@ impl<'a> Parameters<'a> {
                     per_param_norms.push(per_sample_grad.f_norm_scalaropt_dim(2, &dims, false)?);
                 }
                 let per_sample_norms =
-                    Tensor::f_stack(&per_param_norms, 1)?.f_norm_scalaropt_dim(2, &[1], false)?;
+                    Tensor::f_stack(&per_param_norms, 1).map_err(|e| TchError::Shape(format!("Failed to stack per-sample gradients, are you using a model with expanded weights? Initial error: {}", e)))?.f_norm_scalaropt_dim(2, &[1], false)?;
                 let max_grad_norm_t = Tensor::of_slice(&[*max_grad_norm as f32]);
                 let per_sample_clip_factor = max_grad_norm_t
                     .f_div(&per_sample_norms.f_add_scalar(1e-6)?)?

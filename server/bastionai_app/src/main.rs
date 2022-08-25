@@ -19,7 +19,7 @@ mod remote_torch {
 }
 use remote_torch::remote_torch_server::{RemoteTorch, RemoteTorchServer};
 use remote_torch::{
-    Chunk, Devices, Empty, Metric, Optimizers, Reference, References, TestConfig, TrainConfig,
+    Chunk, Devices, Empty, Metric, Optimizers, Reference, References, TestConfig, TrainConfig
 };
 
 mod storage;
@@ -184,7 +184,7 @@ impl RemoteTorch for BastionAIServer {
             .unwrap()
             .insert(identifier, Arc::new(RwLock::new(Run::Pending)));
         let run = Arc::clone(self.runs.read().unwrap().get(&identifier).unwrap());
-        module_train(module, dataset, run, config, device).await?;
+        module_train(module, dataset, run, config, device);
         Ok(Response::new(Reference {
             identifier: format!("{}", identifier),
             description: String::from(""),
@@ -227,7 +227,7 @@ impl RemoteTorch for BastionAIServer {
             .unwrap()
             .insert(identifier, Arc::new(RwLock::new(Run::Pending)));
         let run = Arc::clone(self.runs.read().unwrap().get(&identifier).unwrap());
-        module_test(module, dataset, run, config, device).await?;
+        module_test(module, dataset, run, config, device);
         Ok(Response::new(Reference {
             identifier: format!("{}", identifier),
             description: String::from(""),

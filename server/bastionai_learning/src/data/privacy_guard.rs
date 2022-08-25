@@ -24,7 +24,7 @@ pub(crate) fn generate_noise_like(tensor: &Tensor, std: f64) -> Result<Tensor, T
 }
 
 pub(crate) fn compute_sigma(eps: f32, delta: f32, l2_sensibility: f32) -> f32 {
-    l2_sensibility * (2.0 * (1.25 / delta).ln()).sqrt() / eps
+    l2_sensibility * (2.0 * (1.25 / delta).ln()).sqrt() / (eps + 1e-8)
 }
 
 fn independence_check<T: PartialEq>(a: &[T], b: &[T]) -> bool {
@@ -318,8 +318,15 @@ impl PrivacyGuard<Tensor> {
         })
     }
 
-    pub fn batch_size(&self) -> i64 {
-        self.value.size()[0]
+    pub fn batch_size(&self) -> Result<i64, TchError> {
+        let size = self.value.size();
+        if size.len() > 0 {
+            Ok(self.value.size()[0])
+        } else {
+            Err(TchError::Kind(String::from(
+                "Tensor has no dimmensions, cannot infer batch size.",
+            )))
+        }
     }
 
     pub fn backward(&self) {
@@ -339,7 +346,10 @@ impl PrivacyGuard<Tensor> {
         f_to(self: &Self, device: Device) -> Result<Self, TchError> where sensibility = self.sensibility, batch_dependence = self.batch_dependence.clone()
         f_view(self: &Self, s: impl Shape) -> Result<Self, TchError> where sensibility = Sensibility::Unknown, batch_dependence = self.batch_dependence.clone()
         f_double_value(self: &Self, idx: &[i64]) -> Result<PrivacyGuard<f64>, TchError> where sensibility = self.sensibility, batch_dependence = self.batch_dependence.clone()
-        f_clamp(self: &Self, min: f64, max: f64) -> Result<Self, TchError> where sensibility = Sensibility::LInfinity(max as f32), batch_dependence = self.batch_dependence.clone()
+        f_clamp(self: &Self, min: f64, max: f64) -> Result<Self, TchError> where sensibility = match self.sensibility {
+            Sensibility::LInfinity(s) => Sensibility::LInfinity(s.min(max.abs().max(min.abs()) as f32)),
+            _ => Sensibility::LInfinity(max.abs().max(min.abs()) as f32),
+        }, batch_dependence = self.batch_dependence.clone()
         f_sum(self: &Self, dtype: Kind) -> Result<Self, TchError> where sensibility = match self.sensibility {
             Sensibility::Unknown => Sensibility::Unknown,
             Sensibility::LInfinity(s) => Sensibility::LInfinity(match self.batch_dependence {
@@ -392,7 +402,7 @@ impl PrivacyGuard<()> {
     pub fn get_private(self, budget: PrivacyBudget) -> Result<(), TchError> {
         match budget {
             PrivacyBudget::NotPrivate => Ok(self.get_non_private()),
-            PrivacyBudget::Private(eps) => {
+            PrivacyBudget::Private(_) => {
                 if let Sensibility::Unknown = self.sensibility {
                     return Err(TchError::Kind(String::from(
                         "Unknown sensibility. Consider clipping prior to noising.",

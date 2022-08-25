@@ -11,11 +11,11 @@ from torch.nn import Module
 from torch.utils.data import Dataset
 
 from bastionai.utils import (
+    PrivacyBudget,
+    NotPrivate,
     TensorDataset,
     dataset_from_chunks,
     deserialize_weights_to_model,
-    metric_tqdm,
-    metric_tqdm_with_epochs,
     serialize_dataset,
     serialize_model,
 )
@@ -28,12 +28,10 @@ class Client:
     """BastionAI client class."""
 
     def __init__(
-        self, stub: RemoteTorchStub, default_secret: bytes, progress: bool = True
+        self, stub: RemoteTorchStub, default_secret: bytes,
     ) -> None:
         self.stub = stub
         self.default_secret = default_secret
-        self.progress = progress
-        self.log: List[Metric] = []
 
     def send_model(
         self, model: Module, description: str, secret: bytes, chunk_size=100_000_000
@@ -66,6 +64,7 @@ class Client:
         dataset: Dataset,
         description: str,
         secret: bytes,
+        privacy_limit: PrivacyBudget = NotPrivate(),
         chunk_size=100_000_000,
         batch_size=1024,
     ) -> Reference:
@@ -90,6 +89,7 @@ class Client:
                 secret=secret,
                 chunk_size=chunk_size,
                 batch_size=batch_size,
+                privacy_limit=privacy_limit,
             )
         )
 
@@ -152,30 +152,22 @@ class Client:
         """
         return self.stub.AvailableOptimizers(Empty()).list
 
-    def train(self, config: TrainConfig) -> None:
+    def train(self, config: TrainConfig) -> Reference:
         """Trains a model with `TrainConfig` configuration on BastionAI.
 
         Args:
             config (TrainConfig):
                 Training configuration to pass to BastionAI.
         """
-        train_progress = self.stub.Train(config)
-        if self.progress:
-            metric_tqdm_with_epochs(train_progress, name=f"loss ({config.metric})")
-        else:
-            self.log += list(train_progress)
+        return  self.stub.Train(config)
 
-    def test(self, config: TestConfig) -> None:
+    def test(self, config: TestConfig) -> Reference:
         """Tests a dataset on a model on BastionAI.
 
         Args:
             config (TestConfig): Configuration for testing on BastionAI.
         """
-        test_progress = self.stub.Test(config)
-        if self.progress:
-            metric_tqdm(test_progress, name=f"metric ({config.metric})")
-        else:
-            self.log += list(test_progress)
+        return self.stub.Test(config)
 
     def delete_dataset(self, ref: Reference) -> None:
         """Deletes a dataset with reference on BastionAI.
@@ -193,6 +185,9 @@ class Client:
             ref (Reference): BastionAI reference to dataset.
         """
         self.stub.DeleteModule(ref)
+    
+    def get_metric(self, run: Reference) -> Metric:
+        return self.stub.GetMetric(run)
 
     def RemoteDataLoader(self, *args, **kwargs) -> "RemoteDataLoader":
         from bastionai.learner import RemoteDataLoader

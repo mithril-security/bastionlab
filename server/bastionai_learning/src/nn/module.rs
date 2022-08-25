@@ -43,7 +43,7 @@ impl<'a> Forward<'a> {
         if inputs.len() > 0 {
             *self.dp_sgd_context.write().unwrap() = Some(DpSGDContext {
                 delta: inputs[0].map_context(|x| x.delta()),
-                batch_sampling_rate: inputs[0].batch_size() as f32 / inputs[0].map_context(|x| x.nb_samples()) as f32,
+                batch_sampling_rate: inputs[0].batch_size()? as f32 / inputs[0].map_context(|x| x.nb_samples()) as f32,
                 empty_guard: inputs[0].empty(),
             })
         }

@@ -33,33 +33,35 @@ class MockStub:
     def FetchDataset(self, ref: Reference) -> Iterator[Chunk]:
         return self.data_chunks[int(ref.identifier)]
     
-    def Train(self, config: TrainConfig) -> Iterator[Metric]:
-        return (Metric(value=0.0, batch=1, epoch=1, nb_epochs=1, nb_batches=1) for _ in range(1))
+    def Train(self, config: TrainConfig) -> Reference:
+        return Reference(identifier="0", description="run 0")
     
-    def Test(self, config: TrainConfig) -> Iterator[Metric]:
-        return (Metric(value=0.0, batch=1, epoch=1, nb_epochs=1, nb_batches=1) for _ in range(1))
+    def Test(self, config: TrainConfig) -> Reference:
+        return Reference(identifier="0", description="run 0")
+    
+    def GetMetric(self, run: Reference) -> Metric:
+        return Metric(value=0.0, batch=1, epoch=1, nb_epochs=1, nb_batches=1)
 
 
 def test_api(simple_dataset):
     model = DummyModule()
 
-    client = Client(MockStub(), b"", progress=False)
+    client = Client(MockStub(), b"")
 
     dl = DataLoader(simple_dataset, batch_size=2)
-    remote_dataloader = client.RemoteDataLoader(dl, dl)
-
-    t = tqdm([])
+    remote_dataloader = client.RemoteDataLoader(dl, dl, privacy_limit=Private(400.0))
 
     remote_learner = client.RemoteLearner(
         model,
         remote_dataloader,
         metric="l2",
         expand=False,
+        progress=False
     )
 
-    remote_learner.fit(nb_epochs=100, eps=100.0)
+    remote_learner.fit(nb_epochs=100, eps=Private(20.0))
     remote_learner.test()
-    assert client.log == [Metric(value=0.0, batch=1, epoch=1, nb_epochs=1, nb_batches=1) for _ in range(1)] * 2
+    assert remote_learner.log == [Metric(value=0.0, batch=1, epoch=1, nb_epochs=1, nb_batches=1) for _ in range(1)] * 2
 
     remote_learner.model = DummyModule()
     assert not module_eq(model, remote_learner.model, remote_dataloader.trace_input)
