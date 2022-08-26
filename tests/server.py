@@ -7,7 +7,7 @@ from time import time as now, sleep
 import atexit
 
 server_process = None
-server_name = "server"
+server_name = "bastionai_app"
 
 
 def launch_server():
