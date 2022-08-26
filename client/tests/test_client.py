@@ -6,10 +6,12 @@ from bastionai.client import Client
 from test_utils import Params, DummyModule, module_eq, simple_dataset
 from torch.utils.data import DataLoader
 
+
 class MockStub:
     def __init__(self):
         self.data_chunks = []
         self.counter = 0
+        self.client_info = ClientInfo()
 
     def _store(self, chunks: Iterator[Chunk]) -> Reference:
         self.data_chunks.append(chunks)
@@ -21,15 +23,15 @@ class MockStub:
         model = list(unstream_artifacts(
             (chunk.data for chunk in chunks), deserialization_fn=torch.jit.load
         ))[0]
-        chunks = serialize_model(Params(model), "", "", b"")
+        chunks = serialize_model(Params(model), "", "", b"", self.client_info)
         return self._store(chunks)
-    
+
     def SendDataset(self, chunks: Iterator[Chunk]) -> Reference:
         return self._store(chunks)
-    
+
     def FetchModule(self, ref: Reference) -> Iterator[Chunk]:
         return self.data_chunks[int(ref.identifier)]
-    
+
     def FetchDataset(self, ref: Reference) -> Iterator[Chunk]:
         return self.data_chunks[int(ref.identifier)]
     
@@ -46,7 +48,7 @@ class MockStub:
 def test_api(simple_dataset):
     model = DummyModule()
 
-    client = Client(MockStub(), b"")
+    client = Client(MockStub(), b"", client_info=ClientInfo())
 
     dl = DataLoader(simple_dataset, batch_size=2)
     remote_dataloader = client.RemoteDataLoader(dl, dl, privacy_limit=Private(344.0))

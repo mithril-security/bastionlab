@@ -1,3 +1,7 @@
+import getpass
+from hashlib import sha256
+import platform
+import socket
 import ssl
 from bastionai.optimizer_config import *
 from dataclasses import dataclass
@@ -5,7 +9,9 @@ from dataclasses import dataclass
 from typing import Any, List, TYPE_CHECKING
 
 import grpc  # type: ignore [import]
-from bastionai.pb.remote_torch_pb2 import Empty, Metric, Reference, TestConfig, TrainConfig  # type: ignore [import]
+
+from bastionai.pb.remote_torch_pb2 import Empty, Metric, Reference, TestConfig, TrainConfig, ClientInfo  # type: ignore [import]
+
 from bastionai.pb.remote_torch_pb2_grpc import RemoteTorchStub  # type: ignore [import]
 from torch.nn import Module
 from torch.utils.data import Dataset
@@ -21,6 +27,8 @@ from bastionai.utils import (
     serialize_model,
 )
 
+from bastionai.version import __version__ as app_version
+
 if TYPE_CHECKING:
     from bastionai.learner import RemoteLearner, RemoteDataLoader
 
@@ -31,10 +39,12 @@ class Client:
     def __init__(
         self,
         stub: RemoteTorchStub,
-        default_secret: bytes = b"",  # we don't use the secrets yet
+        client_info: ClientInfo,
+        default_secret: bytes = b""
     ) -> None:
         self.stub = stub
         self.default_secret = default_secret
+        self.client_info = client_info
 
     def send_model(
         self,
@@ -68,6 +78,7 @@ class Client:
                 description=description,
                 secret=secret if secret is not None else self.default_secret,
                 chunk_size=chunk_size,
+                client_info=self.client_info,
             )
         )
 
@@ -104,6 +115,7 @@ class Client:
                 chunk_size=chunk_size,
                 batch_size=batch_size,
                 privacy_limit=privacy_limit,
+                client_info=self.client_info,
             )
         )
 
@@ -225,6 +237,18 @@ class Connection:
     server_name: str = "bastionai-srv"
 
     def __enter__(self) -> Client:
+        uname = platform.uname()
+        client_info = ClientInfo(
+            uid=sha256((socket.gethostname() + "-" + getpass.getuser()).encode("utf-8"))
+            .digest()
+            .hex(),
+            platform_name=uname.system,
+            platform_arch=uname.machine,
+            platform_version=uname.version,
+            platform_release=uname.release,
+            user_agent="bastionai_python",
+            user_agent_version=app_version,
+        )
         connection_options = (("grpc.ssl_target_name_override", self.server_name),)
         server_cert = ssl.get_server_certificate((self.host, self.port))
 
@@ -236,7 +260,7 @@ class Connection:
         self.channel = grpc.secure_channel(
             server_target, server_cred, options=connection_options
         )
-        return Client(RemoteTorchStub(self.channel), self.default_secret)
+        return Client(RemoteTorchStub(self.channel), self.default_secret, client_info)
 
     def __exit__(self, exc_type: Any, exc_value: Any, exc_traceback: Any) -> None:
         self.channel.close()

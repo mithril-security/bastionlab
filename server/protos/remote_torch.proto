@@ -28,6 +28,7 @@ message Chunk {
     string name = 2;
     string description = 3;
     bytes secret = 4;
+    ClientInfo client_info = 5;
 }
 
 message Empty {
@@ -107,6 +108,16 @@ message Metric {
     int32 epoch = 4;
     int32 nb_epochs = 5;
     int32 nb_batches = 6;
+}
+
+message ClientInfo {
+    string uid = 1;
+    string platform_name = 2;
+    string platform_arch = 3;
+    string platform_version = 4;
+    string platform_release = 5;
+    string user_agent = 6;
+    string user_agent_version = 7;
 }
 
 service RemoteTorch {

@@ -1,12 +1,16 @@
+use super::ClientInfo;
 use crate::remote_torch::{train_config, Metric, TestConfig, TrainConfig};
 use crate::utils::tcherror_to_status;
+use crate::telemetry::{self, TelemetryEventProps};
 use bastionai_learning::data::privacy_guard::PrivacyBudget;
 use bastionai_learning::data::Dataset;
 use bastionai_learning::nn::{Forward, LossType, Module};
 use bastionai_learning::optim::{Adam, Optimizer, SGD};
 use bastionai_learning::procedures::{self, Tester, Trainer};
+use log::info;
 use std::ops::DerefMut;
 use std::sync::{Arc, RwLock};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tch::{Device, TchError};
 use tonic::Status;
 
@@ -132,8 +136,14 @@ pub fn module_train(
     run: Arc<RwLock<Run>>,
     config: TrainConfig,
     device: Device,
+    model_client_info: Arc<(String, Option<ClientInfo>)>,
+    dataset_client_info: Arc<(String, Option<ClientInfo>)>,
 ) {
     tokio::spawn(async move {
+        let start_time = Instant::now();
+        let (model_hash, client_info) = &*model_client_info;
+        let (dataset_hash, _) = &*dataset_client_info;
+
         let epochs = config.epochs;
         let batch_size = config.batch_size;
         let mut module = module.write().unwrap();
@@ -152,6 +162,19 @@ pub fn module_train(
                 );
                 let nb_epochs = trainer.nb_epochs() as i32;
                 let nb_batches = trainer.nb_batches() as i32;
+
+                telemetry::add_event(
+                    TelemetryEventProps::TrainerLog {
+                        log_type: Some("start_training".to_string()),
+                        model_hash: Some(model_hash.clone()),
+                        dataset_hash: Some(dataset_hash.clone()),
+                        time: SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap()
+                            .as_millis(),
+                    },
+                    client_info.clone(),
+                );
                 for res in trainer {
                     *run.write().unwrap() =
                         match tcherror_to_status(res.map(|(epoch, batch, value, std)| Metric {
@@ -166,6 +189,23 @@ pub fn module_train(
                             Err(e) => Run::Error(e),
                         };
                 }
+                telemetry::add_event(
+                    TelemetryEventProps::TrainerLog {
+                        log_type: Some("end_training".to_string()),
+                        model_hash: Some(model_hash.clone()),
+                        dataset_hash: Some(dataset_hash.clone()),
+                        time: SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap()
+                            .as_millis(),
+                    },
+                    client_info.clone(),
+                );
+                info!(
+                target: "BastionAI",
+                            "Model trained successfully in {}ms",
+                            start_time.elapsed().as_millis()
+                        );
             }
             Err(e) => *run.write().unwrap() = Run::Error(e),
         };
@@ -178,6 +218,8 @@ pub fn module_test(
     run: Arc<RwLock<Run>>,
     config: TestConfig,
     device: Device,
+    model_client_info: Arc<(String, Option<ClientInfo>)>,
+    dataset_client_info: Arc<(String, Option<ClientInfo>)>,
 ) {
     tokio::spawn(async move {
         let module = module.write().unwrap();
@@ -188,6 +230,22 @@ pub fn module_test(
                 let tester =
                     Tester::new(forward, &dataset, metric, metric_budget, device, batch_size);
                 let nb_batches = tester.nb_batches() as i32;
+                let (model_hash, client_info) = &*model_client_info;
+                let (dataset_hash, _) = &*dataset_client_info;
+
+                let start_time = Instant::now();
+                telemetry::add_event(
+                    TelemetryEventProps::TrainerLog {
+                        log_type: Some("start_testing".to_string()),
+                        model_hash: Some(model_hash.clone()),
+                        dataset_hash: Some(dataset_hash.clone()),
+                        time: SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap()
+                            .as_millis(),
+                    },
+                    client_info.clone(),
+                );
                 for res in tester {
                     *run.write().unwrap() =
                         match tcherror_to_status(res.map(|(batch, value, std)| Metric {
@@ -202,6 +260,23 @@ pub fn module_test(
                             Err(e) => Run::Error(e),
                         };
                 }
+                telemetry::add_event(
+                    TelemetryEventProps::TrainerLog {
+                        log_type: Some("end_testing".to_string()),
+                        model_hash: Some(model_hash.clone()),
+                        dataset_hash: Some(dataset_hash.clone()),
+                        time: SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap()
+                            .as_millis(),
+                    },
+                    client_info.clone(),
+                );
+                info!(
+                target: "BastionAI",
+                            "Model tested successfully in {}ms",
+                            start_time.elapsed().as_millis()
+                        );
             }
             Err(e) => *run.write().unwrap() = Run::Error(e),
         }
