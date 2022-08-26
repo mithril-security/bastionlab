@@ -106,6 +106,18 @@ class Client:
             Reference:
                 BastionAI reference object
         """
+        list(
+            serialize_dataset(
+                dataset,
+                name=name,
+                description=description,
+                secret=secret if secret is not None else self.default_secret,
+                chunk_size=chunk_size,
+                batch_size=batch_size,
+                privacy_limit=privacy_limit,
+                client_info=self.client_info,
+            )
+        )
         return self.stub.SendDataset(
             serialize_dataset(
                 dataset,

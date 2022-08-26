@@ -42,13 +42,13 @@ class MockStub:
         return Reference(identifier="0", description="run 0")
     
     def GetMetric(self, run: Reference) -> Metric:
-        return Metric(value=0.0, batch=1, epoch=1, nb_epochs=1, nb_batches=1)
+        return Metric(value=0.0, batch=0, epoch=0, nb_epochs=1, nb_batches=1)
 
 
 def test_api(simple_dataset):
     model = DummyModule()
 
-    client = Client(MockStub(), b"", client_info=ClientInfo())
+    client = Client(MockStub(), client_info=ClientInfo())
 
     dl = DataLoader(simple_dataset, batch_size=2)
     remote_dataloader = client.RemoteDataLoader(dl, dl, privacy_limit=Private(344.0))
@@ -63,7 +63,7 @@ def test_api(simple_dataset):
 
     remote_learner.fit(nb_epochs=100, eps=Private(142.0))
     remote_learner.test()
-    assert remote_learner.log == [Metric(value=0.0, batch=1, epoch=1, nb_epochs=1, nb_batches=1) for _ in range(1)] * 2
+    assert remote_learner.log == [Metric(value=0.0, batch=0, epoch=0, nb_epochs=1, nb_batches=1)] * 2
 
     remote_learner.model = DummyModule()
     assert not module_eq(model, remote_learner.model, remote_dataloader.trace_input)
