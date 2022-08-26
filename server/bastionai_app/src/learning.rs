@@ -1,39 +1,90 @@
 use super::ClientInfo;
 use crate::remote_torch::{train_config, Metric, TestConfig, TrainConfig};
-use crate::telemetry::{self, TelemetryEventProps};
 use crate::utils::tcherror_to_status;
+use crate::telemetry::{self, TelemetryEventProps};
+use bastionai_learning::data::privacy_guard::PrivacyBudget;
 use bastionai_learning::data::Dataset;
-use bastionai_learning::nn::{LossType, Module};
+use bastionai_learning::nn::{Forward, LossType, Module};
 use bastionai_learning::optim::{Adam, Optimizer, SGD};
-use bastionai_learning::procedures;
+use bastionai_learning::procedures::{self, Tester, Trainer};
 use log::info;
+use std::ops::DerefMut;
 use std::sync::{Arc, RwLock};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tch::{Device, TchError};
-use tokio::sync::mpsc;
-use tokio_stream::wrappers::ReceiverStream;
-use tonic::{Response, Status};
+use tonic::Status;
 
-fn build_train_context(
-    module: Arc<RwLock<Module>>,
+#[derive(Debug)]
+pub enum Run {
+    Ok(Metric),
+    Error(Status),
+    Pending,
+}
+
+fn build_shared_context(
+    metric: &str,
+    metric_eps: f32,
+    batch_size: i32,
+    dataset_size: usize,
+    nb_epochs: i32,
+) -> Result<(procedures::Metric, PrivacyBudget), TchError> {
+    let total_nb_batches = dataset_size as i32 / batch_size * nb_epochs;
+    println!("total batches: {}, dataset size: {}, batch_size: {}, epochs: {}", total_nb_batches, dataset_size, batch_size, nb_epochs);
+    let metric = procedures::Metric::try_from_name(metric)?;
+    let metric_budget = if metric_eps < 0.0 {
+        PrivacyBudget::NotPrivate
+    } else {
+        PrivacyBudget::Private(metric_eps / total_nb_batches as f32)
+    };
+
+    Ok((metric, metric_budget))
+}
+
+fn build_test_context<'a>(
+    module: &'a Module,
+    dataset: &Dataset,
+    config: TestConfig,
+) -> Result<(Forward<'a>, procedures::Metric, PrivacyBudget), TchError> {
+    let forward = module.forward_fn();
+    let (metric, metric_budget) = build_shared_context(
+        &config.metric,
+        config.metric_eps,
+        config.batch_size,
+        dataset.len(),
+        1,
+    )?;
+
+    println!("metric_budget: {:?}", metric_budget);
+    Ok((forward, metric, metric_budget))
+}
+
+fn build_train_context<'a>(
+    module: &'a mut Module,
+    dataset: &Dataset,
     config: TrainConfig,
-) -> Result<(Box<dyn Optimizer + Send>, procedures::Metric), TchError> {
-    let parameters = match config
-        .privacy
-        .ok_or(TchError::FileFormat(String::from("Invalid privacy option")))?
-    {
-        train_config::Privacy::Standard(_) => module.read().unwrap().parameters(),
-        train_config::Privacy::DifferentialPrivacy(train_config::DpParameters {
-            max_grad_norm,
-            noise_multiplier,
-        }) => module.read().unwrap().private_parameters(
-            max_grad_norm as f64,
-            noise_multiplier as f64,
+) -> Result<
+    (
+        Forward<'a>,
+        Box<dyn Optimizer + 'a>,
+        procedures::Metric,
+        PrivacyBudget,
+    ),
+    TchError,
+> {
+    let q = config.batch_size as f32 / dataset.len() as f32;
+    let t = config.epochs as f32 / q;
+    let (forward, parameters) = if config.eps < 0.0 {
+        module.parameters()
+    } else {
+        module.private_parameters(
+            config.eps / (q * t.sqrt()),
+            config.max_grad_norm,
             LossType::Mean(config.batch_size as i64),
-        ),
+        )
     };
 
     let optimizer = match config
+        .clone()
         .optimizer
         .ok_or(TchError::FileFormat(String::from("Invalid optimizer")))?
     {
@@ -49,7 +100,7 @@ fn build_train_context(
                 .momentum(momentum as f64)
                 .dampening(dampening as f64)
                 .nesterov(nesterov),
-        ) as Box<dyn Optimizer + Send>,
+        ) as Box<dyn Optimizer + 'a>,
         train_config::Optimizer::Adam(train_config::Adam {
             learning_rate,
             beta_1,
@@ -64,40 +115,48 @@ fn build_train_context(
                 .epsilon(epsilon as f64)
                 .weight_decay(weight_decay as f64)
                 .amsgrad(amsgrad),
-        ) as Box<dyn Optimizer + Send>,
+        ) as Box<dyn Optimizer + 'a>,
     };
 
-    let metric = procedures::Metric::try_from_name(&config.metric)?;
+    let (metric, metric_budget) = build_shared_context(
+        &config.metric,
+        config.metric_eps,
+        config.batch_size,
+        dataset.len(),
+        config.epochs,
+    )?;
 
-    Ok((optimizer, metric))
+    println!("budget: {:?}, metric_budget: {:?}", config.eps / (q * t.sqrt()), metric_budget);
+    Ok((forward, optimizer, metric, metric_budget))
 }
 
-pub async fn stream_module_train(
+pub fn module_train(
     module: Arc<RwLock<Module>>,
     dataset: Arc<RwLock<Dataset>>,
+    run: Arc<RwLock<Run>>,
     config: TrainConfig,
     device: Device,
-    model_client_info: Arc<(String, Option<ClientInfo>)>,
-    dataset_client_info: Arc<(String, Option<ClientInfo>)>,
-) -> Response<ReceiverStream<Result<Metric, Status>>> {
-    let (tx, rx) = mpsc::channel(1);
+    model_hash: String,
+    dataset_hash: String,
+    client_info: Option<ClientInfo>,
+) {
     tokio::spawn(async move {
+        let start_time = Instant::now();
         let epochs = config.epochs;
         let batch_size = config.batch_size;
-        let start_time = Instant::now();
-        let (model_hash, client_info) = &*model_client_info;
-        let (dataset_hash, _) = &*dataset_client_info;
-
-        match tcherror_to_status(build_train_context(Arc::clone(&module), config)) {
-            Ok((optimizer, metric)) => {
-                let trainer = Module::train(
-                    module,
-                    dataset,
+        let mut module = module.write().unwrap();
+        let dataset = dataset.read().unwrap();
+        match tcherror_to_status(build_train_context(&mut module, &dataset, config)) {
+            Ok((forward, optimizer, metric, metric_budget)) => {
+                let trainer = Trainer::new(
+                    forward,
+                    &dataset,
                     optimizer,
                     metric,
+                    metric_budget,
+                    device,
                     epochs as usize,
                     batch_size as usize,
-                    device,
                 );
                 let nb_epochs = trainer.nb_epochs() as i32;
                 let nb_batches = trainer.nb_batches() as i32;
@@ -115,26 +174,30 @@ pub async fn stream_module_train(
                     client_info.clone(),
                 );
                 for res in trainer {
-                    let res = tcherror_to_status(res.map(|(epoch, batch, value)| Metric {
-                        epoch,
-                        batch,
-                        value,
-                        nb_epochs,
-                        nb_batches,
-                    }));
-                    tx.send(res).await.unwrap(); // Fix this
+                    *run.write().unwrap() =
+                        match tcherror_to_status(res.map(|(epoch, batch, value, std)| Metric {
+                            epoch,
+                            batch,
+                            value,
+                            nb_epochs,
+                            nb_batches,
+                            uncertainty: 2.0 * std,
+                        })) {
+                            Ok(m) => Run::Ok(m),
+                            Err(e) => Run::Error(e),
+                        };
                 }
                 telemetry::add_event(
                     TelemetryEventProps::TrainerLog {
                         log_type: Some("end_training".to_string()),
-                        model_hash: Some(model_hash.clone()),
-                        dataset_hash: Some(dataset_hash.clone()),
+                        model_hash: Some(model_hash),
+                        dataset_hash: Some(dataset_hash),
                         time: SystemTime::now()
                             .duration_since(UNIX_EPOCH)
                             .unwrap()
                             .as_millis(),
                     },
-                    client_info.clone(),
+                    client_info,
                 );
                 info!(
                 target: "BastionAI",
@@ -142,30 +205,30 @@ pub async fn stream_module_train(
                             start_time.elapsed().as_millis()
                         );
             }
-            Err(e) => tx.send(Err(e)).await.unwrap(), // Fix this
-        }
+            Err(e) => *run.write().unwrap() = Run::Error(e),
+        };
     });
-
-    Response::new(ReceiverStream::new(rx))
 }
-pub async fn stream_module_test(
+
+pub fn module_test(
     module: Arc<RwLock<Module>>,
     dataset: Arc<RwLock<Dataset>>,
+    run: Arc<RwLock<Run>>,
     config: TestConfig,
     device: Device,
-    model_client_info: Arc<(String, Option<ClientInfo>)>,
-    dataset_client_info: Arc<(String, Option<ClientInfo>)>,
-) -> Response<ReceiverStream<Result<Metric, Status>>> {
-    let (tx, rx) = mpsc::channel(1);
+    model_hash: String,
+    dataset_hash: String,
+    client_info: Option<ClientInfo>,
+) {
     tokio::spawn(async move {
-        let metric = tcherror_to_status(procedures::Metric::try_from_name(&config.metric));
-        match metric {
-            Ok(metric) => {
+        let module = module.write().unwrap();
+        let dataset = dataset.read().unwrap();
+        let batch_size = config.batch_size as usize;
+        match tcherror_to_status(build_test_context(&module, &dataset, config)) {
+            Ok((forward, metric, metric_budget)) => {
                 let tester =
-                    Module::test(module, dataset, metric, config.batch_size as usize, device);
+                    Tester::new(forward, &dataset, metric, metric_budget, device, batch_size);
                 let nb_batches = tester.nb_batches() as i32;
-                let (model_hash, client_info) = &*model_client_info;
-                let (dataset_hash, _) = &*dataset_client_info;
 
                 let start_time = Instant::now();
                 telemetry::add_event(
@@ -181,26 +244,30 @@ pub async fn stream_module_test(
                     client_info.clone(),
                 );
                 for res in tester {
-                    let res = tcherror_to_status(res.map(|(batch, value)| Metric {
-                        epoch: 0,
-                        batch,
-                        value,
-                        nb_epochs: 1,
-                        nb_batches,
-                    }));
-                    tx.send(res).await.unwrap(); // Fix this
+                    *run.write().unwrap() =
+                        match tcherror_to_status(res.map(|(batch, value, std)| Metric {
+                            epoch: 0,
+                            batch,
+                            value,
+                            nb_epochs: 1,
+                            nb_batches,
+                            uncertainty: 2.0 * std,
+                        })) {
+                            Ok(m) => Run::Ok(m),
+                            Err(e) => Run::Error(e),
+                        };
                 }
                 telemetry::add_event(
                     TelemetryEventProps::TrainerLog {
                         log_type: Some("end_testing".to_string()),
-                        model_hash: Some(model_hash.clone()),
-                        dataset_hash: Some(dataset_hash.clone()),
+                        model_hash: Some(model_hash),
+                        dataset_hash: Some(dataset_hash),
                         time: SystemTime::now()
                             .duration_since(UNIX_EPOCH)
                             .unwrap()
                             .as_millis(),
                     },
-                    client_info.clone(),
+                    client_info,
                 );
                 info!(
                 target: "BastionAI",
@@ -208,9 +275,7 @@ pub async fn stream_module_test(
                             start_time.elapsed().as_millis()
                         );
             }
-            Err(e) => tx.send(Err(e)).await.unwrap(), // Fix this
+            Err(e) => *run.write().unwrap() = Run::Error(e),
         }
     });
-
-    Response::new(ReceiverStream::new(rx))
 }

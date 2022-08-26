@@ -8,7 +8,7 @@ use super::{initialize_statistics, Optimizer};
 /// This is a reimplementation of Pytorch's [Adam] in Rust.
 /// 
 /// [Adam]: https://pytorch.org/docs/stable/generated/torch.optim.Adam.html
-pub struct Adam {
+pub struct Adam<'a> {
     learning_rate: f64,
     beta_1: f64,
     beta_2: f64,
@@ -19,11 +19,11 @@ pub struct Adam {
     v: Vec<Option<Tensor>>,
     v_hat_max: Vec<Option<Tensor>>,
     t: i32,
-    pub parameters: Parameters,
+    pub parameters: Parameters<'a>,
 }
 
-impl Adam {
-    pub fn new(parameters: Parameters, learning_rate: f64) -> Self {
+impl<'a> Adam<'a> {
+    pub fn new(parameters: Parameters<'a>, learning_rate: f64) -> Self {
         Adam {
             learning_rate: learning_rate,
             beta_1: 0.9,
@@ -60,7 +60,7 @@ impl Adam {
     }
 }
 
-impl Optimizer for Adam {
+impl<'a> Optimizer for Adam<'a> {
     fn zero_grad(&mut self) -> Result<(), TchError> {
         self.parameters.zero_grad();
         Ok(())

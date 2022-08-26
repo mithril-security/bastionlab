@@ -1,17 +1,53 @@
-use tch::Tensor;
-use tch::{TrainableCModule, nn::VarStore, TchError, Device};
 use std::sync::{Arc, RwLock};
-use super::{Parameters, LossType};
-use crate::procedures::{ModuleTrainer, ModuleTester, Metric};
-use crate::data::Dataset;
-use crate::optim::Optimizer;
-use crate::serialization::SizedObjectsBytes;
 
-pub enum Privacy {
-    Standard,
-    DifferentialPrivacy {
-        max_grad_norm: f64,
-        noise_multiplier: f64,
+use super::{LossType, Parameters};
+use crate::data::privacy_guard::PrivacyGuard;
+use crate::serialization::SizedObjectsBytes;
+use tch::Tensor;
+use tch::{nn::VarStore, Device, TchError, TrainableCModule};
+
+#[derive(Debug, Clone)]
+pub struct DpSGDContext {
+    delta: f32,
+    batch_sampling_rate: f32,
+    empty_guard: PrivacyGuard<()>,
+}
+
+impl DpSGDContext {
+    pub fn delta(&self) -> f32 {
+        self.delta
+    }
+    pub fn batch_sampling_rate(&self) -> f32 {
+        self.batch_sampling_rate
+    }
+    pub fn empty_guard(&self) -> &PrivacyGuard<()> {
+        &self.empty_guard
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Forward<'a> {
+    c_module: &'a TrainableCModule,
+    dp_sgd_context: Arc<RwLock<Option<DpSGDContext>>>,
+}
+
+impl<'a> Forward<'a> {
+    pub(crate) fn forward_inner(&self, inputs: &[Tensor]) -> Result<Tensor, TchError> {
+        self.c_module.forward_ts(inputs)
+    }
+
+    pub fn forward(
+        &self,
+        inputs: Vec<PrivacyGuard<Tensor>>,
+    ) -> Result<PrivacyGuard<Tensor>, TchError> {
+        if inputs.len() > 0 {
+            *self.dp_sgd_context.write().unwrap() = Some(DpSGDContext {
+                delta: inputs[0].map_context(|x| x.delta()),
+                batch_sampling_rate: inputs[0].batch_size()? as f32 / inputs[0].map_context(|x| x.nb_samples()) as f32,
+                empty_guard: inputs[0].empty(),
+            })
+        }
+        PrivacyGuard::apply_forward(self.clone(), inputs)
     }
 }
 
@@ -25,68 +61,64 @@ pub enum Privacy {
 pub struct Module {
     c_module: TrainableCModule,
     var_store: VarStore,
+    dp_sgd_context: Arc<RwLock<Option<DpSGDContext>>>,
 }
 
 impl Module {
-    pub fn forward(&self, inputs: &[Tensor]) -> Result<Tensor, TchError> {
-        self.c_module.forward_ts(inputs)
+    pub fn load_from_file(file_path: &str, device: Device) -> Result<Self, TchError> {
+        let var_store = VarStore::new(device);
+        let c_module = TrainableCModule::load(file_path, var_store.root())?;
+        Ok(Module {
+            c_module,
+            var_store,
+            dp_sgd_context: Arc::new(RwLock::new(None)),
+        })
+    }
+    pub fn forward_fn<'a>(&'a self) -> Forward<'a> {
+        Forward {
+            c_module: &self.c_module,
+            dp_sgd_context: Arc::clone(&self.dp_sgd_context),
+        }
     }
     /// Get the model's parameters wrapped in a `Parameter::Standard` variant
     /// to train the model without differential privacy with an [`Optimizer`].
-    pub fn parameters(&self) -> Parameters {
-        Parameters::standard(&self.var_store)
+    pub fn parameters<'a>(&'a mut self) -> (Forward<'a>, Parameters<'a>) {
+        (
+            Forward {
+                c_module: &self.c_module,
+                dp_sgd_context: Arc::clone(&self.dp_sgd_context),
+            },
+            Parameters::standard(
+                &mut self.var_store,
+                Arc::clone(&self.dp_sgd_context),
+            ),
+        )
     }
     /// Get the model's parameters wrapped in a `Parameter::Private` variant
     /// to train the model with DP-SGD with an [`Optimizer`].
-    pub fn private_parameters(
-        &self,
-        max_grad_norm: f64,
-        noise_multiplier: f64,
+    pub fn private_parameters<'a>(
+        &'a mut self,
+        eps: f32,
+        max_grad_norm: f32,
         loss_type: LossType,
-    ) -> Parameters {
-        Parameters::private(&self.var_store, max_grad_norm, noise_multiplier, loss_type)
+    ) -> (Forward<'a>, Parameters<'a>) {
+        (
+            Forward {
+                c_module: &self.c_module,
+                dp_sgd_context: Arc::clone(&self.dp_sgd_context),
+            },
+            Parameters::private(
+                &mut self.var_store,
+                eps,
+                max_grad_norm,
+                loss_type,
+                Arc::clone(&self.dp_sgd_context),
+            ),
+        )
     }
     /// Moves all the parameters to the specified device.
     pub fn set_device(&mut self, device: Device) {
         self.var_store.set_device(device);
-    }
-    /// Returns an ietrator that trains the model using a very basic training loop on specified `device`
-    /// and that yields the loss after every iteration (i.e. every batch).
-    /// Loss, optimizer, batch size and more are read from the given `config`.
-    pub fn train(
-        s: Arc<RwLock<Self>>,
-        dataset: Arc<RwLock<Dataset>>,
-        optimizer: Box<dyn Optimizer + Send>,
-        metric: Metric,
-        epochs: usize,
-        batch_size: usize,
-        device: Device,
-    ) -> ModuleTrainer {
-        let mut module = s.write().unwrap();
-        module.set_device(device);
-
-        ModuleTrainer::new(
-            Arc::clone(&s),
-            dataset,
-            optimizer,
-            metric,
-            device,
-            epochs,
-            batch_size,
-        )
-    }
-    /// Tests the model using a very basic test loop on specified `device`.
-    /// Metric, batch size and more are read from the given `config`.
-    pub fn test(
-        s: Arc<RwLock<Module>>,
-        dataset: Arc<RwLock<Dataset>>,
-        metric: Metric,
-        batch_size: usize,
-        device: Device,
-    ) -> ModuleTester {
-        s.write().unwrap().set_device(device);
-
-        ModuleTester::new(s, dataset, metric, device, batch_size)
     }
 }
 
@@ -101,6 +133,7 @@ impl TryFrom<SizedObjectsBytes> for Module {
         Ok(Module {
             c_module: TrainableCModule::load_data(&mut &object[..], vs.root())?,
             var_store: vs,
+            dp_sgd_context: Arc::new(RwLock::new(None)),
         })
     }
 }

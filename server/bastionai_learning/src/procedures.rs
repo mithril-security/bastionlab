@@ -1,61 +1,70 @@
-use tch::{Tensor, TchError, Device};
-use std::sync::{Arc, RwLock};
-use crate::nn::Module;
+use crate::data::privacy_guard::{PrivacyGuard, PrivacyBudget};
 use crate::data::{Dataset, DatasetIter};
+use crate::nn::Forward;
 use crate::optim::Optimizer;
+use tch::{Device, Kind, TchError, Tensor};
 
-fn tensors_to_device(tensors: Vec<Tensor>, device: Device) -> Result<Vec<Tensor>, TchError> {
-    let mut tensors_ = Vec::with_capacity(tensors.len());
-    for tensor in tensors.iter() {
-        tensors_.push(tensor.f_to(device)?);
+fn inputs_to_device(inputs: Vec<PrivacyGuard<Tensor>>, device: Device) -> Result<Vec<PrivacyGuard<Tensor>>, TchError> {
+    let mut inputs_ = Vec::with_capacity(inputs.len());
+    for tensor in inputs.iter() {
+        inputs_.push(tensor.f_to(device)?);
     }
-    Ok(tensors_)
+    Ok(inputs_)
 }
 
-pub struct ModuleTrainer {
-    module: Arc<RwLock<Module>>,
-    dataset: Arc<RwLock<Dataset>>,
-    optimizer: Box<dyn Optimizer + Send>,
+pub struct Trainer<'a> {
+    forward: Forward<'a>,
+    dataset: &'a Dataset,
+    optimizer: Box<dyn Optimizer + 'a>,
     metric: Metric,
+    metric_budget: PrivacyBudget,
     device: Device,
     epochs: usize,
     batch_size: usize,
-    dataloader: std::iter::Enumerate<DatasetIter>,
+    dataloader: std::iter::Enumerate<DatasetIter<'a>>,
     current_epoch: usize,
 }
 
-impl ModuleTrainer {
+impl<'a> Trainer<'a> {
     pub fn new(
-        module: Arc<RwLock<Module>>,
-        dataset: Arc<RwLock<Dataset>>,
-        optimizer: Box<dyn Optimizer + Send>,
+        forward: Forward<'a>,
+        dataset: &'a Dataset,
+        optimizer: Box<dyn Optimizer + 'a>,
         metric: Metric,
+        metric_budget: PrivacyBudget,
         device: Device,
         epochs: usize,
         batch_size: usize,
-    ) -> ModuleTrainer {
-        ModuleTrainer {
-            module,
-            dataset: Arc::clone(&dataset),
+    ) -> Trainer<'a> {
+        Trainer {
+            forward,
+            dataset,
             optimizer,
             metric,
+            metric_budget,
             device,
             epochs,
             batch_size,
-            dataloader: Dataset::iter_shuffle(dataset, batch_size).enumerate(),
+            dataloader: dataset.iter_shuffle(batch_size).enumerate(),
             current_epoch: 0,
         }
     }
 
-    pub fn train_on_batch(&mut self, i: usize, inputs: Vec<Tensor>, labels: Tensor) -> Result<(i32, i32, f32), TchError> {
-        let inputs = tensors_to_device(inputs, self.device)?;
+    pub fn train_on_batch(
+        &mut self,
+        i: usize,
+        inputs: Vec<PrivacyGuard<Tensor>>,
+        labels: PrivacyGuard<Tensor>,
+    ) -> Result<(i32, i32, f32, f32), TchError> {
+        let inputs = inputs_to_device(inputs, self.device)?;
         let labels = labels.f_to(self.device)?;
-        let outputs = self.module.read().unwrap().forward(&inputs)?;
+        let outputs = self.forward.forward(inputs)?;
         let loss = self.metric.compute(&outputs, &labels)?;
         self.optimizer.zero_grad()?;
         loss.backward();
         self.optimizer.step()?;
-        Ok((self.current_epoch as i32, i as i32, self.metric.value()))
+        let (value, std) = self.metric.value(self.metric_budget)?;
+        Ok((self.current_epoch as i32, i as i32, value, std))
     }
 
     pub fn nb_epochs(&self) -> usize {
@@ -63,12 +72,12 @@ impl ModuleTrainer {
     }
 
     pub fn nb_batches(&self) -> usize {
-        self.dataset.read().unwrap().len() / self.batch_size
+        self.dataset.len() / self.batch_size
     }
 }
 
-impl Iterator for ModuleTrainer {
-    type Item = Result<(i32, i32, f32), TchError>;
+impl<'a> Iterator for Trainer<'a> {
+    type Item = Result<(i32, i32, f32, f32), TchError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some((i, (inputs, labels))) = self.dataloader.next() {
@@ -77,8 +86,7 @@ impl Iterator for ModuleTrainer {
             self.current_epoch += 1;
             self.metric.reset();
             if self.current_epoch < self.epochs {
-                self.dataloader =
-                    Dataset::iter_shuffle(Arc::clone(&self.dataset), self.batch_size).enumerate();
+                self.dataloader = self.dataset.iter_shuffle(self.batch_size).enumerate();
                 self.next()
             } else {
                 None
@@ -87,38 +95,47 @@ impl Iterator for ModuleTrainer {
     }
 }
 
-pub struct ModuleTester {
-    module: Arc<RwLock<Module>>,
+pub struct Tester<'a> {
+    forward: Forward<'a>,
     metric: Metric,
+    metric_budget: PrivacyBudget,
     device: Device,
-    dataloader: std::iter::Enumerate<DatasetIter>,
+    dataloader: std::iter::Enumerate<DatasetIter<'a>>,
     nb_batches: usize,
 }
 
-impl ModuleTester {
+impl<'a> Tester<'a> {
     pub fn new(
-        module: Arc<RwLock<Module>>,
-        dataset: Arc<RwLock<Dataset>>,
+        forward: Forward<'a>,
+        dataset: &'a Dataset,
         metric: Metric,
+        metric_budget: PrivacyBudget,
         device: Device,
         batch_size: usize,
-    ) -> ModuleTester {
-        let nb_batches = dataset.read().unwrap().len() / batch_size;
-        ModuleTester {
-            module,
+    ) -> Tester<'a> {
+        let nb_batches = dataset.len() / batch_size;
+        Tester {
+            forward,
             metric,
+            metric_budget,
             device,
-            dataloader: Dataset::iter_shuffle(dataset, batch_size).enumerate(),
+            dataloader: dataset.iter_shuffle(batch_size).enumerate(),
             nb_batches,
         }
     }
 
-    pub fn test_on_batch(&mut self, i: usize, inputs: Vec<Tensor>, labels: Tensor) -> Result<(i32, f32), TchError> {
-        let inputs = tensors_to_device(inputs, self.device)?;
+    pub fn test_on_batch(
+        &mut self,
+        i: usize,
+        inputs: Vec<PrivacyGuard<Tensor>>,
+        labels: PrivacyGuard<Tensor>,
+    ) -> Result<(i32, f32, f32), TchError> {
+        let inputs = inputs_to_device(inputs, self.device)?;
         let labels = labels.f_to(self.device)?;
-        let outputs = self.module.read().unwrap().forward(&inputs)?;
+        let outputs = self.forward.forward(inputs)?;
         let _ = self.metric.compute(&outputs, &labels)?;
-        Ok((i as i32, self.metric.value()))
+        let (value, std) = self.metric.value(self.metric_budget)?;
+        Ok((i as i32, value, std))
     }
 
     pub fn nb_batches(&self) -> usize {
@@ -126,8 +143,8 @@ impl ModuleTester {
     }
 }
 
-impl Iterator for ModuleTester {
-    type Item = Result<(i32, f32), TchError>;
+impl<'a> Iterator for Tester<'a> {
+    type Item = Result<(i32, f32, f32), TchError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some((i, (inputs, labels))) = self.dataloader.next() {
@@ -140,50 +157,75 @@ impl Iterator for ModuleTester {
 
 /// A loss function with average statistics
 pub struct Metric {
-    loss_fn: Box<dyn Fn(&Tensor, &Tensor) -> Result<Tensor, TchError> + Send>,
-    value: f32,
+    loss_fn: Box<dyn Fn(&PrivacyGuard<Tensor>, &PrivacyGuard<Tensor>) -> Result<PrivacyGuard<Tensor>, TchError> + Send>,
+    clipping: (f64, f64),
+    value: Option<PrivacyGuard<Tensor>>,
     nb_samples: usize,
 }
 
 impl Metric {
     /// Returns a `Metric` corresponding to given name, if not available raises an error.
     pub fn try_from_name(loss_name: &str) -> Result<Self, TchError> {
+        let (loss_fn, clipping): (Box<dyn Fn(&PrivacyGuard<Tensor>, &PrivacyGuard<Tensor>) -> Result<PrivacyGuard<Tensor>, TchError> + Send>, _) = match loss_name {
+            "accuracy" => (Box::new(|output, label| {
+                let prediction = output.f_argmax(-1, false)?;
+                prediction
+                    .f_sub(label)?
+                    .f_clamp(0.0, 1.0)?
+                    .f_sum(Kind::Float)
+            }), (0.0, 1.0)),
+            "l2" => (Box::new(|output, label| output.f_mse_loss(label, tch::Reduction::Mean)), (0.0, 10.0)),
+            "cross_entropy" => {
+                (Box::new(|output, label| {
+                    let weight: Option<Tensor> = None;
+                    output.f_cross_entropy_loss(label, weight, tch::Reduction::Mean, -100, 0.)
+                }), (0.0, 10.0))
+            }
+            s => {
+                return Err(TchError::FileFormat(String::from(format!(
+                    "Invalid loss name, unknown loss {}.",
+                    s
+                ))))
+            }
+        };
         Ok(Metric {
-            loss_fn: match loss_name {
-                "accuracy" => Box::new(|output, label| {
-                    let prediction = output.f_argmax(-1, false)?.double_value(&[]);
-                    Ok(if prediction == label.double_value(&[]) {
-                        Tensor::of_slice(&[1]).f_view([])?
-                    } else {
-                        Tensor::of_slice(&[1]).f_view([])?
-                    })
-                }),
-                "l2" => Box::new(|output, label| output.f_mse_loss(label, tch::Reduction::Mean)),
-                "cross_entropy" => Box::new(|output, label| output.f_cross_entropy_loss::<Tensor>(label, None, tch::Reduction::Mean, -100, 0.)),
-                s => return Err(TchError::FileFormat(String::from(format!("Invalid loss name, unknown loss {}.", s)))),
-            },
-            value: 0.0,
-            nb_samples: 1,
+            loss_fn,
+            clipping,
+            value: None,
+            nb_samples: 0,
         })
     }
 
     /// Computes the metric's value given `output` and `label` and updates the average.
-    pub fn compute(&mut self, output: &Tensor, label: &Tensor) -> Result<Tensor, TchError> {
+    pub fn compute(&mut self, output: &PrivacyGuard<Tensor>, label: &PrivacyGuard<Tensor>) -> Result<PrivacyGuard<Tensor>, TchError> {
         let loss = (self.loss_fn)(output, label)?;
-        self.value += 1. / (self.nb_samples as f32) * (loss.double_value(&[]) as f32 - self.value);
+        self.value = match &self.value {
+            Some(v) => Some(
+                v.f_mul_scalar(self.nb_samples as f64 / (self.nb_samples + 1) as f64)?
+                    .f_add(&loss.f_mul_scalar(1.0 / self.nb_samples as f64)?)?,
+            ),
+            None => Some(loss.f_clone()?),
+        };
         self.nb_samples += 1;
         Ok(loss)
     }
 
     /// Returns the average.
-    pub fn value(&self) -> f32 {
-        self.value
+    pub fn value(&self, budget: PrivacyBudget) -> Result<(f32, f32), TchError> {
+        // clip here
+        // unwrap_or(0.0)
+        match &self.value {
+            Some(x) => {
+                let (value, std) = x.f_clone()?.f_clamp(self.clipping.0, self.clipping.1)?.get_private_with_std(budget)?;
+                Ok(((value.f_double_value(&[])? as f32).clamp(self.clipping.0 as f32, self.clipping.1 as f32), std))
+            },
+            None => Ok((0.0, 0.0)),
+        }
     }
 
     /// Resets the metric
     pub fn reset(&mut self) {
-        self.value = 0.0;
+        self.value = None;
         self.nb_samples = 1;
     }
 }
-
