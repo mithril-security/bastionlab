@@ -71,7 +71,7 @@ def test_data_wrapping(simple_dataset):
 ])
 def test_simple_dataset_serialization(chunk_size, batch_size, simple_dataset):
     ds1 = simple_dataset
-    chunks = serialize_dataset(ds1, "", b"", chunk_size=chunk_size, batch_size=batch_size)
+    chunks = serialize_dataset(ds1, "", "", b"", chunk_size=chunk_size, batch_size=batch_size)
     ds2 = dataset_from_chunks(chunks)
 
     assert len(ds1) == len(ds2)
@@ -90,7 +90,7 @@ def sms_spam_collection() -> TensorDataset:
 
 def test_real_dataset_serialization(sms_spam_collection):
     ds1 = sms_spam_collection
-    chunks = serialize_dataset(ds1, "", b"", batch_size=10_000)
+    chunks = serialize_dataset(ds1, "", "", b"", batch_size=10_000)
     ds2 = dataset_from_chunks(chunks)
 
     assert all([
@@ -102,7 +102,7 @@ def test_real_dataset_serialization(sms_spam_collection):
 
 def run_model_test(model: Module, chunk_size: int, test_input: List[Tensor]):
     model1 = model
-    chunks = serialize_model(model1, "", b"", chunk_size)
+    chunks = serialize_model(model1, "", "", b"", chunk_size)
     models = list(unstream_artifacts(
         (chunk.data for chunk in chunks), deserialization_fn=torch.jit.load
     ))
@@ -141,7 +141,7 @@ def test_simple_model_deserialization():
     model1 = DummyModule()
     model2 = DummyModule()
     
-    chunks = serialize_model(Params(model1), "", b"")
+    chunks = serialize_model(Params(model1), "", "", b"")
     deserialize_weights_to_model(model2, chunks)
 
     assert module_eq(model1, model2, [torch.randn(1)])

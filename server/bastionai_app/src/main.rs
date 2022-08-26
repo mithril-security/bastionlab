@@ -63,6 +63,7 @@ impl RemoteTorch for BastionAIServer {
 
         let dataset: Artifact<Dataset> =
             tcherror_to_status((unstream_data(request.into_inner()).await?).deserialize())?;
+        let name = String::from(dataset.name.clone());
         let description = String::from(dataset.description.clone());
         let identifier = Uuid::new_v4();
 
@@ -76,6 +77,7 @@ impl RemoteTorch for BastionAIServer {
 
         Ok(Response::new(Reference {
             identifier: format!("{}", identifier),
+            name,
             description,
         }))
     }
@@ -88,6 +90,7 @@ impl RemoteTorch for BastionAIServer {
 
         let module: Artifact<Module> =
             tcherror_to_status(unstream_data(request.into_inner()).await?.deserialize())?;
+        let name = String::from(module.name.clone());
         let description = String::from(module.description.clone());
         let identifier = Uuid::new_v4();
 
@@ -100,6 +103,7 @@ impl RemoteTorch for BastionAIServer {
 
         Ok(Response::new(Reference {
             identifier: format!("{}", identifier),
+            name,
             description,
         }))
     }
@@ -187,6 +191,7 @@ impl RemoteTorch for BastionAIServer {
         module_train(module, dataset, run, config, device);
         Ok(Response::new(Reference {
             identifier: format!("{}", identifier),
+            name: format!("Run #{}", identifier),
             description: String::from(""),
         }))
     }
@@ -230,6 +235,7 @@ impl RemoteTorch for BastionAIServer {
         module_test(module, dataset, run, config, device);
         Ok(Response::new(Reference {
             identifier: format!("{}", identifier),
+            name: format!("Run #{}", identifier),
             description: String::from(""),
         }))
     }
@@ -245,6 +251,7 @@ impl RemoteTorch for BastionAIServer {
             .iter()
             .map(|(k, v)| Reference {
                 identifier: format!("{}", k),
+                name: v.name.clone(),
                 description: v.description.clone(),
             })
             .collect();
@@ -263,6 +270,7 @@ impl RemoteTorch for BastionAIServer {
             .iter()
             .map(|(k, v)| Reference {
                 identifier: format!("{}", k),
+                name: v.name.clone(),
                 description: v.description.clone(),
             })
             .collect();

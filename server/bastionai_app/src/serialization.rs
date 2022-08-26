@@ -13,12 +13,16 @@ pub async fn unstream_data(
     mut stream: tonic::Streaming<Chunk>,
 ) -> Result<Artifact<SizedObjectsBytes>, Status> {
     let mut data_bytes: Vec<u8> = Vec::new();
+    let mut name: String = String::new();
     let mut description: String = String::new();
     let mut secret: Vec<u8> = Vec::new();
 
     while let Some(chunk) = stream.next().await {
         let mut chunk = chunk?;
         data_bytes.append(&mut chunk.data);
+        if chunk.name.len() != 0 {
+            name = chunk.name;
+        }
         if chunk.description.len() != 0 {
             description = chunk.description;
         }
@@ -27,7 +31,7 @@ pub async fn unstream_data(
         }
     }
 
-    Ok(Artifact::new(data_bytes.into(), description, &secret))
+    Ok(Artifact::new(data_bytes.into(), name, description, &secret))
 }
 
 pub async fn stream_data(
@@ -46,6 +50,11 @@ pub async fn stream_data(
             tx.send(Ok(Chunk {
                 // Chunks always contain one object -> fix this
                 data: bytes.to_vec(),
+                name: if i == 0 {
+                    artifact.name.clone()
+                } else {
+                    String::from("")
+                },
                 description: if i == 0 {
                     artifact.description.clone()
                 } else {

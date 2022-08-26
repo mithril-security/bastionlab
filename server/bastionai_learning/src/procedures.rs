@@ -55,7 +55,7 @@ impl<'a> Trainer<'a> {
         i: usize,
         inputs: Vec<PrivacyGuard<Tensor>>,
         labels: PrivacyGuard<Tensor>,
-    ) -> Result<(i32, i32, f32), TchError> {
+    ) -> Result<(i32, i32, f32, f32), TchError> {
         let inputs = inputs_to_device(inputs, self.device)?;
         let labels = labels.f_to(self.device)?;
         let outputs = self.forward.forward(inputs)?;
@@ -63,7 +63,8 @@ impl<'a> Trainer<'a> {
         self.optimizer.zero_grad()?;
         loss.backward();
         self.optimizer.step()?;
-        Ok((self.current_epoch as i32, i as i32, self.metric.value(self.metric_budget)?))
+        let (value, std) = self.metric.value(self.metric_budget)?;
+        Ok((self.current_epoch as i32, i as i32, value, std))
     }
 
     pub fn nb_epochs(&self) -> usize {
@@ -76,7 +77,7 @@ impl<'a> Trainer<'a> {
 }
 
 impl<'a> Iterator for Trainer<'a> {
-    type Item = Result<(i32, i32, f32), TchError>;
+    type Item = Result<(i32, i32, f32, f32), TchError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some((i, (inputs, labels))) = self.dataloader.next() {
@@ -128,14 +129,13 @@ impl<'a> Tester<'a> {
         i: usize,
         inputs: Vec<PrivacyGuard<Tensor>>,
         labels: PrivacyGuard<Tensor>,
-    ) -> Result<(i32, f32), TchError> {
+    ) -> Result<(i32, f32, f32), TchError> {
         let inputs = inputs_to_device(inputs, self.device)?;
         let labels = labels.f_to(self.device)?;
         let outputs = self.forward.forward(inputs)?;
         let _ = self.metric.compute(&outputs, &labels)?;
-
-        // clip here
-        Ok((i as i32, self.metric.value(self.metric_budget)?))
+        let (value, std) = self.metric.value(self.metric_budget)?;
+        Ok((i as i32, value, std))
     }
 
     pub fn nb_batches(&self) -> usize {
@@ -144,7 +144,7 @@ impl<'a> Tester<'a> {
 }
 
 impl<'a> Iterator for Tester<'a> {
-    type Item = Result<(i32, f32), TchError>;
+    type Item = Result<(i32, f32, f32), TchError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some((i, (inputs, labels))) = self.dataloader.next() {
@@ -211,12 +211,15 @@ impl Metric {
     }
 
     /// Returns the average.
-    pub fn value(&self, budget: PrivacyBudget) -> Result<f32, TchError> {
+    pub fn value(&self, budget: PrivacyBudget) -> Result<(f32, f32), TchError> {
         // clip here
         // unwrap_or(0.0)
         match &self.value {
-            Some(x) => Ok(x.f_clone()?.f_clamp(self.clipping.0, self.clipping.1)?.get_private(budget)?.f_double_value(&[])? as f32),
-            None => Ok(0.0),
+            Some(x) => {
+                let (value, std) = x.f_clone()?.f_clamp(self.clipping.0, self.clipping.1)?.get_private_with_std(budget)?;
+                Ok(((value.f_double_value(&[])? as f32).clamp(self.clipping.0 as f32, self.clipping.1 as f32), std))
+            },
+            None => Ok((0.0, 0.0)),
         }
     }
 

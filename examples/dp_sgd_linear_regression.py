@@ -29,12 +29,13 @@ Y = torch.tensor([[0.2], [-2.0]])
 test_dataset = TensorDataset([X], Y)
 test_dataloader = DataLoader(test_dataset, batch_size=2)
 
-with Connection("localhost", 50051, default_secret=b"secret") as client:
+with Connection("localhost", 50051) as client:
     remote_dataloader = client.RemoteDataLoader(
         train_dataloader,
         test_dataloader,
+        name="1D Linear Regression",
         description="Dummy 1D Linear Regression Dataset (param is 2)",
-        privacy_limit=Private(8340.1)
+        privacy_limit=Private(8320.1),
     )
 
     remote_learner = client.RemoteLearner(
@@ -42,9 +43,9 @@ with Connection("localhost", 50051, default_secret=b"secret") as client:
         remote_dataloader,
         metric="l2",
         optimizer=SGD(lr=0.1),
+        model_name="Linear 1x1",
         model_description="1D Linear Regression Model",
         expand=False,
-        metric_eps=Private(10.0)
     )
 
     print(f"Weight: {lreg_model.fc1.expanded_weight}")
@@ -53,10 +54,10 @@ with Connection("localhost", 50051, default_secret=b"secret") as client:
 
     print(f"Optimizers: {(client.get_available_optimizers())}")
 
-    remote_learner.fit(nb_epochs=200, eps=Private(20.0))
+    remote_learner.fit(nb_epochs=200, eps=Private(300.0), metric_eps=Private(8000.0))
 
     lreg_model = remote_learner.get_model()
 
     print(f"Weight: {lreg_model.fc1.expanded_weight}")
 
-    remote_learner.test()
+    remote_learner.test(metric_eps=Private(20.0))

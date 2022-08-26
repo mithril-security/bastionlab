@@ -193,15 +193,15 @@ def unstream_artifacts(
 
 
 def data_chunks_generator(
-    stream: Iterator[bytes], description: str, secret: bytes,
+    stream: Iterator[bytes], name: str, description: str, secret: bytes,
 ) -> Iterator[Chunk]:
     first = True
     for x in stream:
         if first:
             first = False
-            yield Chunk(data=x, description=description, secret=secret)
+            yield Chunk(data=x, name=name, description=description, secret=secret)
         else:
-            yield Chunk(data=x, description="", secret=bytes())
+            yield Chunk(data=x, name=name, description="", secret=bytes())
 
 
 def make_batch(data: List[Tuple[List[Tensor], Tensor]]) -> Tuple[List[Tensor], Tensor]:
@@ -213,6 +213,7 @@ def make_batch(data: List[Tuple[List[Tensor], Tensor]]) -> Tuple[List[Tensor], T
 
 def serialize_dataset(
     dataset: Dataset,
+    name: str,
     description: str,
     secret: bytes,
     privacy_limit: PrivacyBudget = NotPrivate(),
@@ -225,17 +226,18 @@ def serialize_dataset(
             chunk_size,
             serialization_fn=serialize_batch(privacy_limit),
         ),
+        name,
         description,
         secret,
     )
 
 
 def serialize_model(
-    model: Module, description: str, secret: bytes, chunk_size=100_000_000
+    model: Module, name: str, description: str, secret: bytes, chunk_size=100_000_000
 ) -> Iterator[Chunk]:
     ts = torch.jit.script(model)
     return data_chunks_generator(
-        stream_artifacts(iter([ts]), chunk_size, torch.jit.save), description, secret
+        stream_artifacts(iter([ts]), chunk_size, torch.jit.save), name, description, secret
     )
 
 

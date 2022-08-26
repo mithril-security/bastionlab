@@ -13,6 +13,7 @@ from torch.utils.data import Dataset
 from bastionai.utils import (
     PrivacyBudget,
     NotPrivate,
+    Private,
     TensorDataset,
     dataset_from_chunks,
     deserialize_weights_to_model,
@@ -28,13 +29,20 @@ class Client:
     """BastionAI client class."""
 
     def __init__(
-        self, stub: RemoteTorchStub, default_secret: bytes,
+        self,
+        stub: RemoteTorchStub,
+        default_secret: bytes = b"",  # we don't use the secrets yet
     ) -> None:
         self.stub = stub
         self.default_secret = default_secret
 
     def send_model(
-        self, model: Module, description: str, secret: bytes, chunk_size=100_000_000
+        self,
+        model: Module,
+        name: str,
+        description: str = "",
+        secret: Optional[bytes] = None,
+        chunk_size=100_000_000,
     ) -> Reference:
         """Uploads Pytorch Modules to BastionAI
 
@@ -55,15 +63,20 @@ class Client:
         """
         return self.stub.SendModel(
             serialize_model(
-                model, description=description, secret=secret, chunk_size=chunk_size
+                model,
+                name=name,
+                description=description,
+                secret=secret if secret is not None else self.default_secret,
+                chunk_size=chunk_size,
             )
         )
 
     def send_dataset(
         self,
         dataset: Dataset,
-        description: str,
-        secret: bytes,
+        name: str,
+        description: str = "",
+        secret: Optional[bytes] = None,
         privacy_limit: PrivacyBudget = NotPrivate(),
         chunk_size=100_000_000,
         batch_size=1024,
@@ -85,8 +98,9 @@ class Client:
         return self.stub.SendDataset(
             serialize_dataset(
                 dataset,
+                name=name,
                 description=description,
-                secret=secret,
+                secret=secret if secret is not None else self.default_secret,
                 chunk_size=chunk_size,
                 batch_size=batch_size,
                 privacy_limit=privacy_limit,
@@ -159,7 +173,7 @@ class Client:
             config (TrainConfig):
                 Training configuration to pass to BastionAI.
         """
-        return  self.stub.Train(config)
+        return self.stub.Train(config)
 
     def test(self, config: TestConfig) -> Reference:
         """Tests a dataset on a model on BastionAI.
@@ -185,7 +199,7 @@ class Client:
             ref (Reference): BastionAI reference to dataset.
         """
         self.stub.DeleteModule(ref)
-    
+
     def get_metric(self, run: Reference) -> Metric:
         return self.stub.GetMetric(run)
 
@@ -206,7 +220,7 @@ class Connection:
 
     host: str
     port: int
-    default_secret: bytes
+    default_secret: bytes = b"" # we don't use the secrets yet
     channel: Any = None
     server_name: str = "bastionai-srv"
 

@@ -21,7 +21,7 @@ class MockStub:
         model = list(unstream_artifacts(
             (chunk.data for chunk in chunks), deserialization_fn=torch.jit.load
         ))[0]
-        chunks = serialize_model(Params(model), "", b"")
+        chunks = serialize_model(Params(model), "", "", b"")
         return self._store(chunks)
     
     def SendDataset(self, chunks: Iterator[Chunk]) -> Reference:
@@ -49,7 +49,7 @@ def test_api(simple_dataset):
     client = Client(MockStub(), b"")
 
     dl = DataLoader(simple_dataset, batch_size=2)
-    remote_dataloader = client.RemoteDataLoader(dl, dl, privacy_limit=Private(400.0))
+    remote_dataloader = client.RemoteDataLoader(dl, dl, privacy_limit=Private(344.0))
 
     remote_learner = client.RemoteLearner(
         model,
@@ -59,7 +59,7 @@ def test_api(simple_dataset):
         progress=False
     )
 
-    remote_learner.fit(nb_epochs=100, eps=Private(20.0))
+    remote_learner.fit(nb_epochs=100, eps=Private(142.0))
     remote_learner.test()
     assert remote_learner.log == [Metric(value=0.0, batch=1, epoch=1, nb_epochs=1, nb_batches=1) for _ in range(1)] * 2
 

@@ -18,14 +18,16 @@ package remote_torch;
 message Reference {
     // BastionAI reference object. 
     string identifier = 1;
-    string description = 2;
+    string name = 2;
+    string description = 3;
 }
 
 message Chunk {
     // Chunk of data sent from and to the BastionAI server.
     bytes data = 1;
-    string description = 2;
-    bytes secret = 3;
+    string name = 2;
+    string description = 3;
+    bytes secret = 4;
 }
 
 message Empty {
@@ -100,10 +102,11 @@ message Optimizers {
 
 message Metric {
     float value = 1;
-    int32 batch = 2;
-    int32 epoch = 3;
-    int32 nb_epochs = 4;
-    int32 nb_batches = 5;
+    float uncertainty = 2;
+    int32 batch = 3;
+    int32 epoch = 4;
+    int32 nb_epochs = 5;
+    int32 nb_batches = 6;
 }
 
 service RemoteTorch {

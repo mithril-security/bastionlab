@@ -247,9 +247,9 @@ macro_rules! defer_binary_f_fns_to_inner {
 }
 
 impl PrivacyGuard<Tensor> {
-    pub fn get_private(self, budget: PrivacyBudget) -> Result<Tensor, TchError> {
+    pub fn get_private_with_std(self, budget: PrivacyBudget) -> Result<(Tensor, f32), TchError> {
         match budget {
-            PrivacyBudget::NotPrivate => Ok(self.get_non_private()),
+            PrivacyBudget::NotPrivate => Ok((self.get_non_private(), 0.0)),
             PrivacyBudget::Private(eps) => {
                 let l2_sensibility = match self.sensibility {
                     Sensibility::Unknown => {
@@ -270,9 +270,13 @@ impl PrivacyGuard<Tensor> {
                     sigma as f64,
                 )?)?;
                 context.update_budget(budget);
-                Ok(res)
+                Ok((res, sigma))
             }
         }
+    }
+
+    pub fn get_private(self, budget: PrivacyBudget) -> Result<Tensor, TchError> {
+        Ok(self.get_private_with_std(budget)?.0)
     }
 
     pub(crate) fn apply_forward<'a>(

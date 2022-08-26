@@ -64,14 +64,14 @@ impl<'a> Iterator for DatasetIter<'a> {
                 .iter()
                 .map(|input| {
                     PrivacyGuard::new(
-                        Tensor::f_stack(&input, 0).unwrap(),
+                        Tensor::f_stack(&input, 0).unwrap(), // Handle this in a better way
                         BatchDependence::Independent(vec![batch_id]),
                         Arc::clone(&self.dataset.privacy_context),
                     )
                 })
                 .collect();
             let batch_labels = PrivacyGuard::new(
-                Tensor::f_stack(&batch_labels, 0).unwrap(),
+                Tensor::f_stack(&batch_labels, 0).unwrap(), // Handle this in a better way
                 BatchDependence::Independent(vec![batch_id]),
                 Arc::clone(&self.dataset.privacy_context),
             );
