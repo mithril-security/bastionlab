@@ -1,5 +1,3 @@
-#![feature(once_cell)]
-
 use env_logger::Env;
 use log::info;
 use std::collections::HashMap;
@@ -52,10 +50,10 @@ use bastionai_learning::serialization::SizedObjectsBytes;
 
 struct BastionAIServer {
     modules: RwLock<HashMap<Uuid, Artifact<Module>>>,
-    modules_hashes: RwLock<HashMap<Uuid, Arc<(String, Option<ClientInfo>)>>>,
     datasets: RwLock<HashMap<Uuid, Artifact<Dataset>>>,
-    datasets_hashes: RwLock<HashMap<Uuid, Arc<(String, Option<ClientInfo>)>>>,
-
+    runs: RwLock<HashMap<Uuid, Arc<RwLock<Run>>>>,
+    modules_hashes: RwLock<HashMap<Uuid, (String, Option<ClientInfo>)>>,
+    datasets_hashes: RwLock<HashMap<Uuid, (String, Option<ClientInfo>)>>,
 }
 
 impl BastionAIServer {
@@ -64,6 +62,7 @@ impl BastionAIServer {
             modules: RwLock::new(HashMap::new()),
             modules_hashes: RwLock::new(HashMap::new()),
             datasets: RwLock::new(HashMap::new()),
+            runs: RwLock::new(HashMap::new()),
             datasets_hashes: RwLock::new(HashMap::new())
         }
     }
@@ -73,8 +72,6 @@ impl BastionAIServer {
 impl RemoteTorch for BastionAIServer {
     type FetchDatasetStream = ReceiverStream<Result<Chunk, Status>>;
     type FetchModuleStream = ReceiverStream<Result<Chunk, Status>>;
-    type TrainStream = ReceiverStream<Result<Metric, Status>>;
-    type TestStream = ReceiverStream<Result<Metric, Status>>;
 
     async fn send_dataset(
         &self,
@@ -95,6 +92,7 @@ impl RemoteTorch for BastionAIServer {
         };
 
         let dataset: Artifact<Dataset> = tcherror_to_status((artifact).deserialize())?;
+        let name = String::from(dataset.name.clone());
         let description = String::from(dataset.description.clone());
         let identifier = Uuid::new_v4();
 
@@ -105,7 +103,7 @@ impl RemoteTorch for BastionAIServer {
 
             self.datasets_hashes.write().unwrap().insert(
                 identifier.clone(),
-                Arc::new((dataset_hash.clone(), client_info.clone())),
+                (dataset_hash.clone(), client_info.clone()),
             );
         let elapsed = start_time.elapsed();
         info!(
@@ -118,12 +116,13 @@ impl RemoteTorch for BastionAIServer {
                 dataset_name: Some(description.clone()),
                 dataset_size,
                 time_taken: elapsed.as_millis() as f64,
-                dataset_hash: Some(dataset_hash.clone())
+                dataset_hash: Some(dataset_hash)
             },
             client_info,
         );
         Ok(Response::new(Reference {
             identifier: format!("{}", identifier),
+            name,
             description,
         }))
     }
@@ -147,7 +146,7 @@ impl RemoteTorch for BastionAIServer {
         };
 
         let module: Artifact<Module> = tcherror_to_status(artifact.deserialize())?;
-
+        let name = String::from(module.name.clone());
         let description = String::from(module.description.clone());
         let identifier = Uuid::new_v4();
 
@@ -159,7 +158,7 @@ impl RemoteTorch for BastionAIServer {
 
         self.modules_hashes.write().unwrap().insert(
             identifier.clone(),
-            Arc::new((model_hash.clone(), client_info.clone())),
+            (model_hash.clone(), client_info.clone()),
         );
 
         info!(
@@ -178,6 +177,7 @@ impl RemoteTorch for BastionAIServer {
         );
         Ok(Response::new(Reference {
             identifier: format!("{}", identifier),
+            name,
             description,
         }))
     }
@@ -226,10 +226,7 @@ impl RemoteTorch for BastionAIServer {
         Ok(Response::new(Empty {}))
     }
 
-    async fn train(
-        &self,
-        request: Request<TrainConfig>,
-    ) -> Result<Response<Self::TrainStream>, Status> {
+    async fn train(&self, request: Request<TrainConfig>) -> Result<Response<Reference>, Status> {
         let config = request.into_inner();
         let dataset_id = parse_reference(
             config
@@ -251,24 +248,23 @@ impl RemoteTorch for BastionAIServer {
                 .ok_or(Status::not_found("Not found"))?;
             Arc::clone(&module.data)
         };
-        let model_client_info = {
-            let modules_hashes = self.modules_hashes.read().unwrap();
 
-            let model_hash = modules_hashes
+        let (model_hash, client_info) = {
+            let modules_hashes = self.modules_hashes.read().unwrap();
+            let (model_hash, client_info) = modules_hashes
                 .get(&module_id)
                 .ok_or(Status::not_found("Not found"))?;
-
-            Arc::clone(&model_hash)
+            (model_hash.clone(), client_info.clone())
         };
 
-        let dataset_client_info = {
+        let dataset_hash = {
             let datasets_hashes = self.datasets_hashes.read().unwrap();
-
-            let dataset_hash = datasets_hashes
-            .get(&dataset_id) 
-            .ok_or(Status::not_found("Not found"))?;
-            Arc::clone(&dataset_hash)
+            let (dataset_hash, _) = datasets_hashes
+                .get(&dataset_id) 
+                .ok_or(Status::not_found("Not found"))?;
+            dataset_hash.clone()
         };
+
         let dataset = {
             let datasets = self.datasets.read().unwrap();
             let dataset = datasets
@@ -276,13 +272,22 @@ impl RemoteTorch for BastionAIServer {
                 .ok_or(Status::not_found("Not found"))?;
             Arc::clone(&dataset.data)
         };
-        Ok(stream_module_train(module, dataset, config, device, model_client_info, dataset_client_info).await)
+
+        let identifier = Uuid::new_v4();
+        self.runs
+            .write()
+            .unwrap()
+            .insert(identifier, Arc::new(RwLock::new(Run::Pending)));
+        let run = Arc::clone(self.runs.read().unwrap().get(&identifier).unwrap());
+        module_train(module, dataset, run, config, device, model_hash.clone(), dataset_hash.clone(), client_info.clone());
+        Ok(Response::new(Reference {
+            identifier: format!("{}", identifier),
+            name: format!("Run #{}", identifier),
+            description: String::from(""),
+        }))
     }
 
-    async fn test(
-        &self,
-        request: Request<TestConfig>,
-    ) -> Result<Response<Self::TestStream>, Status> {
+    async fn test(&self, request: Request<TestConfig>) -> Result<Response<Reference>, Status> {
         let config = request.into_inner();
         let dataset_id = parse_reference(
             config
@@ -304,24 +309,23 @@ impl RemoteTorch for BastionAIServer {
                 .ok_or(Status::not_found("Not found"))?;
             Arc::clone(&module.data)
         };
-        let model_client_info = {
+        
+        let (model_hash, client_info) = {
             let modules_hashes = self.modules_hashes.read().unwrap();
-
-            let model_hash = modules_hashes
+            let (model_hash, client_info) = modules_hashes
                 .get(&module_id)
                 .ok_or(Status::not_found("Not found"))?;
-
-            Arc::clone(&model_hash)
+            (model_hash.clone(), client_info.clone())
         };
 
-        let dataset_client_info = {
+        let dataset_hash = {
             let datasets_hashes = self.datasets_hashes.read().unwrap();
-
-            let dataset_hash = datasets_hashes
-            .get(&dataset_id) 
-            .ok_or(Status::not_found("Not found"))?;
-            Arc::clone(&dataset_hash)
+            let (dataset_hash, _) = datasets_hashes
+                .get(&dataset_id) 
+                .ok_or(Status::not_found("Not found"))?;
+            dataset_hash.clone()
         };
+
         let dataset = {
             let datasets = self.datasets.read().unwrap();
             let dataset = datasets
@@ -329,7 +333,19 @@ impl RemoteTorch for BastionAIServer {
                 .ok_or(Status::not_found("Not found"))?;
             Arc::clone(&dataset.data)
         };
-        Ok(stream_module_test(module, dataset, config, device, model_client_info, dataset_client_info).await)
+
+        let identifier = Uuid::new_v4();
+        self.runs
+            .write()
+            .unwrap()
+            .insert(identifier, Arc::new(RwLock::new(Run::Pending)));
+        let run = Arc::clone(self.runs.read().unwrap().get(&identifier).unwrap());
+        module_test(module, dataset, run, config, device, model_hash.clone(), dataset_hash.clone(), client_info.clone());
+        Ok(Response::new(Reference {
+            identifier: format!("{}", identifier),
+            name: format!("Run #{}", identifier),
+            description: String::from(""),
+        }))
     }
 
     async fn available_models(
@@ -343,6 +359,7 @@ impl RemoteTorch for BastionAIServer {
             .iter()
             .map(|(k, v)| Reference {
                 identifier: format!("{}", k),
+                name: v.name.clone(),
                 description: v.description.clone(),
             })
             .collect();
@@ -361,6 +378,7 @@ impl RemoteTorch for BastionAIServer {
             .iter()
             .map(|(k, v)| Reference {
                 identifier: format!("{}", k),
+                name: v.name.clone(),
                 description: v.description.clone(),
             })
             .collect();
@@ -389,6 +407,24 @@ impl RemoteTorch for BastionAIServer {
     ) -> Result<Response<Optimizers>, Status> {
         let list = vec!["SGD", "Adam"].iter().map(|v| v.to_string()).collect();
         Ok(Response::new(Optimizers { list }))
+    }
+
+    async fn get_metric(&self, request: Request<Reference>) -> Result<Response<Metric>, Status> {
+        let identifier = parse_reference(request.into_inner())?;
+
+        match &*self
+            .runs
+            .read()
+            .unwrap()
+            .get(&identifier)
+            .unwrap()
+            .read()
+            .unwrap()
+        {
+            Run::Pending => Err(Status::internal("Run has not started.")),
+            Run::Ok(m) => Ok(Response::new(m.clone())),
+            Run::Error(e) => Err(Status::internal(e.message())),
+        }
     }
 }
 

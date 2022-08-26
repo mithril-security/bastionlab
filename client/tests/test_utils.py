@@ -89,6 +89,7 @@ def test_simple_dataset_serialization(chunk_size, batch_size, simple_dataset):
     ds1 = simple_dataset
     chunks = serialize_dataset(
         ds1,
+        name="",
         description="",
         secret=b"",
         chunk_size=chunk_size,
@@ -114,6 +115,7 @@ def test_real_dataset_serialization(sms_spam_collection):
     ds1 = sms_spam_collection
     chunks = serialize_dataset(
         ds1,
+        name="",
         description="",
         secret=b"",
         batch_size=10_000,
@@ -133,6 +135,7 @@ def run_model_test(model: Module, chunk_size: int, test_input: List[Tensor]):
     model1 = model
     chunks = serialize_model(
         model1,
+        name="",
         description="",
         secret=b"",
         chunk_size=chunk_size,
@@ -181,7 +184,7 @@ def test_simple_model_deserialization():
     model2 = DummyModule()
 
     chunks = serialize_model(
-        Params(model1), description="", secret=b"", client_info=empty_client_info
+        Params(model1), name="", description="", secret=b"", client_info=empty_client_info
     )
     deserialize_weights_to_model(model2, chunks)
 

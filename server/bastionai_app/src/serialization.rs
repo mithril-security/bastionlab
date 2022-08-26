@@ -20,6 +20,7 @@ pub async fn unstream_data(
     Status,
 > {
     let mut data_bytes: Vec<u8> = Vec::new();
+    let mut name: String = String::new();
     let mut description: String = String::new();
     let mut secret: Vec<u8> = Vec::new();
     let mut client_info: Option<ClientInfo> = None;
@@ -27,6 +28,9 @@ pub async fn unstream_data(
     while let Some(chunk) = stream.next().await {
         let mut chunk = chunk?;
         data_bytes.append(&mut chunk.data);
+        if chunk.name.len() != 0 {
+            name = chunk.name;
+        }
         if chunk.description.len() != 0 {
             description = chunk.description;
             client_info = chunk.client_info;
@@ -37,7 +41,7 @@ pub async fn unstream_data(
     }
 
     Ok((
-        Artifact::new(data_bytes.into(), description, &secret),
+        Artifact::new(data_bytes.into(), name, description, &secret),
         client_info,
     ))
 }
@@ -60,6 +64,11 @@ pub async fn stream_data(
             tx.send(Ok(Chunk {
                 // Chunks always contain one object -> fix this
                 data: bytes.to_vec(),
+                name: if i == 0 {
+                    artifact.name.clone()
+                } else {
+                    String::from("")
+                },
                 description: if i == 0 {
                     artifact.description.clone()
                 } else {
