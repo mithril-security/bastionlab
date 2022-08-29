@@ -133,7 +133,11 @@ pub struct PrivacyGuard<T> {
 }
 
 impl<T> PrivacyGuard<T> {
-    pub fn new(value: T, batch_dependence: BatchDependence, context: Arc<RwLock<PrivacyContext>>) -> Self {
+    pub fn new(
+        value: T,
+        batch_dependence: BatchDependence,
+        context: Arc<RwLock<PrivacyContext>>,
+    ) -> Self {
         PrivacyGuard {
             value,
             sensibility: Sensibility::Unknown,
@@ -246,6 +250,65 @@ macro_rules! defer_binary_f_fns_to_inner {
     )*};
 }
 
+macro_rules! defer_loss_fn_to_inner_with_clipping {
+    ($($fn:ident(
+        $self:ident: $self_type:ty,
+        $target:ident: $type_target:ty,
+        $clipping:ident: $type_clipping:ty$(,
+        $arg1:ident: $type1:ty$(,
+        $arg2:ident: $type2:ty$(,
+        $arg3:ident: $type3:ty$(,
+        $arg4:ident: $type4:ty)?)?)?)?
+    ) -> $out_type:ty)*) => {$(
+        pub fn $fn(
+            $self: $self_type,
+            $target: $type_target,
+            $clipping: $type_clipping$(,
+            $arg1: $type1$(,
+            $arg2: $type2$(,
+            $arg3: $type3$(,
+            $arg4: $type4)?)?)?)?
+        ) -> $out_type {
+            if Arc::as_ptr(&$self.context) != Arc::as_ptr(&$target.context) {
+                return Err(TchError::Kind(String::from(
+                    "Inputs must share the same privacy context.",
+                )));
+            }
+    
+            let unreduced = $self.value.$fn(&$target.value$(, $arg1$(, $arg2$(, $arg3$(, $arg4)?)?)?)?)?;
+            let clipped = unreduced.f_clamp($clipping.0, $clipping.1)?;
+            let max_norm = $clipping.0.abs().max($clipping.1.abs()) as f32;
+    
+            let (batch_dependence, sensibility) = match (&$self.batch_dependence, &$target.batch_dependence)
+            {
+                (BatchDependence::Independent(a), BatchDependence::Independent(b)) if a == b => (
+                    BatchDependence::Independent(a.clone()),
+                    Sensibility::LInfinity(max_norm),
+                ),
+                _ => (
+                    BatchDependence::Dependent,
+                    Sensibility::LInfinity($self.batch_size()? as f32 * max_norm),
+                ),
+            };
+    
+            let non_clipped = PrivacyGuard {
+                value: unreduced.f_sum_dim_intlist(&[0], false, Kind::Float)?,
+                sensibility: Sensibility::Unknown,
+                batch_dependence: batch_dependence.clone(),
+                context: Arc::clone(&$self.context),
+            };
+    
+            let clipped = PrivacyGuard {
+                value: clipped.f_sum_dim_intlist(&[0], false, Kind::Float)?,
+                sensibility,
+                batch_dependence,
+                context: Arc::clone(&$self.context),
+            };
+            Ok((non_clipped, clipped))
+        }
+    )*};
+}
+
 impl PrivacyGuard<Tensor> {
     pub fn get_private_with_std(self, budget: PrivacyBudget) -> Result<(Tensor, f32), TchError> {
         match budget {
@@ -265,10 +328,9 @@ impl PrivacyGuard<Tensor> {
                     return Err(TchError::Kind(String::from("Privacy limit violation.")));
                 }
                 let sigma = compute_sigma(eps, context.delta, l2_sensibility);
-                let res = self.value.f_add(&generate_noise_like(
-                    &self.value,
-                    sigma as f64,
-                )?)?;
+                let res = self
+                    .value
+                    .f_add(&generate_noise_like(&self.value, sigma as f64)?)?;
                 context.update_budget(budget);
                 Ok((res, sigma))
             }
@@ -292,12 +354,17 @@ impl PrivacyGuard<Tensor> {
             {
                 let batch_dependence = inputs[0].batch_dependence.clone();
                 let context = Arc::clone(&inputs[0].context);
-                if inputs
-                    .iter()
-                    .skip(1)
-                    .fold(true, |acc, input| input.batch_dependence == batch_dependence && acc)
-                {
-                    (inputs.into_iter().map(|input| input.value).collect::<Vec<_>>(), batch_dependence, context)
+                if inputs.iter().skip(1).fold(true, |acc, input| {
+                    input.batch_dependence == batch_dependence && acc
+                }) {
+                    (
+                        inputs
+                            .into_iter()
+                            .map(|input| input.value)
+                            .collect::<Vec<_>>(),
+                        batch_dependence,
+                        context,
+                    )
                 } else {
                     return Err(TchError::Kind(String::from(
                         "Inputs must come from the same batch.",
@@ -345,6 +412,62 @@ impl PrivacyGuard<Tensor> {
             context: Arc::clone(&self.context),
         })
     }
+
+    defer_loss_fn_to_inner_with_clipping! {
+        f_mse_loss(self: &Self, target: &Self, clipping: (f64, f64), reduction: Reduction) -> Result<(Self, Self), TchError>
+        f_cross_entropy_loss(
+            self: &Self,
+            target: &Self,
+            clipping: (f64, f64),
+            weight: Option<impl Borrow<Tensor>>,
+            reduction: Reduction,
+            ignore_index: i64,
+            label_smoothing: f64
+        ) -> Result<(Self, Self), TchError>
+    }
+
+    // pub fn f_mse_loss(
+    //     self: &Self,
+    //     target: &Self,
+    //     clipping: f64,
+    //     reduction: Reduction,
+    // ) -> Result<(Self, Self), TchError> {
+    //     if Arc::as_ptr(&self.context) != Arc::as_ptr(&target.context) {
+    //         return Err(TchError::Kind(String::from(
+    //             "Inputs must share the same privacy context.",
+    //         )));
+    //     }
+
+    //     let unreduced = self.value.f_mse_loss(&target.value, Reduction::None)?;
+    //     let clipped = unreduced.f_clamp(-clipping, clipping)?;
+
+    //     let (batch_dependence, sensibility) = match (self.batch_dependence, target.batch_dependence)
+    //     {
+    //         (BatchDependence::Independent(a), BatchDependence::Independent(b)) if a == b => (
+    //             BatchDependence::Independent(a),
+    //             Sensibility::LInfinity(clipping as f32),
+    //         ),
+    //         _ => (
+    //             BatchDependence::Dependent,
+    //             Sensibility::LInfinity(self.batch_size()? as f32 * clipping as f32),
+    //         ),
+    //     };
+
+    //     let non_clipped = PrivacyGuard {
+    //         value: unreduced.f_sum_dim_intlist(&[0], false, Kind::Float)?,
+    //         sensibility: Sensibility::Unknown,
+    //         batch_dependence,
+    //         context: Arc::clone(&self.context),
+    //     };
+
+    //     let clipped = PrivacyGuard {
+    //         value: clipped.f_sum_dim_intlist(&[0], false, Kind::Float)?,
+    //         sensibility,
+    //         batch_dependence,
+    //         context: Arc::clone(&self.context),
+    //     };
+    //     Ok((non_clipped, clipped))
+    // }
 
     defer_f_fns_to_inner! {
         f_to(self: &Self, device: Device) -> Result<Self, TchError> where sensibility = self.sensibility, batch_dependence = self.batch_dependence.clone()
@@ -397,8 +520,8 @@ impl PrivacyGuard<Tensor> {
                 a + b
             })
         }, batch_dependence = self.batch_dependence.clone() + other.batch_dependence.clone()
-        f_mse_loss(self: &Self, target: &Self, reduction: Reduction) -> Result<Self, TchError> where sensibility = Sensibility::Unknown, batch_dependence = self.batch_dependence.clone()
-        f_cross_entropy_loss(self: &Self, target: &Self, weight: Option<impl Borrow<Tensor>>, reduction: Reduction, ignore_index: i64, label_smoothing: f64) -> Result<Self, TchError> where sensibility = Sensibility::Unknown, batch_dependence = self.batch_dependence.clone()
+        // f_mse_loss(self: &Self, target: &Self, reduction: Reduction) -> Result<Self, TchError> where sensibility = Sensibility::Unknown, batch_dependence = self.batch_dependence.clone()
+        // f_cross_entropy_loss(self: &Self, target: &Self, weight: Option<impl Borrow<Tensor>>, reduction: Reduction, ignore_index: i64, label_smoothing: f64) -> Result<Self, TchError> where sensibility = Sensibility::Unknown, batch_dependence = self.batch_dependence.clone()
     }
 }
 
@@ -410,7 +533,7 @@ impl PrivacyGuard<()> {
                 if let Sensibility::Unknown = self.sensibility {
                     return Err(TchError::Kind(String::from(
                         "Unknown sensibility. Consider clipping prior to noising.",
-                    )))
+                    )));
                 }
                 let mut context = self.context.write().unwrap();
                 if !context.within_bounds(budget) {

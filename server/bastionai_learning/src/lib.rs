@@ -72,7 +72,7 @@ mod tests {
                 let x = PrivacyGuard::new(x.copy(), BatchDependence::Dependent, context.clone());
                 let t = PrivacyGuard::new(t.copy(), BatchDependence::Dependent, context.clone());
                 let y = forward.forward(vec![x]).unwrap();
-                let loss = y.f_mse_loss(&t, tch::Reduction::Mean).unwrap();
+                let loss = y.f_mse_loss(&t, (0.0, 10.0), tch::Reduction::Mean).unwrap().0;
                 optimizer.zero_grad().unwrap();
                 loss.backward();
                 optimizer.step().unwrap();
@@ -105,7 +105,7 @@ mod tests {
                 let t = PrivacyGuard::new(t.copy(), BatchDependence::Dependent, context.clone());
 
                 let y = forward.forward(vec![x]).unwrap();
-                let loss = y.f_mse_loss(&t, tch::Reduction::Mean).unwrap();
+                let loss = y.f_mse_loss(&t, (0.0, 10.0), tch::Reduction::Mean).unwrap().0;
                 optimizer.zero_grad().unwrap();
                 loss.backward();
                 optimizer.step().unwrap();
