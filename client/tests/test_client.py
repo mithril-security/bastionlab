@@ -20,9 +20,11 @@ class MockStub:
         return ref
 
     def SendModel(self, chunks: Iterator[Chunk]) -> Reference:
-        model = list(unstream_artifacts(
-            (chunk.data for chunk in chunks), deserialization_fn=torch.jit.load
-        ))[0]
+        model = list(
+            unstream_artifacts(
+                (chunk.data for chunk in chunks), deserialization_fn=torch.jit.load
+            )
+        )[0]
         chunks = serialize_model(Params(model), "", "", b"", self.client_info)
         return self._store(chunks)
 
@@ -34,13 +36,13 @@ class MockStub:
 
     def FetchDataset(self, ref: Reference) -> Iterator[Chunk]:
         return self.data_chunks[int(ref.identifier)]
-    
+
     def Train(self, config: TrainConfig) -> Reference:
         return Reference(identifier="0", description="run 0")
-    
+
     def Test(self, config: TrainConfig) -> Reference:
         return Reference(identifier="0", description="run 0")
-    
+
     def GetMetric(self, run: Reference) -> Metric:
         return Metric(value=0.0, batch=0, epoch=0, nb_epochs=1, nb_batches=1)
 
@@ -54,16 +56,19 @@ def test_api(simple_dataset):
     remote_dataloader = client.RemoteDataLoader(dl, dl, privacy_limit=Private(344.0))
 
     remote_learner = client.RemoteLearner(
-        model,
-        remote_dataloader,
-        metric="l2",
-        expand=False,
-        progress=False
+        model, remote_dataloader, metric="l2", expand=False, progress=False
     )
 
     remote_learner.fit(nb_epochs=100, eps=Private(142.0))
     remote_learner.test()
-    assert remote_learner.log == [Metric(value=0.0, batch=0, epoch=0, nb_epochs=1, nb_batches=1)] * 2
+    assert (
+        remote_learner.log
+        == [
+            Metric(
+                value=0.0, batch=0, epoch=0, nb_epochs=1, nb_batches=1
+            )
+        ]
+    )
 
     remote_learner.model = DummyModule()
     assert not module_eq(model, remote_learner.model, remote_dataloader.trace_input)

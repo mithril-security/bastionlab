@@ -78,7 +78,7 @@ FROM base-build as base-cpu
 
 COPY . ./server
 RUN make -C server SERVER_DIR=/root/server init && \
-    make -C server LIBTORCH_PATH=/root/libtorch MODE=release SERVER_DIR=/root/server &&\
+    make -C server LIBTORCH_PATH=/root/libtorch MODE=release SERVER_DIR=/root/server compile &&\
     cp -r ./server/target/release/bastionai_app . &&\
     cp ./server/tools/config.toml . &&\
     cp -r ./server/bin/* .
@@ -87,7 +87,7 @@ EXPOSE 50051
 
 CMD ./bastionai_app
 
-### vscode-dev-env: This image is used for developers to work on blindai with vscode remote containers extension
+### vscode-dev-env: This image is used for developers to work on bastionai with vscode remote containers extension
 
 FROM base-build AS dev-env
 
@@ -99,6 +99,7 @@ ARG USER_UID=1000
 ARG USER_GID=$USER_UID
 
 ENV RUST_TOOLCHAIN=stable-x86_64-unknown-linux-gnu
+ENV BASTIONAI_DISABLE_TELEMETRY=1
 
 # run VS Code dev container setup script
 COPY ./docker/common-dev.sh /tmp/library-scripts/

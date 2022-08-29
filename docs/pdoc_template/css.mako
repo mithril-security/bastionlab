@@ -261,7 +261,7 @@
 	.admonition.note,
 	.admonition.info,
 	.admonition.important {
-	  background: #1ef;
+	  background: #214649;
 	}
 	.admonition.todo,
 	.admonition.versionadded,

@@ -32,6 +32,7 @@ jobs:
       
     - name: Install bastionai
       run: |
+        cp -rf ../server/protos/ .
         python -m pip install -e .
     
     - name: Lint with flake8
@@ -49,4 +50,9 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Check types with mypy
-      run: mypy bastionai
+      run: |
+        rm -rf bastionai/pb/remote_torch*
+        mypy bastionai
+   
+
+

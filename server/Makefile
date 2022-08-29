@@ -31,7 +31,7 @@ else
 endif
 
 
-all: compile
+all: init compile copy-bin
 
 init:
 # Create server tls config
@@ -50,10 +50,10 @@ compile:
 
 copy-bin:
 	@cp $(TOOLS_DIR)/config.toml $(BIN_DIR)
-	@cp $(TARGET_DIR)/server $(BIN_DIR)
+	@cp $(TARGET_DIR)/$(SERVER_NAME) $(BIN_DIR)
 	
 run:
-	@cd $(BIN_DIR) && ./server
+	@cd $(BIN_DIR) && ./$(SERVER_NAME)
 
 clean:
 	@rm -rf $(BIN_DIR)

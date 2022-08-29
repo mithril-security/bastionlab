@@ -1,0 +1,167 @@
+name: Run the tests
+on:
+  push:
+    paths:
+      - "server/**"
+      - "tests/**"
+      - ".github/workflow/*"
+jobs:
+  build-server:
+    strategy:
+      matrix:
+        image: [bastionai]
+
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+      # Setup
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1.6.0
+        with:
+          driver: docker-container
+
+      # Build server
+      - name: Build server
+        uses: docker/build-push-action@v2.10.0
+        with:
+          push: false
+          load: true
+          tags: ${{ matrix.image }}
+          context: ./server
+          file: ./server/docker/build.dockerfile
+          target: base-cpu
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          outputs: type=docker,dest=/tmp/${{ matrix.image }}.tar
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ matrix.image }}
+          path: /tmp/${{ matrix.image }}.tar
+
+  build-client:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@master
+
+      # Reuse previous wheels if the client is unchanged
+      - name: Cache wheels
+        id: cache-wheels
+        uses: actions/cache@v3
+        with:
+          path: client/wheelhouse/*.whl
+          key: wheels-${{ runner.os }}-${{ hashFiles('client/') }}
+
+      # Install cibuildwheel
+      - uses: actions/setup-python@v3
+        if: ${{ steps.cache-wheels.outputs.cache-hit != 'true' }}
+        with:
+          python-version: "3.9"
+
+      - name: Install cibuildwheel
+        if: ${{ steps.cache-wheels.outputs.cache-hit != 'true' }}
+        run: python -m pip install cibuildwheel==2.6.0
+
+      # Build client
+      - uses: actions/cache@v2
+        if: ${{ steps.cache-wheels.outputs.cache-hit != 'true' }}
+        
+        with:
+          path: |
+            ./client/build
+            ./client/bastionai.egg-info
+            ./client/bastionai/lib
+          key: client/build-${{ env.pythonLocation }}-${{ hashFiles('client/setup.py') }}
+
+      - name: Building the client
+        if: ${{ steps.cache-wheels.outputs.cache-hit != 'true' }}
+        run: |
+          cd client &&  cp -rf ../server/protos/ . && python -m pip wheel -w ./wheelhouse .
+        env:
+          CIBW_BUILD: "cp39-manylinux_*" # force python 3.9 and manylinux for this build
+          CIBW_ARCHS: x86_64 # ignore i686/x86 (32bit) for now, as well as arm and stuff
+
+      # List wheels
+      - name: List wheels
+        run: |
+          ls -l client/wheelhouse
+
+      # Outputs
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: client-artifacts
+          path: client/wheelhouse/*.whl
+
+  run-tests:
+    strategy:
+      matrix:
+        include:
+          - serverImage: bastionai
+            clientImage: ubuntu-latest
+            os: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    needs: [build-server, build-client]
+    steps:
+      - uses: actions/checkout@master
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      # Setup
+
+      - uses: actions/setup-python@v3
+        with:
+          python-version: "3.9"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          cd client && cp -rf ../server/protos/ . && python -m pip install -e .
+
+      # Get server
+
+      - name: Download artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: ${{ matrix.serverImage }}
+          path: /tmp
+      - name: Load image
+        run: |
+          docker load --input /tmp/${{ matrix.serverImage }}.tar
+          docker image ls -a
+      # Get client
+      - name: Download artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: client-artifacts
+          path: /tmp/client-artifacts
+
+      - name: Show artifacts
+        run: |
+          ls -l /tmp/client-artifacts 
+          unzip -l /tmp/client-artifacts/bastionai-*.whl
+
+      - name: Load package
+        run: python -m pip install /tmp/client-artifacts/*.whl
+
+      # Run tests
+
+      - name: Launch server
+        run: |
+          docker kill -f app > /dev/null 2>&1 || true
+          docker run --rm -d -e BASTIONAI_DISABLE_TELEMETRY=1 -p 50051:50051  --name app ${{ matrix.serverImage }}:latest
+      - name: Run tests
+        run: cd tests && python -m unittest || (docker logs app; false)
+        env:
+          BASTIONAI_TEST_NO_LAUNCH_SERVER: "true"
+       
+      # - name: Install Jupyter and related test tools
+      #   run: python -m pip install pytest nbmake
+
+      # - name: Test Jupyter notebooks
+      #   run: pytest --nbmake-timeout=40 --nbmake-kernel=python3 --nbmake examples/*.ipynb || (docker logs app; false)

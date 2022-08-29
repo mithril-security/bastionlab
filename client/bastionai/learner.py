@@ -25,13 +25,23 @@ class RemoteDataLoader:
         description: str = "",
         secret: Optional[bytes] = None,
     ) -> None:
-        if test_dataloader is not None and train_dataloader.batch_size != test_dataloader.batch_size:
+        """RemoteDataLoader class creates a remote dataloader on BastionAI with the training and testing datasets
+
+        Args:
+            client (Client): A BastionAI client connection
+            train_dataloader (DataLoader): Dataloader serving the training dataset.
+            test_dataloader (DataLoader): Dataloader serving the testing dataset.
+            description (Optional[str], optional): A string description of the dataset being uploaded. Defaults to None.
+            secret (Optional[bytes], optional): User secret to secure training and testing datasets with. Defaults to None.
+        """
+        if (
+            test_dataloader is not None
+            and train_dataloader.batch_size != test_dataloader.batch_size
+        ):
             raise Exception("Train and test dataloaders must use the same batch size.")
         self.train_dataset_ref = client.send_dataset(
             train_dataloader.dataset,
-            name=name
-            if name is not None
-            else type(train_dataloader.dataset).__name__,
+            name=name if name is not None else type(train_dataloader.dataset).__name__,
             description=description,
             secret=secret,
             privacy_limit=privacy_limit,
@@ -58,7 +68,7 @@ class RemoteDataLoader:
         self.secret = secret
         self.privacy_limit = privacy_limit
         self.nb_samples = len(train_dataloader.dataset)  # type: ignore [arg-type]
-    
+
     def _set_test_dataloader(self, test_dataloader: DataLoader) -> None:
         if self.batch_size != test_dataloader.batch_size:
             raise Exception("Train and test dataloaders must use the same batch size.")
@@ -90,6 +100,22 @@ class RemoteLearner:
         expand: bool = True,
         progress: bool = True,
     ) -> None:
+        """A class to create a remote learner on BastionAI.
+
+        The remote learner accepts the model to be trained and a remote dataloader created with `RemoteDataLoader`.
+
+        Args:
+            client (Client): A BastionAI client connection
+            model (Union[Module, Reference]): A Pytorch nn.Module or a BastionAI model reference.
+            remote_dataloader (RemoteDataLoader): A BastionAI remote dataloader.
+            metric (str): Specifies the preferred loss metric.
+            optimizer (OptimizerConfig): Specifies which kind of optimizer to use during training.
+            device (str): Specifies on which device to train model.
+            max_grad_norm (float): This specifies the clipping threshold for gradients in DP-SGD.
+            model_description (Optional[str], optional): Provides additional description of models when uploading them to BastionAI server. Defaults to None.
+            secret (Option[bytes], optional): User secret to secure training and testing datasets with. Defaults to None.
+            expand (bool): A switch to either expand weights or not. Defaults to True.
+        """
         if isinstance(model, Module):
             model_class_name = type(model).__name__
 
@@ -106,9 +132,7 @@ class RemoteLearner:
                 )
             self.model_ref = client.send_model(
                 model,
-                name=model_name
-                if model_name is not None
-                else model_class_name,
+                name=model_name if model_name is not None else model_class_name,
                 description=model_description,
                 secret=secret,
             )
@@ -191,7 +215,7 @@ class RemoteLearner:
     ) -> None:
         name = self.metric
         timeout_counter = 0
-        
+
         metric = None
         for _ in range(timeout):
             try:
@@ -202,14 +226,18 @@ class RemoteLearner:
             except:
                 continue
         if metric is None:
-            raise Exception(f"Run start timeout. Polling has stoped. You may query the server by hand later using: run id is {run.identifier}")
+            raise Exception(
+                f"Run start timeout. Polling has stoped. You may query the server by hand later using: run id is {run.identifier}"
+            )
 
         if self.progress:
             t = RemoteLearner._new_tqdm_bar(
                 metric.epoch + 1, metric.nb_epochs, metric.nb_batches, train
             )
             t.update(metric.batch + 1)
-            t.set_postfix(**{name: "{:.4f} (+/- {:.4f})".format(metric.value, metric.uncertainty)})
+            t.set_postfix(
+                **{name: "{:.4f} (+/- {:.4f})".format(metric.value, metric.uncertainty)}
+            )
         else:
             self.log.append(metric)
 
@@ -241,7 +269,13 @@ class RemoteLearner:
                     t.update(metric.batch + 1)
                 else:
                     t.update(metric.batch - prev_batch)
-                t.set_postfix(**{name: "{:.4f} (+/- {:.4f})".format(metric.value, metric.uncertainty)})
+                t.set_postfix(
+                    **{
+                        name: "{:.4f} (+/- {:.4f})".format(
+                            metric.value, metric.uncertainty
+                        )
+                    }
+                )
             else:
                 self.log.append(metric)
 
@@ -255,10 +289,15 @@ class RemoteLearner:
         timeout: int = 100,
         poll_delay: float = 0.2,
     ) -> None:
-        run = self.client.train(
-            self._train_config(nb_epochs, eps, max_grad_norm, lr, metric_eps)
-        )
-        self._poll_metric(run, timeout=timeout, poll_delay=poll_delay)
+        """Fit an uploaded model to the provided parameters.
+
+        Args:
+            nb_epocs (int): Specifies the number of epochs to fit the model.
+            eps (float): Specifies the epsilon for differential privacy step.
+            max_grad_norm (Optional[float], optional): Specifies the clipping threshold for gradients in DP-SGD. Defaults to None.
+            lr (Optional[float], optional): Specifies the learning rate. Defaults to None.
+        """
+        self.client.train(self._train_config(nb_epochs, eps, max_grad_norm, lr))
 
     def test(
         self,
@@ -268,11 +307,22 @@ class RemoteLearner:
         timeout: int = 100,
         poll_delay: float = 0.2,
     ) -> None:
+        """Tests the remote model with the test dataloader provided in the RemoteDataLoader.
+
+        Args:
+            metric (Optional[str], optional): Specifies the preferred loss metric. Defaults to None.
+        """
         if test_dataloader is not None:
             self.remote_dataloader._set_test_dataloader(test_dataloader)
         run = self.client.test(self._test_config(metric, metric_eps))
         self._poll_metric(run, train=False, timeout=timeout, poll_delay=poll_delay)
 
     def get_model(self) -> Module:
+        """Retrieves the trained model from BastionAI
+
+        Returns:
+            torch.nn.Module:
+                A Pytorch module.
+        """
         self.client.fetch_model_weights(self.model, self.model_ref)
         return self.model
