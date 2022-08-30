@@ -1,10 +1,13 @@
-use crate::data::privacy_guard::{PrivacyGuard, PrivacyBudget};
+use crate::data::privacy_guard::{PrivacyBudget, PrivacyGuard};
 use crate::data::{Dataset, DatasetIter};
 use crate::nn::Forward;
 use crate::optim::Optimizer;
 use tch::{Device, Kind, TchError, Tensor};
 
-fn inputs_to_device(inputs: Vec<PrivacyGuard<Tensor>>, device: Device) -> Result<Vec<PrivacyGuard<Tensor>>, TchError> {
+fn inputs_to_device(
+    inputs: Vec<PrivacyGuard<Tensor>>,
+    device: Device,
+) -> Result<Vec<PrivacyGuard<Tensor>>, TchError> {
     let mut inputs_ = Vec::with_capacity(inputs.len());
     for tensor in inputs.iter() {
         inputs_.push(tensor.f_to(device)?);
@@ -157,30 +160,54 @@ impl<'a> Iterator for Tester<'a> {
 
 /// A loss function with average statistics
 pub struct Metric {
-    loss_fn: Box<dyn Fn(&PrivacyGuard<Tensor>, &PrivacyGuard<Tensor>) -> Result<PrivacyGuard<Tensor>, TchError> + Send>,
-    clipping: (f64, f64),
+    loss_fn: Box<
+        dyn Fn(
+                &PrivacyGuard<Tensor>,
+                &PrivacyGuard<Tensor>,
+            ) -> Result<(PrivacyGuard<Tensor>, PrivacyGuard<Tensor>), TchError>
+            + Send,
+    >,
     value: Option<PrivacyGuard<Tensor>>,
+    clipping: (f64, f64),
     nb_samples: usize,
 }
 
 impl Metric {
     /// Returns a `Metric` corresponding to given name, if not available raises an error.
     pub fn try_from_name(loss_name: &str) -> Result<Self, TchError> {
-        let (loss_fn, clipping): (Box<dyn Fn(&PrivacyGuard<Tensor>, &PrivacyGuard<Tensor>) -> Result<PrivacyGuard<Tensor>, TchError> + Send>, _) = match loss_name {
+        let (loss_fn, clipping): (
+            Box<
+                dyn Fn(
+                        &PrivacyGuard<Tensor>,
+                        &PrivacyGuard<Tensor>,
+                    )
+                        -> Result<(PrivacyGuard<Tensor>, PrivacyGuard<Tensor>), TchError>
+                    + Send,
+            >,
+            (f64, f64),
+        ) = match loss_name {
             "accuracy" => (Box::new(|output, label| {
-                let prediction = output.f_argmax(-1, false)?;
-                prediction
+                let prediction = output
+                    .f_argmax(-1, false)?
                     .f_sub(label)?
                     .f_clamp(0.0, 1.0)?
-                    .f_sum(Kind::Float)
+                    .f_sum(Kind::Float)?;
+                Ok((prediction.f_clone()?, prediction))
             }), (0.0, 1.0)),
-            "l2" => (Box::new(|output, label| output.f_mse_loss(label, tch::Reduction::Mean)), (0.0, 10.0)),
-            "cross_entropy" => {
-                (Box::new(|output, label| {
-                    let weight: Option<Tensor> = None;
-                    output.f_cross_entropy_loss(label, weight, tch::Reduction::Mean, -100, 0.)
-                }), (0.0, 10.0))
-            }
+            "l2" => (Box::new(|output, label| {
+                output.f_mse_loss(label, (0.0, 10.0), tch::Reduction::Mean)
+            }), (0.0, 10.0)),
+            "cross_entropy" => (Box::new(|output, label| {
+                let weight: Option<Tensor> = None;
+                output.f_cross_entropy_loss(
+                    label,
+                    (0.0, 10.0),
+                    weight,
+                    tch::Reduction::Mean,
+                    -100,
+                    0.,
+                )
+            }), (0.0, 10.0)),
             s => {
                 return Err(TchError::FileFormat(String::from(format!(
                     "Invalid loss name, unknown loss {}.",
@@ -190,24 +217,28 @@ impl Metric {
         };
         Ok(Metric {
             loss_fn,
-            clipping,
             value: None,
+            clipping,
             nb_samples: 0,
         })
     }
 
     /// Computes the metric's value given `output` and `label` and updates the average.
-    pub fn compute(&mut self, output: &PrivacyGuard<Tensor>, label: &PrivacyGuard<Tensor>) -> Result<PrivacyGuard<Tensor>, TchError> {
+    pub fn compute(
+        &mut self,
+        output: &PrivacyGuard<Tensor>,
+        label: &PrivacyGuard<Tensor>,
+    ) -> Result<PrivacyGuard<Tensor>, TchError> {
         let loss = (self.loss_fn)(output, label)?;
         self.value = match &self.value {
             Some(v) => Some(
                 v.f_mul_scalar(self.nb_samples as f64 / (self.nb_samples + 1) as f64)?
-                    .f_add(&loss.f_mul_scalar(1.0 / self.nb_samples as f64)?)?,
+                    .f_add(&loss.1.f_mul_scalar(1.0 / self.nb_samples as f64)?)?,
             ),
-            None => Some(loss.f_clone()?),
+            None => Some(loss.1.f_clone()?),
         };
         self.nb_samples += 1;
-        Ok(loss)
+        Ok(loss.0)
     }
 
     /// Returns the average.
@@ -216,9 +247,15 @@ impl Metric {
         // unwrap_or(0.0)
         match &self.value {
             Some(x) => {
-                let (value, std) = x.f_clone()?.f_clamp(self.clipping.0, self.clipping.1)?.get_private_with_std(budget)?;
-                Ok(((value.f_double_value(&[])? as f32).clamp(self.clipping.0 as f32, self.clipping.1 as f32), std))
-            },
+                let (value, std) = x
+                    .f_clone()?
+                    .get_private_with_std(budget)?;
+                Ok((
+                    (value.f_double_value(&[])? as f32)
+                        .clamp(self.clipping.0 as f32, self.clipping.1 as f32),
+                    std,
+                ))
+            }
             None => Ok((0.0, 0.0)),
         }
     }
