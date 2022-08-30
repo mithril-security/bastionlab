@@ -17,9 +17,6 @@ from torch.nn import Module
 from torch.utils.data import Dataset
 
 from bastionai.utils import (
-    PrivacyBudget,
-    NotPrivate,
-    Private,
     TensorDataset,
     dataset_from_chunks,
     deserialize_weights_to_model,
@@ -84,7 +81,7 @@ class Client:
         name: str,
         description: str = "",
         secret: Optional[bytes] = None,
-        privacy_limit: PrivacyBudget = NotPrivate(),
+        privacy_limit: Optional[float] = None,
         chunk_size=100_000_000,
         batch_size=1024,
     ) -> Reference:
@@ -281,7 +278,7 @@ class Connection:
         self.channel = grpc.secure_channel(
             server_target, server_cred, options=connection_options
         )
-        return Client(RemoteTorchStub(self.channel), client_info, self.default_secret)
+        return Client(RemoteTorchStub(self.channel), client_info=client_info, default_secret=self.default_secret)
 
     def __exit__(self, exc_type: Any, exc_value: Any, exc_traceback: Any) -> None:
         self.channel.close()

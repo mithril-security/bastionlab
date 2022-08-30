@@ -11,8 +11,6 @@ from bastionai.optimizer_config import *
 from time import sleep
 from tqdm import tqdm  # type: ignore [import]
 
-from bastionai.utils import PrivacyBudget, Private, NotPrivate
-
 
 class RemoteDataLoader:
     def __init__(
@@ -20,7 +18,7 @@ class RemoteDataLoader:
         client: Client,
         train_dataloader: DataLoader,
         test_dataloader: Optional[DataLoader] = None,
-        privacy_limit: PrivacyBudget = NotPrivate(),
+        privacy_limit: Optional[float] = None,
         name: Optional[str] = None,
         description: str = "",
         secret: Optional[bytes] = None,
@@ -89,11 +87,11 @@ class RemoteLearner:
         client: Client,
         model: Union[Module, Reference],
         remote_dataloader: RemoteDataLoader,
-        metric: str,
+        loss: str,
         optimizer: OptimizerConfig = Adam(),
         device: str = "cpu",
         max_grad_norm: float = 1.0,
-        metric_eps_per_batch: PrivacyBudget = Private(1.0),
+        metric_eps_per_batch: Optional[float] = None,
         model_name: Optional[str] = None,
         model_description: str = "",
         secret: Optional[bytes] = None,
@@ -140,21 +138,26 @@ class RemoteLearner:
             self.model_ref = model
         self.remote_dataloader = remote_dataloader
         self.client = client
-        self.metric = metric
+        self.loss = loss
         self.optimizer = optimizer
         self.device = device
         self.max_grad_norm = max_grad_norm
-        self.metric_eps = metric_eps_per_batch
+        self.metric_eps_per_batch = (
+            0.01
+            if self.remote_dataloader.privacy_limit is not None
+            and metric_eps_per_batch is None
+            else (metric_eps_per_batch if metric_eps_per_batch is not None else -1.0)
+        )
         self.progress = progress
         self.log: List[Metric] = []
 
     def _train_config(
         self,
         nb_epochs: int,
-        eps: PrivacyBudget,
+        eps: Optional[float],
         max_grad_norm: Optional[float] = None,
         lr: Optional[float] = None,
-        metric_eps: Optional[PrivacyBudget] = None,
+        metric_eps: Optional[float] = None,
     ) -> TrainConfig:
         return TrainConfig(
             model=self.model_ref,
@@ -162,12 +165,12 @@ class RemoteLearner:
             batch_size=self.remote_dataloader.batch_size,
             epochs=nb_epochs,
             device=self.device,
-            metric=self.metric,
-            eps=eps.into_float(),
+            metric=self.loss,
+            eps=eps if eps is not None else -1.0,
             max_grad_norm=max_grad_norm if max_grad_norm else self.max_grad_norm,
-            metric_eps=metric_eps.into_float()
+            metric_eps=metric_eps
             if metric_eps
-            else self.metric_eps.into_float()
+            else self.metric_eps_per_batch
             * float(nb_epochs)
             * float(
                 self.remote_dataloader.nb_samples / self.remote_dataloader.batch_size
@@ -176,17 +179,17 @@ class RemoteLearner:
         )
 
     def _test_config(
-        self, metric: Optional[str] = None, metric_eps: Optional[PrivacyBudget] = None
+        self, metric: Optional[str] = None, metric_eps: Optional[float] = None
     ) -> TestConfig:
         return TestConfig(
             model=self.model_ref,
             dataset=self.remote_dataloader.test_dataset_ref,
             batch_size=self.remote_dataloader.batch_size,
             device=self.device,
-            metric=metric if metric is not None else self.metric,
-            metric_eps=metric_eps.into_float()
+            metric=metric if metric is not None else self.loss,
+            metric_eps=metric_eps
             if metric_eps
-            else self.metric_eps.into_float()
+            else self.metric_eps_per_batch
             * float(
                 self.remote_dataloader.nb_samples / self.remote_dataloader.batch_size
             ),
@@ -209,11 +212,11 @@ class RemoteLearner:
     def _poll_metric(
         self,
         run: Reference,
+        name: str,
         train: bool = True,
         timeout: int = 100,
         poll_delay: float = 0.2,
     ) -> None:
-        name = self.metric
         timeout_counter = 0
 
         metric = None
@@ -221,7 +224,6 @@ class RemoteLearner:
             try:
                 sleep(poll_delay)
                 metric = self.client.get_metric(run)
-                print("Poll")
                 break
             except:
                 continue
@@ -282,10 +284,10 @@ class RemoteLearner:
     def fit(
         self,
         nb_epochs: int,
-        eps: PrivacyBudget,
+        eps: Optional[float],
         max_grad_norm: Optional[float] = None,
         lr: Optional[float] = None,
-        metric_eps: Optional[PrivacyBudget] = None,
+        metric_eps: Optional[float] = None,
         timeout: int = 100,
         poll_delay: float = 0.2,
     ) -> None:
@@ -297,13 +299,18 @@ class RemoteLearner:
             max_grad_norm (Optional[float], optional): Specifies the clipping threshold for gradients in DP-SGD. Defaults to None.
             lr (Optional[float], optional): Specifies the learning rate. Defaults to None.
         """
-        self.client.train(self._train_config(nb_epochs, eps, max_grad_norm, lr))
+        run = self.client.train(
+            self._train_config(nb_epochs, eps, max_grad_norm, lr, metric_eps)
+        )
+        self._poll_metric(
+            run, name=self.loss, train=True, timeout=timeout, poll_delay=poll_delay
+        )
 
     def test(
         self,
         test_dataloader: Optional[DataLoader] = None,
         metric: Optional[str] = None,
-        metric_eps: Optional[PrivacyBudget] = None,
+        metric_eps: Optional[float] = None,
         timeout: int = 100,
         poll_delay: float = 0.2,
     ) -> None:
@@ -315,7 +322,13 @@ class RemoteLearner:
         if test_dataloader is not None:
             self.remote_dataloader._set_test_dataloader(test_dataloader)
         run = self.client.test(self._test_config(metric, metric_eps))
-        self._poll_metric(run, train=False, timeout=timeout, poll_delay=poll_delay)
+        self._poll_metric(
+            run,
+            name=metric if metric is not None else self.loss,
+            train=False,
+            timeout=timeout,
+            poll_delay=poll_delay,
+        )
 
     def get_model(self) -> Module:
         """Retrieves the trained model from BastionAI

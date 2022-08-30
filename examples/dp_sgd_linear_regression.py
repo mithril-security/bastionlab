@@ -41,7 +41,7 @@ with Connection("localhost", 50051) as client:
     remote_learner = client.RemoteLearner(
         lreg_model,
         remote_dataloader,
-        metric="l2",
+        loss="l2",
         optimizer=SGD(lr=0.1),
         model_name="Linear 1x1",
         model_description="1D Linear Regression Model",
