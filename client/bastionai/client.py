@@ -17,9 +17,6 @@ from torch.nn import Module
 from torch.utils.data import Dataset
 
 from bastionai.utils import (
-    PrivacyBudget,
-    NotPrivate,
-    Private,
     TensorDataset,
     dataset_from_chunks,
     deserialize_weights_to_model,
@@ -84,7 +81,7 @@ class Client:
         name: str,
         description: str = "",
         secret: Optional[bytes] = None,
-        privacy_limit: PrivacyBudget = NotPrivate(),
+        privacy_limit: Optional[float] = None,
         chunk_size=100_000_000,
         batch_size=1024,
     ) -> Reference:

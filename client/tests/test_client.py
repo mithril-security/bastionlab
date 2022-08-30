@@ -53,13 +53,13 @@ def test_api(simple_dataset):
     client = Client(MockStub(), client_info=ClientInfo())
 
     dl = DataLoader(simple_dataset, batch_size=2)
-    remote_dataloader = client.RemoteDataLoader(dl, dl, privacy_limit=Private(344.0))
+    remote_dataloader = client.RemoteDataLoader(dl, dl, privacy_limit=344.0)
 
     remote_learner = client.RemoteLearner(
-        model, remote_dataloader, metric="l2", expand=False, progress=False
+        model, remote_dataloader, loss="l2", expand=False, progress=False
     )
 
-    remote_learner.fit(nb_epochs=100, eps=Private(142.0))
+    remote_learner.fit(nb_epochs=100, eps=142.0)
     remote_learner.test()
     assert (
         remote_learner.log
@@ -67,7 +67,7 @@ def test_api(simple_dataset):
             Metric(
                 value=0.0, batch=0, epoch=0, nb_epochs=1, nb_batches=1
             )
-        ]
+        ] * 2
     )
 
     remote_learner.model = DummyModule()

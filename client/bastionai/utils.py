@@ -17,32 +17,14 @@ U = TypeVar("U")
 SIZE_LEN = 8
 
 
-class PrivacyBudget:
-    def into_float(self) -> float:
-        raise NotImplemented
-
-
-@dataclass
-class Private(PrivacyBudget):
-    value: float
-    def into_float(self) -> float:
-        return self.value
-
-
-@dataclass
-class NotPrivate(PrivacyBudget):
-    def into_float(self) -> float:
-        return -1.0
-
-
 class DataWrapper(Module):
-    def __init__(self, columns: List[Tensor], labels: Optional[Tensor], privacy_limit: PrivacyBudget = NotPrivate()) -> None:
+    def __init__(self, columns: List[Tensor], labels: Optional[Tensor], privacy_limit: Optional[float] = None) -> None:
         super().__init__()
         for i, column in enumerate(columns):
             self.__setattr__(f"samples_{i}", Parameter(column, requires_grad=False))
         if labels is not None:
             self.labels = Parameter(labels, requires_grad=False)
-        self.privacy_limit = Parameter(torch.tensor([privacy_limit.into_float()]))
+        self.privacy_limit = Parameter(torch.tensor([privacy_limit if privacy_limit is not None else -1.0]))
 
 
 class TensorDataset(Dataset):
@@ -120,7 +102,7 @@ def chunks(
     if len(chunk) > 0:
         yield cat_fn(chunk)
 
-def serialize_batch(privacy_limit: PrivacyBudget = NotPrivate()) -> Callable[[Tuple[List[Tensor], Tensor], io.BytesIO], None]:
+def serialize_batch(privacy_limit: Optional[float] = None) -> Callable[[Tuple[List[Tensor], Tensor], io.BytesIO], None]:
     def inner(data: Tuple[List[Tensor], Tensor], buff: io.BytesIO) -> None:
         torch.jit.save(torch.jit.script(DataWrapper(*data, privacy_limit)), buff)
     return inner
@@ -221,7 +203,7 @@ def serialize_dataset(
     description: str,
     secret: bytes,
     client_info: ClientInfo,
-    privacy_limit: PrivacyBudget = NotPrivate(),
+    privacy_limit: Optional[float] = None,
     chunk_size=100_000_000,
     batch_size=1024,
 ) -> Iterator[Chunk]:
