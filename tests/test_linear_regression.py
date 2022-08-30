@@ -10,7 +10,7 @@ from bastionai.psg.nn import Linear  # type: ignore [import]
 from torch.utils.data import DataLoader
 
 import logging
-from bastionai.utils import TensorDataset, Private  # type: ignore [import]
+from bastionai.utils import TensorDataset  # type: ignore [import]
 from server import launch_server  # type: ignore [import]
 
 logging.basicConfig(level=logging.INFO)
@@ -24,12 +24,12 @@ class LinRegTest(unittest.TestCase):
                 test_dataloader,
                 name="1D Linear Regression",
                 description="Dummy 1D Linear Regression Dataset (param is 2)",
-                privacy_limit=Private(8320.1),
+                privacy_limit=8320.1,
             )
             remote_learner = client.RemoteLearner(
                 lreg_model,
                 remote_dataloader,
-                metric="l2",
+                loss="l2",
                 optimizer=SGD(lr=0.1),
                 model_name="Linear 1x1",
                 model_description="1D Linear Regression Model",
@@ -45,12 +45,12 @@ class LinRegTest(unittest.TestCase):
                 test_dataloader,
                 name="1D Linear Regression",
                 description="Dummy 1D Linear Regression Dataset (param is 2)",
-                privacy_limit=Private(8320.1),
+                privacy_limit=8320.1,
             )
             remote_learner = client.RemoteLearner(
                 lreg_model,
                 remote_dataloader,
-                metric="l2",
+                loss="l2",
                 optimizer=SGD(lr=0.1),
                 model_name="Linear 1x1",
                 model_description="1D Linear Regression Model",
