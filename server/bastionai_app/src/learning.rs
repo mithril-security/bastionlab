@@ -1,7 +1,7 @@
 use super::ClientInfo;
 use crate::remote_torch::{train_config, Metric, TestConfig, TrainConfig};
-use crate::utils::tcherror_to_status;
 use crate::telemetry::{self, TelemetryEventProps};
+use crate::utils::tcherror_to_status;
 use bastionai_learning::data::privacy_guard::PrivacyBudget;
 use bastionai_learning::data::Dataset;
 use bastionai_learning::nn::{Forward, LossType, Module};
@@ -29,7 +29,10 @@ fn build_shared_context(
     nb_epochs: i32,
 ) -> Result<(procedures::Metric, PrivacyBudget), TchError> {
     let total_nb_batches = dataset_size as i32 / batch_size * nb_epochs;
-    println!("total batches: {}, dataset size: {}, batch_size: {}, epochs: {}", total_nb_batches, dataset_size, batch_size, nb_epochs);
+    println!(
+        "total batches: {}, dataset size: {}, batch_size: {}, epochs: {}",
+        total_nb_batches, dataset_size, batch_size, nb_epochs
+    );
     let metric = procedures::Metric::try_from_name(metric)?;
     let metric_budget = if metric_eps < 0.0 {
         PrivacyBudget::NotPrivate
@@ -126,7 +129,11 @@ fn build_train_context<'a>(
         config.epochs,
     )?;
 
-    println!("budget: {:?}, metric_budget: {:?}", config.eps / (q * t.sqrt()), metric_budget);
+    println!(
+        "budget: {:?}, metric_budget: {:?}",
+        config.eps / (q * t.sqrt()),
+        metric_budget
+    );
     Ok((forward, optimizer, metric, metric_budget))
 }
 
@@ -174,18 +181,20 @@ pub fn module_train(
                     client_info.clone(),
                 );
                 for res in trainer {
-                    *run.write().unwrap() =
-                        match tcherror_to_status(res.map(|(epoch, batch, value, std)| Metric {
-                            epoch,
-                            batch,
-                            value,
-                            nb_epochs,
-                            nb_batches,
-                            uncertainty: 2.0 * std,
-                        })) {
-                            Ok(m) => Run::Ok(m),
-                            Err(e) => Run::Error(e),
-                        };
+                    match tcherror_to_status(res.map(|(epoch, batch, value, std)| Metric {
+                        epoch,
+                        batch,
+                        value,
+                        nb_epochs,
+                        nb_batches,
+                        uncertainty: 2.0 * std,
+                    })) {
+                        Ok(m) => *run.write().unwrap() = Run::Ok(m),
+                        Err(e) => {
+                            *run.write().unwrap() = Run::Error(e);
+                            break;
+                        }
+                    }
                 }
                 telemetry::add_event(
                     TelemetryEventProps::TrainerLog {

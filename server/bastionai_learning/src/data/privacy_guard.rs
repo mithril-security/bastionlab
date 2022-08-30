@@ -496,29 +496,35 @@ impl PrivacyGuard<Tensor> {
     }
 
     defer_binary_f_fns_to_inner! {
-        f_add(self: &Self, other: &Self) -> Result<Self, TchError> where sensibility = match (self.sensibility, other.sensibility) {
-            (Sensibility::Unknown, _) => Sensibility::Unknown,
-            (_, Sensibility::Unknown) => Sensibility::Unknown,
-            (Sensibility::L2(a), Sensibility::L2(b))
-            | (Sensibility::L2(a), Sensibility::LInfinity(b))
-            | (Sensibility::LInfinity(a), Sensibility::L2(b))
-            | (Sensibility::LInfinity(a), Sensibility::LInfinity(b)) => Sensibility::L2(if let BatchDependence::Independent(_) = self.batch_dependence.clone() + other.batch_dependence.clone() {
+        f_add(self: &Self, other: &Self) -> Result<Self, TchError> where sensibility = {
+            let compose = |a: f32, b: f32| if let BatchDependence::Independent(_) = self.batch_dependence.clone() + other.batch_dependence.clone() {
                 a.max(b)
             } else {
                 a + b
-            })
+            };
+            
+            match (self.sensibility, other.sensibility) {
+                (Sensibility::L2(a), Sensibility::L2(b)) => Sensibility::L2((compose)(a, b)),
+                (Sensibility::L2(a), Sensibility::LInfinity(b)) => Sensibility::L2((compose)(a, (other.value.numel() as f32).sqrt() * b)),
+                (Sensibility::LInfinity(a), Sensibility::L2(b)) => Sensibility::L2((compose)((self.value.numel() as f32).sqrt() * a, b)),
+                (Sensibility::LInfinity(a), Sensibility::LInfinity(b)) => Sensibility::LInfinity((compose)((self.value.numel() as f32).sqrt() * a, (other.value.numel() as f32).sqrt() * b)),
+                _ => Sensibility::Unknown,
+            }
         }, batch_dependence = self.batch_dependence.clone() + other.batch_dependence.clone()
-        f_sub(self: &Self, other: &Self) -> Result<Self, TchError> where sensibility = match (self.sensibility, other.sensibility) {
-            (Sensibility::Unknown, _) => Sensibility::Unknown,
-            (_, Sensibility::Unknown) => Sensibility::Unknown,
-            (Sensibility::L2(a), Sensibility::L2(b))
-            | (Sensibility::L2(a), Sensibility::LInfinity(b))
-            | (Sensibility::LInfinity(a), Sensibility::L2(b))
-            | (Sensibility::LInfinity(a), Sensibility::LInfinity(b)) => Sensibility::L2(if let BatchDependence::Independent(_) = self.batch_dependence.clone() + other.batch_dependence.clone() {
+        f_sub(self: &Self, other: &Self) -> Result<Self, TchError> where sensibility = {
+            let compose = |a: f32, b: f32| if let BatchDependence::Independent(_) = self.batch_dependence.clone() + other.batch_dependence.clone() {
                 a.max(b)
             } else {
                 a + b
-            })
+            };
+            
+            match (self.sensibility, other.sensibility) {
+                (Sensibility::L2(a), Sensibility::L2(b)) => Sensibility::L2((compose)(a, b)),
+                (Sensibility::L2(a), Sensibility::LInfinity(b)) => Sensibility::L2((compose)(a, (other.value.numel() as f32).sqrt() * b)),
+                (Sensibility::LInfinity(a), Sensibility::L2(b)) => Sensibility::L2((compose)((self.value.numel() as f32).sqrt() * a, b)),
+                (Sensibility::LInfinity(a), Sensibility::LInfinity(b)) => Sensibility::LInfinity((compose)((self.value.numel() as f32).sqrt() * a, (other.value.numel() as f32).sqrt() * b)),
+                _ => Sensibility::Unknown,
+            }
         }, batch_dependence = self.batch_dependence.clone() + other.batch_dependence.clone()
         // f_mse_loss(self: &Self, target: &Self, reduction: Reduction) -> Result<Self, TchError> where sensibility = Sensibility::Unknown, batch_dependence = self.batch_dependence.clone()
         // f_cross_entropy_loss(self: &Self, target: &Self, weight: Option<impl Borrow<Tensor>>, reduction: Reduction, ignore_index: i64, label_smoothing: f64) -> Result<Self, TchError> where sensibility = Sensibility::Unknown, batch_dependence = self.batch_dependence.clone()
