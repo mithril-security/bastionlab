@@ -47,7 +47,7 @@ use serialization::*;
 
 use bastionai_learning::serialization::SizedObjectsBytes;
 
-
+/// The server's state
 struct BastionAIServer {
     modules: RwLock<HashMap<Uuid, Artifact<Module>>>,
     datasets: RwLock<HashMap<Uuid, Artifact<Dataset>>>,

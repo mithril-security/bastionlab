@@ -10,6 +10,10 @@ use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use tonic::{Response, Status};
 use uuid::Uuid;
 
+/// Returns a raw artifact from a stream of chunks received over gRPC.
+/// 
+/// This function only parses header data such as the name and description
+/// of the artifact. The actual objects remains in binary format.
 pub async fn unstream_data(
     mut stream: tonic::Streaming<Chunk>,
 ) -> Result<
@@ -46,6 +50,7 @@ pub async fn unstream_data(
     ))
 }
 
+/// Converts a raw artifact (a header and a binary object) into a stream of chunks to be sent over gRPC.
 pub async fn stream_data(
     artifact: Artifact<SizedObjectsBytes>,
     chunk_size: usize,
@@ -92,11 +97,13 @@ pub async fn stream_data(
     Response::new(ReceiverStream::new(rx))
 }
 
+/// Parses a reference object from the bastionai gRPC protocol and returns the uuid of the referee. 
 pub fn parse_reference(reference: Reference) -> Result<Uuid, Status> {
     Uuid::parse_str(&reference.identifier)
         .map_err(|_| Status::internal("Invalid BastionAI reference"))
 }
 
+/// Parses a device string and returns a [`tch::Device`] object if the string is a valid device name.
 pub fn parse_device(device: &str) -> Result<Device, Status> {
     Ok(match device {
         "cpu" => Device::Cpu,

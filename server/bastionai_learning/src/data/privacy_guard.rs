@@ -4,8 +4,8 @@ use std::ops::Add;
 use std::sync::{Arc, RwLock};
 use tch::{Device, Kind, Reduction, Shape, TchError, Tensor};
 
-// Generates a tensor having the same size as `tensor` that contains gaussian noise
-// with mean 0 and standard deviation `std`.
+/// Generates a tensor having the same size as `tensor` that contains gaussian noise
+/// with mean 0 and standard deviation `std`.
 pub(crate) fn generate_noise_like(tensor: &Tensor, std: f64) -> Result<Tensor, TchError> {
     let zeros = Tensor::zeros(&tensor.size(), (Kind::Float, tensor.device()));
     if std == 0. {
@@ -23,10 +23,13 @@ pub(crate) fn generate_noise_like(tensor: &Tensor, std: f64) -> Result<Tensor, T
     }
 }
 
+/// Returns the std deviation of the gaussian noise that must be added to attain
+/// (`eps`-`delta`)-DP guarantees with a mechanism having the given `l2_sensibility`.
 pub(crate) fn compute_sigma(eps: f32, delta: f32, l2_sensibility: f32) -> f32 {
     l2_sensibility * (2.0 * (1.25 / delta).ln()).sqrt() / (eps + 1e-8)
 }
 
+/// Checks whether sets `a` and `b` are disjoint.
 fn independence_check<T: PartialEq>(a: &[T], b: &[T]) -> bool {
     let mut res = true;
     for x in b.iter() {
@@ -35,6 +38,9 @@ fn independence_check<T: PartialEq>(a: &[T], b: &[T]) -> bool {
     res
 }
 
+/// Encodes the sensibility of a function evaluation w.r.t. its input expressed
+/// either in `LInfinity` or `L2` norm. The `Unknown` variant is used
+/// when the sensibility cannot be automatically infered.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Sensibility {
     Unknown,
@@ -42,6 +48,19 @@ pub enum Sensibility {
     LInfinity(f32),
 }
 
+/// Encodes the interdependence of a tensor's lines.
+/// 
+/// A tensor is considered `Independent` if each line
+/// is computed independently of the others using a
+/// single sample from the dataset (this is usually
+/// the case when batching), and `Dependent` otherwise.
+/// 
+/// The `Idenpendent` variant contains a list of batches
+/// involved in the computation. This is useful to mark
+/// the result of a bianry operation with two independent
+/// tensors as independent if the two tensors were computed
+/// on two disjoint sets of batches. For this purpose, this
+/// type implepents Add.
 #[derive(Debug, Clone, PartialEq)]
 pub enum BatchDependence {
     Dependent,
@@ -66,12 +85,18 @@ impl Add for BatchDependence {
     }
 }
 
+/// Represents a privacy budget (epsilon) that is possibly infinite (`NotPrivate`).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PrivacyBudget {
     NotPrivate,
     Private(f32),
 }
 
+/// Contains all the necessary data for [`Dataset`] to track its usage.
+/// 
+/// This struct is placed in an [`Arc`] and shared with all PrivacyGuards
+/// that contain data from the dataset so that the guards can increase the
+/// expended budget when turned into readable values.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PrivacyContext {
     expended: PrivacyBudget,
@@ -124,6 +149,18 @@ impl PrivacyContext {
     }
 }
 
+/// Encapsulate a private result.
+/// 
+/// It is impossible to read the value of the result without
+/// using either the `get_private` or `get_not_private` methods.
+/// 
+/// `get_private` returns a noised value of the contained result according
+/// to the allocated privacy budget if the dataset's privacy limit allows it.
+/// It also updates the dataset's expended budget accordingly.
+/// 
+/// `get_non_private` returns the unnoised value if the dataset allows it
+/// (no privacy limit is set) and sets the dataset's expended budget to `NotPrivate`
+/// (infinite).
 #[derive(Debug, Clone)]
 pub struct PrivacyGuard<T> {
     value: T,
@@ -146,15 +183,24 @@ impl<T> PrivacyGuard<T> {
         }
     }
 
+    /// Returns a noised value of the contained result according
+    /// to the allocated privacy budget if the dataset's privacy limit allows it.
+    /// It also updates the dataset's expended budget accordingly.
     pub fn get_non_private(self) -> T {
         self.context.write().unwrap().expended = PrivacyBudget::NotPrivate;
         self.value
     }
 
+    /// Applies an immutable function to the conatained shared context.
+    /// 
+    /// Useful to read dataset level information such as delta, privacy limit, etc.
     pub fn map_context<U>(&self, f: impl Fn(&PrivacyContext) -> U) -> U {
         f(&self.context.read().unwrap())
     }
 
+    /// Returns an empty guard that shares the same context.
+    /// 
+    /// Useful to enforce a privacy contraint without actually retrieving any value.
     pub fn empty(&self) -> PrivacyGuard<()> {
         PrivacyGuard {
             value: (),
@@ -164,6 +210,7 @@ impl<T> PrivacyGuard<T> {
         }
     }
 
+    /// Checks whether the value can privately be retrieved with given budget.
     pub fn within_bounds(&self, budget: PrivacyBudget) -> bool {
         self.context.read().unwrap().within_bounds(budget)
     }
@@ -426,56 +473,13 @@ impl PrivacyGuard<Tensor> {
         ) -> Result<(Self, Self), TchError>
     }
 
-    // pub fn f_mse_loss(
-    //     self: &Self,
-    //     target: &Self,
-    //     clipping: f64,
-    //     reduction: Reduction,
-    // ) -> Result<(Self, Self), TchError> {
-    //     if Arc::as_ptr(&self.context) != Arc::as_ptr(&target.context) {
-    //         return Err(TchError::Kind(String::from(
-    //             "Inputs must share the same privacy context.",
-    //         )));
-    //     }
-
-    //     let unreduced = self.value.f_mse_loss(&target.value, Reduction::None)?;
-    //     let clipped = unreduced.f_clamp(-clipping, clipping)?;
-
-    //     let (batch_dependence, sensibility) = match (self.batch_dependence, target.batch_dependence)
-    //     {
-    //         (BatchDependence::Independent(a), BatchDependence::Independent(b)) if a == b => (
-    //             BatchDependence::Independent(a),
-    //             Sensibility::LInfinity(clipping as f32),
-    //         ),
-    //         _ => (
-    //             BatchDependence::Dependent,
-    //             Sensibility::LInfinity(self.batch_size()? as f32 * clipping as f32),
-    //         ),
-    //     };
-
-    //     let non_clipped = PrivacyGuard {
-    //         value: unreduced.f_sum_dim_intlist(&[0], false, Kind::Float)?,
-    //         sensibility: Sensibility::Unknown,
-    //         batch_dependence,
-    //         context: Arc::clone(&self.context),
-    //     };
-
-    //     let clipped = PrivacyGuard {
-    //         value: clipped.f_sum_dim_intlist(&[0], false, Kind::Float)?,
-    //         sensibility,
-    //         batch_dependence,
-    //         context: Arc::clone(&self.context),
-    //     };
-    //     Ok((non_clipped, clipped))
-    // }
-
     defer_f_fns_to_inner! {
         f_to(self: &Self, device: Device) -> Result<Self, TchError> where sensibility = self.sensibility, batch_dependence = self.batch_dependence.clone()
         f_view(self: &Self, s: impl Shape) -> Result<Self, TchError> where sensibility = Sensibility::Unknown, batch_dependence = self.batch_dependence.clone()
         f_double_value(self: &Self, idx: &[i64]) -> Result<PrivacyGuard<f64>, TchError> where sensibility = self.sensibility, batch_dependence = self.batch_dependence.clone()
         f_clamp(self: &Self, min: f64, max: f64) -> Result<Self, TchError> where sensibility = match self.sensibility {
-            Sensibility::LInfinity(s) => Sensibility::LInfinity(s.min(max.abs().max(min.abs()) as f32)),
-            _ => Sensibility::LInfinity(max.abs().max(min.abs()) as f32),
+            Sensibility::LInfinity(s) => Sensibility::LInfinity(s.min(max as f32 - min as f32)),
+            _ => Sensibility::LInfinity((max - min) as f32),
         }, batch_dependence = self.batch_dependence.clone()
         f_sum(self: &Self, dtype: Kind) -> Result<Self, TchError> where sensibility = match self.sensibility {
             Sensibility::Unknown => Sensibility::Unknown,
@@ -491,7 +495,7 @@ impl PrivacyGuard<Tensor> {
         f_mul_scalar(self: &Self, other: f64) -> Result<Self, TchError> where sensibility = match self.sensibility {
             Sensibility::Unknown => Sensibility::Unknown,
             Sensibility::LInfinity(s) => Sensibility::LInfinity(other as f32 * s),
-            Sensibility::L2(_) => Sensibility::Unknown,
+            Sensibility::L2(s) => Sensibility::L2(other as f32 * s),
         }, batch_dependence = self.batch_dependence.clone()
     }
 

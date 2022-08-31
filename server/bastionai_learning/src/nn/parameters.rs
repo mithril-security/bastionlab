@@ -5,13 +5,11 @@ use crate::data::privacy_guard::{compute_sigma, generate_noise_like, PrivacyBudg
 use std::sync::{Arc, RwLock};
 use tch::{nn::VarStore, IndexOp, TchError, Tensor};
 
+/// Securely copies the parameters to avoid leaking gradients.
 fn copy_parameters(params: &Vec<Tensor>) -> Result<Vec<Tensor>, TchError> {
     let mut res = Vec::new();
     for p in params.iter() {
         res.push(p.copy().f_detach_()?);
-        // let mut x = p.f_zeros_like()?;
-        // let _ = x.f_add_(&p);
-        // res.push(x);
     }
     Ok(res)
 }
@@ -29,7 +27,8 @@ pub enum LossType {
 ///
 /// The standard variant provides standard parameter update, the private variant performs DP-SGD.
 /// Note that the private variant requires the model to use expanded weights. In the Python API,
-/// layers with expanded weights may be found under `bastionai.psg.nn`.
+/// layers with expanded weights may be found under `bastionai.psg.nn`. A standard model may also
+/// be turned into an expanded one using the `bastionai.psg.expand` function.
 #[derive(Debug)]
 pub enum Parameters<'a> {
     Standard {
@@ -87,8 +86,9 @@ impl<'a> Parameters<'a> {
     /// Returns contained parameters.
     ///
     /// This method is useful to inspect the weights during or after training.
-    /// Note that for privacy reasons, a call to this method erases the accumulated gradients
-    /// that contain non DP protected information about the samples.
+    /// Note that for privacy reasons, this method actually returns a copy of
+    /// the parameters that do not contain the accumulated gradients because
+    /// the gradients contain non DP protected information about the samples.
     pub fn into_inner(&self) -> Result<Vec<Tensor>, TchError> {
         // self.zero_grad();
         match self {

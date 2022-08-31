@@ -4,9 +4,11 @@ from .nn import LayerNorm, Linear, Embedding
 
 def expand_weights(module: torch.nn.Module, max_batch_size: int) -> None:
     """
-    Recursively put desired batch norm in nn.module module.
+    Recursively converts the layers of a model to their expanded counterpart in `bastionai.psg.nn`.
 
-    set module = net to start code.
+    Args:
+        module: model whose weights must be expanded.
+        max_batch_size: maximum size of the batches that will be processed by the model.
     """
     # go through all attributes of module nn.module (e.g. network or layer) and put batch norms if present
     for attr_str in dir(module):
