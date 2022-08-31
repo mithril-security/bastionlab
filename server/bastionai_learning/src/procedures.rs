@@ -15,6 +15,10 @@ fn inputs_to_device(
     Ok(inputs_)
 }
 
+/// A basic parametrizable loop for training a model.
+/// 
+/// This struct implements [`std::Iter::Iterator`] and yields
+/// a metric value for every step (i.e. every batch of every epoch).
 pub struct Trainer<'a> {
     forward: Forward<'a>,
     dataset: &'a Dataset,
@@ -98,6 +102,10 @@ impl<'a> Iterator for Trainer<'a> {
     }
 }
 
+/// A basic parametriazable loop for testing a model.
+/// 
+/// This struct implements [`std::Iter::Iterator`] and yields
+/// a metric value for every step (i.e. every batch).
 pub struct Tester<'a> {
     forward: Forward<'a>,
     metric: Metric,
@@ -158,7 +166,7 @@ impl<'a> Iterator for Tester<'a> {
     }
 }
 
-/// A loss function with average statistics
+/// A loss (or metric) function with average statistics
 pub struct Metric {
     loss_fn: Box<
         dyn Fn(
@@ -241,10 +249,8 @@ impl Metric {
         Ok(loss.0)
     }
 
-    /// Returns the average.
+    /// Privately returns the average with given budget.
     pub fn value(&self, budget: PrivacyBudget) -> Result<(f32, f32), TchError> {
-        // clip here
-        // unwrap_or(0.0)
         match &self.value {
             Some(x) => {
                 let (value, std) = x

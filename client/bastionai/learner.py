@@ -13,6 +13,17 @@ from tqdm import tqdm  # type: ignore [import]
 
 
 class RemoteDataLoader:
+    """Represents a remote dataloader on the BlindAI server encapsulating a training
+    and optional testing datasets along with dataloading parameters.
+
+    Args:
+        client: A BastionAI client to be used to access server resources.
+        train_dataloader: A `torch.utils.data.DataLoader` instance for training that will be uploaded on the server.
+        test_dataloader: An optional `torch.utils.data.DataLoader` instance for testing that will be uploaded on the server.
+        name: A name for the uploaded dataset.
+        description: A string description of the dataset being uploaded.
+        secret: [In progress] Owner secret override for the uploaded data.
+    """
     def __init__(
         self,
         client: Client,
@@ -23,15 +34,6 @@ class RemoteDataLoader:
         description: str = "",
         secret: Optional[bytes] = None,
     ) -> None:
-        """RemoteDataLoader class creates a remote dataloader on BastionAI with the training and testing datasets
-
-        Args:
-            client (Client): A BastionAI client connection
-            train_dataloader (DataLoader): Dataloader serving the training dataset.
-            test_dataloader (DataLoader): Dataloader serving the testing dataset.
-            description (Optional[str], optional): A string description of the dataset being uploaded. Defaults to None.
-            secret (Optional[bytes], optional): User secret to secure training and testing datasets with. Defaults to None.
-        """
         if (
             test_dataloader is not None
             and train_dataloader.batch_size != test_dataloader.batch_size
@@ -82,6 +84,28 @@ class RemoteDataLoader:
 
 
 class RemoteLearner:
+    """Represents a remote model on the server along with hyperparameters to train and test it.
+    
+    The remote learner accepts the model to be trained with a `RemoteDataLoader`.
+
+    Args:
+        client: A BastionAI client to be used to access server resources.
+        model: A Pytorch nn.Module or a BastionAI gRPC protocol reference to a distant model.
+        remote_dataloader: A BastionAI remote dataloader.
+        loss: The name of the loss to use for training the model, supported loss functions are "l2" and "cross_entropy".
+        optimizer: The configuration of the optimizer to use during training, refer to the documentation of `OptimizerConfig`.
+        device: Name of the device on which to train model. The list of supported devices may be obtained using the
+                `get_available_devices` endpoint of the `Client` object.
+        max_grad_norm: This specifies the clipping threshold for gradients in DP-SGD.
+        metric_eps_per_batch: The privacy budget allocated to the disclosure of the loss of every batch.
+                              May be overriden by providing a global budget for the loss disclosure over the whole training
+                              on calling the `fit` method.
+        model_name: A name for the uploaded model.
+        model_description: Provides additional description for the uploaded model.
+        secret: [In progress] Owner secret override for the uploaded model.
+        expand: Whether to expand model's weights prior to uploading it, or not.
+        progress: Whether to display a tqdm progress bar or not.
+    """
     def __init__(
         self,
         client: Client,
@@ -98,22 +122,6 @@ class RemoteLearner:
         expand: bool = True,
         progress: bool = True,
     ) -> None:
-        """A class to create a remote learner on BastionAI.
-
-        The remote learner accepts the model to be trained and a remote dataloader created with `RemoteDataLoader`.
-
-        Args:
-            client (Client): A BastionAI client connection
-            model (Union[Module, Reference]): A Pytorch nn.Module or a BastionAI model reference.
-            remote_dataloader (RemoteDataLoader): A BastionAI remote dataloader.
-            metric (str): Specifies the preferred loss metric.
-            optimizer (OptimizerConfig): Specifies which kind of optimizer to use during training.
-            device (str): Specifies on which device to train model.
-            max_grad_norm (float): This specifies the clipping threshold for gradients in DP-SGD.
-            model_description (Optional[str], optional): Provides additional description of models when uploading them to BastionAI server. Defaults to None.
-            secret (Option[bytes], optional): User secret to secure training and testing datasets with. Defaults to None.
-            expand (bool): A switch to either expand weights or not. Defaults to True.
-        """
         if isinstance(model, Module):
             model_class_name = type(model).__name__
 
@@ -288,22 +296,27 @@ class RemoteLearner:
         max_grad_norm: Optional[float] = None,
         lr: Optional[float] = None,
         metric_eps: Optional[float] = None,
-        timeout: int = 100,
+        timeout: float = 60.0,
         poll_delay: float = 0.2,
     ) -> None:
-        """Fit an uploaded model to the provided parameters.
+        """Fits the uploaded model to the training dataset with given hyperparameters.
 
         Args:
-            nb_epocs (int): Specifies the number of epochs to fit the model.
-            eps (float): Specifies the epsilon for differential privacy step.
-            max_grad_norm (Optional[float], optional): Specifies the clipping threshold for gradients in DP-SGD. Defaults to None.
-            lr (Optional[float], optional): Specifies the learning rate. Defaults to None.
+            nb_epocs: Specifies the number of epochs to train the model.
+            eps: Specifies the global privacy budget for the DP-SGD algorithm.
+            max_grad_norm: Overrides the default clipping threshold for gradients passed to the constructor.
+            lr: Overrides the default learning rate of the optimizer config passed to the constructor.
+            metric_eps: Global privacy budget for loss disclosure for the whole training that overrides
+                        the default per-batch budget.
+            timeout: Timeout in seconds between two updates of the loss on the server side. When elapsed without updates,
+                     polling ends and the progress bar is terminated.
+            poll_delay: Delay in seconds between two polling requests for the loss.
         """
         run = self.client.train(
             self._train_config(nb_epochs, eps, max_grad_norm, lr, metric_eps)
         )
         self._poll_metric(
-            run, name=self.loss, train=True, timeout=timeout, poll_delay=poll_delay
+            run, name=self.loss, train=True, timeout=int(timeout / poll_delay), poll_delay=poll_delay
         )
 
     def test(
@@ -317,7 +330,13 @@ class RemoteLearner:
         """Tests the remote model with the test dataloader provided in the RemoteDataLoader.
 
         Args:
-            metric (Optional[str], optional): Specifies the preferred loss metric. Defaults to None.
+            test_dataloader: overrides the test dataloader passed to the remote `RemoteDataLoader` constructor.
+            metric: test metric name, if not providedm the training loss is used. Metrics available are loss functions and `accuracy`.
+            metric_eps: Global privacy budget for metric disclosure for the whole testing procedure that overrides
+                        the default per-batch budget.
+            timeout: Timeout in seconds between two updates of the metric on the server side. When elapsed without updates,
+                     polling ends and the progress bar is terminated.
+            poll_delay: Delay in seconds between two polling requests for the metric.
         """
         if test_dataloader is not None:
             self.remote_dataloader._set_test_dataloader(test_dataloader)
@@ -331,11 +350,8 @@ class RemoteLearner:
         )
 
     def get_model(self) -> Module:
-        """Retrieves the trained model from BastionAI
-
-        Returns:
-            torch.nn.Module:
-                A Pytorch module.
+        """Returns the model passed to the constructor with its weights
+        updated with the weights obtained by training on the server.
         """
         self.client.fetch_model_weights(self.model, self.model_ref)
         return self.model

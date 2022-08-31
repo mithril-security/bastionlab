@@ -6,6 +6,8 @@ use crate::serialization::SizedObjectsBytes;
 use tch::Tensor;
 use tch::{nn::VarStore, Device, TchError, TrainableCModule};
 
+/// Contains useful information at the module level to carry out DP-SGD
+/// (delta, batch sampling rate, etc.)
 #[derive(Debug, Clone)]
 pub struct DpSGDContext {
     delta: f32,
@@ -25,6 +27,16 @@ impl DpSGDContext {
     }
 }
 
+/// Represents the forward pass function of a module.
+/// 
+/// The forward pass can be applied to a set of inputs using
+/// the `forward` method.
+/// 
+/// This struct is needed because parameters mutably borrow part of a
+/// module (its parameters) pereventing any other code from immutably
+/// borrowing its forward pass function. This can be circumventing by
+/// returning the forward pass as a standalone struct at the same time
+/// as the parameters.
 #[derive(Debug, Clone)]
 pub struct Forward<'a> {
     c_module: &'a TrainableCModule,
@@ -53,10 +65,13 @@ impl<'a> Forward<'a> {
 
 /// A Trainable Model
 ///
-/// Contains a reference to a `tch::TrainableCModule`
+/// Contains a reference to a [`tch::TrainableCModule`]
 /// obtained from bytes data that has been serialized with
-/// `torch.jit.save` and a VarStore that holds the models
-/// parameters.
+/// `torch.jit.save`, a VarStore that holds the models
+/// parameters and some contaxt data in a `DpSGDContext`.
+/// 
+/// The context is shared with the [`Forward`] and [`Parameters`] objects
+/// returned by methods.
 #[derive(Debug)]
 pub struct Module {
     c_module: TrainableCModule,
@@ -65,6 +80,7 @@ pub struct Module {
 }
 
 impl Module {
+    /// Loads a module serialized with `torch.jit.save` from a file.
     pub fn load_from_file(file_path: &str, device: Device) -> Result<Self, TchError> {
         let var_store = VarStore::new(device);
         let c_module = TrainableCModule::load(file_path, var_store.root())?;
@@ -74,14 +90,17 @@ impl Module {
             dp_sgd_context: Arc::new(RwLock::new(None)),
         })
     }
+    /// Returns the forward pass of the module as a standalone [`Forward`] struct.
     pub fn forward_fn<'a>(&'a self) -> Forward<'a> {
         Forward {
             c_module: &self.c_module,
             dp_sgd_context: Arc::clone(&self.dp_sgd_context),
         }
     }
-    /// Get the model's parameters wrapped in a `Parameter::Standard` variant
-    /// to train the model without differential privacy with an [`Optimizer`].
+    /// Get the model's forward pass as a standalone [`Forward`] struct
+    /// and parameters wrapped in a [`Parameter::Standard`] variant.
+    /// 
+    /// The parameters can be used to train the model without differential privacy with an [`Optimizer`].
     pub fn parameters<'a>(&'a mut self) -> (Forward<'a>, Parameters<'a>) {
         (
             Forward {
@@ -94,8 +113,10 @@ impl Module {
             ),
         )
     }
-    /// Get the model's parameters wrapped in a `Parameter::Private` variant
-    /// to train the model with DP-SGD with an [`Optimizer`].
+    /// Get the model's forward pass as a standalone [`Forward`] struct
+    /// and parameters wrapped in a [`Parameter::Private`] variant.
+    /// 
+    /// The parameters can be used to train the model with differential privacy with an [`Optimizer`].
     pub fn private_parameters<'a>(
         &'a mut self,
         eps: f32,

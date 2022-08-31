@@ -31,7 +31,14 @@ if TYPE_CHECKING:
 
 
 class Client:
-    """BastionAI client class."""
+    """BastionAI client class.
+    
+    Args:
+        stub: The underlying gRPC client for the BastionAI protocol.
+        client_info: Client information for telemetry purposes.
+        default_secret: Default ownership secrets to be used for all requests,
+                        may be overriden at the method level.
+    """
 
     def __init__(
         self,
@@ -49,20 +56,22 @@ class Client:
         name: str,
         description: str = "",
         secret: Optional[bytes] = None,
-        chunk_size=100_000_000,
+        chunk_size: int = 100_000_000,
     ) -> Reference:
-        """Uploads Pytorch Modules to BastionAI
+        """Uploads a Pytorch module to the BastionAI server.
 
         This endpoint transforms Pytorch modules into TorchScript modules and sends
-        them to the BastionAI server.
+        them to the BastionAI server over gRPC.
 
         Args:
-            model (Module): This is Pytorch's nn.Module.
-            description (str): A string description of the module being uploaded.
-            secret (bytes): User secret to secure module with.
+            model: The Pytorch nn.Module to upload.
+            name: A name for the module being uploaded.
+            description: A string description of the module being uploaded.
+            secret: Ownership secret override for this request.
+            chunk_size: Size of a chunk in the BastionAI gRPC protocol in bytes.
 
         Returns:
-            Reference: BastionAI reference object
+            BastionAI gRPC protocol's reference object.
         """
         return self.stub.SendModel(
             serialize_model(
@@ -85,15 +94,20 @@ class Client:
         chunk_size=100_000_000,
         batch_size=1024,
     ) -> Reference:
-        """Uploads Pytorch Dataset to BastionAI.
+        """Uploads a Pytorch Dataset to the BastionAI server.
 
         Args:
-            model (Module): This is Pytorch's nn.Module.
-            description (str): A string description of the dataset being uploaded.
-            secret (bytes): User secret to secure module with.
+            model: The Pytorch Dataset to upload.
+            name: A name for the dataset being uploaded.
+            description: A string description of the dataset being uploaded.
+            secret: Ownership secret override for this request.
+            chunk_size: Size of a chunk in the BastionAI gRPC protocol in bytes.
+            batch_size: Size of a unit of serialization in number of samples,
+                        increasing this value may increase serialization throughput
+                        at the price of a higher memory consumption.
 
         Returns:
-            Reference: BastionAI reference object
+            BastionAI gRPC protocol's reference object.
         """
         list(
             serialize_dataset(
@@ -121,123 +135,102 @@ class Client:
         )
 
     def fetch_model_weights(self, model: Module, ref: Reference) -> None:
-        """Fetchs the weights of a trained model with a BastionAI reference.
+        """Fetches the weights of a distant trained model with a BastionAI gRPC protocol reference
+        and loads the weights into the passed model instance.
 
         Args:
-            model (Module): This is Pytorch's nn.Module corresponding to an uploaded module.
-            ref (Reference): BastionAI reference object corresponding to a module.
+            model: The Pytorch's nn.Module whose weights will be replaced by the fetched weights.
+            ref: BastionAI gRPC protocol reference object corresponding to the distant trained model.
         """
         chunks = self.stub.FetchModule(ref)
         deserialize_weights_to_model(model, chunks)
 
     def fetch_dataset(self, ref: Reference) -> TensorDataset:
-        """Fetchs the dataset with a BastionAI reference.
+        """Fetches the distant dataset with a BastionAI gRPC protocol reference.
 
         Args:
-            ref (Reference): BastionAI reference object corresponding to a dataset.
+            ref: BastionAI gRPC protocol reference object corresponding to the distant dataset.
 
         Returns:
-            TensorDataset: A wrapper to convert Tensors from BastionAI to Pytorch DataLoader
+            A dataset instance built from received data.
         """
         return dataset_from_chunks(self.stub.FetchDataset(ref))
 
     def get_available_models(self) -> List[Reference]:
-        """Gets a list of references of available models on BastionAI.
-
-        Returns:
-            List[Reference]: A list of BastionAI available models as BastionAI references.
-        """
+        """Returns the list of BastionAI gRPC protocol references of all available models on the server."""
         return self.stub.AvailableModels(Empty())
 
     def get_available_datasets(self) -> List[Reference]:
-        """Gets a list of references of datasets on BastionAI.
-
-        Returns:
-            List[Reference]: A list of BastionAI available datasets as BastionAI references.
-        """
+        """Returns the list of BastionAI gRPC protocol references of all datasets on the server."""
         return self.stub.AvailableDatasets(Empty())
 
     def get_available_devices(self) -> List[str]:
-        """Gets a list of devices available on BastionAI.
-
-        Returns:
-            List[str]: A list of BastionAI available devices.
-        """
+        """Returns the list of devices available on the server."""
         return self.stub.AvailableDevices(Empty()).list
 
     def get_available_optimizers(self) -> List[str]:
-        """Gets a list of optimizers supported by BastionAI.
-
-        Returns:
-            List[Optimizers]: A list of optimizers available on BastionAI training server.
-        """
+        """Returns the list of optimizers supported by the server."""
         return self.stub.AvailableOptimizers(Empty()).list
 
     def train(self, config: TrainConfig) -> Reference:
-        """Trains a model with `TrainConfig` configuration on BastionAI.
+        """Trains a model with hyperparameters defined in `config` on the BastionAI server.
 
         Args:
-            config (TrainConfig): Training configuration to pass to BastionAI.
+            config: Training configuration that specifies the model, dataset and hyperparameters.
         """
         return self.stub.Train(config)
 
     def test(self, config: TestConfig) -> Reference:
-        """Tests a dataset on a model on BastionAI.
+        """Tests a dataset on a model according to `config` on the BastionAI server.
 
         Args:
-            config (TestConfig): Configuration for testing on BastionAI.
+            config: Testing configuration that specifies the model, dataset and hyperparameters.
         """
         return self.stub.Test(config)
 
     def delete_dataset(self, ref: Reference) -> None:
-        """Deletes a dataset with reference on BastionAI.
+        """Deletes the dataset correponding to the given `ref` reference on the BastionAI server.
 
         Args:
-            ref (Reference): BastionAI reference to dataset.
+            ref: BastionAI gRPC protocol reference of the dataset to be deleted.
         """
         self.stub.DeleteDataset(ref)
 
     def delete_module(self, ref: Reference) -> None:
-        """Deletes a model with reference from BastionAI.
+        """Deletes the module correponding to the given `ref` reference on the BastionAI server.
 
         Args:
-            ref (Reference): BastionAI reference to dataset.
+            ref: BastionAI gRPC protocol reference of the module to be deleted.
         """
         self.stub.DeleteModule(ref)
 
     def get_metric(self, run: Reference) -> Metric:
+        """Returns the value of the metric associated with the given `run` reference.
+
+        Args:
+            run: BastionAI gRPC protocol reference of the run whose metric is read.
+        """
         return self.stub.GetMetric(run)
 
     def RemoteDataLoader(self, *args, **kwargs) -> "RemoteDataLoader":
-        """RemoteDataLoader class creates a remote dataloader on BastionAI with the training and testing datasets
+        """Returns a RemoteDataLoader object encapsulating a training and testing dataloaders
+        on the remote server that uses this client to communicate with the server.
 
         Args:
-            client (Client): A BastionAI client connection
-            train_dataloader (DataLoader): Dataloader serving the training dataset.
-            test_dataloader (DataLoader): Dataloader serving the testing dataset.
-            description (Optional[str], optional): A string description of the dataset being uploaded. Defaults to None.
-            secret (Optional[bytes], optional): User secret to secure training and testing datasets with. Defaults to None.
+            *args: all arguments are forwarded to the `RemoteDataLoader` constructor.
+            **kwargs: all keyword arguments are forwarded to the `RemoteDataLoader` constructor.
         """
         from bastionai.learner import RemoteDataLoader
 
         return RemoteDataLoader(self, *args, **kwargs)
 
     def RemoteLearner(self, *args, **kwargs) -> "RemoteLearner":
-        """A class to create a remote learner on BastionAI.
-
-        The remote learner accepts the model to be trained and a remote dataloader created with `RemoteDataLoader`.
+        """Returns a RemoteLearner object encapsulating a model and hyperparameters for
+        training and testing on the remote server and that uses this client to communicate with the server.
 
         Args:
-            client (Client): A BastionAI client connection
-            model (Union[Module, Reference]): A Pytorch nn.Module or a BastionAI model reference.
-            remote_dataloader (RemoteDataLoader): A BastionAI remote dataloader.
-            metric (str): Specifies the preferred loss metric.
-            optimizer (OptimizerConfig): Specifies which kind of optimizer to use during training.
-            device (str): Specifies on which device to train model.
-            max_grad_norm (float): This specifies the clipping threshold for gradients in DP-SGD.
-            model_description (Optional[str], optional): Provides additional description of models when uploading them to BastionAI server. Defaults to None.
-            secret (Option[bytes], optional): User secret to secure training and testing datasets with. Defaults to None.
-            expand (bool): A switch to either expand weights or not. Defaults to True.
+            *args: all arguments are forwarded to the `RemoteDataLoader` constructor.
+            **kwargs: all keyword arguments are forwarded to the `RemoteDataLoader` constructor.
         """
         from bastionai.learner import RemoteLearner
 
@@ -246,7 +239,14 @@ class Client:
 
 @dataclass
 class Connection:
-    """Connection class for creating connections to BastionAI."""
+    """Context manger that handles a connection to a BastionAI server.
+    It returns a `Client` to use the connexion within its context.
+    
+    Args:
+        host: Hostname of the BastionAI server.
+        port: Port of the BastionAI server.
+        default_secret: Default owner secret passed to the constructor of the return `Client`.
+    """
 
     host: str
     port: int

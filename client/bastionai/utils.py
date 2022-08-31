@@ -18,6 +18,14 @@ SIZE_LEN = 8
 
 
 class DataWrapper(Module):
+    """Wrapps data in a (dummy) module to be able to retrieve them through libtorch on the server.
+
+    Args:
+        columns: Tensors that represent the clolumns of the dataset (a column contains the values
+        for a given input for all samples).
+        labels: A tensor containing the labels of all inputs.
+        privacy_limit: Maximum privacy budget that can be expanded on these data.
+    """
     def __init__(self, columns: List[Tensor], labels: Optional[Tensor], privacy_limit: Optional[float] = None) -> None:
         super().__init__()
         for i, column in enumerate(columns):
@@ -28,6 +36,14 @@ class DataWrapper(Module):
 
 
 class TensorDataset(Dataset):
+    """A simple dataset compliant with Torch's `Dataset` build upon
+    tensors representing columns and labels.
+
+    Args:
+        columns: Tensors that represent the clolumns of the dataset (a column contains the values
+        for a given input for all samples).
+        labels: A tensor containing the labels of all inputs.
+    """
     def __init__(self, columns: List[Tensor], labels: Optional[Tensor]) -> None:
         super().__init__()
         self.columns = columns
@@ -44,6 +60,7 @@ class TensorDataset(Dataset):
 
 
 def data_from_wrapper(wrapper: DataWrapper) -> Tuple[List[Tensor], Optional[Tensor]]:
+    """Converts a data wrapper into a list of columns and labels."""
     opt_columns: List[Optional[Tensor]] = []
     labels: Optional[Tensor] = None
     for name, param in wrapper.named_parameters():
@@ -68,6 +85,7 @@ def data_from_wrapper(wrapper: DataWrapper) -> Tuple[List[Tensor], Optional[Tens
 
 
 def dataset_from_chunks(chunks: Iterator[Chunk]) -> TensorDataset:
+    """Builds a `TensorDataset` from a chunks iterator (returned by the underlying gRPC protocol)."""
     wrappers = unstream_artifacts(
         (chunk.data for chunk in chunks), deserialization_fn=torch.jit.load
     )
@@ -85,6 +103,7 @@ def dataset_from_chunks(chunks: Iterator[Chunk]) -> TensorDataset:
 
 
 def id(l: List[T]) -> U:
+    """Identity functions. Here for type checking."""
     res: U = l  # type: ignore [assignment]
     return res
 
@@ -92,6 +111,13 @@ def id(l: List[T]) -> U:
 def chunks(
     it: Iterator[T], chunk_size: int, cat_fn: Callable[[List[T]], U] = id
 ) -> Iterator[U]:
+    """Groups elements of an iterator by chunks.
+    
+    Args:
+        it: input iterator.
+        chunk_size: size of the chunks.
+        cat_fn: aggregation function called on every chunk.
+    """
     chunk: List[T] = []
     for x in it:
         if len(chunk) == chunk_size:
@@ -103,6 +129,9 @@ def chunks(
         yield cat_fn(chunk)
 
 def serialize_batch(privacy_limit: Optional[float] = None) -> Callable[[Tuple[List[Tensor], Tensor], io.BytesIO], None]:
+    """Serializes a batch of data by wrapping it in a `DataWrapper` module, using torch.jit utility functions and
+    writes the output to the given buffer.
+    """
     def inner(data: Tuple[List[Tensor], Tensor], buff: io.BytesIO) -> None:
         torch.jit.save(torch.jit.script(DataWrapper(*data, privacy_limit)), buff)
     return inner
@@ -113,6 +142,13 @@ def stream_artifacts(
     chunk_size: int,
     serialization_fn: Callable[[T, io.BytesIO], None] = torch.save,
 ) -> Iterator[bytes]:
+    """Converts an iterator of objects into an iterator of bytes chunks.
+    
+    Args:
+        artifacts: Iterator whose objects will be converted.
+        chunk_size: Size of the bytes chunks.
+        serialization_fn: Function used to convert an object into bytes and write these bytes to a buffer.
+    """
     eoi = False
     buff = io.BytesIO()
     while not eoi:
@@ -146,6 +182,11 @@ def stream_artifacts(
 def unstream_artifacts(
     stream: Iterator[bytes], deserialization_fn: Callable[[io.BytesIO], T] = torch.load
 ) -> Iterator[T]:
+    """Converts an iterator of bytes chunks into an iterator of objects.
+
+    Args:
+        stream: Iterator of bytes chunks.
+    """
     buff = io.BytesIO()
     init_chunk = stream.__next__()
     size = int.from_bytes(init_chunk[:8], "little")
@@ -181,6 +222,15 @@ def data_chunks_generator(
     secret: bytes,
     client_info: ClientInfo,
 ) -> Iterator[Chunk]:
+    """Converts an iterator of bytes chunks into an iterator of BastionAI gRPC protocol `Chunk` messages.
+
+    Args:
+        stream: Iterator of bytes chunks.
+        name: A name for the objects being sent.
+        description: Description of the objects being sent.
+        secret: Onwer secret associated with the objects being sent.
+        client_info: client related data for telemetry purposes.
+    """
     first = True
     for x in stream:
         if first:
@@ -191,6 +241,8 @@ def data_chunks_generator(
 
 
 def make_batch(data: List[Tuple[List[Tensor], Tensor]]) -> Tuple[List[Tensor], Tensor]:
+    """Aggregates a group of lists of column tensors and label tensors.
+    """
     return (
         [torch.stack([x[0][i] for x in data]) for i in range(len(data[0][0]))],
         torch.stack([x[1] for x in data]),
@@ -207,6 +259,21 @@ def serialize_dataset(
     chunk_size=100_000_000,
     batch_size=1024,
 ) -> Iterator[Chunk]:
+    """Coverts a dataset into an iterator of bytes chunks.
+    
+    The dataset is processed one batch at a time. Each batch is wrapped in a `DataModuleWrapper`
+    and serialized using `torch.jit` utility functions.
+
+    Args:
+        dataset: Dataset to be serialized.
+        name: Name of the dataset on the server.
+        description: Description of the dataset.
+        secret: Owner secret associated with the dataset.
+        client_info: Client related data for telemetry purposes.
+        privacy_limit: Maximum privacy budget that can be spent on this dataset.
+        chunk_size: size of the bytes chunks sent over gRPC.
+        batch_size: size of the batches (in number of samples) during the serialization step.
+    """
     return data_chunks_generator(
         stream_artifacts(
             chunks(iter(dataset), batch_size, cat_fn=make_batch),
@@ -223,6 +290,19 @@ def serialize_dataset(
 def serialize_model(
     model: Module, name: str, description: str, secret: bytes, client_info: ClientInfo, chunk_size=100_000_000
 ) -> Iterator[Chunk]:
+    """Coverts a model into an iterator of bytes chunks.
+    
+    The model is scripted using `torch.jit.script` and serialiazed as a whole with `torch.jit.save`. The resulting
+    bytes are sent over gRPC in a chunked manner.
+
+    Args:
+        model: Model to be serialized.
+        name: Name of the model on the server.
+        description: Description of the model.
+        secret: Owner secret associated with the model.
+        client_info: Client related data for telemetry purposes.
+        chunk_size: size of the bytes chunks sent over gRPC.
+    """
     ts = torch.jit.script(model)
     return data_chunks_generator(
         stream_artifacts(iter([ts]), chunk_size, torch.jit.save), name=name, description=description, secret=secret, client_info=client_info
@@ -230,6 +310,9 @@ def serialize_model(
 
 
 def deserialize_weights_to_model(model: Module, chunks: Iterator[Chunk]) -> None:
+    """Deserializes weights from an iterator of BastionAI gRPC protocol `Chunks` writes
+    them to the passed model.
+    """
     wrapper = list(
         unstream_artifacts(
             (chunk.data for chunk in chunks), deserialization_fn=torch.jit.load
@@ -252,6 +335,12 @@ def deserialize_weights_to_model(model: Module, chunks: Iterator[Chunk]) -> None
 
 
 class MultipleOutputWrapper(Module):
+    """Utility wrapper to select one output of a model with multiple outputs.
+    
+    Args:
+        module: A model with more than one outputs.
+        output: Index of the output to retain.
+    """
     def __init__(self, module: Module, output: int = 0) -> None:
         super().__init__()
         self.inner = module

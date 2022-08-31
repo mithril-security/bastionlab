@@ -123,6 +123,28 @@ def expanded_convolution(
     conv_fn: Callable, tuple_fn: Callable[[T], Tuple[int, ...]]
 ) -> Callable:
     class ConvNd(_ConvNd):
+        """Convolutional layer with expanded weights to be used with DP-SGD.
+
+        Weights are expanded to the provided `max_batch_size` so that the autodiff computes
+        the per-samples gradient needed by the DP-SGD algorithm.
+
+        Expansion is made without copying or allocating more memory at the model
+        lifetime scale as expanded weights are just a view on the original weights
+        (similar to broadcasting).
+
+        However, weights are reallocated while computing the forward pass for a short amount of time
+        as the forward pass computation needs them in a contiguous format.
+        As layers are typically used one after the other, the overall memory impact is neglectable.
+
+        To speed up the computation of the forward pass with expanded weights, we use grouped convolutions
+        with a number of groups equal to the number of samples: the convolution operator uses one kernel group per sample
+        (which makes sample computations independent) and the weights of these are shared thanks to the expansion.
+
+        Refer to the Pytorch documentation for more on how to use the various parameters: 
+            1D: https://pytorch.org/docs/stable/generated/torch.nn.Conv1d.html#torch.nn.Conv1d
+            2D: https://pytorch.org/docs/stable/generated/torch.nn.Conv2d.html#torch.nn.Conv2d
+            3D: https://pytorch.org/docs/stable/generated/torch.nn.Conv3d.html#torch.nn.Conv3d
+        """
         def __init__(
             self,
             in_channels: int,
@@ -209,6 +231,11 @@ Conv3d = expanded_convolution(F.conv3d, _triple)
 
 
 class ConvLinear(nn.Module):
+    """Linear layer with expanded weights that internally uses an expanded 1D convolution.
+    
+    Refer to the documentation of convolutions for more about the internals and Pytorch's Linear
+    Layer documentation for more about the parameters and their usage.
+    """
     def __init__(
         self,
         in_features: int,
@@ -236,6 +263,20 @@ class ConvLinear(nn.Module):
 
 
 class Linear(nn.Linear):
+    """Linear layer with expanded weights to be used with DP-SGD.
+
+    Weights are expanded to the `max_batch_size` so that the autodif computes
+    the per-samples gradient needed by the DP-SGD algorithm.
+
+    Expansion is made without copying or allocating more memory as expanded
+    weights are just a view on the original weights (similar to broadcasting).
+
+    However, this implies the forward pass is performed with einsum which may slightly
+    decrese the performance of the computation.
+
+    Refer to the Pytorch documentation for more on how to use the various parameters:
+    https://pytorch.org/docs/stable/generated/torch.nn.Linear.html#torch.nn.Linear.
+    """
     def __init__(
         self,
         in_features: int,
@@ -289,6 +330,25 @@ class Linear(nn.Linear):
 
 
 class Embedding(nn.Embedding):
+    """Linear layer with expanded weights to be used with DP-SGD.
+
+    Weights are expanded to the `max_batch_size` so that the autodif computes
+    the per-samples gradient needed by the DP-SGD algorithm.
+
+    An embedding layer is essentially a lookup table that internally stores all
+    the vectors of the vocabulary and returns the vector associated with each input index.
+    To compute per-sample gradients, we "copy" the lookup table as many times
+    as the maximum number of samples in a batch. The input indexes are offseted
+    by their sample number times the vocabulary size before actually looking up
+    so that each sample uses a different "copy" of the lookup table.
+
+    The copy of the lookup table is intself costless as we only use an expanded view
+    (similar to broadcasting). The runtime cost is low as well as we just need to remap
+    the input indexes.
+
+    Refer to the Pytorch documentation for more on how to use the various parameters:
+    https://pytorch.org/docs/stable/generated/torch.nn.Embedding.html#torch.nn.Embedding.
+    """
     def __init__(
         self,
         num_embeddings: int,
@@ -351,6 +411,21 @@ class Embedding(nn.Embedding):
 
 
 class LayerNorm(nn.LayerNorm):
+    """LayerNorm layer with expanded weights to be used with DP-SGD.
+
+    Weights are expanded to the `max_batch_size` so that the autodif computes
+    the per-samples gradient needed by the DP-SGD algorithm.
+
+    Expansion is made without copying or allocating more memory as expanded
+    weights are just a view on the original weights (similar to broadcasting).
+
+    This comes at no additional cost during the forward pass as LayerNorm involves
+    an affine elementwise operation that can directly be done with the expanded weights
+    with proper views.
+
+    Refer to the Pytorch documentation for more on how to use the various parameters:
+    https://pytorch.org/docs/stable/generated/torch.nn.LayerNorm.html#torch.nn.LayerNorm.
+    """
     def __init__(
         self,
         normalized_shape: Union[int, List[int], Size],

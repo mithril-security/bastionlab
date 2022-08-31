@@ -1,4 +1,4 @@
-use super::privacy_guard::{PrivacyBudget, PrivacyContext, PrivacyGuard, BatchDependence};
+use super::privacy_guard::{BatchDependence, PrivacyBudget, PrivacyContext, PrivacyGuard};
 use crate::serialization::SizedObjectsBytes;
 use rand::{seq::SliceRandom, thread_rng};
 use std::convert::TryFrom;
@@ -7,7 +7,7 @@ use std::ops::Deref;
 use std::sync::{Arc, Mutex, RwLock};
 use tch::{Device, IndexOp, TchError, Tensor};
 
-/// Simple in-memory dataset
+/// Simple in-memory dataset that keeps track of its usage in terms of privacy budget
 #[derive(Debug)]
 pub struct Dataset {
     samples_inputs: Vec<Mutex<Tensor>>,
@@ -141,7 +141,7 @@ impl TryFrom<SizedObjectsBytes> for Dataset {
                                 PrivacyBudget::Private(limit)
                             };
                         }
-                    },
+                    }
                     s => {
                         if s.starts_with("samples_") {
                             let idx: usize = s[8..].parse().or(Err(TchError::FileFormat(

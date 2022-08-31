@@ -21,6 +21,7 @@ pub enum Run {
     Pending,
 }
 
+/// Returns a metric by name from config and computes per step privacy budget for metrics
 fn build_shared_context(
     metric: &str,
     metric_eps: f32,
@@ -43,6 +44,7 @@ fn build_shared_context(
     Ok((metric, metric_budget))
 }
 
+/// Returns a forward pass, a metric and a metric budget from config.
 fn build_test_context<'a>(
     module: &'a Module,
     dataset: &Dataset,
@@ -61,6 +63,7 @@ fn build_test_context<'a>(
     Ok((forward, metric, metric_budget))
 }
 
+/// Returns a forward pass, an optimizer, a metric and a metric budget from config.
 fn build_train_context<'a>(
     module: &'a mut Module,
     dataset: &Dataset,
@@ -137,6 +140,7 @@ fn build_train_context<'a>(
     Ok((forward, optimizer, metric, metric_budget))
 }
 
+/// Trains `module` on `dataset` outputing metrics to `run` with given `config` on `device`.
 pub fn module_train(
     module: Arc<RwLock<Module>>,
     dataset: Arc<RwLock<Dataset>>,
@@ -219,6 +223,7 @@ pub fn module_train(
     });
 }
 
+/// Tests `module` on `dataset` outputing metrics to `run` with given `config` on `device`.
 pub fn module_test(
     module: Arc<RwLock<Module>>,
     dataset: Arc<RwLock<Dataset>>,

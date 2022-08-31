@@ -2,6 +2,7 @@ import grpc  # type: ignore [import]
 
 
 def check_rpc_exception(rpc_error):
+    """Nicely displays a gRPC protocol error."""
     if rpc_error.code() == grpc.StatusCode.CANCELLED:
         return f"Cancelled GRPC call: code={rpc_error.code()} message={rpc_error.details()}"
 
@@ -20,6 +21,7 @@ def check_rpc_exception(rpc_error):
 
 
 def check_socket_exception(socket_error):
+    """Nicely displays a socket error."""
     if len(socket_error.args) >= 2:
         error_code = socket_error.args[0]
         error_message = socket_error.args[1]
