@@ -379,7 +379,6 @@ impl PrivacyGuard<Tensor> {
                     .value
                     .f_add(&generate_noise_like(&self.value, sigma as f64)?)?;
                 context.update_budget(budget);
-                println!("Guard sigma: {:?}", sigma);
                 Ok((res, sigma))
             }
         }
