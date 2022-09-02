@@ -30,10 +30,6 @@ fn build_shared_context(
     nb_epochs: i32,
 ) -> Result<(procedures::Metric, PrivacyBudget), TchError> {
     let total_nb_batches = dataset_size as i32 / batch_size * nb_epochs;
-    println!(
-        "total batches: {}, dataset size: {}, batch_size: {}, epochs: {}",
-        total_nb_batches, dataset_size, batch_size, nb_epochs
-    );
     let metric = procedures::Metric::try_from_name(metric)?;
     let metric_budget = if metric_eps < 0.0 {
         PrivacyBudget::NotPrivate
@@ -59,7 +55,6 @@ fn build_test_context<'a>(
         1,
     )?;
 
-    println!("metric_budget: {:?}", metric_budget);
     Ok((forward, metric, metric_budget))
 }
 
@@ -132,11 +127,6 @@ fn build_train_context<'a>(
         config.epochs,
     )?;
 
-    println!(
-        "budget: {:?}, metric_budget: {:?}",
-        config.eps / (q * t.sqrt()),
-        metric_budget
-    );
     Ok((forward, optimizer, metric, metric_budget))
 }
 

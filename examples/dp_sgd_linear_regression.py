@@ -4,7 +4,7 @@ from bastionai.pb.remote_torch_pb2 import TestConfig, TrainConfig
 from bastionai.psg.nn import Linear
 from torch import Tensor
 from torch.nn import Module
-from bastionai.utils import TensorDataset, Private
+from bastionai.utils import TensorDataset
 from torch.utils.data import DataLoader
 
 
@@ -35,7 +35,7 @@ with Connection("localhost", 50051) as client:
         test_dataloader,
         name="1D Linear Regression",
         description="Dummy 1D Linear Regression Dataset (param is 2)",
-        privacy_limit=Private(8320.1),
+        privacy_limit=8320.1,
     )
 
     remote_learner = client.RemoteLearner(
@@ -54,10 +54,10 @@ with Connection("localhost", 50051) as client:
 
     print(f"Optimizers: {(client.get_available_optimizers())}")
 
-    remote_learner.fit(nb_epochs=200, eps=Private(300.0), metric_eps=Private(8000.0))
+    remote_learner.fit(nb_epochs=200, eps=300.0, metric_eps=8000.0)
 
     lreg_model = remote_learner.get_model()
 
     print(f"Weight: {lreg_model.fc1.expanded_weight}")
 
-    remote_learner.test(metric_eps=Private(20.0))
+    remote_learner.test(metric_eps=20.0)
