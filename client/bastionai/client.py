@@ -203,6 +203,11 @@ class Client:
             run: BastionAI gRPC protocol reference of the run whose metric is read.
         """
         return self.stub.GetMetric(run)
+    
+    def list_remote_datasets(self) -> List["RemoteDataset"]:
+        from bastionai.learner import RemoteDataset
+
+        return RemoteDataset.list_available(self)
 
     def RemoteDataset(self, *args, **kwargs) -> "RemoteDataset":
         """Returns a RemoteDataLoader object encapsulating a training and testing dataloaders
@@ -227,11 +232,6 @@ class Client:
         from bastionai.learner import RemoteLearner
 
         return RemoteLearner(self, *args, **kwargs)
-    
-    def list_remote_datasets(self, ) -> List["RemoteDataset"]:
-        from bastionai.learner import RemoteDataset
-
-        return RemoteDataset.list_available(self)
 
 
 @dataclass

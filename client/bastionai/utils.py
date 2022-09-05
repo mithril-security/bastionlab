@@ -10,7 +10,7 @@ from torch.utils.data import Dataset
 
 from tqdm import tqdm  # type: ignore [import]
 
-from bastionai.pb.remote_torch_pb2 import Chunk, Metric, ClientInfo, Reference  # type: ignore [import]
+from bastionai.pb.remote_torch_pb2 import Chunk, ClientInfo, Reference  # type: ignore [import]
 
 T = TypeVar("T")
 U = TypeVar("U")
@@ -290,7 +290,7 @@ def serialize_dataset(
         meta=bulk_serialize({
             "input_shape": [input.size() for input in dataset[0][0]],
             "input_dtype": [input.dtype for input in dataset[0][0]],
-            "nb_samples": len(dataset),
+            "nb_samples": len(dataset), # type: ignore [arg-type]
             "privacy_limit": privacy_limit,
             "train_dataset": train_dataset,
         }),

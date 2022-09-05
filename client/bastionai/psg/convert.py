@@ -13,9 +13,9 @@ def _set_weight_and_bias(
         and destination_layer.weight is not None
     ):
         # Set weight to pretrained value
-        torch.nn.init.zeros_(destination_layer.weight)
+        torch.nn.init.zeros_(destination_layer.weight) # type: ignore [arg-type]
         with torch.no_grad():
-            destination_layer.weight.add_(source_layer.weight)
+            destination_layer.weight.add_(source_layer.weight) # type: ignore [operator, arg-type]
 
     if (
         hasattr(source_layer, "bias")
@@ -24,9 +24,9 @@ def _set_weight_and_bias(
         and destination_layer.bias is not None
     ):
         # Set bias to pretrained value
-        torch.nn.init.zeros_(destination_layer.bias)
+        torch.nn.init.zeros_(destination_layer.bias) # type: ignore [arg-type]
         with torch.no_grad():
-            destination_layer.bias.add_(source_layer.bias)
+            destination_layer.bias.add_(source_layer.bias) # type: ignore [operator, arg-type]
 
 
 def expand_weights(module: torch.nn.Module, max_batch_size: int) -> None:
