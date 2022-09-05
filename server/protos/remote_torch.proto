@@ -20,6 +20,7 @@ message Reference {
     string identifier = 1;
     string name = 2;
     string description = 3;
+    bytes meta = 4;
 }
 
 message Chunk {
@@ -29,6 +30,7 @@ message Chunk {
     string description = 3;
     bytes secret = 4;
     ClientInfo client_info = 5;
+    bytes meta = 6;
 }
 
 message Empty {

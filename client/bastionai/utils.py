@@ -1,5 +1,5 @@
 import io
-from typing import Callable, Iterator, List, Tuple, TypeVar, Optional
+from typing import Callable, Iterator, List, Tuple, TypeVar, Optional, Any
 from dataclasses import dataclass
 
 import torch
@@ -10,7 +10,7 @@ from torch.utils.data import Dataset
 
 from tqdm import tqdm  # type: ignore [import]
 
-from bastionai.pb.remote_torch_pb2 import Chunk, Metric, ClientInfo  # type: ignore [import]
+from bastionai.pb.remote_torch_pb2 import Chunk, Metric, ClientInfo, Reference  # type: ignore [import]
 
 T = TypeVar("T")
 U = TypeVar("U")
@@ -221,6 +221,7 @@ def data_chunks_generator(
     description: str,
     secret: bytes,
     client_info: ClientInfo,
+    meta: bytes,
 ) -> Iterator[Chunk]:
     """Converts an iterator of bytes chunks into an iterator of BastionAI gRPC protocol `Chunk` messages.
 
@@ -235,9 +236,9 @@ def data_chunks_generator(
     for x in stream:
         if first:
             first = False
-            yield Chunk(data=x, name=name, description=description, secret=secret, client_info=client_info)
+            yield Chunk(data=x, name=name, description=description, secret=secret, client_info=client_info, meta=meta)
         else:
-            yield Chunk(data=x, name=name, description="", secret=bytes(), client_info=ClientInfo())
+            yield Chunk(data=x, name=name, description="", secret=bytes(), client_info=ClientInfo(), meta=bytes())
 
 
 def make_batch(data: List[Tuple[List[Tensor], Tensor]]) -> Tuple[List[Tensor], Tensor]:
@@ -245,7 +246,7 @@ def make_batch(data: List[Tuple[List[Tensor], Tensor]]) -> Tuple[List[Tensor], T
     """
     return (
         [torch.stack([x[0][i] for x in data]) for i in range(len(data[0][0]))],
-        torch.stack([x[1] for x in data]),
+        torch.stack([x[1] for x in data]) if type(data[0][1]) == torch.Tensor else torch.tensor([x[1] for x in data]),
     )
 
 
@@ -256,8 +257,9 @@ def serialize_dataset(
     secret: bytes,
     client_info: ClientInfo,
     privacy_limit: Optional[float] = None,
-    chunk_size=100_000_000,
-    batch_size=1024,
+    chunk_size: int = 100_000_000,
+    batch_size: int = 1024,
+    train_dataset: Optional[Reference] = None,
 ) -> Iterator[Chunk]:
     """Coverts a dataset into an iterator of bytes chunks.
     
@@ -273,6 +275,7 @@ def serialize_dataset(
         privacy_limit: Maximum privacy budget that can be spent on this dataset.
         chunk_size: size of the bytes chunks sent over gRPC.
         batch_size: size of the batches (in number of samples) during the serialization step.
+        train_dataset: metadata, True means this dataset is suited for training, False that it should be used for testing/validating only
     """
     return data_chunks_generator(
         stream_artifacts(
@@ -280,10 +283,17 @@ def serialize_dataset(
             chunk_size,
             serialization_fn=serialize_batch(privacy_limit),
         ),
-        name,
-        description,
-        secret,
-        client_info,
+        name=name,
+        description=description,
+        secret=secret,
+        client_info=client_info,
+        meta=bulk_serialize({
+            "input_shape": [input.size() for input in dataset[0][0]],
+            "input_dtype": [input.dtype for input in dataset[0][0]],
+            "nb_samples": len(dataset),
+            "privacy_limit": privacy_limit,
+            "train_dataset": train_dataset,
+        }),
     )
 
 
@@ -305,7 +315,7 @@ def serialize_model(
     """
     ts = torch.jit.script(model)
     return data_chunks_generator(
-        stream_artifacts(iter([ts]), chunk_size, torch.jit.save), name=name, description=description, secret=secret, client_info=client_info
+        stream_artifacts(iter([ts]), chunk_size, torch.jit.save), name=name, description=description, secret=secret, client_info=client_info, meta=b""
     )
 
 
@@ -349,3 +359,15 @@ class MultipleOutputWrapper(Module):
     def forward(self, *args, **kwargs) -> Tensor:
         output = self.inner.forward(*args, **kwargs)
         return output[self.output]
+
+def bulk_serialize(obj: Any) -> bytes:
+    buff = io.BytesIO()
+    torch.save(obj, buff)
+    buff.seek(0)
+    return buff.read()
+
+def bulk_deserialize(b: bytes) -> Any:
+    buff = io.BytesIO()
+    buff.write(b)
+    buff.seek(0)
+    return torch.load(buff)

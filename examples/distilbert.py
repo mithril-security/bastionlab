@@ -1,57 +1,53 @@
-from transformers import DistilBertForSequenceClassification, DistilBertTokenizer
 import torch
-from bastionai.client import Connection
-from bastionai.psg import expand_weights
-from bastionai.utils import MultipleOutputWrapper, TensorDataset
-from bastionai.pb.remote_torch_pb2 import TestConfig, TrainConfig, Empty
 import pandas as pd
-from sklearn.model_selection import train_test_split
 import numpy as np
+from sklearn.model_selection import train_test_split
+from transformers import DistilBertForSequenceClassification, DistilBertTokenizer
+from torch.utils.data import DataLoader
 
-# file_path = "examples/data/SMSSpamCollection"
+from bastionai.client import Connection
+from bastionai.optimizer_config import Adam
+from bastionai.utils import MultipleOutputWrapper, TensorDataset
 
-# # Load data
-# df = pd.DataFrame({ "label": int(), "text": str() }, index = [])
-# with open(file_path) as f:
-#   for line in f.readlines():
-#     split = line.split('\t')
-#     df = df.append({
-#         "label": 1 if split[0] == "spam" else 0,
-#         "text": split[1]
-#         }, ignore_index = True)
+##########################################################################################
 
-# tokenizer = DistilBertTokenizer.from_pretrained("distilbert-base-uncased")
+file_path = "./data/SMSSpamCollection"
 
-# # Preprocessing
-# token_id = []
-# attention_masks = []
-# for sample in df.text.values:
-#     encoding_dict = tokenizer.encode_plus(
-#         sample,
-#         add_special_tokens = True,
-#         max_length = 32,
-#         pad_to_max_length = True,
-#         return_attention_mask = True,
-#         return_tensors = 'pt'
-#     )
-#     token_id.append(encoding_dict['input_ids']) 
-#     attention_masks.append(encoding_dict['attention_mask'])
+labels = []
+texts = []
+with open(file_path) as f:
+  for line in f.readlines():
+    split = line.split('\t')
+    labels.append(1 if split[0] == "spam" else 0)
+    texts.append(split[1])
+df = pd.DataFrame({ "label": labels, "text": texts })
 
-# token_id = torch.cat(token_id, dim = 0)
-# attention_masks = torch.cat(attention_masks, dim = 0)
-# labels = torch.tensor(df.label.values)
+################################################################################
 
-# torch.save(token_id, "examples/data/token_id.pt")
-# torch.save(attention_masks, "examples/data/attention_masks.pt")
-# torch.save(labels, "examples/data/labels.pt")
+tokenizer = DistilBertTokenizer.from_pretrained("distilbert-base-uncased")
 
-token_id = torch.load("examples/data/token_id.pt")
-attention_masks = torch.load("examples/data/attention_masks.pt")
-labels = torch.load("examples/data/labels.pt")
+token_id = []
+attention_masks = []
+for sample in df.text.values:
+    encoding_dict = tokenizer.encode_plus(
+        sample,
+        add_special_tokens=True,
+        max_length=32,
+        truncation=True,
+        padding="max_length",
+        return_attention_mask=True,
+        return_tensors='pt'
+    )
+    token_id.append(encoding_dict['input_ids']) 
+    attention_masks.append(encoding_dict['attention_mask'])
 
-# Make training and testing datasets
+token_id = torch.cat(token_id, dim=0)
+attention_masks = torch.cat(attention_masks, dim=0)
+labels = torch.tensor(df.label.values)
+
+######################################################################
+
 val_ratio = 0.2
-batch_size = 4
 
 train_idx, test_idx = train_test_split(
     np.arange(len(labels)),
@@ -59,7 +55,6 @@ train_idx, test_idx = train_test_split(
     shuffle=True,
     stratify=labels
 )
-train_idx = train_idx[:160]
 
 train_set = TensorDataset([
     token_id[train_idx], 
@@ -71,70 +66,52 @@ test_set = TensorDataset([
     attention_masks[test_idx]
 ], labels[test_idx])
 
+#######################################################################
 
-# Load, expand and trace model
+# Do not display warnings about layer not initialized
+# with pretrained weights (classification layers, this is fine)
+from transformers import logging
+logging.set_verbosity_error()
+
 model = DistilBertForSequenceClassification.from_pretrained(
-    'bert-base-uncased',
+    'distilbert-base-uncased',
     num_labels=2,
     output_attentions=False,
     output_hidden_states=False,
     torchscript=True
 )
-expand_weights(model, batch_size)
-# print(model)
-# raise Exception("Stop")
+model = MultipleOutputWrapper(model, 0)
 
-[text, mask], label = train_set[0]
-traced_model = torch.jit.trace(
-    MultipleOutputWrapper(model, 0),
-    [
-        text.unsqueeze(0),
-        mask.unsqueeze(0),
-        #label.unsqueeze(0)
-    ]
-)
+###############################################################################################
 
-# from torch.utils.data import DataLoader
-# d = DataLoader(train_set, batch_size=16)
-# for [text, mask], label in d:
-#     out = traced_model(text, mask)
-#     loss = torch.nn.functional.cross_entropy(out, label)
-#     loss.backward()
-    # raise Exception("Stop")
+# The Data Owner privately uploads their model online
+with Connection("localhost", 50051) as client:
+    remote_dataset = client.RemoteDataset(train_set, test_set, name="SMSSpamCollection")
 
-with Connection("::1", 50051) as client:
-    model_ref = client.send_model(
-        traced_model,
-        "Expanded DistilBERT",
-        b"secret"
+################################################################################################
+
+with Connection("localhost", 50051) as client:
+    remote_datasets = client.list_remote_datasets()
+
+print([str(ds) for ds in remote_datasets])
+
+#################################################################################################
+
+import warnings
+warnings.filterwarnings("ignore")
+
+# The Data Scientist discovers available datasets and use one of them to train their model
+with Connection("localhost", 50051) as client:
+    remote_learner = client.RemoteLearner(
+        model,
+        remote_datasets[0],
+        max_batch_size=4,
+        loss="cross_entropy",
+        optimizer=Adam(lr=5e-5),
+        model_name="DistilBERT",
     )
-    print(f"Model ref: {model_ref}")
 
-    train_dataset_ref = client.send_dataset(
-        train_set,
-        "SMSSpamCollection",
-        b'secret'
-    )
-    print(f"Dataset ref: {train_dataset_ref}")
-
-    client.train(TrainConfig(
-        model=model_ref,
-        dataset=train_dataset_ref,
-        batch_size=batch_size,
-        epochs=2,
-        device="cpu",
-        metric="cross_entropy",
-        differential_privacy=TrainConfig.DpParameters(
-            max_grad_norm=100.,
-            noise_multiplier=0.001
-        ),
-        # standard=Empty(),
-        adam=TrainConfig.Adam(
-            learning_rate=5e-5,
-            beta_1=0.9,
-            beta_2=0.999,
-            epsilon=1e-8,
-            weight_decay=0,
-            amsgrad=False
-        )
-    ))
+    remote_learner.fit(nb_epochs=2, eps=6.0)#, poll_delay=1.0)
+    remote_learner.test(metric="accuracy")
+    
+    trained_model = remote_learner.get_model()
