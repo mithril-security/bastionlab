@@ -92,8 +92,9 @@ impl RemoteTorch for BastionAIServer {
         };
 
         let dataset: Artifact<Dataset> = tcherror_to_status((artifact).deserialize())?;
-        let name = String::from(dataset.name.clone());
-        let description = String::from(dataset.description.clone());
+        let name = dataset.name.clone();
+        let description = dataset.description.clone();
+        let meta = dataset.meta.clone();
         let identifier = Uuid::new_v4();
 
         self.datasets
@@ -124,6 +125,7 @@ impl RemoteTorch for BastionAIServer {
             identifier: format!("{}", identifier),
             name,
             description,
+            meta,
         }))
     }
 
@@ -146,8 +148,9 @@ impl RemoteTorch for BastionAIServer {
         };
 
         let module: Artifact<Module> = tcherror_to_status(artifact.deserialize())?;
-        let name = String::from(module.name.clone());
-        let description = String::from(module.description.clone());
+        let name = module.name.clone();
+        let description = module.description.clone();
+        let meta = module.meta.clone();
         let identifier = Uuid::new_v4();
 
         self.modules
@@ -179,6 +182,7 @@ impl RemoteTorch for BastionAIServer {
             identifier: format!("{}", identifier),
             name,
             description,
+            meta,
         }))
     }
 
@@ -284,6 +288,7 @@ impl RemoteTorch for BastionAIServer {
             identifier: format!("{}", identifier),
             name: format!("Run #{}", identifier),
             description: String::from(""),
+            meta: Vec::new(),
         }))
     }
 
@@ -345,6 +350,7 @@ impl RemoteTorch for BastionAIServer {
             identifier: format!("{}", identifier),
             name: format!("Run #{}", identifier),
             description: String::from(""),
+            meta: Vec::new(),
         }))
     }
 
@@ -361,6 +367,7 @@ impl RemoteTorch for BastionAIServer {
                 identifier: format!("{}", k),
                 name: v.name.clone(),
                 description: v.description.clone(),
+                meta: v.meta.clone(),
             })
             .collect();
 
@@ -380,6 +387,7 @@ impl RemoteTorch for BastionAIServer {
                 identifier: format!("{}", k),
                 name: v.name.clone(),
                 description: v.description.clone(),
+                meta: v.meta.clone(),
             })
             .collect();
 
@@ -421,7 +429,7 @@ impl RemoteTorch for BastionAIServer {
             .read()
             .unwrap()
         {
-            Run::Pending => Err(Status::internal("Run has not started.")),
+            Run::Pending => Err(Status::unavailable("Run has not started.")),
             Run::Ok(m) => Ok(Response::new(m.clone())),
             Run::Error(e) => Err(Status::internal(e.message())),
         }

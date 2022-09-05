@@ -4,7 +4,6 @@ from bastionai.pb.remote_torch_pb2 import Chunk, Reference, TrainConfig, Metric
 from bastionai.utils import *
 from bastionai.client import Client
 from test_utils import Params, DummyModule, module_eq, simple_dataset
-from torch.utils.data import DataLoader
 
 
 class MockStub:
@@ -52,11 +51,10 @@ def test_api(simple_dataset):
 
     client = Client(MockStub(), client_info=ClientInfo())
 
-    dl = DataLoader(simple_dataset, batch_size=2)
-    remote_dataloader = client.RemoteDataLoader(dl, dl, privacy_limit=344.0)
+    remote_dataloader = client.RemoteDataset(simple_dataset, privacy_limit=344.0)
 
     remote_learner = client.RemoteLearner(
-        model, remote_dataloader, loss="l2", expand=False, progress=False
+        model, remote_dataloader, loss="l2", expand=False, progress=False, max_batch_size=2,
     )
 
     remote_learner.fit(nb_epochs=100, eps=142.0)

@@ -3,12 +3,14 @@ use crate::storage::Artifact;
 use crate::Reference;
 use bastionai_learning::serialization::SizedObjectsBytes;
 use log::info;
-use std::{sync::Arc, time::Instant};
+use std::time::Instant;
 use tch::Device;
 use tokio::sync::mpsc;
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use tonic::{Response, Status};
 use uuid::Uuid;
+use ring::hmac;
+use std::sync::{Arc, RwLock};
 
 /// Returns a raw artifact from a stream of chunks received over gRPC.
 /// 
@@ -27,6 +29,7 @@ pub async fn unstream_data(
     let mut name: String = String::new();
     let mut description: String = String::new();
     let mut secret: Vec<u8> = Vec::new();
+    let mut meta: Vec<u8> = Vec::new();
     let mut client_info: Option<ClientInfo> = None;
 
     while let Some(chunk) = stream.next().await {
@@ -42,10 +45,19 @@ pub async fn unstream_data(
         if chunk.secret.len() != 0 {
             secret = chunk.secret;
         }
+        if chunk.meta.len() != 0 {
+            meta = chunk.meta;
+        }
     }
 
     Ok((
-        Artifact::new(data_bytes.into(), name, description, &secret),
+        Artifact {
+            data: Arc::new(RwLock::new(data_bytes.into())),
+            name,
+            description,
+            secret: hmac::Key::new(hmac::HMAC_SHA256, &secret),
+            meta,
+        },
         client_info,
     ))
 }
@@ -81,6 +93,11 @@ pub async fn stream_data(
                 },
                 secret: vec![],
                 client_info: Some(ClientInfo::default()),
+                meta: if i == 0 {
+                    artifact.meta.clone()
+                } else {
+                    Vec::new()
+                },
             }))
             .await
             .unwrap(); // Fix this

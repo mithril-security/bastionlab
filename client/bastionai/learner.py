@@ -2,7 +2,7 @@ from typing import Optional, Union, List
 
 from bastionai.pb.remote_torch_pb2 import Metric, Reference, TestConfig, TrainConfig  # type: ignore [import]
 from torch.nn import Module
-from torch.utils.data import DataLoader
+from torch.utils.data import Dataset
 import torch
 from bastionai.psg import expand_weights
 from bastionai.client import Client
@@ -11,87 +11,116 @@ from bastionai.optimizer_config import *
 from time import sleep
 from tqdm import tqdm  # type: ignore [import]
 
+import grpc # type: ignore [import]
+from grpc import StatusCode
 
-class RemoteDataLoader:
+from bastionai.utils import bulk_deserialize
+
+
+class RemoteDataset:
     """Represents a remote dataloader on the BlindAI server encapsulating a training
     and optional testing datasets along with dataloading parameters.
 
     Args:
         client: A BastionAI client to be used to access server resources.
-        train_dataloader: A `torch.utils.data.DataLoader` instance for training that will be uploaded on the server.
-        test_dataloader: An optional `torch.utils.data.DataLoader` instance for testing that will be uploaded on the server.
+        train_dataset: A `torch.utils.data.Dataset` instance for training that will be uploaded on the server.
+        test_dataset: An optional `torch.utils.data.Dataset` instance for testing that will be uploaded on the server.
         name: A name for the uploaded dataset.
         description: A string description of the dataset being uploaded.
         secret: [In progress] Owner secret override for the uploaded data.
     """
+
     def __init__(
         self,
         client: Client,
-        train_dataloader: DataLoader,
-        test_dataloader: Optional[DataLoader] = None,
+        train_dataset: Union[Dataset, Reference],
+        test_dataset: Optional[Union[Dataset, Reference]] = None,
         privacy_limit: Optional[float] = None,
         name: Optional[str] = None,
         description: str = "",
         secret: Optional[bytes] = None,
     ) -> None:
-        if (
-            test_dataloader is not None
-            and train_dataloader.batch_size != test_dataloader.batch_size
-        ):
-            raise Exception("Train and test dataloaders must use the same batch size.")
-        self.train_dataset_ref = client.send_dataset(
-            train_dataloader.dataset,
-            name=name if name is not None else type(train_dataloader.dataset).__name__,
-            description=description,
-            secret=secret,
-            privacy_limit=privacy_limit,
-        )
-        if test_dataloader is not None:
-            self.test_dataset_ref = client.send_dataset(
-                test_dataloader.dataset,
-                name=f"{name} (test)"
-                if name is not None
-                else type(test_dataloader.dataset).__name__,
+        if isinstance(train_dataset, Dataset):
+            self.train_dataset_ref = client.send_dataset(
+                train_dataset,
+                name=name if name is not None else type(train_dataset).__name__,
                 description=description,
                 secret=secret,
                 privacy_limit=privacy_limit,
             )
+            self.name = name
+            self.description = description
+            self.trace_input = [input.unsqueeze(0) for input in train_dataset[0][0]]
+            self.nb_samples = len(train_dataset)  # type: ignore [arg-type]
+            self.privacy_limit = privacy_limit
         else:
-            self.test_dataset_ref = None
-        self.trace_input, _ = train_dataloader.dataset[0]
+            self.train_dataset_ref = train_dataset
+            self.name = self.train_dataset_ref.name
+            self.description = self.train_dataset_ref.description
+            meta = bulk_deserialize(train_dataset.meta)
+            self.trace_input = [
+                torch.zeros(s, dtype=dtype)
+                if dtype
+                in [torch.uint8, torch.int8, torch.int16, torch.int32, torch.int64]
+                else torch.randn(s, dtype=dtype)
+                for s, dtype in zip(meta["input_shape"], meta["input_dtype"])
+            ]
+            self.nb_samples = meta["nb_samples"]
+            self.privacy_limit = meta["privacy_limit"]
+        if test_dataset is not None and isinstance(test_dataset, Dataset):
+            self.test_dataset_ref = client.send_dataset(
+                test_dataset,
+                name=f"{name} (test)"
+                if name is not None
+                else type(test_dataset).__name__,
+                description=description,
+                secret=secret,
+                privacy_limit=privacy_limit,
+                train_dataset=self.train_dataset_ref,
+            )
+        else:
+            self.test_dataset_ref = test_dataset
         self.client = client
-        if train_dataloader.batch_size is None:
-            raise Exception("A batch size must be provided to the dataloader.")
-        self.batch_size: int = train_dataloader.batch_size
-        self.name = name
-        self.description = description
         self.secret = secret
-        self.privacy_limit = privacy_limit
-        self.nb_samples = len(train_dataloader.dataset)  # type: ignore [arg-type]
 
-    def _set_test_dataloader(self, test_dataloader: DataLoader) -> None:
-        if self.batch_size != test_dataloader.batch_size:
-            raise Exception("Train and test dataloaders must use the same batch size.")
-        self.test_dataset_ref = self.client.send_dataset(
-            test_dataloader.dataset,
-            name=f"{self.name} (test)"
-            if self.description is not None
-            else type(test_dataloader.dataset).__name__,
-            description=self.description,
-            secret=self.secret,
-            privacy_limit=self.privacy_limit,
-        )
+    @staticmethod
+    def list_available(client: Client) -> List["RemoteDataset"]:
+        """Returns the list of `RemoteDataset`s available on the server."""
+        refs = client.get_available_datasets()
+        ds = [(ref, bulk_deserialize(ref.meta)["train_dataset"]) for ref in refs]
+        return [RemoteDataset(client, d[1], d[0]) for d in ds if d[1] is not None]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.train_dataset_ref.identifier}): size={self.nb_samples}, desc={self.description if len(self.description) > 0 else 'N/A'}"
+
+    def __format__(self, __format_spec: str) -> str:
+        return self.__str__()
+
+    def _set_test_dataset(self, test_dataset: Union[Dataset, Reference]) -> None:
+        if not type(test_dataset) == Reference:
+            self.test_dataset_ref = self.client.send_dataset(
+                test_dataset,
+                name=f"{self.name} (test)"
+                if self.description is not None
+                else type(test_dataset).__name__,
+                description=self.description,
+                secret=self.secret,
+                privacy_limit=self.privacy_limit,
+                train_dataset=self.train_dataset_ref,
+            )
+        else:
+            self.test_dataset_ref = test_dataset
 
 
 class RemoteLearner:
     """Represents a remote model on the server along with hyperparameters to train and test it.
-    
+
     The remote learner accepts the model to be trained with a `RemoteDataLoader`.
 
     Args:
         client: A BastionAI client to be used to access server resources.
         model: A Pytorch nn.Module or a BastionAI gRPC protocol reference to a distant model.
-        remote_dataloader: A BastionAI remote dataloader.
+        remote_dataset: A BastionAI remote dataloader.
         loss: The name of the loss to use for training the model, supported loss functions are "l2" and "cross_entropy".
         optimizer: The configuration of the optimizer to use during training, refer to the documentation of `OptimizerConfig`.
         device: Name of the device on which to train model. The list of supported devices may be obtained using the
@@ -106,12 +135,14 @@ class RemoteLearner:
         expand: Whether to expand model's weights prior to uploading it, or not.
         progress: Whether to display a tqdm progress bar or not.
     """
+
     def __init__(
         self,
         client: Client,
         model: Union[Module, Reference],
-        remote_dataloader: RemoteDataLoader,
+        remote_dataset: Union[RemoteDataset, Reference],
         loss: str,
+        max_batch_size: int,
         optimizer: OptimizerConfig = Adam(),
         device: str = "cpu",
         max_grad_norm: float = 1.0,
@@ -126,7 +157,7 @@ class RemoteLearner:
             model_class_name = type(model).__name__
 
             if expand:
-                expand_weights(model, remote_dataloader.batch_size)
+                expand_weights(model, max_batch_size)
             self.model = model
             try:
                 model = torch.jit.script(model)
@@ -134,7 +165,7 @@ class RemoteLearner:
                 model = torch.jit.trace(  # Compile the model with the tracing strategy
                     # Wrapp the model to use the first output only (and drop the others)
                     model,
-                    [x.unsqueeze(0) for x in remote_dataloader.trace_input],
+                    [x.unsqueeze(0) for x in remote_dataset.trace_input],
                 )
             self.model_ref = client.send_model(
                 model,
@@ -144,15 +175,20 @@ class RemoteLearner:
             )
         else:
             self.model_ref = model
-        self.remote_dataloader = remote_dataloader
+        self.remote_dataset = (
+            remote_dataset
+            if type(remote_dataset) == RemoteDataset
+            else RemoteDataset(client, remote_dataset)
+        )
         self.client = client
         self.loss = loss
         self.optimizer = optimizer
         self.device = device
+        self.max_batch_size = max_batch_size
         self.max_grad_norm = max_grad_norm
         self.metric_eps_per_batch = (
             0.01
-            if self.remote_dataloader.privacy_limit is not None
+            if self.remote_dataset.privacy_limit is not None
             and metric_eps_per_batch is None
             else (metric_eps_per_batch if metric_eps_per_batch is not None else -1.0)
         )
@@ -163,14 +199,16 @@ class RemoteLearner:
         self,
         nb_epochs: int,
         eps: Optional[float],
+        batch_size: Optional[int] = None,
         max_grad_norm: Optional[float] = None,
         lr: Optional[float] = None,
         metric_eps: Optional[float] = None,
     ) -> TrainConfig:
+        batch_size = batch_size if batch_size is not None else self.max_batch_size
         return TrainConfig(
             model=self.model_ref,
-            dataset=self.remote_dataloader.train_dataset_ref,
-            batch_size=self.remote_dataloader.batch_size,
+            dataset=self.remote_dataset.train_dataset_ref,
+            batch_size=batch_size,
             epochs=nb_epochs,
             device=self.device,
             metric=self.loss,
@@ -180,27 +218,27 @@ class RemoteLearner:
             if metric_eps
             else self.metric_eps_per_batch
             * float(nb_epochs)
-            * float(
-                self.remote_dataloader.nb_samples / self.remote_dataloader.batch_size
-            ),
+            * float(self.remote_dataset.nb_samples / batch_size),
             **self.optimizer.to_msg_dict(lr),
         )
 
     def _test_config(
-        self, metric: Optional[str] = None, metric_eps: Optional[float] = None
+        self,
+        batch_size: Optional[int] = None,
+        metric: Optional[str] = None,
+        metric_eps: Optional[float] = None,
     ) -> TestConfig:
+        batch_size = batch_size if batch_size is not None else self.max_batch_size
         return TestConfig(
             model=self.model_ref,
-            dataset=self.remote_dataloader.test_dataset_ref,
-            batch_size=self.remote_dataloader.batch_size,
+            dataset=self.remote_dataset.test_dataset_ref,
+            batch_size=batch_size,
             device=self.device,
             metric=metric if metric is not None else self.loss,
             metric_eps=metric_eps
             if metric_eps
             else self.metric_eps_per_batch
-            * float(
-                self.remote_dataloader.nb_samples / self.remote_dataloader.batch_size
-            ),
+            * float(self.remote_dataset.nb_samples / batch_size),
         )
 
     @staticmethod
@@ -233,8 +271,11 @@ class RemoteLearner:
                 sleep(poll_delay)
                 metric = self.client.get_metric(run)
                 break
-            except:
-                continue
+            except grpc._channel._InactiveRpcError as e:
+                if e._state.code == StatusCode.UNAVAILABLE:
+                    continue
+                else:
+                    raise e
         if metric is None:
             raise Exception(
                 f"Run start timeout. Polling has stoped. You may query the server by hand later using: run id is {run.identifier}"
@@ -293,6 +334,7 @@ class RemoteLearner:
         self,
         nb_epochs: int,
         eps: Optional[float],
+        batch_size: Optional[int] = None,
         max_grad_norm: Optional[float] = None,
         lr: Optional[float] = None,
         metric_eps: Optional[float] = None,
@@ -313,15 +355,22 @@ class RemoteLearner:
             poll_delay: Delay in seconds between two polling requests for the loss.
         """
         run = self.client.train(
-            self._train_config(nb_epochs, eps, max_grad_norm, lr, metric_eps)
+            self._train_config(
+                nb_epochs, eps, batch_size, max_grad_norm, lr, metric_eps
+            )
         )
         self._poll_metric(
-            run, name=self.loss, train=True, timeout=int(timeout / poll_delay), poll_delay=poll_delay
+            run,
+            name=self.loss,
+            train=True,
+            timeout=int(timeout / poll_delay),
+            poll_delay=poll_delay,
         )
 
     def test(
         self,
-        test_dataloader: Optional[DataLoader] = None,
+        test_dataset: Optional[Union[Dataset, Reference]] = None,
+        batch_size: Optional[int] = None,
         metric: Optional[str] = None,
         metric_eps: Optional[float] = None,
         timeout: int = 100,
@@ -330,7 +379,7 @@ class RemoteLearner:
         """Tests the remote model with the test dataloader provided in the RemoteDataLoader.
 
         Args:
-            test_dataloader: overrides the test dataloader passed to the remote `RemoteDataLoader` constructor.
+            test_dataset: overrides the test dataset passed to the remote `RemoteDataset` constructor.
             metric: test metric name, if not providedm the training loss is used. Metrics available are loss functions and `accuracy`.
             metric_eps: Global privacy budget for metric disclosure for the whole testing procedure that overrides
                         the default per-batch budget.
@@ -338,9 +387,9 @@ class RemoteLearner:
                      polling ends and the progress bar is terminated.
             poll_delay: Delay in seconds between two polling requests for the metric.
         """
-        if test_dataloader is not None:
-            self.remote_dataloader._set_test_dataloader(test_dataloader)
-        run = self.client.test(self._test_config(metric, metric_eps))
+        if test_dataset is not None:
+            self.remote_dataset._set_test_dataset(test_dataset)
+        run = self.client.test(self._test_config(batch_size, metric, metric_eps))
         self._poll_metric(
             run,
             name=metric if metric is not None else self.loss,

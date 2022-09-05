@@ -11,19 +11,10 @@ pub struct Artifact<T> {
     pub name: String,
     pub description: String,
     pub secret: hmac::Key,
+    pub meta: Vec<u8>,
 }
 
 impl<T> Artifact<T> {
-    /// Creates new artifact from data, name, description and owner key.
-    pub fn new(data: T, name: String, description: String, secret: &[u8]) -> Self {
-        Artifact {
-            data: Arc::new(RwLock::new(data)),
-            name,
-            description,
-            secret: hmac::Key::new(hmac::HMAC_SHA256, &secret),
-        }
-    }
-
     /// Verifies passed meassage and tag against stored owner key.
     pub fn verify(&self, msg: &[u8], tag: &[u8]) -> bool {
         match hmac::verify(&self.secret, msg, tag) {
@@ -47,6 +38,7 @@ where
             name: self.name.clone(),
             description: self.description.clone(),
             secret: self.secret.clone(),
+            meta: self.meta.clone(),
         })
     }
 }
@@ -66,6 +58,7 @@ impl Artifact<SizedObjectsBytes> {
             name: self.name,
             description: self.description,
             secret: self.secret,
+            meta: self.meta,
         })
     }
 }

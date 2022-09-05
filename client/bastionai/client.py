@@ -27,7 +27,7 @@ from bastionai.utils import (
 from bastionai.version import __version__ as app_version
 
 if TYPE_CHECKING:
-    from bastionai.learner import RemoteLearner, RemoteDataLoader
+    from bastionai.learner import RemoteLearner, RemoteDataset
 
 
 class Client:
@@ -91,8 +91,9 @@ class Client:
         description: str = "",
         secret: Optional[bytes] = None,
         privacy_limit: Optional[float] = None,
-        chunk_size=100_000_000,
-        batch_size=1024,
+        chunk_size: int = 100_000_000,
+        batch_size: int = 1024,
+        train_dataset: Optional[Reference] = None,
     ) -> Reference:
         """Uploads a Pytorch Dataset to the BastionAI server.
 
@@ -105,22 +106,12 @@ class Client:
             batch_size: Size of a unit of serialization in number of samples,
                         increasing this value may increase serialization throughput
                         at the price of a higher memory consumption.
+            train_dataset: metadata, True means this dataset is suited for training,
+                   False that it should be used for testing/validating only
 
         Returns:
             BastionAI gRPC protocol's reference object.
         """
-        list(
-            serialize_dataset(
-                dataset,
-                name=name,
-                description=description,
-                secret=secret if secret is not None else self.default_secret,
-                chunk_size=chunk_size,
-                batch_size=batch_size,
-                privacy_limit=privacy_limit,
-                client_info=self.client_info,
-            )
-        )
         return self.stub.SendDataset(
             serialize_dataset(
                 dataset,
@@ -131,6 +122,7 @@ class Client:
                 batch_size=batch_size,
                 privacy_limit=privacy_limit,
                 client_info=self.client_info,
+                train_dataset=train_dataset,
             )
         )
 
@@ -158,11 +150,11 @@ class Client:
 
     def get_available_models(self) -> List[Reference]:
         """Returns the list of BastionAI gRPC protocol references of all available models on the server."""
-        return self.stub.AvailableModels(Empty())
+        return self.stub.AvailableModels(Empty()).list
 
     def get_available_datasets(self) -> List[Reference]:
         """Returns the list of BastionAI gRPC protocol references of all datasets on the server."""
-        return self.stub.AvailableDatasets(Empty())
+        return self.stub.AvailableDatasets(Empty()).list
 
     def get_available_devices(self) -> List[str]:
         """Returns the list of devices available on the server."""
@@ -211,8 +203,13 @@ class Client:
             run: BastionAI gRPC protocol reference of the run whose metric is read.
         """
         return self.stub.GetMetric(run)
+    
+    def list_remote_datasets(self) -> List["RemoteDataset"]:
+        from bastionai.learner import RemoteDataset
 
-    def RemoteDataLoader(self, *args, **kwargs) -> "RemoteDataLoader":
+        return RemoteDataset.list_available(self)
+
+    def RemoteDataset(self, *args, **kwargs) -> "RemoteDataset":
         """Returns a RemoteDataLoader object encapsulating a training and testing dataloaders
         on the remote server that uses this client to communicate with the server.
 
@@ -220,9 +217,9 @@ class Client:
             *args: all arguments are forwarded to the `RemoteDataLoader` constructor.
             **kwargs: all keyword arguments are forwarded to the `RemoteDataLoader` constructor.
         """
-        from bastionai.learner import RemoteDataLoader
+        from bastionai.learner import RemoteDataset
 
-        return RemoteDataLoader(self, *args, **kwargs)
+        return RemoteDataset(self, *args, **kwargs)
 
     def RemoteLearner(self, *args, **kwargs) -> "RemoteLearner":
         """Returns a RemoteLearner object encapsulating a model and hyperparameters for

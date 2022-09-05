@@ -19,9 +19,9 @@ logging.basicConfig(level=logging.INFO)
 class LinRegTest(unittest.TestCase):
     def test_model_and_data_upload(self):
         with Connection("localhost", 50051, default_secret=b"") as client:
-            remote_dataloader = client.RemoteDataLoader(
-                train_dataloader,
-                test_dataloader,
+            remote_dataloader = client.RemoteDataset(
+                train_dataset,
+                test_dataset,
                 name="1D Linear Regression",
                 description="Dummy 1D Linear Regression Dataset (param is 2)",
                 privacy_limit=8320.1,
@@ -34,15 +34,16 @@ class LinRegTest(unittest.TestCase):
                 model_name="Linear 1x1",
                 model_description="1D Linear Regression Model",
                 expand=False,
+                max_batch_size=2,
             )
 
         self.assertEqual(remote_learner.client, client)
 
     def test_weights_before_and_after_upload(self):
         with Connection("localhost", 50051, default_secret=b"") as client:
-            remote_dataloader = client.RemoteDataLoader(
-                train_dataloader,
-                test_dataloader,
+            remote_dataloader = client.RemoteDataset(
+                train_dataset,
+                test_dataset,
                 name="1D Linear Regression",
                 description="Dummy 1D Linear Regression Dataset (param is 2)",
                 privacy_limit=8320.1,
@@ -55,6 +56,7 @@ class LinRegTest(unittest.TestCase):
                 model_name="Linear 1x1",
                 model_description="1D Linear Regression Model",
                 expand=False,
+                max_batch_size=2,
             )
 
             bastion_lreg_model = remote_learner.get_model()
@@ -62,7 +64,7 @@ class LinRegTest(unittest.TestCase):
 
 
 def setUpModule():
-    global train_dataloader, test_dataloader, lreg_model
+    global train_dataset, test_dataset, lreg_model
 
     launch_server()
 
@@ -79,12 +81,10 @@ def setUpModule():
     X = torch.tensor([[0.0], [1.0], [0.5], [0.2]])
     Y = torch.tensor([[0.0], [2.0], [1.0], [0.4]])
     train_dataset = TensorDataset([X], Y)
-    train_dataloader = DataLoader(train_dataset, batch_size=2)
 
     X = torch.tensor([[0.1], [-1.0]])
     Y = torch.tensor([[0.2], [-2.0]])
     test_dataset = TensorDataset([X], Y)
-    test_dataloader = DataLoader(test_dataset, batch_size=2)
 
 
 if __name__ == "__main__":
