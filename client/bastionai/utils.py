@@ -8,8 +8,6 @@ from torch.nn import Module
 from torch.nn.parameter import Parameter
 from torch.utils.data import Dataset
 
-from tqdm import tqdm  # type: ignore [import]
-
 from bastionai.pb.remote_torch_pb2 import Chunk, ClientInfo, Reference  # type: ignore [import]
 
 T = TypeVar("T")

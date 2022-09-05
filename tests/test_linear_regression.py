@@ -34,6 +34,7 @@ class LinRegTest(unittest.TestCase):
                 model_name="Linear 1x1",
                 model_description="1D Linear Regression Model",
                 expand=False,
+                max_batch_size=2,
             )
 
         self.assertEqual(remote_learner.client, client)
@@ -55,6 +56,7 @@ class LinRegTest(unittest.TestCase):
                 model_name="Linear 1x1",
                 model_description="1D Linear Regression Model",
                 expand=False,
+                max_batch_size=2,
             )
 
             bastion_lreg_model = remote_learner.get_model()
