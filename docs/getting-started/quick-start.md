@@ -3,7 +3,7 @@
 ### From source
 
 First clone our repo:
-```
+```bash
 $ git clone git@github.com:mithril-security/bastionai.git
 ```
 Then install the client library:
