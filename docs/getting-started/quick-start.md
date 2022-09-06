@@ -104,7 +104,12 @@ docker run -p 50051:50051 -d bastionai
 
 ### From source
 
-First clone our repo:
+First make sure that the following build dependences (Debian-like systems) are installed on your machine:
+```
+sudo apt update && apt install -y build-essential patchelf libssl-dev pkg-config curl unzip
+```
+
+Then, clone our repository:
 ```
 git clone git@github.com:mithril-security/bastionai.git
 ```
