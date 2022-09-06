@@ -114,7 +114,7 @@ impl RemoteTorch for BastionAIServer {
 
         telemetry::add_event(
             TelemetryEventProps::SendDataset {
-                dataset_name: Some(description.clone()),
+                dataset_name: Some(name.clone()),
                 dataset_size,
                 time_taken: elapsed.as_millis() as f64,
                 dataset_hash: Some(dataset_hash)
@@ -171,7 +171,7 @@ impl RemoteTorch for BastionAIServer {
 
         telemetry::add_event(
             TelemetryEventProps::SendModel {
-                model_name: Some(description.clone()),
+                model_name: Some(name.clone()),
                 model_hash: Some(model_hash),
                 model_size,
                 time_taken: elapsed.as_millis() as f64,

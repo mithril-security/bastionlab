@@ -32,20 +32,16 @@ pub async fn unstream_data(
     let mut meta: Vec<u8> = Vec::new();
     let mut client_info: Option<ClientInfo> = None;
 
+    let mut first = true;
     while let Some(chunk) = stream.next().await {
         let mut chunk = chunk?;
         data_bytes.append(&mut chunk.data);
-        if chunk.name.len() != 0 {
+        if first {
+            first = false;
             name = chunk.name;
-        }
-        if chunk.description.len() != 0 {
             description = chunk.description;
-            client_info = chunk.client_info;
-        }
-        if chunk.secret.len() != 0 {
             secret = chunk.secret;
-        }
-        if chunk.meta.len() != 0 {
+            client_info = chunk.client_info;
             meta = chunk.meta;
         }
     }
