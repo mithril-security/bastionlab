@@ -1,5 +1,6 @@
 import torch
 from .nn import LayerNorm, Linear, Embedding, Conv1d, Conv2d, Conv3d
+from typing import Tuple
 
 
 def _set_weight_and_bias(
@@ -29,102 +30,111 @@ def _set_weight_and_bias(
             destination_layer.bias.add_(source_layer.bias) # type: ignore [operator, arg-type]
 
 
-def expand_weights(module: torch.nn.Module, max_batch_size: int) -> None:
+def parent_layer(module, name: str) -> Tuple[torch.nn.Module, str]:
+    """Returns the parent module of the layer corresponding to the given name (path)
+    in the given module and the attribute name of the layer wrt its parent.
     """
-    Recursively converts the layers of a model to their expanded counterpart in `bastionai.psg.nn`.
+    segments = name.strip().split('.')
+    child_name = segments[-1]
+    
+    layer = module
+    for segment in segments[:-1]:
+        if not segment.isnumeric():
+            layer = getattr(layer, segment)
+        else:
+            layer = layer[int(segment)]
+    
+    return (layer, child_name)
+
+def expand_weights(module: torch.nn.Module, max_batch_size: int) -> None:
+    """Recursively converts the layers of a model to their expanded counterpart in `bastionai.psg.nn`.
 
     Args:
         module: model whose weights must be expanded.
         max_batch_size: maximum size of the batches that will be processed by the model.
     """
-    # go through all attributes of module nn.module (e.g. network or layer) and put batch norms if present
-    for attr_str in dir(module):
-        target_attr = getattr(module, attr_str)
-        if type(target_attr) == torch.nn.Linear:
-            linear_layer = Linear(
-                in_features=target_attr.in_features,
-                out_features=target_attr.out_features,
+    for name, layer in module.named_modules():
+        if isinstance(layer, torch.nn.Linear):
+            expanded_layer = Linear(
+                in_features=layer.in_features,
+                out_features=layer.out_features,
                 max_batch_size=max_batch_size,
-                bias=target_attr.bias is not None,
+                bias=layer.bias is not None,
             )
-            _set_weight_and_bias(linear_layer, target_attr)
-            setattr(module, attr_str, linear_layer)
-        elif type(target_attr) == torch.nn.Conv1d:
-            conv_layer = Conv1d(
-                in_channels=target_attr.in_channels,
-                out_channels=target_attr.out_channels,
-                kernel_size=target_attr.kernel_size,
+            _set_weight_and_bias(expanded_layer, layer)
+            setattr(*parent_layer(module, name), expanded_layer)
+        elif isinstance(layer, torch.nn.Conv1d):
+            expanded_layer = Conv1d(
+                in_channels=layer.in_channels,
+                out_channels=layer.out_channels,
+                kernel_size=layer.kernel_size,
                 max_batch_size=max_batch_size,
-                stride=target_attr.stride,
-                padding=target_attr.padding,
-                dilation=target_attr.dilation,
-                groups=target_attr.groups,
-                bias=target_attr.bias is not None,
-                padding_mode=target_attr.padding_mode,
+                stride=layer.stride,
+                padding=layer.padding,
+                dilation=layer.dilation,
+                groups=layer.groups,
+                bias=layer.bias is not None,
+                padding_mode=layer.padding_mode,
             )
-            _set_weight_and_bias(conv_layer, target_attr)
-            setattr(module, attr_str, conv_layer)
-        elif type(target_attr) == torch.nn.Conv2d:
-            conv_layer = Conv2d(
-                in_channels=target_attr.in_channels,
-                out_channels=target_attr.out_channels,
-                kernel_size=target_attr.kernel_size,
+            _set_weight_and_bias(expanded_layer, layer)
+            setattr(*parent_layer(module, name), expanded_layer)
+        elif isinstance(layer, torch.nn.Conv2d):
+            expanded_layer = Conv2d(
+                in_channels=layer.in_channels,
+                out_channels=layer.out_channels,
+                kernel_size=layer.kernel_size,
                 max_batch_size=max_batch_size,
-                stride=target_attr.stride,
-                padding=target_attr.padding,
-                dilation=target_attr.dilation,
-                groups=target_attr.groups,
-                bias=target_attr.bias is not None,
-                padding_mode=target_attr.padding_mode,
+                stride=layer.stride,
+                padding=layer.padding,
+                dilation=layer.dilation,
+                groups=layer.groups,
+                bias=layer.bias is not None,
+                padding_mode=layer.padding_mode,
             )
-            _set_weight_and_bias(conv_layer, target_attr)
-            setattr(module, attr_str, conv_layer)
-        elif type(target_attr) == torch.nn.Conv3d:
-            conv_layer = Conv3d(
-                in_channels=target_attr.in_channels,
-                out_channels=target_attr.out_channels,
-                kernel_size=target_attr.kernel_size,
+            _set_weight_and_bias(expanded_layer, layer)
+            setattr(*parent_layer(module, name), expanded_layer)
+        elif isinstance(layer, torch.nn.Conv3d):
+            expanded_layer = Conv3d(
+                in_channels=layer.in_channels,
+                out_channels=layer.out_channels,
+                kernel_size=layer.kernel_size,
                 max_batch_size=max_batch_size,
-                stride=target_attr.stride,
-                padding=target_attr.padding,
-                dilation=target_attr.dilation,
-                groups=target_attr.groups,
-                bias=target_attr.bias is not None,
-                padding_mode=target_attr.padding_mode,
+                stride=layer.stride,
+                padding=layer.padding,
+                dilation=layer.dilation,
+                groups=layer.groups,
+                bias=layer.bias is not None,
+                padding_mode=layer.padding_mode,
             )
-            _set_weight_and_bias(conv_layer, target_attr)
-            setattr(module, attr_str, conv_layer)
-        elif type(target_attr) == torch.nn.Embedding:
-            embedding_layer = Embedding(
-                num_embeddings=target_attr.num_embeddings,
-                embedding_dim=target_attr.embedding_dim,
+            _set_weight_and_bias(expanded_layer, layer)
+            setattr(*parent_layer(module, name), expanded_layer)
+        elif isinstance(layer, torch.nn.Embedding):
+            expanded_layer = Embedding(
+                num_embeddings=layer.num_embeddings,
+                embedding_dim=layer.embedding_dim,
                 max_batch_size=max_batch_size,
-                padding_idx=target_attr.padding_idx,
-                max_norm=target_attr.max_norm,
-                norm_type=target_attr.norm_type,
-                scale_grad_by_freq=target_attr.scale_grad_by_freq,
-                sparse=target_attr.sparse,
+                padding_idx=layer.padding_idx,
+                max_norm=layer.max_norm,
+                norm_type=layer.norm_type,
+                scale_grad_by_freq=layer.scale_grad_by_freq,
+                sparse=layer.sparse,
             )
-            _set_weight_and_bias(embedding_layer, target_attr)
-            setattr(module, attr_str, embedding_layer)
-        elif type(target_attr) == torch.nn.LayerNorm:
-            norm_layer = LayerNorm(
-                normalized_shape=list(target_attr.normalized_shape),
+            _set_weight_and_bias(expanded_layer, layer)
+            setattr(*parent_layer(module, name), expanded_layer)
+        elif isinstance(layer, torch.nn.LayerNorm):
+            expanded_layer = LayerNorm(
+                normalized_shape=list(layer.normalized_shape),
                 max_batch_size=max_batch_size,
-                eps=target_attr.eps,
-                elementwise_affine=target_attr.elementwise_affine,
+                eps=layer.eps,
+                elementwise_affine=layer.elementwise_affine,
             )
 
-            if target_attr.elementwise_affine:
-                _set_weight_and_bias(norm_layer, target_attr)
-            setattr(module, attr_str, norm_layer)
-        elif type(target_attr) in [
+            if layer.elementwise_affine:
+                _set_weight_and_bias(expanded_layer, layer)
+            setattr(*parent_layer(module, name), expanded_layer)
+        elif any([isinstance(layer, t) for t in [
             torch.nn.BatchNorm1d,
             torch.nn.BatchNorm2d,
             torch.nn.BatchNorm3d,
-        ]:
-            setattr(module, attr_str, torch.nn.Identity())
-
-    # iterate through immediate child modules. Note, the recursion is done by our code no need to use named_modules()
-    for _, immediate_child_module in module.named_children():
-        expand_weights(immediate_child_module, max_batch_size)
+        ]]):
+            setattr(*parent_layer(module, name), torch.nn.Identity())

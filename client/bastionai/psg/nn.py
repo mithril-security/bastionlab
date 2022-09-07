@@ -93,6 +93,7 @@ class _ConvNd(conv._ConvNd):
             device,
             dtype,
         )
+        self.kernel_dim = len(kernel_size)
         self.max_batch_size = max_batch_size
         _reassign_parameter_as_buffer(self, "weight", self.weight.detach())
         self.expanded_weight = nn.Parameter(
@@ -110,9 +111,9 @@ class _ConvNd(conv._ConvNd):
 
     def extra_repr(self):
         s = super().extra_repr()
-        s_params = s.split(",")
+        s_params = s.split(", ")
         return ", ".join(
-            [*s_params[:3], f"max_batch_size={self.max_batch_size}", *s_params[3:]]
+            [*s_params[:2 + self.kernel_dim], f"max_batch_size={self.max_batch_size}", *s_params[2 + self.kernel_dim:]]
         )
 
 
@@ -310,7 +311,7 @@ class Linear(nn.Linear):
 
     def extra_repr(self):
         s = super().extra_repr()
-        s_params = s.split(",")
+        s_params = s.split(", ")
         return ", ".join(
             [*s_params[:3], f"max_batch_size={self.max_batch_size}", *s_params[3:]]
         )
@@ -383,7 +384,7 @@ class Embedding(nn.Embedding):
 
     def extra_repr(self):
         s = super().extra_repr()
-        s_params = s.split(",")
+        s_params = s.split(", ")
         return ", ".join(
             [*s_params[:3], f"max_batch_size={self.max_batch_size}", *s_params[3:]]
         )
@@ -455,7 +456,7 @@ class LayerNorm(nn.LayerNorm):
 
     def extra_repr(self):
         s = super().extra_repr()
-        s_params = s.split(",")
+        s_params = s.split(", ")
         return ", ".join(
             [*s_params[:3], f"max_batch_size={self.max_batch_size}", *s_params[3:]]
         )
