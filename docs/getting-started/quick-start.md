@@ -24,7 +24,7 @@ We provide an example of how to privately fine-tune a BERT model on a small data
 In the following, we assume the open source dataset we use should remain private.
 This simple example may be extended to more complex scenarios, such as medical or legal document analysis.
 
-The notebook with detailled model and data preparation can be found [here](examples/distilbert_example_notebook.ipynb).
+The notebook with detailled model and data preparation can be found [here](https://github.com/mithril-security/bastionai/blob/master/examples/distilbert_example_notebook.ipynb).
 
 #### Data owner POV
 
