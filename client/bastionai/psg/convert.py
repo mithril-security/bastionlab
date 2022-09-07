@@ -47,6 +47,8 @@ def parent_layer(module, name: str) -> Tuple[torch.nn.Module, str]:
     return (layer, child_name)
 
 def expand_layer(layer: torch.nn.Module, max_batch_size: int) -> Optional[torch.nn.Module]:
+    """Returns an expanded version of given layer if supported, else None.
+    """
     if isinstance(layer, torch.nn.Linear):
         return Linear(
             in_features=layer.in_features,
