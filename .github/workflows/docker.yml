@@ -22,4 +22,5 @@ jobs:
           context: ./server
           file: ./server/Dockerfile
           push: true
-          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/bastionai:latest, ${{ secrets.DOCKER_HUB_USERNAME }}/bastionai:${{ github.event.release.tag_name }}
+#          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/bastionai:latest, ${{ secrets.DOCKER_HUB_USERNAME }}/bastionai:${{ github.event.release.tag_name }}
+          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/bastionai:latest, ${{ secrets.DOCKER_HUB_USERNAME }}/bastionai:v0.1.3
