@@ -47,6 +47,7 @@ class RemoteDataset:
                 description=description,
                 secret=secret,
                 privacy_limit=privacy_limit,
+                progress=True,
             )
             self.name = name
             self.description = description
@@ -77,6 +78,7 @@ class RemoteDataset:
                 secret=secret,
                 privacy_limit=privacy_limit,
                 train_dataset=self.train_dataset_ref,
+                progress=True,
             )
         else:
             self.test_dataset_ref = test_dataset
@@ -107,6 +109,7 @@ class RemoteDataset:
                 secret=self.secret,
                 privacy_limit=self.privacy_limit,
                 train_dataset=self.train_dataset_ref,
+                progress=True,
             )
         else:
             self.test_dataset_ref = test_dataset
@@ -172,6 +175,7 @@ class RemoteLearner:
                 name=model_name if model_name is not None else model_class_name,
                 description=model_description,
                 secret=secret,
+                progress=True,
             )
         else:
             self.model_ref = model
@@ -247,7 +251,7 @@ class RemoteLearner:
     ) -> tqdm:
         t = tqdm(
             total=nb_batches,
-            unit="batch",
+            unit=" batch",
             bar_format="{l_bar}{bar:20}{r_bar}",
         )
         t.set_description(
