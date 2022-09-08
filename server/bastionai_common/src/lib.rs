@@ -19,6 +19,8 @@ use http::Uri;
 use serde::{de::Error, Deserialize, Deserializer};
 use std::net::ToSocketAddrs;
 
+pub mod auth;
+
 #[derive(Deserialize, Clone, Debug)]
 pub struct NetworkConfig {
     //  Connection for Client -> Enclave communication

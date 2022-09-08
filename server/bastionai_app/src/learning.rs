@@ -8,7 +8,6 @@ use bastionai_learning::nn::{Forward, LossType, Module};
 use bastionai_learning::optim::{Adam, Optimizer, SGD};
 use bastionai_learning::procedures::{self, Tester, Trainer};
 use log::info;
-use std::ops::DerefMut;
 use std::sync::{Arc, RwLock};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tch::{Device, TchError};

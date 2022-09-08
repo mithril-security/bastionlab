@@ -1,6 +1,5 @@
 use super::{Chunk, ClientInfo};
 use crate::storage::Artifact;
-use crate::Reference;
 use bastionai_learning::serialization::SizedObjectsBytes;
 use log::info;
 use std::time::Instant;
@@ -8,7 +7,6 @@ use tch::Device;
 use tokio::sync::mpsc;
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use tonic::{Response, Status};
-use uuid::Uuid;
 use ring::hmac;
 use std::sync::{Arc, RwLock};
 
@@ -19,10 +17,7 @@ use std::sync::{Arc, RwLock};
 pub async fn unstream_data(
     mut stream: tonic::Streaming<Chunk>,
 ) -> Result<
-    (
-        Artifact<SizedObjectsBytes>,
-        Option<ClientInfo>
-    ),
+    Artifact<SizedObjectsBytes>,
     Status,
 > {
     let mut data_bytes: Vec<u8> = Vec::new();
@@ -46,16 +41,14 @@ pub async fn unstream_data(
         }
     }
 
-    Ok((
-        Artifact {
-            data: Arc::new(RwLock::new(data_bytes.into())),
-            name,
-            description,
-            secret: hmac::Key::new(hmac::HMAC_SHA256, &secret),
-            meta,
-        },
+    Ok(Artifact {
+        data: Arc::new(RwLock::new(data_bytes.into())),
+        name,
+        description,
+        secret: hmac::Key::new(hmac::HMAC_SHA256, &secret),
+        meta,
         client_info,
-    ))
+    })
 }
 
 /// Converts a raw artifact (a header and a binary object) into a stream of chunks to be sent over gRPC.
@@ -108,12 +101,6 @@ pub async fn stream_data(
             );
 
     Response::new(ReceiverStream::new(rx))
-}
-
-/// Parses a reference object from the bastionai gRPC protocol and returns the uuid of the referee. 
-pub fn parse_reference(reference: Reference) -> Result<Uuid, Status> {
-    Uuid::parse_str(&reference.identifier)
-        .map_err(|_| Status::internal("Invalid BastionAI reference"))
 }
 
 /// Parses a device string and returns a [`tch::Device`] object if the string is a valid device name.

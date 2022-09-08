@@ -46,24 +46,21 @@ mod serialization;
 use serialization::*;
 
 use bastionai_learning::serialization::SizedObjectsBytes;
+use bastionai_common::auth::{auth_interceptor, setup_jwt};
 
 /// The server's state
 struct BastionAIServer {
-    modules: RwLock<HashMap<Uuid, Artifact<Module>>>,
-    datasets: RwLock<HashMap<Uuid, Artifact<Dataset>>>,
+    modules: RwLock<HashMap<String, Artifact<Module>>>,
+    datasets: RwLock<HashMap<String, Artifact<Dataset>>>,
     runs: RwLock<HashMap<Uuid, Arc<RwLock<Run>>>>,
-    modules_hashes: RwLock<HashMap<Uuid, (String, Option<ClientInfo>)>>,
-    datasets_hashes: RwLock<HashMap<Uuid, (String, Option<ClientInfo>)>>,
 }
 
 impl BastionAIServer {
     pub fn new() -> Self {
         BastionAIServer {
             modules: RwLock::new(HashMap::new()),
-            modules_hashes: RwLock::new(HashMap::new()),
             datasets: RwLock::new(HashMap::new()),
             runs: RwLock::new(HashMap::new()),
-            datasets_hashes: RwLock::new(HashMap::new())
         }
     }
 }
@@ -79,10 +76,7 @@ impl RemoteTorch for BastionAIServer {
     ) -> Result<Response<Reference>, Status> {
         let start_time = Instant::now();
 
-        let (artifact, client_info): (
-            Artifact<SizedObjectsBytes>,
-            Option<ClientInfo>
-        ) = unstream_data(request.into_inner()).await?;
+        let artifact: Artifact<SizedObjectsBytes> = unstream_data(request.into_inner()).await?;
 
         let (dataset_hash, dataset_size) = {
             let lock = artifact.data.read().unwrap();
@@ -95,17 +89,13 @@ impl RemoteTorch for BastionAIServer {
         let name = dataset.name.clone();
         let description = dataset.description.clone();
         let meta = dataset.meta.clone();
-        let identifier = Uuid::new_v4();
+        let client_info = dataset.client_info.clone();
 
         self.datasets
             .write()
             .unwrap()
-            .insert(identifier.clone(), dataset);
+            .insert(dataset_hash.clone(), dataset);
 
-            self.datasets_hashes.write().unwrap().insert(
-                identifier.clone(),
-                (dataset_hash.clone(), client_info.clone()),
-            );
         let elapsed = start_time.elapsed();
         info!(
         target: "BastionAI",
@@ -117,12 +107,12 @@ impl RemoteTorch for BastionAIServer {
                 dataset_name: Some(name.clone()),
                 dataset_size,
                 time_taken: elapsed.as_millis() as f64,
-                dataset_hash: Some(dataset_hash)
+                dataset_hash: Some(dataset_hash.clone())
             },
             client_info,
         );
         Ok(Response::new(Reference {
-            identifier: format!("{}", identifier),
+            identifier: format!("{}", dataset_hash),
             name,
             description,
             meta,
@@ -135,10 +125,7 @@ impl RemoteTorch for BastionAIServer {
     ) -> Result<Response<Reference>, Status> {
         let start_time = Instant::now();
 
-        let (artifact, client_info): (
-            Artifact<SizedObjectsBytes>,
-            Option<ClientInfo>
-        ) = unstream_data(request.into_inner()).await?;
+        let artifact: Artifact<SizedObjectsBytes> = unstream_data(request.into_inner()).await?;
 
         let (model_hash, model_size) = {
             let lock = artifact.data.read().unwrap();
@@ -151,18 +138,13 @@ impl RemoteTorch for BastionAIServer {
         let name = module.name.clone();
         let description = module.description.clone();
         let meta = module.meta.clone();
-        let identifier = Uuid::new_v4();
+        let client_info = module.client_info.clone();
 
         self.modules
             .write()
             .unwrap()
-            .insert(identifier.clone(), module);
+            .insert(model_hash.clone(), module);
         let elapsed = start_time.elapsed();
-
-        self.modules_hashes.write().unwrap().insert(
-            identifier.clone(),
-            (model_hash.clone(), client_info.clone()),
-        );
 
         info!(
         target: "BastionAI",
@@ -172,14 +154,14 @@ impl RemoteTorch for BastionAIServer {
         telemetry::add_event(
             TelemetryEventProps::SendModel {
                 model_name: Some(name.clone()),
-                model_hash: Some(model_hash),
+                model_hash: Some(model_hash.clone()),
                 model_size,
                 time_taken: elapsed.as_millis() as f64,
             },
             client_info,
         );
         Ok(Response::new(Reference {
-            identifier: format!("{}", identifier),
+            identifier: format!("{}", model_hash),
             name,
             description,
             meta,
@@ -190,7 +172,7 @@ impl RemoteTorch for BastionAIServer {
         &self,
         request: Request<Reference>,
     ) -> Result<Response<Self::FetchDatasetStream>, Status> {
-        let identifier = parse_reference(request.into_inner())?;
+        let identifier = request.into_inner().identifier;
         let serialized = {
             let datasets = self.datasets.read().unwrap();
             let artifact = datasets
@@ -206,7 +188,7 @@ impl RemoteTorch for BastionAIServer {
         &self,
         request: Request<Reference>,
     ) -> Result<Response<Self::FetchModuleStream>, Status> {
-        let identifier = parse_reference(request.into_inner())?;
+        let identifier = request.into_inner().identifier;
         let serialized = {
             let modules = self.modules.read().unwrap();
             let artifact = modules
@@ -219,54 +201,36 @@ impl RemoteTorch for BastionAIServer {
     }
 
     async fn delete_dataset(&self, request: Request<Reference>) -> Result<Response<Empty>, Status> {
-        let identifier = parse_reference(request.into_inner())?;
+        let identifier = request.into_inner().identifier;
         self.datasets.write().unwrap().remove(&identifier);
         Ok(Response::new(Empty {}))
     }
 
     async fn delete_module(&self, request: Request<Reference>) -> Result<Response<Empty>, Status> {
-        let identifier = parse_reference(request.into_inner())?;
+        let identifier = request.into_inner().identifier;
         self.modules.write().unwrap().remove(&identifier);
         Ok(Response::new(Empty {}))
     }
 
     async fn train(&self, request: Request<TrainConfig>) -> Result<Response<Reference>, Status> {
         let config = request.into_inner();
-        let dataset_id = parse_reference(
-            config
-                .dataset
-                .clone()
-                .ok_or(Status::invalid_argument("Not found"))?,
-        )?;
-        let module_id = parse_reference(
-            config
-                .model
-                .clone()
-                .ok_or(Status::invalid_argument("Not found"))?,
-        )?;
+        let dataset_id = config
+            .dataset
+            .clone()
+            .ok_or(Status::invalid_argument("Not found"))?
+            .identifier;
+        let module_id = config
+            .model
+            .clone()
+            .ok_or(Status::invalid_argument("Not found"))?
+            .identifier;
         let device = parse_device(&config.device)?;
-        let module = {
+        let (module, client_info) = {
             let modules = self.modules.read().unwrap();
             let module = modules
                 .get(&module_id)
                 .ok_or(Status::not_found("Not found"))?;
-            Arc::clone(&module.data)
-        };
-
-        let (model_hash, client_info) = {
-            let modules_hashes = self.modules_hashes.read().unwrap();
-            let (model_hash, client_info) = modules_hashes
-                .get(&module_id)
-                .ok_or(Status::not_found("Not found"))?;
-            (model_hash.clone(), client_info.clone())
-        };
-
-        let dataset_hash = {
-            let datasets_hashes = self.datasets_hashes.read().unwrap();
-            let (dataset_hash, _) = datasets_hashes
-                .get(&dataset_id) 
-                .ok_or(Status::not_found("Not found"))?;
-            dataset_hash.clone()
+            (Arc::clone(&module.data), module.client_info.clone())
         };
 
         let dataset = {
@@ -283,7 +247,7 @@ impl RemoteTorch for BastionAIServer {
             .unwrap()
             .insert(identifier, Arc::new(RwLock::new(Run::Pending)));
         let run = Arc::clone(self.runs.read().unwrap().get(&identifier).unwrap());
-        module_train(module, dataset, run, config, device, model_hash.clone(), dataset_hash.clone(), client_info.clone());
+        module_train(module, dataset, run, config, device, module_id, dataset_id, client_info);
         Ok(Response::new(Reference {
             identifier: format!("{}", identifier),
             name: format!("Run #{}", identifier),
@@ -294,41 +258,23 @@ impl RemoteTorch for BastionAIServer {
 
     async fn test(&self, request: Request<TestConfig>) -> Result<Response<Reference>, Status> {
         let config = request.into_inner();
-        let dataset_id = parse_reference(
-            config
-                .dataset
-                .clone()
-                .ok_or(Status::invalid_argument("Not found"))?,
-        )?;
-        let module_id = parse_reference(
-            config
-                .model
-                .clone()
-                .ok_or(Status::invalid_argument("Not found"))?,
-        )?;
+        let dataset_id = config
+            .dataset
+            .clone()
+            .ok_or(Status::invalid_argument("Not found"))?
+            .identifier;
+        let module_id = config
+            .model
+            .clone()
+            .ok_or(Status::invalid_argument("Not found"))?
+            .identifier;
         let device = parse_device(&config.device)?;
-        let module = {
+        let (module, client_info) = {
             let modules = self.modules.read().unwrap();
             let module = modules
                 .get(&module_id)
                 .ok_or(Status::not_found("Not found"))?;
-            Arc::clone(&module.data)
-        };
-        
-        let (model_hash, client_info) = {
-            let modules_hashes = self.modules_hashes.read().unwrap();
-            let (model_hash, client_info) = modules_hashes
-                .get(&module_id)
-                .ok_or(Status::not_found("Not found"))?;
-            (model_hash.clone(), client_info.clone())
-        };
-
-        let dataset_hash = {
-            let datasets_hashes = self.datasets_hashes.read().unwrap();
-            let (dataset_hash, _) = datasets_hashes
-                .get(&dataset_id) 
-                .ok_or(Status::not_found("Not found"))?;
-            dataset_hash.clone()
+            (Arc::clone(&module.data), module.client_info.clone())
         };
 
         let dataset = {
@@ -345,7 +291,7 @@ impl RemoteTorch for BastionAIServer {
             .unwrap()
             .insert(identifier, Arc::new(RwLock::new(Run::Pending)));
         let run = Arc::clone(self.runs.read().unwrap().get(&identifier).unwrap());
-        module_test(module, dataset, run, config, device, model_hash.clone(), dataset_hash.clone(), client_info.clone());
+        module_test(module, dataset, run, config, device, module_id, dataset_id, client_info);
         Ok(Response::new(Reference {
             identifier: format!("{}", identifier),
             name: format!("Run #{}", identifier),
@@ -418,7 +364,8 @@ impl RemoteTorch for BastionAIServer {
     }
 
     async fn get_metric(&self, request: Request<Reference>) -> Result<Response<Metric>, Status> {
-        let identifier = parse_reference(request.into_inner())?;
+        let identifier = Uuid::parse_str(&request.into_inner().identifier)
+            .map_err(|_| Status::internal("Invalid BastionAI reference"))?;
 
         match &*self
             .runs
@@ -457,6 +404,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let server_key = fs::read("tls/host_server.key")?;
     let server_identity = Identity::from_pem(&server_cert, &server_key);
 
+    setup_jwt();
+
     let server = BastionAIServer::new();
 
     let mut file = File::open("config.toml")?;
@@ -489,7 +438,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     Server::builder()
         .tls_config(ServerTlsConfig::new().identity(server_identity))?
-        .add_service(RemoteTorchServer::new(server))
+        .add_service(RemoteTorchServer::with_interceptor(server, auth_interceptor))
         .serve(network_config.client_to_enclave_untrusted_socket()?)
         .await?;
 

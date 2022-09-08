@@ -4,6 +4,8 @@ use std::convert::TryInto;
 use std::sync::{Arc, RwLock};
 use tch::TchError;
 
+use crate::remote_torch::ClientInfo;
+
 /// Stored object with name, description and owner key
 #[derive(Debug)]
 pub struct Artifact<T> {
@@ -12,17 +14,18 @@ pub struct Artifact<T> {
     pub description: String,
     pub secret: hmac::Key,
     pub meta: Vec<u8>,
+    pub client_info: Option<ClientInfo>,
 }
 
-impl<T> Artifact<T> {
-    /// Verifies passed meassage and tag against stored owner key.
-    pub fn verify(&self, msg: &[u8], tag: &[u8]) -> bool {
-        match hmac::verify(&self.secret, msg, tag) {
-            Ok(()) => true,
-            Err(_) => false,
-        }
-    }
-}
+// impl<T> Artifact<T> {
+//     /// Verifies passed meassage and tag against stored owner key.
+//     pub fn verify(&self, msg: &[u8], tag: &[u8]) -> bool {
+//         match hmac::verify(&self.secret, msg, tag) {
+//             Ok(()) => true,
+//             Err(_) => false,
+//         }
+//     }
+// }
 
 impl<T> Artifact<T>
 where
@@ -39,6 +42,7 @@ where
             description: self.description.clone(),
             secret: self.secret.clone(),
             meta: self.meta.clone(),
+            client_info: self.client_info.clone(),
         })
     }
 }
@@ -59,6 +63,7 @@ impl Artifact<SizedObjectsBytes> {
             description: self.description,
             secret: self.secret,
             meta: self.meta,
+            client_info: self.client_info,
         })
     }
 }
