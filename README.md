@@ -6,6 +6,7 @@
 
 <h4 align="center">
   <a href="https://www.mithrilsecurity.io">Website</a> |
+  <a href="https://bastionai.readthedocs.io/en/latest/">Documentation</a> |
   <a href="https://blog.mithrilsecurity.io/">Blog</a> |
   <a href="https://www.linkedin.com/company/mithril-security-company">LinkedIn</a> | 
   <a href="https://www.twitter.com/mithrilsecurity">Twitter</a> | 
