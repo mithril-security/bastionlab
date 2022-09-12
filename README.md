@@ -48,6 +48,10 @@ Note that the *Data Scientist never has access to the dataset in clear*. At best
 
 Similarly, The *Cloud provider can't access neither the model nor the data* as TEEs provide end-to-end encryption. All data exclusively used inside the TEE are protected by hardware memory isolation and/or encryption.
 
+### Installing BastionAI
+
+Please refer to the Getting Started page of our official [documentation](https://bastionai.readthedocs.io/en/latest/getting-started/quick-start/).
+
 ### Finetune BERT on confidential data
 
 We provide an example of how to privately fine-tune a BERT model on a small dataset for spam/ham classification. In the following, we assume the open source dataset we use should remain private.
