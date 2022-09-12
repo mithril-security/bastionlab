@@ -1,6 +1,6 @@
 target
 docker/*.dockerfile
-Dockerfile
+Dockerfile*
 bin/
 target/
 tmp/
