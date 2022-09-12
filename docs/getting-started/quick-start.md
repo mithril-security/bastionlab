@@ -86,7 +86,7 @@ Finally, once training is over, the Data Scientist may pull the trained model us
 ### Using our official Docker image
 
 ```
-docker run -p 50051:50051 -d bastionai:latest
+docker run -p 50051:50051 -d mithrilsecuritysas/bastionai:latest
 ```
 
 ### By locally building our Docker image
