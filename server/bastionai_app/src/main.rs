@@ -199,7 +199,7 @@ impl RemoteTorch for BastionAIServer {
             tcherror_to_status(artifact.serialize())?
         };
 
-        Ok(stream_data(serialized, 100_000_000, "Dataset".to_string()).await)
+        Ok(stream_data(serialized, 4_194_285, "Dataset".to_string()).await)
     }
 
     async fn fetch_module(
@@ -215,7 +215,7 @@ impl RemoteTorch for BastionAIServer {
             tcherror_to_status(artifact.serialize())?
         };
 
-        Ok(stream_data(serialized, 100_000_000, "Model".to_string()).await)
+        Ok(stream_data(serialized, 4_194_285, "Model".to_string()).await)
     }
 
     async fn delete_dataset(&self, request: Request<Reference>) -> Result<Response<Empty>, Status> {

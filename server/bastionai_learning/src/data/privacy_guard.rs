@@ -489,7 +489,7 @@ impl PrivacyGuard<Tensor> {
             }),
             Sensibility::L2(_) => Sensibility::Unknown,
         }, batch_dependence = self.batch_dependence.clone()
-        f_argmax(self: &Self, dim: i64, keepdim: bool) -> Result<Self, TchError> where sensibility = Sensibility::LInfinity(self.value.size()[dim as usize] as f32), batch_dependence = self.batch_dependence.clone()
+        f_argmax(self: &Self, dim: i64, keepdim: bool) -> Result<Self, TchError> where sensibility = Sensibility::LInfinity(self.value.size()[if dim > 0 { dim as usize } else { self.value.dim() - 1 }] as f32), batch_dependence = self.batch_dependence.clone()
         f_add_scalar(self: &Self, other: impl Into<tch::Scalar>) -> Result<Self, TchError> where sensibility = self.sensibility, batch_dependence = self.batch_dependence.clone()
         f_sub_scalar(self: &Self, other: impl Into<tch::Scalar>) -> Result<Self, TchError> where sensibility = self.sensibility, batch_dependence = self.batch_dependence.clone()
         f_mul_scalar(self: &Self, other: f64) -> Result<Self, TchError> where sensibility = match self.sensibility {
