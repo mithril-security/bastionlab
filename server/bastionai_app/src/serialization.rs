@@ -111,10 +111,10 @@ pub fn parse_device(device: &str) -> Result<Device, Status> {
         device => {
             if device.starts_with("cuda:") {
                 let id = usize::from_str_radix(&device[5..], 10)
-                    .or(Err(Status::invalid_argument("Wrong device")))?;
+                    .or(Err(Status::invalid_argument("Unknown device")))?;
                 Device::Cuda(id)
             } else {
-                return Err(Status::invalid_argument("Wrong device"));
+                return Err(Status::invalid_argument("Unknown device"));
             }
         }
     })

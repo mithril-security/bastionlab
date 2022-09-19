@@ -15,6 +15,7 @@ import grpc # type: ignore [import]
 from grpc import StatusCode
 
 from bastionai.utils import bulk_deserialize
+from bastionai.errors import GRPCException
 
 
 class RemoteDataset:
@@ -251,7 +252,7 @@ class RemoteLearner:
     ) -> tqdm:
         t = tqdm(
             total=nb_batches,
-            unit=" batch",
+            unit="batch",
             bar_format="{l_bar}{bar:20}{r_bar}",
         )
         t.set_description(
@@ -275,8 +276,8 @@ class RemoteLearner:
                 sleep(poll_delay)
                 metric = self.client.get_metric(run)
                 break
-            except grpc._channel._InactiveRpcError as e:
-                if e._state.code == StatusCode.UNAVAILABLE:
+            except GRPCException as e:
+                if e.code == StatusCode.OUT_OF_RANGE:
                     continue
                 else:
                     raise e
@@ -305,7 +306,7 @@ class RemoteLearner:
             # Handle end of training
             if (
                 metric.epoch + 1 == metric.nb_epochs
-                and metric.batch + 1 == metric.nb_batches
+                and metric.batch == metric.nb_batches
             ):
                 break
             if metric.batch == prev_batch and metric.epoch == prev_epoch:
