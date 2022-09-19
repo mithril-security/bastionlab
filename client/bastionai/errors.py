@@ -1,5 +1,5 @@
 import grpc  # type: ignore [import]
-from grpc._channel import _InactiveRpcError
+from grpc._channel import _InactiveRpcError # type: ignore [import]
 from dataclasses import dataclass
 from typing import Callable, TypeVar
 

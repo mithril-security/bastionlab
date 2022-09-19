@@ -304,11 +304,6 @@ class RemoteLearner:
             metric = self.client.get_metric(run)
 
             # Handle end of training
-            if (
-                metric.epoch + 1 == metric.nb_epochs
-                and metric.batch == metric.nb_batches
-            ):
-                break
             if metric.batch == prev_batch and metric.epoch == prev_epoch:
                 timeout_counter += 1
             else:
@@ -334,6 +329,12 @@ class RemoteLearner:
                 )
             else:
                 self.log.append(metric)
+            
+            if (
+                metric.epoch + 1 == metric.nb_epochs
+                and metric.batch + 1 == metric.nb_batches
+            ):
+                break
 
     def fit(
         self,
