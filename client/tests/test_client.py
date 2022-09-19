@@ -65,7 +65,7 @@ def test_api(simple_dataset):
             Metric(
                 value=0.0, batch=0, epoch=0, nb_epochs=1, nb_batches=1
             )
-        ] * 2
+        ] * 4
     )
 
     remote_learner.model = DummyModule()

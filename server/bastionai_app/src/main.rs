@@ -177,7 +177,7 @@ impl RemoteTorch for BastionAIServer {
             let datasets = self.datasets.read().unwrap();
             let artifact = datasets
                 .get(&identifier)
-                .ok_or(Status::not_found("Not found"))?;
+                .ok_or(Status::not_found("Dataset not found"))?;
             tcherror_to_status(artifact.serialize())?
         };
 
@@ -193,7 +193,7 @@ impl RemoteTorch for BastionAIServer {
             let modules = self.modules.read().unwrap();
             let artifact = modules
                 .get(&identifier)
-                .ok_or(Status::not_found("Not found"))?;
+                .ok_or(Status::not_found("Module not found"))?;
             tcherror_to_status(artifact.serialize())?
         };
 
@@ -217,19 +217,19 @@ impl RemoteTorch for BastionAIServer {
         let dataset_id = config
             .dataset
             .clone()
-            .ok_or(Status::invalid_argument("Not found"))?
+            .ok_or(Status::invalid_argument("Invalid dataset reference"))?
             .identifier;
         let module_id = config
             .model
             .clone()
-            .ok_or(Status::invalid_argument("Not found"))?
+            .ok_or(Status::invalid_argument("Invalid module reference"))?
             .identifier;
         let device = parse_device(&config.device)?;
         let (module, client_info) = {
             let modules = self.modules.read().unwrap();
             let module = modules
                 .get(&module_id)
-                .ok_or(Status::not_found("Not found"))?;
+                .ok_or(Status::not_found("Module not found"))?;
             (Arc::clone(&module.data), module.client_info.clone())
         };
 
@@ -237,7 +237,7 @@ impl RemoteTorch for BastionAIServer {
             let datasets = self.datasets.read().unwrap();
             let dataset = datasets
                 .get(&dataset_id)
-                .ok_or(Status::not_found("Not found"))?;
+                .ok_or(Status::not_found("Dataset not found"))?;
             Arc::clone(&dataset.data)
         };
 
@@ -261,19 +261,19 @@ impl RemoteTorch for BastionAIServer {
         let dataset_id = config
             .dataset
             .clone()
-            .ok_or(Status::invalid_argument("Not found"))?
+            .ok_or(Status::invalid_argument("Invalid dataset reference"))?
             .identifier;
         let module_id = config
             .model
             .clone()
-            .ok_or(Status::invalid_argument("Not found"))?
+            .ok_or(Status::invalid_argument("Invalid dataset reference"))?
             .identifier;
         let device = parse_device(&config.device)?;
         let (module, client_info) = {
             let modules = self.modules.read().unwrap();
             let module = modules
                 .get(&module_id)
-                .ok_or(Status::not_found("Not found"))?;
+                .ok_or(Status::not_found("Module not found"))?;
             (Arc::clone(&module.data), module.client_info.clone())
         };
 
@@ -281,7 +281,7 @@ impl RemoteTorch for BastionAIServer {
             let datasets = self.datasets.read().unwrap();
             let dataset = datasets
                 .get(&dataset_id)
-                .ok_or(Status::not_found("Not found"))?;
+                .ok_or(Status::not_found("Dataset not found"))?;
             Arc::clone(&dataset.data)
         };
 
@@ -365,7 +365,7 @@ impl RemoteTorch for BastionAIServer {
 
     async fn get_metric(&self, request: Request<Reference>) -> Result<Response<Metric>, Status> {
         let identifier = Uuid::parse_str(&request.into_inner().identifier)
-            .map_err(|_| Status::internal("Invalid BastionAI reference"))?;
+            .map_err(|_| Status::invalid_argument("Invalid run reference"))?;
 
         match &*self
             .runs
@@ -376,7 +376,7 @@ impl RemoteTorch for BastionAIServer {
             .read()
             .unwrap()
         {
-            Run::Pending => Err(Status::unavailable("Run has not started.")),
+            Run::Pending => Err(Status::out_of_range("Run has not started.")),
             Run::Ok(m) => Ok(Response::new(m.clone())),
             Run::Error(e) => Err(Status::internal(e.message())),
         }

@@ -1,6 +1,5 @@
 import io
 from typing import Callable, Iterator, List, Tuple, TypeVar, Optional, Any
-from dataclasses import dataclass
 
 import torch
 from torch import Tensor
