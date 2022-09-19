@@ -57,6 +57,7 @@ class Client:
         description: str = "",
         secret: Optional[bytes] = None,
         chunk_size: int = 100_000_000,
+        progress: bool = False,
     ) -> Reference:
         """Uploads a Pytorch module to the BastionAI server.
 
@@ -81,6 +82,7 @@ class Client:
                 secret=secret if secret is not None else self.default_secret,
                 chunk_size=chunk_size,
                 client_info=self.client_info,
+                progress=progress,
             )
         )
 
@@ -94,6 +96,7 @@ class Client:
         chunk_size: int = 100_000_000,
         batch_size: int = 1024,
         train_dataset: Optional[Reference] = None,
+        progress: bool = False,
     ) -> Reference:
         """Uploads a Pytorch Dataset to the BastionAI server.
 
@@ -123,6 +126,7 @@ class Client:
                 privacy_limit=privacy_limit,
                 client_info=self.client_info,
                 train_dataset=train_dataset,
+                progress=progress,
             )
         )
 

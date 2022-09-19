@@ -8,6 +8,8 @@ from torch.nn import Module
 from torch.nn.parameter import Parameter
 from torch.utils.data import Dataset
 
+from tqdm import tqdm # type: ignore [import]
+
 from bastionai.pb.remote_torch_pb2 import Chunk, ClientInfo, Reference  # type: ignore [import]
 
 T = TypeVar("T")
@@ -139,7 +141,7 @@ def stream_artifacts(
     artifacts: Iterator[T],
     chunk_size: int,
     serialization_fn: Callable[[T, io.BytesIO], None] = torch.save,
-) -> Iterator[bytes]:
+) -> Iterator[Tuple[int, bytes]]:
     """Converts an iterator of objects into an iterator of bytes chunks.
     
     Args:
@@ -169,9 +171,9 @@ def stream_artifacts(
         position = buff.tell()
         buff.seek(0)
         if eoi:
-            yield buff.read(position)
+            yield (position, buff.read(position))
         else:
-            yield buff.read(chunk_size)
+            yield (position, buff.read(chunk_size))
             tail = buff.read(position - chunk_size)
             buff.seek(0)
             buff.write(tail)
@@ -214,12 +216,13 @@ def unstream_artifacts(
 
 
 def data_chunks_generator(
-    stream: Iterator[bytes],
+    stream: Iterator[Tuple[int, bytes]],
     name: str,
     description: str,
     secret: bytes,
     client_info: ClientInfo,
     meta: bytes,
+    progress: bool = False,
 ) -> Iterator[Chunk]:
     """Converts an iterator of bytes chunks into an iterator of BastionAI gRPC protocol `Chunk` messages.
 
@@ -231,12 +234,29 @@ def data_chunks_generator(
         client_info: client related data for telemetry purposes.
     """
     first = True
-    for x in stream:
+    last_estimate = 0
+    chunk_size = 0
+    for estimate, x in stream:
+        if first:
+            chunk_size = len(x)
+
+        if progress and estimate != last_estimate - chunk_size:
+            t = tqdm(
+                    total=estimate,
+                    unit="B",
+                    unit_scale=True,
+                    bar_format="{l_bar}{bar:20}{r_bar}",
+                )
+            t.set_description(f"Sending {name}")
+
         if first:
             first = False
             yield Chunk(data=x, name=name, description=description, secret=secret, client_info=client_info, meta=meta)
         else:
             yield Chunk(data=x, name=name, description="", secret=bytes(), client_info=ClientInfo(), meta=bytes())
+        
+        if progress:
+            t.update(chunk_size if chunk_size is not None else 1)
 
 
 def make_batch(data: List[Tuple[List[Tensor], Tensor]]) -> Tuple[List[Tensor], Tensor]:
@@ -258,6 +278,7 @@ def serialize_dataset(
     chunk_size: int = 100_000_000,
     batch_size: int = 1024,
     train_dataset: Optional[Reference] = None,
+    progress: bool = False,
 ) -> Iterator[Chunk]:
     """Coverts a dataset into an iterator of bytes chunks.
     
@@ -292,11 +313,12 @@ def serialize_dataset(
             "privacy_limit": privacy_limit,
             "train_dataset": train_dataset,
         }),
+        progress=progress,
     )
 
 
 def serialize_model(
-    model: Module, name: str, description: str, secret: bytes, client_info: ClientInfo, chunk_size=100_000_000
+    model: Module, name: str, description: str, secret: bytes, client_info: ClientInfo, chunk_size: int = 100_000_000, progress: bool = False,
 ) -> Iterator[Chunk]:
     """Coverts a model into an iterator of bytes chunks.
     
@@ -313,7 +335,7 @@ def serialize_model(
     """
     ts = torch.jit.script(model)
     return data_chunks_generator(
-        stream_artifacts(iter([ts]), chunk_size, torch.jit.save), name=name, description=description, secret=secret, client_info=client_info, meta=b""
+        stream_artifacts(iter([ts]), chunk_size, torch.jit.save), name=name, description=description, secret=secret, client_info=client_info, meta=b"", progress=progress,
     )
 
 
