@@ -241,7 +241,7 @@ def data_chunks_generator(
 
         if progress and estimate != last_estimate - chunk_size:
             t = tqdm(
-                    total=estimate,
+                    total=(estimate // chunk_size) * chunk_size + (chunk_size if estimate % chunk_size != 0 else 0),
                     unit="B",
                     unit_scale=True,
                     bar_format="{l_bar}{bar:20}{r_bar}",
@@ -255,7 +255,8 @@ def data_chunks_generator(
             yield Chunk(data=x, name=name, description="", secret=bytes(), client_info=ClientInfo(), meta=bytes())
         
         if progress:
-            t.update(chunk_size if chunk_size is not None else 1)
+            t.update(chunk_size)
+        last_estimate = estimate
 
 
 def make_batch(data: List[Tuple[List[Tensor], Tensor]]) -> Tuple[List[Tensor], Tensor]:
