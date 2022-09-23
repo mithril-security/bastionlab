@@ -316,6 +316,10 @@ impl RemoteTorch for BastionAIServer {
                 meta: v.meta.clone(),
             })
             .collect();
+            
+        info!(
+            target: "BastionAI",
+            "Listing available models.");
 
         Ok(Response::new(References { list }))
     }

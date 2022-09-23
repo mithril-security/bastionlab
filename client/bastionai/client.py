@@ -49,6 +49,7 @@ class Client:
         self.stub = stub
         self.default_secret = default_secret
         self.client_info = client_info
+        get_attestation_report()
 
     def send_model(
         self,
@@ -279,7 +280,17 @@ class Connection:
         self.channel = grpc.secure_channel(
             server_target, server_cred, options=connection_options
         )
+
+        get_validate_attestation(Client(RemoteTorchStub(self.channel), client_info=client_info, default_secret=self.default_secret))
+
+
+
         return Client(RemoteTorchStub(self.channel), client_info=client_info, default_secret=self.default_secret)
 
     def __exit__(self, exc_type: Any, exc_value: Any, exc_traceback: Any) -> None:
         self.channel.close()
+
+    def validate_attestation(attestation_client: Client):
+        import secrets
+        nonce = secrets.SystemRandom()
+        GRPCException.map_error(lambda: client.stub.ClientReportRequest()))
