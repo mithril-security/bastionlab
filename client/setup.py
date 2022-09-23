@@ -44,6 +44,7 @@ def generate_stub():
 
 class BuildPackage(build_py):
     def run(self):
+        print(f"Inside BuildPackage")
         generate_stub()
         super(BuildPackage, self).run()
 
@@ -58,7 +59,7 @@ setup(
     cmdclass={"build_py": BuildPackage},
     long_description=long_description,
     author="Kwabena Amponsem, Lucas Bourtoule",
-    author_email="kwabena.amponsem@mithrilsecurity.io, luacs.bourtoule@nithrilsecurity.io",
+    author_email="kwabena.amponsem@mithrilsecurity.io, luacs.bourtoule@mithrilsecurity.io",
     classifiers=["Programming Language :: Python :: 3"],
     install_requires=[
         "grpcio==1.47.0",
