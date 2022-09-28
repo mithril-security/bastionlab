@@ -146,6 +146,7 @@ pub fn module_train(
         let batch_size = config.batch_size;
         let mut module = module.write().unwrap();
         let dataset = dataset.read().unwrap();
+        module.set_device(device);
         match tcherror_to_status(build_train_context(&mut module, &dataset, config)) {
             Ok((forward, optimizer, metric, metric_budget)) => {
                 let trainer = Trainer::new(
@@ -237,9 +238,10 @@ pub fn module_test(
     client_info: Option<ClientInfo>,
 ) {
     tokio::spawn(async move {
-        let module = module.write().unwrap();
+        let mut module = module.write().unwrap();
         let dataset = dataset.read().unwrap();
         let batch_size = config.batch_size as usize;
+        module.set_device(device);
         match tcherror_to_status(build_test_context(&module, &dataset, config)) {
             Ok((forward, metric, metric_budget)) => {
                 let tester =
