@@ -234,19 +234,23 @@ def data_chunks_generator(
     """
     first = True
     last_estimate = 0
-    chunk_size = 0
+    t = None
     for estimate, x in stream:
-        if first:
-            chunk_size = len(x)
+        # print(estimate)
+        # print(f"{chunk_size} > {estimate}")
 
-        if progress and estimate != last_estimate - chunk_size:
-            t = tqdm(
-                    total=(estimate // chunk_size) * chunk_size + (chunk_size if estimate % chunk_size != 0 else 0),
-                    unit="B",
-                    unit_scale=True,
-                    bar_format="{l_bar}{bar:20}{r_bar}",
-                )
-            t.set_description(f"Sending {name}")
+        if progress and estimate > last_estimate:
+            if t is not None:
+                t.total = t.n + estimate
+                t.refresh()
+            else:
+                t = tqdm(
+                        total=estimate,
+                        unit="B",
+                        unit_scale=True,
+                        bar_format="{l_bar}{bar:20}{r_bar}",
+                    )
+                t.set_description(f"Sending {name}")
 
         if first:
             first = False
@@ -255,7 +259,7 @@ def data_chunks_generator(
             yield Chunk(data=x, name=name, description="", secret=bytes(), client_info=ClientInfo(), meta=bytes())
         
         if progress:
-            t.update(chunk_size)
+            t.update(len(x))
         last_estimate = estimate
 
 
