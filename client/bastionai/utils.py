@@ -101,7 +101,7 @@ def dataset_from_chunks(chunks: Iterator[Chunk]) -> TensorDataset:
     return TensorDataset(columns, labels)
 
 
-def id(l: List[T]) -> U:
+def id(l: List[T], _: Optional[U] = None) -> U:
     """Identity functions. Here for type checking."""
     res: U = l  # type: ignore [assignment]
     return res
@@ -258,7 +258,7 @@ def data_chunks_generator(
         else:
             yield Chunk(data=x, name=name, description="", secret=bytes(), client_info=ClientInfo(), meta=bytes())
         
-        if progress:
+        if progress and t is not None:
             t.update(len(x))
         last_estimate = estimate
 
