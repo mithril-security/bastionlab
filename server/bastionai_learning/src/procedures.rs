@@ -198,8 +198,11 @@ impl Metric {
                 let prediction = output
                     .f_argmax(-1, false)?
                     .f_sub(label)?
+                    .f_abs()?
                     .f_clamp(0.0, 1.0)?
-                    .f_sum(Kind::Float)?;
+                    .f_sum(Kind::Float)?
+                    .f_mul_scalar(-1.0 / label.batch_size()? as f64)?
+                    .f_add_scalar(1.0)?;
                 Ok((prediction.f_clone()?, prediction))
             }), (0.0, 1.0)),
             "l2" => (Box::new(|output, label| {

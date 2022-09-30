@@ -476,6 +476,7 @@ impl PrivacyGuard<Tensor> {
     defer_f_fns_to_inner! {
         f_to(self: &Self, device: Device) -> Result<Self, TchError> where sensibility = self.sensibility, batch_dependence = self.batch_dependence.clone()
         f_view(self: &Self, s: impl Shape) -> Result<Self, TchError> where sensibility = Sensibility::Unknown, batch_dependence = self.batch_dependence.clone()
+        f_abs(self: &Self) -> Result<Self, TchError> where sensibility = self.sensibility, batch_dependence = self.batch_dependence.clone()
         f_double_value(self: &Self, idx: &[i64]) -> Result<PrivacyGuard<f64>, TchError> where sensibility = self.sensibility, batch_dependence = self.batch_dependence.clone()
         f_clamp(self: &Self, min: f64, max: f64) -> Result<Self, TchError> where sensibility = match self.sensibility {
             Sensibility::LInfinity(s) => Sensibility::LInfinity(s.min(max as f32 - min as f32)),
