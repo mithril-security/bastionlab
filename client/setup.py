@@ -63,7 +63,7 @@ setup(
     install_requires=[
         "grpcio==1.47.0",
         "grpcio-tools==1.47.0",
-        "protobuf==3.20.1",
+        "protobuf==3.20.2",
         "six==1.16.0",
         "torch==1.12.0",
         "numpy==1.23.1",
