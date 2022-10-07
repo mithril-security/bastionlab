@@ -1,0 +1,33 @@
+/* Copyright 2022 Mithril Security. All rights reserved.
+*
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+*   http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License. */
+
+syntax = "proto3";
+package attestation;
+
+message ReportRequest {
+    bytes nonce = 1;
+}
+
+message ReportResponse {
+    bytes report = 1;
+    bytes server_cert = 2;
+    bytes signature_algo = 3;
+    bytes cert_chain = 4;
+    bytes vcek_cert = 5;
+}
+
+service Attestation {
+    // Retrieve an attestation report from the server
+    rpc ClientReportRequest (ReportRequest) returns (ReportResponse);
+}
