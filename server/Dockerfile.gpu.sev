@@ -1,0 +1,28 @@
+FROM nvcr.io/nvidia/pytorch:22.08-py3
+WORKDIR /app
+RUN apt update && \
+    apt install -y \
+        build-essential \
+        patchelf \
+        libssl-dev \
+        pkg-config \
+        git \
+        curl && \
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o rustup-init && \
+    chmod +x rustup-init && \
+    ./rustup-init -y && \
+    git clone "https://github.com/mithril-security/bastionai.git" && \
+    curl -o libtorch.zip 'https://download.pytorch.org/libtorch/cu116/libtorch-cxx11-abi-shared-with-deps-1.12.1%2Bcu116.zip' && \
+    unzip libtorch.zip
+ENV LIBTORCH="/app/libtorch"
+ENV CUDA="/usr/local/cuda"
+ENV LD_LIBRARY_PATH="${CUDA}/lib64:${LIBTORCH}/lib:${LD_LIBRARY_PATH}"
+ENV PATH="/root/.cargo/bin:$PATH"
+WORKDIR ./bastionai/server
+RUN cargo build --release && \
+    mkdir bin && \
+    cp target/release/bastionai_app bin/ && \
+    tools/create_tls_config.sh bin/ && \
+    cp tools/config.toml bin/
+WORKDIR ./bin
+CMD ["./bastionai_app"]

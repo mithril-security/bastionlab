@@ -136,7 +136,7 @@ You can also have a look at our series [Confidential Computing explained](https:
 
 ## Telemetry
 
-BlindAI collects anonymous data regarding general usage, this allows us to understand how you are using the project. We only collect data regarding the execution mode (Hardware/Software) and the usage metrics.
+BastionAI collects anonymous data regarding general usage, this allows us to understand how you are using the project. We only collect data regarding the execution mode (Hardware/Software) and the usage metrics.
 
 This feature can be easily disabled, by setting the environment variable `BASTIONAI_DISABLE_TELEMETRY` to 1.
 

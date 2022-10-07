@@ -198,8 +198,11 @@ impl Metric {
                 let prediction = output
                     .f_argmax(-1, false)?
                     .f_sub(label)?
+                    .f_abs()?
                     .f_clamp(0.0, 1.0)?
-                    .f_sum(Kind::Float)?;
+                    .f_sum(Kind::Float)?
+                    .f_mul_scalar(-1.0 / label.batch_size()? as f64)?
+                    .f_add_scalar(1.0)?;
                 Ok((prediction.f_clone()?, prediction))
             }), (0.0, 1.0)),
             "l2" => (Box::new(|output, label| {
@@ -238,12 +241,13 @@ impl Metric {
         label: &PrivacyGuard<Tensor>,
     ) -> Result<PrivacyGuard<Tensor>, TchError> {
         let loss = (self.loss_fn)(output, label)?;
+        let detached_loss = loss.1.f_clone()?;
         self.value = match &self.value {
             Some(v) => Some(
                 v.f_mul_scalar(self.nb_samples as f64 / (self.nb_samples + 1) as f64)?
-                    .f_add(&loss.1.f_mul_scalar(1.0 / self.nb_samples as f64)?)?,
+                    .f_add(&detached_loss.f_mul_scalar(1.0 / self.nb_samples as f64)?)?,
             ),
-            None => Some(loss.1.f_clone()?),
+            None => Some(detached_loss),
         };
         self.nb_samples += 1;
         Ok(loss.0)

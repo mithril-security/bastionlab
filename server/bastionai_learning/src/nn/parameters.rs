@@ -200,7 +200,7 @@ impl<'a> Parameters<'a> {
                 }
                 let per_sample_norms =
                     Tensor::f_stack(&per_param_norms, 1).map_err(|e| TchError::Shape(format!("Failed to stack per-sample gradients, are you using a model with expanded weights? Initial error: {}", e)))?.f_norm_scalaropt_dim(2, &[1], false)?;
-                let max_grad_norm_t = Tensor::of_slice(&[*max_grad_norm as f32]);
+                let max_grad_norm_t = Tensor::of_slice(&[*max_grad_norm as f32]).f_to_device(per_sample_norms.device())?;
                 let per_sample_clip_factor = max_grad_norm_t
                     .f_div(&per_sample_norms.f_add_scalar(1e-6)?)?
                     .f_clamp(0., 1.)?;

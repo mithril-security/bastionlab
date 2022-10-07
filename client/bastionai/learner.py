@@ -40,6 +40,7 @@ class RemoteDataset:
         name: Optional[str] = None,
         description: str = "",
         secret: Optional[bytes] = None,
+        progress: bool = True,
     ) -> None:
         if isinstance(train_dataset, Dataset):
             self.train_dataset_ref = client.send_dataset(
@@ -48,7 +49,7 @@ class RemoteDataset:
                 description=description,
                 secret=secret,
                 privacy_limit=privacy_limit,
-                progress=True,
+                progress=progress,
             )
             self.name = name
             self.description = description
@@ -79,7 +80,7 @@ class RemoteDataset:
                 secret=secret,
                 privacy_limit=privacy_limit,
                 train_dataset=self.train_dataset_ref,
-                progress=True,
+                progress=progress,
             )
         else:
             self.test_dataset_ref = test_dataset
@@ -99,7 +100,7 @@ class RemoteDataset:
     def __format__(self, __format_spec: str) -> str:
         return self.__str__()
 
-    def _set_test_dataset(self, test_dataset: Union[Dataset, Reference]) -> None:
+    def _set_test_dataset(self, test_dataset: Union[Dataset, Reference], progress: bool = True) -> None:
         if not type(test_dataset) == Reference:
             self.test_dataset_ref = self.client.send_dataset(
                 test_dataset,
@@ -110,7 +111,7 @@ class RemoteDataset:
                 secret=self.secret,
                 privacy_limit=self.privacy_limit,
                 train_dataset=self.train_dataset_ref,
-                progress=True,
+                progress=progress,
             )
         else:
             self.test_dataset_ref = test_dataset
