@@ -1,5 +1,5 @@
-mod parameters;
 mod module;
+mod parameters;
 
-pub use parameters::{Parameters, LossType};
-pub use module::{Module, Forward};
+pub use module::{CheckPoint, Forward, Module};
+pub use parameters::{LossType, Parameters};

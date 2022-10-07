@@ -1,5 +1,6 @@
 use env_logger::Env;
 use log::info;
+use std::borrow::Borrow;
 use std::collections::HashMap;
 
 use std::{
@@ -7,7 +8,7 @@ use std::{
     collections::hash_map::DefaultHasher};
 use std::ffi::CString;
 use std::fs;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, Mutex};
 use std::time::Instant;
 use std::{fs::File, io::Read};
 use tokio_stream::wrappers::ReceiverStream;
@@ -19,7 +20,7 @@ use ring::digest;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
 use uuid::Uuid;
 
-use bastionai_learning::{data::Dataset, nn::Module};
+use bastionai_learning::{data::Dataset, nn::Module, nn::CheckPoint};
 
 mod remote_torch {
     tonic::include_proto!("remote_torch");
@@ -45,11 +46,13 @@ use learning::*;
 mod serialization;
 use serialization::*;
 
-use bastionai_learning::serialization::SizedObjectsBytes;
+use bastionai_learning::serialization::{SizedObjectsBytes, BinaryModule};
 use bastionai_common::auth::{auth_interceptor, setup_jwt};
 
 /// The server's state
 struct BastionAIServer {
+    binaries: RwLock<HashMap<String, Artifact<BinaryModule>>>,
+    checkpoints: RwLock<HashMap<String, CheckPoint>>,
     modules: RwLock<HashMap<String, Artifact<Module>>>,
     datasets: RwLock<HashMap<String, Artifact<Dataset>>>,
     runs: RwLock<HashMap<Uuid, Arc<RwLock<Run>>>>,
@@ -58,6 +61,8 @@ struct BastionAIServer {
 impl BastionAIServer {
     pub fn new() -> Self {
         BastionAIServer {
+            binaries: RwLock::new(HashMap::new()),
+            checkpoints: RwLock::new(HashMap::new()),
             modules: RwLock::new(HashMap::new()),
             datasets: RwLock::new(HashMap::new()),
             runs: RwLock::new(HashMap::new()),
@@ -126,24 +131,22 @@ impl RemoteTorch for BastionAIServer {
         let start_time = Instant::now();
 
         let artifact: Artifact<SizedObjectsBytes> = unstream_data(request.into_inner()).await?;
-
+        
         let (model_hash, model_size) = {
             let lock = artifact.data.read().unwrap();
             let data = lock.get();
             let hash = hex::encode(digest::digest(&digest::SHA256, &data).as_ref());
             (hash, data.len())
         };
-
-        let module: Artifact<Module> = tcherror_to_status(artifact.deserialize())?;
-        let name = module.name.clone();
-        let description = module.description.clone();
-        let meta = module.meta.clone();
-        let client_info = module.client_info.clone();
-
-        self.modules
-            .write()
-            .unwrap()
-            .insert(model_hash.clone(), module);
+        
+        let binary = tcherror_to_status(artifact.deserialize())?;
+            
+        let name = binary.name.clone();
+        let description = binary.description.clone();
+        let meta = binary.meta.clone();
+        let client_info = binary.client_info.clone();
+        
+        self.binaries.write().unwrap().insert(model_hash.clone(), binary);
         let elapsed = start_time.elapsed();
 
         info!(
@@ -219,21 +222,25 @@ impl RemoteTorch for BastionAIServer {
             .clone()
             .ok_or(Status::invalid_argument("Invalid dataset reference"))?
             .identifier;
-        let module_id = config
+        let binary_id = config
             .model
             .clone()
             .ok_or(Status::invalid_argument("Invalid module reference"))?
             .identifier;
-        let device = parse_device(&config.device)?;
-        let (module, client_info) = {
-            let modules = self.modules.read().unwrap();
-            let module = modules
-                .get(&module_id)
-                .ok_or(Status::not_found("Module not found"))?;
-            (Arc::clone(&module.data), module.client_info.clone())
-        };
+            let device = parse_device(&config.device)?;
+        let (binary, client_info) = {
+            let binaries = self.binaries.read().unwrap();
+            let binary: &Artifact<BinaryModule> = 
+              binaries
+                .get(&binary_id)
+                .ok_or(Status::not_found("Module binary not found"))?;
+                
 
-        let dataset = {
+                
+                (Arc::clone(&binary.data),  binary.client_info.clone())
+            };
+            
+            let dataset = {
             let datasets = self.datasets.read().unwrap();
             let dataset = datasets
                 .get(&dataset_id)
@@ -241,13 +248,16 @@ impl RemoteTorch for BastionAIServer {
             Arc::clone(&dataset.data)
         };
 
+        let chkpt = self.checkpoints.write().unwrap().insert(binary_id.clone(), CheckPoint::new()).unwrap();
         let identifier = Uuid::new_v4();
         self.runs
             .write()
             .unwrap()
             .insert(identifier, Arc::new(RwLock::new(Run::Pending)));
         let run = Arc::clone(self.runs.read().unwrap().get(&identifier).unwrap());
-        module_train(module, dataset, run, config, device, module_id, dataset_id, client_info);
+
+        // Create a check point for training.
+        module_train(binary, dataset, run, config, device, binary_id, dataset_id, client_info, &chkpt);
         Ok(Response::new(Reference {
             identifier: format!("{}", identifier),
             name: format!("Run #{}", identifier),
@@ -385,6 +395,8 @@ impl RemoteTorch for BastionAIServer {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+
+
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
 
     let logo_str: &str = include_str!("../logo.txt");
@@ -436,6 +448,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "BastionAI listening on {}",
         network_config.client_to_enclave_untrusted_socket()?
     );
+    println!("Suprresed");
+    info!(
+        "Torch Profiling mode: {:?}", tch::jit::f_get_profiling_mode().unwrap()
+    );
+
     Server::builder()
         .tls_config(ServerTlsConfig::new().identity(server_identity))?
         .add_service(RemoteTorchServer::with_interceptor(server, auth_interceptor))

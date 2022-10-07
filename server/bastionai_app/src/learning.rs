@@ -2,11 +2,14 @@ use super::ClientInfo;
 use crate::remote_torch::{train_config, Metric, TestConfig, TrainConfig};
 use crate::telemetry::{self, TelemetryEventProps};
 use crate::utils::tcherror_to_status;
+use crate::CheckPoint;
 use bastionai_learning::data::privacy_guard::PrivacyBudget;
 use bastionai_learning::data::Dataset;
 use bastionai_learning::nn::{Forward, LossType, Module};
 use bastionai_learning::optim::{Adam, Optimizer, SGD};
 use bastionai_learning::procedures::{self, Tester, Trainer};
+use bastionai_learning::serialization::BinaryModule;
+
 use log::info;
 use std::sync::{Arc, RwLock};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
@@ -131,7 +134,7 @@ fn build_train_context<'a>(
 
 /// Trains `module` on `dataset` outputing metrics to `run` with given `config` on `device`.
 pub fn module_train(
-    module: Arc<RwLock<Module>>,
+    binary: Arc<RwLock<BinaryModule>>,
     dataset: Arc<RwLock<Dataset>>,
     run: Arc<RwLock<Run>>,
     config: TrainConfig,
@@ -139,13 +142,16 @@ pub fn module_train(
     model_hash: String,
     dataset_hash: String,
     client_info: Option<ClientInfo>,
+    chkpt: &CheckPoint,
 ) {
     tokio::spawn(async move {
         let start_time = Instant::now();
         let epochs = config.epochs;
         let batch_size = config.batch_size;
-        let mut module = module.write().unwrap();
+        let binary = binary.read().unwrap();
         let dataset = dataset.read().unwrap();
+
+        let mut module: Module = (&*binary).try_into().unwrap();
         module.set_device(device);
         match tcherror_to_status(build_train_context(&mut module, &dataset, config)) {
             Ok((forward, optimizer, metric, metric_budget)) => {
@@ -158,6 +164,7 @@ pub fn module_train(
                     device,
                     epochs as usize,
                     batch_size as usize,
+                    chkpt,
                 );
                 let nb_epochs = trainer.nb_epochs() as i32;
                 let nb_batches = trainer.nb_batches() as i32;

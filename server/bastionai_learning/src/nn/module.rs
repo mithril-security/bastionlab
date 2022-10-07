@@ -1,8 +1,8 @@
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 
 use super::{LossType, Parameters};
 use crate::data::privacy_guard::PrivacyGuard;
-use crate::serialization::SizedObjectsBytes;
+use crate::serialization::{BinaryModule, SizedObjectsBytes};
 use tch::Tensor;
 use tch::{nn::VarStore, Device, TchError, TrainableCModule};
 
@@ -28,10 +28,10 @@ impl DpSGDContext {
 }
 
 /// Represents the forward pass function of a module.
-/// 
+///
 /// The forward pass can be applied to a set of inputs using
 /// the `forward` method.
-/// 
+///
 /// This struct is needed because parameters mutably borrow part of a
 /// module (its parameters) pereventing any other code from immutably
 /// borrowing its forward pass function. This can be circumventing by
@@ -55,7 +55,8 @@ impl<'a> Forward<'a> {
         if inputs.len() > 0 {
             *self.dp_sgd_context.write().unwrap() = Some(DpSGDContext {
                 delta: inputs[0].map_context(|x| x.delta()),
-                batch_sampling_rate: inputs[0].batch_size()? as f32 / inputs[0].map_context(|x| x.nb_samples()) as f32,
+                batch_sampling_rate: inputs[0].batch_size()? as f32
+                    / inputs[0].map_context(|x| x.nb_samples()) as f32,
                 empty_guard: inputs[0].empty(),
             })
         }
@@ -69,7 +70,7 @@ impl<'a> Forward<'a> {
 /// obtained from bytes data that has been serialized with
 /// `torch.jit.save`, a VarStore that holds the models
 /// parameters and some contaxt data in a `DpSGDContext`.
-/// 
+///
 /// The context is shared with the [`Forward`] and [`Parameters`] objects
 /// returned by methods.
 #[derive(Debug)]
@@ -99,7 +100,7 @@ impl Module {
     }
     /// Get the model's forward pass as a standalone [`Forward`] struct
     /// and parameters wrapped in a [`Parameter::Standard`] variant.
-    /// 
+    ///
     /// The parameters can be used to train the model without differential privacy with an [`Optimizer`].
     pub fn parameters<'a>(&'a mut self) -> (Forward<'a>, Parameters<'a>) {
         (
@@ -107,15 +108,12 @@ impl Module {
                 c_module: &self.c_module,
                 dp_sgd_context: Arc::clone(&self.dp_sgd_context),
             },
-            Parameters::standard(
-                &mut self.var_store,
-                Arc::clone(&self.dp_sgd_context),
-            ),
+            Parameters::standard(&mut self.var_store, Arc::clone(&self.dp_sgd_context)),
         )
     }
     /// Get the model's forward pass as a standalone [`Forward`] struct
     /// and parameters wrapped in a [`Parameter::Private`] variant.
-    /// 
+    ///
     /// The parameters can be used to train the model with differential privacy with an [`Optimizer`].
     pub fn private_parameters<'a>(
         &'a mut self,
@@ -159,6 +157,22 @@ impl TryFrom<SizedObjectsBytes> for Module {
     }
 }
 
+impl TryFrom<&BinaryModule> for Module {
+    type Error = TchError;
+
+    fn try_from(value: &BinaryModule) -> Result<Self, Self::Error> {
+        // let object = value.next().ok_or(TchError::FileFormat(String::from(
+        //     "Invalid data, expected at least one object in stream.",
+        // )))?;
+        let vs = VarStore::new(Device::Cpu);
+        Ok(Module {
+            c_module: TrainableCModule::load_data(&mut &value.0[..], vs.root())?,
+            var_store: vs,
+            dp_sgd_context: Arc::new(RwLock::new(None)),
+        })
+    }
+}
+
 impl TryFrom<&Module> for SizedObjectsBytes {
     type Error = TchError;
 
@@ -170,3 +184,5 @@ impl TryFrom<&Module> for SizedObjectsBytes {
         Ok(module_bytes)
     }
 }
+
+pub type CheckPoint = Vec<Mutex<tch::Tensor>>;
