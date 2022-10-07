@@ -8,7 +8,6 @@ $(VENV)/bin/activate:
 venv: $(VENV)/bin/activate
 
 build: venv
-	git clone https://github.com/pybind/pybind11.git attestation_C/pybind11
 	./$(VENV)/bin/pip install build
 	./$(VENV)/bin/python3 -m build . --wheel
 
