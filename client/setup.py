@@ -4,13 +4,22 @@ from setuptools import find_packages, setup
 from setuptools.command.build_py import build_py
 import pkg_resources
 import re
+#from pybind11 import get_cmake_dir,get_include
+from pybind11.setup_helpers import Pybind11Extension, build_ext
 
 
-PROTO_FILES = ["remote_torch.proto"]
+PROTO_FILES = ["remote_torch.proto","attestation.proto"]
 PROTO_PATH = os.path.join(os.path.dirname(__file__), "protos")
 
 this_directory = Path(__file__).parent
 long_description = (this_directory / "README.md").read_text()
+
+ext_modules = [
+    Pybind11Extension("_attestation_c",
+        ["attestation_C/lib.cpp"],
+        libraries = ['ssl', 'crypto'],
+        cxx_std=11)
+]
 
 def read(filename):
     return open(os.path.join(os.path.dirname(__file__), filename)).read()
@@ -44,7 +53,6 @@ def generate_stub():
 
 class BuildPackage(build_py):
     def run(self):
-        print(f"Inside BuildPackage")
         generate_stub()
         super(BuildPackage, self).run()
 
@@ -58,8 +66,9 @@ setup(
     keywords="confidential computing training client enclave amd-sev machine learning",
     cmdclass={"build_py": BuildPackage},
     long_description=long_description,
+    ext_modules=ext_modules,
     author="Kwabena Amponsem, Lucas Bourtoule",
-    author_email="kwabena.amponsem@mithrilsecurity.io, luacs.bourtoule@mithrilsecurity.io",
+    author_email="kwabena.amponsem@mithrilsecurity.io, luacs.bourtoule@nithrilsecurity.io",
     classifiers=["Programming Language :: Python :: 3"],
     install_requires=[
         "grpcio==1.47.0",
@@ -70,6 +79,7 @@ setup(
         "numpy==1.23.1",
         "typing-extensions==4.3.0",
         "tqdm==4.64.0",
+        "pybind11==2.10.0",
     ],
     package_data={'': ['protos']}
 )

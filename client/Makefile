@@ -8,6 +8,7 @@ $(VENV)/bin/activate:
 venv: $(VENV)/bin/activate
 
 build: venv
+	git clone https://github.com/pybind/pybind11.git attestation_C/pybind11
 	./$(VENV)/bin/pip install build
 	./$(VENV)/bin/python3 -m build . --wheel
 
@@ -22,7 +23,7 @@ clean:
 	rm -rf $(VENV)
 	rm -rf build
 	rm -rf dist
-	#rm -rf bastionai/pb
+	rm -rf bastionai/pb
 	rm -rf bastionai.egg-info
 	find . -type f -name '*.pyc' -delete
 	find . -type d -name '__pycache__' -delete

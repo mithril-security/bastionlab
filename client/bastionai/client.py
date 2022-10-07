@@ -30,6 +30,13 @@ from bastionai.errors import GRPCException
 if TYPE_CHECKING:
     from bastionai.learner import RemoteLearner, RemoteDataset
 
+#<!-- Attestation dependencies -->
+from bastionai.pb.attestation_pb2 import ReportRequest, ReportResponse
+from bastionai.pb.attestation_pb2_grpc import AttestationStub
+import base64
+import _attestation_c
+
+
 class Client:
     """BastionAI client class.
     
@@ -49,7 +56,6 @@ class Client:
         self.stub = stub
         self.default_secret = default_secret
         self.client_info = client_info
-        get_attestation_report()
 
     def send_model(
         self,
@@ -239,6 +245,48 @@ class Client:
         return RemoteLearner(self, *args, **kwargs)
 
 
+def get_validate_attestation(attestation_client: Client, server_cert: str):
+    import secrets
+    import requests
+    import hashlib
+
+    nonce = secrets.token_bytes(16)
+    nonce = base64.b64encode(nonce)
+    
+    report_response = GRPCException.map_error(lambda: attestation_client.stub.ClientReportRequest(ReportRequest(nonce=nonce)))
+    report = report_response.report
+
+    hasher = hashlib.sha256()
+    hasher.update(nonce+server_cert.encode('utf-8'))
+    calc_measurement = hasher.digest()
+ 
+    cert_start_line = '-----BEGIN CERTIFICATE-----'
+    
+    cert_chain = requests.get("https://kdsintf.amd.com/vcek/v1/Milan/cert_chain")
+    certs = cert_chain.text.split(cert_start_line)
+    
+    #First ASK then ARK according to the AMD specifications
+    ARK = cert_start_line+certs[2]
+    ASK = cert_start_line+certs[1]
+
+    #This should cover the entire user-supplied data range (512 bits)
+    #currently it only compares the exact size of the hash 256 bits.
+    if calc_measurement != report[112:144]:     
+        print("Nonce and server certification validation failed. Terminating connection...")
+        exit()
+    else:
+        print("Nonce and server certificate validated successfully")
+
+    vcek_pem = ssl.DER_cert_to_PEM_cert(report_response.vcek_cert)
+    
+    ret_val = 0
+    ret_val = _attestation_c.attest(report[32:1216],vcek_pem,ASK,ARK,len(vcek_pem),len(ASK),len(ARK))
+    
+    if ret_val != 0:
+        print("Attestation validation failed. Terminating connection...")
+        exit()
+
+
 @dataclass
 class Connection:
     """Context manger that handles a connection to a BastionAI server.
@@ -281,16 +329,9 @@ class Connection:
             server_target, server_cred, options=connection_options
         )
 
-        get_validate_attestation(Client(RemoteTorchStub(self.channel), client_info=client_info, default_secret=self.default_secret))
-
-
+        get_validate_attestation(Client(AttestationStub(self.channel), client_info=client_info, default_secret=self.default_secret), server_cert)
 
         return Client(RemoteTorchStub(self.channel), client_info=client_info, default_secret=self.default_secret)
 
     def __exit__(self, exc_type: Any, exc_value: Any, exc_traceback: Any) -> None:
         self.channel.close()
-
-    def validate_attestation(attestation_client: Client):
-        import secrets
-        nonce = secrets.SystemRandom()
-        GRPCException.map_error(lambda: client.stub.ClientReportRequest()))

@@ -48,6 +48,20 @@ use serialization::*;
 use bastionai_learning::serialization::SizedObjectsBytes;
 use bastionai_common::auth::{auth_interceptor, setup_jwt};
 
+//<!--Attestation Deps -->
+use sha2::{Sha256, Digest};
+mod attestation_lib;
+use attestation_lib::*;
+
+mod attestation {
+    tonic::include_proto!("attestation");
+}
+
+use attestation::attestation_server::{Attestation,AttestationServer};
+use attestation::{
+    ReportRequest, ReportResponse,
+};
+
 /// The server's state
 struct BastionAIServer {
     modules: RwLock<HashMap<String, Artifact<Module>>>,
@@ -64,6 +78,40 @@ impl BastionAIServer {
         }
     }
 }
+
+#[tonic::async_trait]
+impl Attestation for BastionAIServer {
+    async fn client_report_request(&self, request: Request<ReportRequest>) -> Result<Response<ReportResponse>,Status>
+    {
+
+        let nonce = request.into_inner().nonce;
+        let server_cert = fs::read("tls/host_server.pem");
+        
+        let mut hasher = Sha256::new();
+        let data:Vec<u8> = match server_cert {
+            Ok(mut cert) => {let mut nonce_bytes = nonce.to_vec();
+                            nonce_bytes.append(&mut cert); 
+                            nonce_bytes},
+            _ => nonce.to_vec(),
+        };
+            
+        hasher.update(data);
+        let report_input_hash = hasher.finalize();
+        
+        let report_certs = get_report(report_input_hash.to_vec()).await.unwrap();
+
+        let server_cert_unwrapped = fs::read("tls/host_server.pem")?;
+
+        Ok(Response::new(ReportResponse{
+            report: report_certs.get("report").unwrap().to_vec(),
+            server_cert : server_cert_unwrapped,
+            signature_algo: report_certs.get("signature_algo").unwrap().to_vec(),
+            cert_chain: report_certs.get("cert_chain").unwrap().to_vec(),
+            vcek_cert: report_certs.get("vcek_cert").unwrap().to_vec(),
+        }))
+    }
+}
+
 
 #[tonic::async_trait]
 impl RemoteTorch for BastionAIServer {
@@ -316,10 +364,6 @@ impl RemoteTorch for BastionAIServer {
                 meta: v.meta.clone(),
             })
             .collect();
-            
-        info!(
-            target: "BastionAI",
-            "Listing available models.");
 
         Ok(Response::new(References { list }))
     }
@@ -411,6 +455,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     setup_jwt();
 
     let server = BastionAIServer::new();
+    let attestation_server = BastionAIServer::new();
 
     let mut file = File::open("config.toml")?;
     let mut contents = String::new();
@@ -442,6 +487,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     Server::builder()
         .tls_config(ServerTlsConfig::new().identity(server_identity))?
+        .add_service(AttestationServer::new(attestation_server))
         .add_service(RemoteTorchServer::with_interceptor(server, auth_interceptor))
         .serve(network_config.client_to_enclave_untrusted_socket()?)
         .await?;
