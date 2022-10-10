@@ -1,12 +1,12 @@
-use tch::{Tensor, TchError};
-use crate::nn::Parameters;
-use super::{initialize_statistics, Optimizer};
+use super::{initialize_statistics, log_checkpoint, Optimizer};
+use crate::nn::{CheckPoint, Parameters};
+use tch::{TchError, Tensor};
 
 /// Adam Optimizer
-/// 
+///
 /// Updates contained parameters using the Adam algorithm.
 /// This is a reimplementation of Pytorch's [Adam] in Rust.
-/// 
+///
 /// [Adam]: https://pytorch.org/docs/stable/generated/torch.optim.Adam.html
 pub struct Adam<'a> {
     learning_rate: f64,
@@ -20,10 +20,11 @@ pub struct Adam<'a> {
     v_hat_max: Vec<Option<Tensor>>,
     t: i32,
     pub parameters: Parameters<'a>,
+    chkpt: &'a mut CheckPoint,
 }
 
 impl<'a> Adam<'a> {
-    pub fn new(parameters: Parameters<'a>, learning_rate: f64) -> Self {
+    pub fn new(parameters: Parameters<'a>, chkpt: &'a mut CheckPoint, learning_rate: f64) -> Self {
         Adam {
             learning_rate: learning_rate,
             beta_1: 0.9,
@@ -36,6 +37,7 @@ impl<'a> Adam<'a> {
             v_hat_max: initialize_statistics(parameters.len()),
             t: 1,
             parameters,
+            chkpt,
         }
     }
     pub fn beta_1(mut self, beta_1: f64) -> Self {
@@ -74,20 +76,30 @@ impl<'a> Optimizer for Adam<'a> {
             }
             if let Some(m) = &mut self.m[i] {
                 // m = beta_1 * m + (1 - beta_1) * grad
-                *m = m.f_mul_scalar(self.beta_1)?.f_add(&grad.f_mul_scalar(1. - self.beta_1)?)?;
+                *m = m
+                    .f_mul_scalar(self.beta_1)?
+                    .f_add(&grad.f_mul_scalar(1. - self.beta_1)?)?;
             } else {
                 self.m[i] = Some(grad.f_mul_scalar(1. - self.beta_1)?);
             }
             if let Some(v) = &mut self.v[i] {
                 // v = beta_2 * v + (1 - beta_1) * grad ** 2
-                *v = v.f_mul_scalar(self.beta_2)?.f_add(&grad.f_square()?.f_mul_scalar(1. - self.beta_2)?)?;
+                *v = v
+                    .f_mul_scalar(self.beta_2)?
+                    .f_add(&grad.f_square()?.f_mul_scalar(1. - self.beta_2)?)?;
             } else {
                 self.v[i] = Some(grad.f_square()?.f_mul_scalar(1. - self.beta_2)?);
             }
             // m_hat = m / (1 - beta_1 ** t)
-            let m_hat = self.m[i].as_ref().unwrap().f_div_scalar(1. - self.beta_1.powi(self.t))?;
+            let m_hat = self.m[i]
+                .as_ref()
+                .unwrap()
+                .f_div_scalar(1. - self.beta_1.powi(self.t))?;
             // v_hat = v / (1 - beta_2 ** t)
-            let v_hat = self.v[i].as_ref().unwrap().f_div_scalar(1. - self.beta_2.powi(self.t))?;
+            let v_hat = self.v[i]
+                .as_ref()
+                .unwrap()
+                .f_div_scalar(1. - self.beta_2.powi(self.t))?;
 
             if self.amsgrad {
                 if let Some(v_hat_max) = &mut self.v_hat_max[i] {
@@ -98,11 +110,28 @@ impl<'a> Optimizer for Adam<'a> {
                     self.v_hat_max[i] = Some(v_hat.f_detach_copy()?);
                 }
                 // update = learning_rate * m_hat / (sqrt(v_hat_max) + epsilon)
-                m_hat.f_div(&self.v_hat_max[i].as_ref().unwrap().f_sqrt()?.f_add_scalar(self.epsilon)?)?.f_mul_scalar(self.learning_rate)
+                m_hat
+                    .f_div(
+                        &self.v_hat_max[i]
+                            .as_ref()
+                            .unwrap()
+                            .f_sqrt()?
+                            .f_add_scalar(self.epsilon)?,
+                    )?
+                    .f_mul_scalar(self.learning_rate)
             } else {
                 // update = learning_rate * m_hat / (sqrt(v_hat) + epsilon)
-                m_hat.f_div(&v_hat.f_sqrt()?.f_add_scalar(self.epsilon)?)?.f_mul_scalar(self.learning_rate)
+                m_hat
+                    .f_div(&v_hat.f_sqrt()?.f_add_scalar(self.epsilon)?)?
+                    .f_mul_scalar(self.learning_rate)
             }
         })
+    }
+
+    fn check_point(&mut self) -> Result<(), TchError> {
+        self.chkpt.append(&mut log_checkpoint(
+            self.parameters.into_named_inner().unwrap(),
+        ));
+        Ok(())
     }
 }

@@ -64,6 +64,7 @@ fn build_test_context<'a>(
 fn build_train_context<'a>(
     module: &'a mut Module,
     dataset: &Dataset,
+    chkpt: &'a mut CheckPoint,
     config: TrainConfig,
 ) -> Result<
     (
@@ -98,7 +99,7 @@ fn build_train_context<'a>(
             dampening,
             nesterov,
         }) => Box::new(
-            SGD::new(parameters, learning_rate as f64)
+            SGD::new(parameters, chkpt, learning_rate as f64)
                 .weight_decay(weight_decay as f64)
                 .momentum(momentum as f64)
                 .dampening(dampening as f64)
@@ -112,7 +113,7 @@ fn build_train_context<'a>(
             weight_decay,
             amsgrad,
         }) => Box::new(
-            Adam::new(parameters, learning_rate as f64)
+            Adam::new(parameters, chkpt, learning_rate as f64)
                 .beta_1(beta_1 as f64)
                 .beta_2(beta_2 as f64)
                 .epsilon(epsilon as f64)
@@ -142,7 +143,7 @@ pub fn module_train(
     model_hash: String,
     dataset_hash: String,
     client_info: Option<ClientInfo>,
-    chkpt: &CheckPoint,
+    chkpt: Arc<RwLock<CheckPoint>>,
 ) {
     tokio::spawn(async move {
         let start_time = Instant::now();
@@ -150,10 +151,17 @@ pub fn module_train(
         let batch_size = config.batch_size;
         let binary = binary.read().unwrap();
         let dataset = dataset.read().unwrap();
+        let mut chkpt = chkpt.write().unwrap();
+        let mut chkpt = chkpt.as_mut();
 
         let mut module: Module = (&*binary).try_into().unwrap();
         module.set_device(device);
-        match tcherror_to_status(build_train_context(&mut module, &dataset, config)) {
+        match tcherror_to_status(build_train_context(
+            &mut module,
+            &dataset,
+            &mut chkpt,
+            config,
+        )) {
             Ok((forward, optimizer, metric, metric_budget)) => {
                 let trainer = Trainer::new(
                     forward,
@@ -164,7 +172,6 @@ pub fn module_train(
                     device,
                     epochs as usize,
                     batch_size as usize,
-                    chkpt,
                 );
                 let nb_epochs = trainer.nb_epochs() as i32;
                 let nb_batches = trainer.nb_batches() as i32;

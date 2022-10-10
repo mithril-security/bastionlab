@@ -1,15 +1,15 @@
-use tch::{Tensor, TchError};
-use crate::nn::Parameters;
-use super::{initialize_statistics, Optimizer};
+use super::{initialize_statistics, log_checkpoint, Optimizer};
+use crate::nn::{CheckPoint, Parameters};
+use tch::{TchError, Tensor};
 
 /// Stochastic Gradient Descent Optimizer
-/// 
+///
 /// Updates contained parameters using the SGD algorithm.
 /// This optimizer also supports weight decay, momentum, dampening
 /// and nesterov updates.
-/// 
+///
 /// It is a reimplementation of Pytorch's [SGD] in Rust.
-/// 
+///
 /// [SGD]: https://pytorch.org/docs/stable/generated/torch.optim.SGD.html
 pub struct SGD<'a> {
     learning_rate: f64,
@@ -19,11 +19,12 @@ pub struct SGD<'a> {
     nesterov: bool,
     statistics: Vec<Option<Tensor>>,
     pub parameters: Parameters<'a>,
+    chkpt: &'a mut CheckPoint,
 }
 
 impl<'a> SGD<'a> {
     /// Returns a new SGD optimizer to update given `parameters` using given `learning_rate`.
-    pub fn new(parameters: Parameters<'a>, learning_rate: f64) -> Self {
+    pub fn new(parameters: Parameters<'a>, chkpt: &'a mut CheckPoint, learning_rate: f64) -> Self {
         SGD {
             learning_rate: learning_rate,
             weight_decay: 0.,
@@ -32,6 +33,7 @@ impl<'a> SGD<'a> {
             nesterov: false,
             statistics: initialize_statistics(parameters.len()),
             parameters,
+            chkpt,
         }
     }
     /// Sets weight_decay.
@@ -71,13 +73,20 @@ impl<'a> Optimizer for SGD<'a> {
             if self.momentum != 0. {
                 if let Some(b) = &mut self.statistics[i] {
                     // b = momentum * b + (1 - dampening) * grad
-                    *b = b.f_mul_scalar(self.momentum)?.f_add(&grad.f_mul_scalar(1. - self.dampening)?)?;
+                    *b = b
+                        .f_mul_scalar(self.momentum)?
+                        .f_add(&grad.f_mul_scalar(1. - self.dampening)?)?;
                 } else {
                     self.statistics[i] = Some(grad.f_detach_copy()?)
                 }
                 if self.nesterov {
                     // grad = grad + momentum * statistics
-                    grad = grad.f_add(&(&self.statistics[i]).as_ref().unwrap().f_mul_scalar(self.momentum)?)?;
+                    grad = grad.f_add(
+                        &(&self.statistics[i])
+                            .as_ref()
+                            .unwrap()
+                            .f_mul_scalar(self.momentum)?,
+                    )?;
                 } else {
                     grad = (&self.statistics[i]).as_ref().unwrap().f_detach_copy()?;
                 }
@@ -85,5 +94,12 @@ impl<'a> Optimizer for SGD<'a> {
             // update = learning_rate * grad
             grad.f_mul_scalar(self.learning_rate)
         })
+    }
+
+    fn check_point(&mut self) -> Result<(), TchError> {
+        self.chkpt.append(&mut log_checkpoint(
+            self.parameters.into_named_inner().unwrap(),
+        ));
+        Ok(())
     }
 }

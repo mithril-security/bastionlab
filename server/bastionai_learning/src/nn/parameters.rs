@@ -14,6 +14,25 @@ fn copy_parameters(params: &Vec<Tensor>) -> Result<Vec<Tensor>, TchError> {
     Ok(res)
 }
 
+fn copy_named_parameters(
+    params: &Vec<(String, Tensor)>,
+) -> Result<Vec<(String, Tensor)>, TchError> {
+    let mut res = Vec::new();
+    for (n, p) in params.iter() {
+        res.push((n.clone(), p.copy().f_detach_()?));
+    }
+    Ok(res)
+}
+
+fn fetch_named_parameters<'a>(vs: &'a mut VarStore) -> Vec<(String, Tensor)> {
+    let mut named_parameters: Vec<(String, Tensor)> = Vec::new();
+    let updated_parameters = vs.trainable_variables();
+    for ((k, _), updated) in vs.variables().iter().zip(updated_parameters) {
+        named_parameters.push((k.clone(), updated.copy().f_detach_().unwrap()));
+    }
+    named_parameters
+}
+
 /// Type of batch aggregation used by a loss function
 ///
 /// The `Mean` variant contains the number of samples in a batch.
@@ -33,11 +52,13 @@ pub enum LossType {
 pub enum Parameters<'a> {
     Standard {
         parameters: Vec<Tensor>,
+        named_parameters: Vec<(String, Tensor)>,
         dp_sgd_context: Arc<RwLock<Option<DpSGDContext>>>,
         _phantom: PhantomData<&'a mut Module>,
     },
     Private {
         parameters: Vec<Tensor>,
+        named_parameters: Vec<(String, Tensor)>,
         eps: f32,
         max_grad_norm: f32,
         loss_type: LossType,
@@ -55,6 +76,7 @@ impl<'a> Parameters<'a> {
     ) -> Parameters<'a> {
         Parameters::Standard {
             parameters: vs.trainable_variables(),
+            named_parameters: fetch_named_parameters(vs),
             dp_sgd_context,
             _phantom: PhantomData,
         }
@@ -74,6 +96,7 @@ impl<'a> Parameters<'a> {
     ) -> Parameters<'a> {
         Parameters::Private {
             parameters: vs.trainable_variables(),
+            named_parameters: fetch_named_parameters(vs),
             eps,
             max_grad_norm,
             loss_type,
@@ -94,6 +117,17 @@ impl<'a> Parameters<'a> {
         match self {
             Parameters::Standard { parameters, .. } => copy_parameters(parameters),
             Parameters::Private { parameters, .. } => copy_parameters(parameters),
+        }
+    }
+
+    pub fn into_named_inner(&self) -> Result<Vec<(String, Tensor)>, TchError> {
+        match self {
+            Parameters::Standard {
+                named_parameters, ..
+            } => copy_named_parameters(named_parameters),
+            Parameters::Private {
+                named_parameters, ..
+            } => copy_named_parameters(named_parameters),
         }
     }
 
@@ -200,7 +234,8 @@ impl<'a> Parameters<'a> {
                 }
                 let per_sample_norms =
                     Tensor::f_stack(&per_param_norms, 1).map_err(|e| TchError::Shape(format!("Failed to stack per-sample gradients, are you using a model with expanded weights? Initial error: {}", e)))?.f_norm_scalaropt_dim(2, &[1], false)?;
-                let max_grad_norm_t = Tensor::of_slice(&[*max_grad_norm as f32]).f_to_device(per_sample_norms.device())?;
+                let max_grad_norm_t = Tensor::of_slice(&[*max_grad_norm as f32])
+                    .f_to_device(per_sample_norms.device())?;
                 let per_sample_clip_factor = max_grad_norm_t
                     .f_div(&per_sample_norms.f_add_scalar(1e-6)?)?
                     .f_clamp(0., 1.)?;

@@ -1,10 +1,11 @@
+use std::io::Cursor;
 use std::sync::{Arc, Mutex, RwLock};
 
 use super::{LossType, Parameters};
 use crate::data::privacy_guard::PrivacyGuard;
 use crate::serialization::{BinaryModule, SizedObjectsBytes};
-use tch::Tensor;
 use tch::{nn::VarStore, Device, TchError, TrainableCModule};
+use tch::{CModule, Tensor};
 
 /// Contains useful information at the module level to carry out DP-SGD
 /// (delta, batch sampling rate, etc.)
@@ -111,6 +112,7 @@ impl Module {
             Parameters::standard(&mut self.var_store, Arc::clone(&self.dp_sgd_context)),
         )
     }
+
     /// Get the model's forward pass as a standalone [`Forward`] struct
     /// and parameters wrapped in a [`Parameter::Private`] variant.
     ///
@@ -161,9 +163,6 @@ impl TryFrom<&BinaryModule> for Module {
     type Error = TchError;
 
     fn try_from(value: &BinaryModule) -> Result<Self, Self::Error> {
-        // let object = value.next().ok_or(TchError::FileFormat(String::from(
-        //     "Invalid data, expected at least one object in stream.",
-        // )))?;
         let vs = VarStore::new(Device::Cpu);
         Ok(Module {
             c_module: TrainableCModule::load_data(&mut &value.0[..], vs.root())?,
@@ -172,7 +171,6 @@ impl TryFrom<&BinaryModule> for Module {
         })
     }
 }
-
 impl TryFrom<&Module> for SizedObjectsBytes {
     type Error = TchError;
 
@@ -185,4 +183,35 @@ impl TryFrom<&Module> for SizedObjectsBytes {
     }
 }
 
-pub type CheckPoint = Vec<Mutex<tch::Tensor>>;
+pub type CheckPoint = Vec<(String, Mutex<Tensor>)>;
+
+impl TryFrom<&CheckPoint> for SizedObjectsBytes {
+    type Error = TchError;
+
+    fn try_from(value: &CheckPoint) -> Result<Self, Self::Error> {
+        println!("&CheckPoint -> SizedObjectBytes");
+        let mut var_store = VarStore::new(Device::Cpu);
+        let mut stream: Vec<u8> = vec![];
+        value.iter().for_each(|(n, t)| {
+            let t_guard = t.lock().unwrap();
+            let capacity = t_guard.numel() * t_guard.f_kind().unwrap().elt_size_in_bytes();
+            let mut bytes = vec![0; capacity];
+            t_guard.copy_data_u8(&mut bytes[..], t_guard.numel());
+            n.as_bytes().to_vec().drain(..).for_each(|v| stream.push(v));
+            bytes.drain(..).for_each(|v| stream.push(v));
+        });
+        let stream = Cursor::new(stream);
+
+        var_store.load_from_stream(stream).unwrap();
+        println!("Loading into varstore");
+        let data = vec![];
+        let module = Module {
+            c_module: TrainableCModule::load_data(&mut data.as_slice(), var_store.root())?,
+            var_store,
+            dp_sgd_context: Arc::new(RwLock::new(None)),
+        };
+        println!("{:#?}", module);
+        let output: SizedObjectsBytes = (&module).try_into().unwrap();
+        Ok(output)
+    }
+}

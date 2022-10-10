@@ -1,6 +1,5 @@
 use env_logger::Env;
 use log::info;
-use std::borrow::Borrow;
 use std::collections::HashMap;
 
 use std::{
@@ -8,7 +7,7 @@ use std::{
     collections::hash_map::DefaultHasher};
 use std::ffi::CString;
 use std::fs;
-use std::sync::{Arc, RwLock, Mutex};
+use std::sync::{Arc, RwLock};
 use std::time::Instant;
 use std::{fs::File, io::Read};
 use tokio_stream::wrappers::ReceiverStream;
@@ -52,7 +51,7 @@ use bastionai_common::auth::{auth_interceptor, setup_jwt};
 /// The server's state
 struct BastionAIServer {
     binaries: RwLock<HashMap<String, Artifact<BinaryModule>>>,
-    checkpoints: RwLock<HashMap<String, CheckPoint>>,
+    checkpoints: RwLock<HashMap<String, Artifact<CheckPoint>>>,
     modules: RwLock<HashMap<String, Artifact<Module>>>,
     datasets: RwLock<HashMap<String, Artifact<Dataset>>>,
     runs: RwLock<HashMap<Uuid, Arc<RwLock<Run>>>>,
@@ -193,8 +192,8 @@ impl RemoteTorch for BastionAIServer {
     ) -> Result<Response<Self::FetchModuleStream>, Status> {
         let identifier = request.into_inner().identifier;
         let serialized = {
-            let modules = self.modules.read().unwrap();
-            let artifact = modules
+            let checkpoints = self.checkpoints.read().unwrap();
+            let artifact = checkpoints
                 .get(&identifier)
                 .ok_or(Status::not_found("Module not found"))?;
             tcherror_to_status(artifact.serialize())?
@@ -228,19 +227,26 @@ impl RemoteTorch for BastionAIServer {
             .ok_or(Status::invalid_argument("Invalid module reference"))?
             .identifier;
             let device = parse_device(&config.device)?;
-        let (binary, client_info) = {
+        let (binary, chkpt, client_info) = {
+            let chkpt = Artifact {
+                data: Arc::new(RwLock::new(CheckPoint::new())),
+                ..Default::default()
+            };
+            
+            self.checkpoints.write().unwrap().insert(binary_id.clone(), chkpt);
+
             let binaries = self.binaries.read().unwrap();
+            let checkpoints = self.checkpoints.read().unwrap();
             let binary: &Artifact<BinaryModule> = 
               binaries
                 .get(&binary_id)
                 .ok_or(Status::not_found("Module binary not found"))?;
-                
 
-                
-                (Arc::clone(&binary.data),  binary.client_info.clone())
-            };
+            let chkpt = checkpoints.get(&binary_id).ok_or(Status::not_found("Module binary not found"))?;
+            (Arc::clone(&binary.data), Arc::clone(&chkpt.data) , binary.client_info.clone())
+        };
             
-            let dataset = {
+        let dataset = {
             let datasets = self.datasets.read().unwrap();
             let dataset = datasets
                 .get(&dataset_id)
@@ -248,7 +254,6 @@ impl RemoteTorch for BastionAIServer {
             Arc::clone(&dataset.data)
         };
 
-        let chkpt = self.checkpoints.write().unwrap().insert(binary_id.clone(), CheckPoint::new()).unwrap();
         let identifier = Uuid::new_v4();
         self.runs
             .write()
@@ -256,8 +261,7 @@ impl RemoteTorch for BastionAIServer {
             .insert(identifier, Arc::new(RwLock::new(Run::Pending)));
         let run = Arc::clone(self.runs.read().unwrap().get(&identifier).unwrap());
 
-        // Create a check point for training.
-        module_train(binary, dataset, run, config, device, binary_id, dataset_id, client_info, &chkpt);
+        module_train(binary, dataset, run, config, device, binary_id, dataset_id, client_info, chkpt);
         Ok(Response::new(Reference {
             identifier: format!("{}", identifier),
             name: format!("Run #{}", identifier),
@@ -448,10 +452,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "BastionAI listening on {}",
         network_config.client_to_enclave_untrusted_socket()?
     );
-    println!("Suprresed");
-    info!(
-        "Torch Profiling mode: {:?}", tch::jit::f_get_profiling_mode().unwrap()
-    );
+
 
     Server::builder()
         .tls_config(ServerTlsConfig::new().identity(server_identity))?

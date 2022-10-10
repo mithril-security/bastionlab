@@ -17,6 +17,19 @@ pub struct Artifact<T> {
     pub client_info: Option<ClientInfo>,
 }
 
+impl<T: Default> Default for Artifact<T> {
+    fn default() -> Self {
+        Self {
+            description: String::default(),
+            name: String::default(),
+            secret: hmac::Key::new(ring::hmac::HMAC_SHA256, &[0]),
+            meta: Vec::default(),
+            client_info: None,
+            data: Arc::default(),
+        }
+    }
+}
+
 // impl<T> Artifact<T> {
 //     /// Verifies passed meassage and tag against stored owner key.
 //     pub fn verify(&self, msg: &[u8], tag: &[u8]) -> bool {

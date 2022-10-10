@@ -76,11 +76,5 @@ impl TryFrom<SizedObjectsBytes> for BinaryModule {
             "Invalid data, expected at least one object in stream.",
         )))?;
         Ok(BinaryModule(object))
-        // let vs = VarStore::new(Device::Cpu);
-        // Ok(Module {
-        //     c_module: TrainableCModule::load_data(&mut &object[..], vs.root())?,
-        //     var_store: vs,
-        //     dp_sgd_context: Arc::new(RwLock::new(None)),
-        // })
     }
 }
