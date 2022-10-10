@@ -13,7 +13,7 @@ mod tests {
     use crate::data::privacy_guard::{
         BatchDependence, PrivacyBudget, PrivacyContext, PrivacyGuard,
     };
-    use crate::nn::{CheckPoint, LossType, Module};
+    use crate::nn::{LossType, Module};
     use crate::optim::{Optimizer, SGD};
 
     fn l2_loss(output: &Tensor, target: &Tensor) -> Result<Tensor, TchError> {
@@ -59,8 +59,8 @@ mod tests {
     fn basic_sgd() {
         let mut module = Module::load_from_file("lreg_base.pt", Device::Cpu).unwrap();
         let (forward, parameters) = module.parameters();
-        let mut chkpt = CheckPoint::new();
-        let mut optimizer = SGD::new(parameters, &mut chkpt, 0.1);
+        // let mut chkpt = CheckPoint::new();
+        let mut optimizer = SGD::new(parameters, 0.1);
 
         let data = vec![
             Tensor::of_slice::<f32>(&[0.]),
@@ -98,9 +98,9 @@ mod tests {
     fn private_sgd() {
         let mut module = Module::load_from_file("lreg.pt", Device::Cpu).unwrap();
         let (forward, parameters) = module.private_parameters(30.0, 1.0, LossType::Mean(2));
-        let mut chkpt = CheckPoint::new();
+        // let mut chkpt = CheckPoint::new();
 
-        let mut optimizer = SGD::new(parameters, &mut chkpt, 0.1);
+        let mut optimizer = SGD::new(parameters, 0.1);
 
         let data = vec![
             Tensor::of_slice::<f32>(&[0.0, 1.0]).f_view([2, 1]).unwrap(),

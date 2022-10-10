@@ -1,5 +1,5 @@
-use super::{initialize_statistics, log_checkpoint, Optimizer};
-use crate::nn::{CheckPoint, Parameters};
+use super::{initialize_statistics, Optimizer};
+use crate::nn::Parameters;
 use tch::{TchError, Tensor};
 
 /// Adam Optimizer
@@ -20,11 +20,10 @@ pub struct Adam<'a> {
     v_hat_max: Vec<Option<Tensor>>,
     t: i32,
     pub parameters: Parameters<'a>,
-    chkpt: &'a mut CheckPoint,
 }
 
 impl<'a> Adam<'a> {
-    pub fn new(parameters: Parameters<'a>, chkpt: &'a mut CheckPoint, learning_rate: f64) -> Self {
+    pub fn new(parameters: Parameters<'a>, learning_rate: f64) -> Self {
         Adam {
             learning_rate: learning_rate,
             beta_1: 0.9,
@@ -37,7 +36,6 @@ impl<'a> Adam<'a> {
             v_hat_max: initialize_statistics(parameters.len()),
             t: 1,
             parameters,
-            chkpt,
         }
     }
     pub fn beta_1(mut self, beta_1: f64) -> Self {
@@ -128,10 +126,7 @@ impl<'a> Optimizer for Adam<'a> {
         })
     }
 
-    fn check_point(&mut self) -> Result<(), TchError> {
-        self.chkpt.append(&mut log_checkpoint(
-            self.parameters.into_named_inner().unwrap(),
-        ));
-        Ok(())
+    fn into_bytes(&mut self) -> Result<Vec<u8>, TchError> {
+        self.parameters.into_bytes()
     }
 }

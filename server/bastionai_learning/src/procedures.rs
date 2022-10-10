@@ -1,6 +1,6 @@
 use crate::data::privacy_guard::{PrivacyBudget, PrivacyGuard};
 use crate::data::{Dataset, DatasetIter};
-use crate::nn::Forward;
+use crate::nn::{CheckPoint, Forward};
 use crate::optim::Optimizer;
 use tch::{Device, Kind, TchError, Tensor};
 
@@ -30,6 +30,7 @@ pub struct Trainer<'a> {
     batch_size: usize,
     dataloader: std::iter::Enumerate<DatasetIter<'a>>,
     current_epoch: usize,
+    chkpt: &'a mut CheckPoint,
 }
 
 impl<'a> Trainer<'a> {
@@ -42,6 +43,7 @@ impl<'a> Trainer<'a> {
         device: Device,
         epochs: usize,
         batch_size: usize,
+        chkpt: &'a mut CheckPoint,
     ) -> Trainer<'a> {
         Trainer {
             forward,
@@ -54,6 +56,7 @@ impl<'a> Trainer<'a> {
             batch_size,
             dataloader: dataset.iter_shuffle(batch_size).enumerate(),
             current_epoch: 0,
+            chkpt,
         }
     }
 
@@ -70,9 +73,6 @@ impl<'a> Trainer<'a> {
         self.optimizer.zero_grad()?;
         loss.backward();
         self.optimizer.step()?;
-
-        self.optimizer.check_point()?;
-
         let (value, std) = self.metric.value(self.metric_budget)?;
         Ok((self.current_epoch as i32, i as i32, value, std))
     }
@@ -97,7 +97,11 @@ impl<'a> Iterator for Trainer<'a> {
             self.metric.reset();
             if self.current_epoch < self.epochs {
                 self.dataloader = self.dataset.iter_shuffle(self.batch_size).enumerate();
-                self.next()
+                let v = self.next();
+
+                let params = self.optimizer.into_bytes().unwrap(); // Fix later with more detailed errors.
+                self.chkpt.log_chkpt(&params).unwrap(); // Fix later with more detailed errors.
+                v
             } else {
                 None
             }

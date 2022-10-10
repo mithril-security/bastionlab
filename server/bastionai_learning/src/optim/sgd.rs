@@ -1,5 +1,5 @@
-use super::{initialize_statistics, log_checkpoint, Optimizer};
-use crate::nn::{CheckPoint, Parameters};
+use super::{initialize_statistics, Optimizer};
+use crate::nn::Parameters;
 use tch::{TchError, Tensor};
 
 /// Stochastic Gradient Descent Optimizer
@@ -19,12 +19,11 @@ pub struct SGD<'a> {
     nesterov: bool,
     statistics: Vec<Option<Tensor>>,
     pub parameters: Parameters<'a>,
-    chkpt: &'a mut CheckPoint,
 }
 
 impl<'a> SGD<'a> {
     /// Returns a new SGD optimizer to update given `parameters` using given `learning_rate`.
-    pub fn new(parameters: Parameters<'a>, chkpt: &'a mut CheckPoint, learning_rate: f64) -> Self {
+    pub fn new(parameters: Parameters<'a>, learning_rate: f64) -> Self {
         SGD {
             learning_rate: learning_rate,
             weight_decay: 0.,
@@ -33,7 +32,6 @@ impl<'a> SGD<'a> {
             nesterov: false,
             statistics: initialize_statistics(parameters.len()),
             parameters,
-            chkpt,
         }
     }
     /// Sets weight_decay.
@@ -96,10 +94,7 @@ impl<'a> Optimizer for SGD<'a> {
         })
     }
 
-    fn check_point(&mut self) -> Result<(), TchError> {
-        self.chkpt.append(&mut log_checkpoint(
-            self.parameters.into_named_inner().unwrap(),
-        ));
-        Ok(())
+    fn into_bytes(&mut self) -> Result<Vec<u8>, TchError> {
+        self.parameters.into_bytes()
     }
 }
