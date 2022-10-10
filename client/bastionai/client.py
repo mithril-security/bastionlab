@@ -269,6 +269,17 @@ def get_validate_attestation(attestation_client: Client, server_cert: str):
     ARK = cert_start_line+certs[2]
     ASK = cert_start_line+certs[1]
 
+    #Comparison of expected MRENCLAVE against received MRENCLAVE
+    #This value is obtained when the UEFI image is generated
+    """
+    MRENCLACE="XXXXXXXXXXXXXXXXXXXXX"
+    if MRENCLAVE == report[48:80]:
+        print("MRENCLAVE is expected value")
+    else:
+        print("MRENCLAVE does not match expected value. Terminating ...")
+        exit()
+    """
+    
     #This should cover the entire user-supplied data range (512 bits)
     #currently it only compares the exact size of the hash 256 bits.
     if calc_measurement != report[112:144]:     
