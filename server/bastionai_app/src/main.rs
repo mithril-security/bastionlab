@@ -1,3 +1,4 @@
+use bastionai_learning::nn::Module;
 use env_logger::Env;
 use log::info;
 use std::collections::HashMap;
@@ -189,25 +190,46 @@ impl RemoteTorch for BastionAIServer {
         request: Request<Reference>,
     ) -> Result<Response<Self::FetchModuleStream>, Status> {
         let identifier = request.into_inner().identifier;
+        
         let serialized = {
             let checkpoints = self.checkpoints.read().unwrap();
-            let artifact = checkpoints
-                .get(&identifier)
-                .ok_or(Status::not_found("Module not found"))?;
-            let checkpoints = &artifact.data.read().unwrap().data;
-            let last_chkpt = &checkpoints[checkpoints.len() - 1];
+            
+            let checkpoint = checkpoints
+                .get(&identifier);
+            match checkpoint {
+                Some(chkpt) => {
+                    let artifact = chkpt;
+                    let checkpoints = &artifact.data.read().unwrap().data;
+                    let last_chkpt = &checkpoints[checkpoints.len() - 1];
+        
+                    let mut chkpt_bytes = SizedObjectsBytes::new();
+                    chkpt_bytes.append_back(last_chkpt.clone());
+        
+                    Artifact {
+                        data: Arc::new(RwLock::new(chkpt_bytes)),
+                        name: artifact.name.clone(),
+                        client_info: artifact.client_info.clone(),
+                        secret: artifact.secret.clone(),
+                        description: artifact.description.clone(),
+                        meta: artifact.meta.clone()
+                    }            
+                }
+                None => {
+                    let binaries = self.binaries.read().unwrap();
+                    let binary = binaries.get(&identifier).ok_or(Status::not_found("Module not found!"))?;
+                    let module: Module = (&*binary.data.read().unwrap()).try_into().unwrap();
+                    let module = Artifact {
+                        data: Arc::new(RwLock::new(module)),
+                        name: binary.name.clone(),
+                        client_info: binary.client_info.clone(),
+                        secret: binary.secret.clone(),
+                        description: binary.description.clone(),
+                        meta: binary.meta.clone()
+                    };
+                    tcherror_to_status(module.serialize())?
 
-            let mut chkpt_bytes = SizedObjectsBytes::new();
-            chkpt_bytes.append_back(last_chkpt.clone());
-
-            Artifact {
-                data: Arc::new(RwLock::new(chkpt_bytes)),
-                name: artifact.name.clone(),
-                client_info: artifact.client_info.clone(),
-                secret: artifact.secret.clone(),
-                description: artifact.description.clone(),
-                meta: artifact.meta.clone()
-            }            
+                }
+            }
         };
 
         Ok(stream_data(serialized, 4_194_285, "Model".to_string()).await)
