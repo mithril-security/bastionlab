@@ -51,7 +51,13 @@ with Connection("localhost", 50051) as client:
 
     print(f"Optimizers: {(client.get_available_optimizers())}")
 
-    remote_learner.fit(nb_epochs=200, eps=300.0, metric_eps=8000.0)
+    remote_learner.fit(
+        nb_epochs=200,
+        eps=300.0,
+        metric_eps=8000.0,
+        per_epoch_checkpoint=False,
+        per_n_step_checkpoint=2,
+    )
 
     lreg_model = remote_learner.get_model()
 

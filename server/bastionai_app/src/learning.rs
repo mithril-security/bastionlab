@@ -162,6 +162,8 @@ pub fn module_train(
         let start_time = Instant::now();
         let epochs = config.epochs;
         let batch_size = config.batch_size;
+        let per_epoch_checkpoint = config.per_epoch_checkpoint;
+        let per_n_step_checkpoint = config.per_n_step_checkpoint;
         let binary = binary.read().unwrap();
         let dataset = dataset.read().unwrap();
         let mut chkpt = chkpt.write().unwrap();
@@ -180,6 +182,8 @@ pub fn module_train(
                     epochs as usize,
                     batch_size as usize,
                     &mut chkpt,
+                    per_epoch_checkpoint,
+                    per_n_step_checkpoint,
                 );
                 let nb_epochs = trainer.nb_epochs() as i32;
                 let nb_batches = trainer.nb_batches() as i32;
@@ -263,10 +267,6 @@ pub fn module_test(
     tokio::spawn(async move {
         let dataset = dataset.read().unwrap();
         let batch_size = config.batch_size as usize;
-
-        // let mut module = module.write().unwrap();
-        // module.set_device(device);
-
         let chkpt = &chkpt.read().unwrap();
         let chkpts_data = &chkpt.data;
         let last_chkpt = &chkpts_data[chkpts_data.len() - 1];
@@ -283,8 +283,6 @@ pub fn module_test(
         )) {
             Ok((forward, metric, metric_budget, mut params)) => {
                 params.override_parameters(loaded_chkpt).unwrap(); // Fix later with more detailed errors.
-                println!("Params overriden");
-
                 let tester =
                     Tester::new(forward, &dataset, metric, metric_budget, device, batch_size);
                 let nb_batches = tester.nb_batches() as i32;

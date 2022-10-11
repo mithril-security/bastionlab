@@ -31,6 +31,8 @@ pub struct Trainer<'a> {
     dataloader: std::iter::Enumerate<DatasetIter<'a>>,
     current_epoch: usize,
     chkpt: &'a mut CheckPoint,
+    per_epoch_chkpt: bool,
+    per_n_steps_chkpt: i32,
 }
 
 impl<'a> Trainer<'a> {
@@ -44,6 +46,8 @@ impl<'a> Trainer<'a> {
         epochs: usize,
         batch_size: usize,
         chkpt: &'a mut CheckPoint,
+        per_epoch_chkpt: bool,
+        per_n_steps_chkpt: i32,
     ) -> Trainer<'a> {
         Trainer {
             forward,
@@ -57,6 +61,8 @@ impl<'a> Trainer<'a> {
             dataloader: dataset.iter_shuffle(batch_size).enumerate(),
             current_epoch: 0,
             chkpt,
+            per_epoch_chkpt,
+            per_n_steps_chkpt,
         }
     }
 
@@ -84,6 +90,11 @@ impl<'a> Trainer<'a> {
     pub fn nb_batches(&self) -> usize {
         self.dataset.len() / self.batch_size
     }
+
+    fn checkpoint(&mut self) {
+        let params = self.optimizer.into_bytes().unwrap(); // Fix later with more detailed errors.
+        self.chkpt.log_chkpt(&params).unwrap(); // Fix later with more detailed errors.
+    }
 }
 
 impl<'a> Iterator for Trainer<'a> {
@@ -91,7 +102,12 @@ impl<'a> Iterator for Trainer<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some((i, (inputs, labels))) = self.dataloader.next() {
-            Some(self.train_on_batch(i, inputs, labels))
+            let v = Some(self.train_on_batch(i, inputs, labels));
+
+            if self.per_n_steps_chkpt > 0 && i % self.per_n_steps_chkpt as usize == 0 {
+                self.checkpoint()
+            }
+            v
         } else {
             self.current_epoch += 1;
             self.metric.reset();
@@ -99,10 +115,15 @@ impl<'a> Iterator for Trainer<'a> {
                 self.dataloader = self.dataset.iter_shuffle(self.batch_size).enumerate();
                 let v = self.next();
 
-                let params = self.optimizer.into_bytes().unwrap(); // Fix later with more detailed errors.
-                self.chkpt.log_chkpt(&params).unwrap(); // Fix later with more detailed errors.
+                // Per Epoch checkpointing
+                if self.per_epoch_chkpt {
+                    self.checkpoint()
+                }
                 v
             } else {
+                if !self.per_epoch_chkpt && self.per_n_steps_chkpt == 0 {
+                    self.checkpoint()
+                }
                 None
             }
         }

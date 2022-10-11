@@ -11,7 +11,7 @@ from bastionai.optimizer_config import *
 from time import sleep
 from tqdm import tqdm  # type: ignore [import]
 
-import grpc # type: ignore [import]
+import grpc  # type: ignore [import]
 from grpc import StatusCode
 
 from bastionai.utils import bulk_deserialize
@@ -100,7 +100,9 @@ class RemoteDataset:
     def __format__(self, __format_spec: str) -> str:
         return self.__str__()
 
-    def _set_test_dataset(self, test_dataset: Union[Dataset, Reference], progress: bool = True) -> None:
+    def _set_test_dataset(
+        self, test_dataset: Union[Dataset, Reference], progress: bool = True
+    ) -> None:
         if not type(test_dataset) == Reference:
             self.test_dataset_ref = self.client.send_dataset(
                 test_dataset,
@@ -209,6 +211,8 @@ class RemoteLearner:
         max_grad_norm: Optional[float] = None,
         lr: Optional[float] = None,
         metric_eps: Optional[float] = None,
+        per_epoch_checkpoint: bool = False,
+        per_n_step_checkpoint: int = 0,
     ) -> TrainConfig:
         batch_size = batch_size if batch_size is not None else self.max_batch_size
         return TrainConfig(
@@ -218,6 +222,8 @@ class RemoteLearner:
             epochs=nb_epochs,
             device=self.device,
             metric=self.loss,
+            per_n_step_checkpoint=per_n_step_checkpoint,
+            per_epoch_checkpoint=per_epoch_checkpoint,
             eps=eps if eps is not None else -1.0,
             max_grad_norm=max_grad_norm if max_grad_norm else self.max_grad_norm,
             metric_eps=metric_eps
@@ -330,7 +336,7 @@ class RemoteLearner:
                 )
             else:
                 self.log.append(metric)
-            
+
             if (
                 metric.epoch + 1 == metric.nb_epochs
                 and metric.batch + 1 == metric.nb_batches
@@ -347,6 +353,8 @@ class RemoteLearner:
         metric_eps: Optional[float] = None,
         timeout: float = 60.0,
         poll_delay: float = 0.2,
+        per_epoch_checkpoint: bool = False,
+        per_n_step_checkpoint: int = 0,
     ) -> None:
         """Fits the uploaded model to the training dataset with given hyperparameters.
 
@@ -363,7 +371,14 @@ class RemoteLearner:
         """
         run = self.client.train(
             self._train_config(
-                nb_epochs, eps, batch_size, max_grad_norm, lr, metric_eps
+                nb_epochs,
+                eps,
+                batch_size,
+                max_grad_norm,
+                lr,
+                metric_eps,
+                per_epoch_checkpoint,
+                per_n_step_checkpoint,
             )
         )
         self._poll_metric(

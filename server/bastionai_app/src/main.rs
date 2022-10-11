@@ -273,6 +273,14 @@ impl RemoteTorch for BastionAIServer {
             .unwrap()
             .insert(identifier, Arc::new(RwLock::new(Run::Pending)));
         let run = Arc::clone(self.runs.read().unwrap().get(&identifier).unwrap());
+        let chkpt_setting = if config.per_epoch_checkpoint {
+            String::from("Checkpoint per epoch")
+        }else if config.per_n_step_checkpoint > 0 {
+            String::from(format!("Checkpoint per {} steps", config.per_n_step_checkpoint))
+        }else {
+            String::from("Checkpoint at the end of training!")
+        };
+        info!(target: "BastionAI", "{}",chkpt_setting );
         module_train(binary, dataset, run, config, device, binary_id, dataset_id, client_info, chkpt);
         Ok(Response::new(Reference {
             identifier: format!("{}", identifier),
