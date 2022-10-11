@@ -93,7 +93,8 @@ impl<'a> Trainer<'a> {
 
     fn checkpoint(&mut self) {
         let params = self.optimizer.into_bytes().unwrap(); // Fix later with more detailed errors.
-        self.chkpt.log_chkpt(&params).unwrap(); // Fix later with more detailed errors.
+        let optim_state = self.optimizer.get_state().unwrap();
+        self.chkpt.log_chkpt(&params, optim_state).unwrap();
     }
 }
 

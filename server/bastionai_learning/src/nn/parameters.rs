@@ -79,6 +79,7 @@ impl<'a> Parameters<'a> {
         loss_type: LossType,
         dp_sgd_context: Arc<RwLock<Option<DpSGDContext>>>,
     ) -> Parameters<'a> {
+        println!("{:?}", vs.trainable_variables());
         Parameters::Private {
             parameters: vs.variables(),
             eps,
@@ -141,6 +142,7 @@ impl<'a> Parameters<'a> {
     }
     /// Overrides model parameters with saved update.
     pub fn override_parameters(&mut self, params: Vec<(String, Tensor)>) -> Result<(), TchError> {
+        println!("{:?}", params);
         match self {
             Parameters::Standard { parameters, .. } => {
                 for (name, param) in params.iter() {
@@ -185,7 +187,7 @@ impl<'a> Parameters<'a> {
     /// When called on a private variant, DP-SGD is applied.
     pub fn update(
         &mut self,
-        mut update_fn: impl FnMut(usize, &Tensor, Tensor) -> Result<Tensor, TchError>,
+        mut update_fn: impl FnMut(&String, &Tensor, Tensor) -> Result<Tensor, TchError>,
     ) -> Result<(), TchError> {
         match self {
             Parameters::Standard {
@@ -203,8 +205,8 @@ impl<'a> Parameters<'a> {
                 {
                     return Err(TchError::Kind(String::from("Privacy limit violation.")));
                 }
-                for (i, (_, param)) in parameters.iter_mut().enumerate() {
-                    let update = update_fn(i, param, param.f_grad()?)?;
+                for (name, param) in parameters.iter_mut() {
+                    let update = update_fn(name, param, param.f_grad()?)?;
                     let _ = param.f_sub_(&update)?;
                     dp_sgd_context
                         .write()
@@ -265,7 +267,7 @@ impl<'a> Parameters<'a> {
                     .f_div(&per_sample_norms.f_add_scalar(1e-6)?)?
                     .f_clamp(0., 1.)?;
 
-                for (i, (_, param)) in parameters.iter_mut().enumerate() {
+                for (i, (name, param)) in parameters.iter_mut().enumerate() {
                     let per_sample_grad = param.grad();
                     let mut update_size = per_sample_grad.size();
                     update_size.remove(0);
@@ -277,7 +279,7 @@ impl<'a> Parameters<'a> {
                     if let LossType::Mean(batch_size) = loss_type {
                         let _ = grad.f_div_scalar_(*batch_size)?;
                     }
-                    let update = update_fn(i, &param.i(0), grad)?;
+                    let update = update_fn(name, &param.i(0), grad)?;
                     let _ = param.i(0).f_sub_(&update)?;
                     if i == 0 {
                         dp_sgd_context

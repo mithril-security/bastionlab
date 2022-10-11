@@ -1,4 +1,6 @@
-use super::{initialize_statistics, Optimizer};
+use std::collections::HashMap;
+
+use super::{initialize_statistics, optimizer::OptimizerStateType, stats_to_bytes, Optimizer};
 use crate::nn::Parameters;
 use tch::{TchError, Tensor};
 
@@ -17,20 +19,21 @@ pub struct SGD<'a> {
     momentum: f64,
     dampening: f64,
     nesterov: bool,
-    statistics: Vec<Option<Tensor>>,
+    statistics: HashMap<String, Option<Tensor>>,
     pub parameters: Parameters<'a>,
 }
 
 impl<'a> SGD<'a> {
     /// Returns a new SGD optimizer to update given `parameters` using given `learning_rate`.
     pub fn new(parameters: Parameters<'a>, learning_rate: f64) -> Self {
+        println!("Params: {}", parameters.len());
         SGD {
             learning_rate: learning_rate,
             weight_decay: 0.,
             momentum: 0.,
             dampening: 0.,
             nesterov: false,
-            statistics: initialize_statistics(parameters.len()),
+            statistics: initialize_statistics(),
             parameters,
         }
     }
@@ -63,30 +66,41 @@ impl<'a> Optimizer for SGD<'a> {
     }
 
     fn step(&mut self) -> Result<(), TchError> {
-        self.parameters.update(|i, x, mut grad| {
+        self.parameters.update(|name, x, mut grad| {
             if self.weight_decay != 0. {
                 // grad = grad + weight_decay * x
                 grad = grad.f_add(&x.f_mul_scalar(self.weight_decay)?)?;
             }
             if self.momentum != 0. {
-                if let Some(b) = &mut self.statistics[i] {
-                    // b = momentum * b + (1 - dampening) * grad
-                    *b = b
-                        .f_mul_scalar(self.momentum)?
-                        .f_add(&grad.f_mul_scalar(1. - self.dampening)?)?;
-                } else {
-                    self.statistics[i] = Some(grad.f_detach_copy()?)
+                match self.statistics.get_mut(name) {
+                    Some(b) => {
+                        if let Some(b) = b {
+                            // b = momentum * b + (1 - dampening) * grad
+                            *b = b
+                                .f_mul_scalar(self.momentum)?
+                                .f_add(&grad.f_mul_scalar(1. - self.dampening)?)?;
+                        }
+                    }
+                    None => {
+                        self.statistics
+                            .insert(name.clone(), Some(grad.f_detach_copy()?));
+                    }
                 }
                 if self.nesterov {
                     // grad = grad + momentum * statistics
-                    grad = grad.f_add(
-                        &(&self.statistics[i])
-                            .as_ref()
-                            .unwrap()
-                            .f_mul_scalar(self.momentum)?,
-                    )?;
+                    let other = self
+                        .statistics
+                        .get(name)
+                        .unwrap()
+                        .as_ref()
+                        .unwrap()
+                        .f_mul_scalar(self.momentum)?;
+                    grad = grad.f_add(&other)?;
                 } else {
-                    grad = (&self.statistics[i]).as_ref().unwrap().f_detach_copy()?;
+                    grad = (self.statistics.get(name).unwrap())
+                        .as_ref()
+                        .unwrap()
+                        .f_detach_copy()?;
                 }
             }
             // update = learning_rate * grad
@@ -96,5 +110,9 @@ impl<'a> Optimizer for SGD<'a> {
 
     fn into_bytes(&mut self) -> Result<Vec<u8>, TchError> {
         self.parameters.into_bytes()
+    }
+    fn get_state(&mut self) -> Result<OptimizerStateType, TchError> {
+        let stats = stats_to_bytes(&self.statistics)?;
+        Ok(OptimizerStateType::SGD(stats))
     }
 }

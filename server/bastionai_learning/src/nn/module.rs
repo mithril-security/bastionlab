@@ -2,6 +2,7 @@ use std::sync::{Arc, RwLock};
 
 use super::{LossType, Parameters};
 use crate::data::privacy_guard::PrivacyGuard;
+use crate::optim::OptimizerStateType;
 use crate::serialization::{BinaryModule, SizedObjectsBytes};
 use tch::Tensor;
 use tch::{nn::VarStore, Device, TchError, TrainableCModule};
@@ -189,6 +190,7 @@ impl TryFrom<&Module> for SizedObjectsBytes {
 pub struct CheckPoint {
     pub data: Vec<Vec<u8>>,
     pub private: bool,
+    pub optimizer_state: Option<OptimizerStateType>,
 }
 
 impl CheckPoint {
@@ -197,11 +199,17 @@ impl CheckPoint {
         Self {
             data: Vec::new(),
             private,
+            optimizer_state: None,
         }
     }
     /// Creates a new checkpoint for a model.
-    pub fn log_chkpt<'a>(&'a mut self, chkpt_bytes: &'a Vec<u8>) -> Result<(), TchError> {
+    pub fn log_chkpt(
+        &mut self,
+        chkpt_bytes: &Vec<u8>,
+        optim_state: OptimizerStateType,
+    ) -> Result<(), TchError> {
         self.data.push(chkpt_bytes.to_vec());
+        self.optimizer_state = Some(optim_state);
         Ok(())
     }
 }
