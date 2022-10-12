@@ -263,22 +263,28 @@ impl RemoteTorch for BastionAIServer {
             let device = parse_device(&config.device)?;
         let (binary, chkpt, client_info) = {
             let binaries = self.binaries.read().unwrap();
-            let mut checkpoints = self.checkpoints.write().unwrap();
             let binary: &Artifact<BinaryModule> = 
             binaries
             .get(&binary_id)
-            .ok_or(Status::not_found("Module binary not found"))?;
-            
-            let chkpt = Artifact {
-                data: Arc::new(RwLock::new(CheckPoint::new(config.eps >= 0.0))),
-                name: binary.name.clone(),
-                client_info: binary.client_info.clone(),
-                secret: binary.secret.clone(),
-                description: binary.description.clone(),
-                meta: binary.meta.clone(),
-            };
+            .ok_or(Status::not_found("Module binary not found"))?; 
+            let mut checkpoints = self.checkpoints.write().unwrap();
+            let chkpt = if config.resume {
+
+                let chkpt = checkpoints.get(&binary_id).ok_or(Status::not_found("CheckPoint not found!"))?;
+                chkpt
+            }else {
+                let chkpt = Artifact {
+                    data: Arc::new(RwLock::new(CheckPoint::new(config.eps >= 0.0))),
+                    name: binary.name.clone(),
+                    client_info: binary.client_info.clone(),
+                    secret: binary.secret.clone(),
+                    description: binary.description.clone(),
+                    meta: binary.meta.clone(),
+                };
             checkpoints.insert(binary_id.clone(), chkpt);
             let chkpt = checkpoints.get(&binary_id).ok_or(Status::not_found("Module binary not found"))?;
+            chkpt
+            };
             (Arc::clone(&binary.data), Arc::clone(&chkpt.data) , binary.client_info.clone())
         };            
         let dataset = {
@@ -295,14 +301,6 @@ impl RemoteTorch for BastionAIServer {
             .unwrap()
             .insert(identifier, Arc::new(RwLock::new(Run::Pending)));
         let run = Arc::clone(self.runs.read().unwrap().get(&identifier).unwrap());
-        let chkpt_setting = if config.per_epoch_checkpoint {
-            String::from("Checkpoint per epoch")
-        }else if config.per_n_step_checkpoint > 0 {
-            String::from(format!("Checkpoint per {} steps", config.per_n_step_checkpoint))
-        }else {
-            String::from("Checkpoint at the end of training!")
-        };
-        info!(target: "BastionAI", "{}",chkpt_setting );
         module_train(binary, dataset, run, config, device, binary_id, dataset_id, client_info, chkpt);
         Ok(Response::new(Reference {
             identifier: format!("{}", identifier),

@@ -50,6 +50,7 @@ message TrainConfig {
     float metric_eps = 9;
     int32 per_n_step_checkpoint = 12;
     bool per_epoch_checkpoint = 13;
+    bool resume = 14;
     
     oneof optimizer {
         // The type of optimizer to be used during training.

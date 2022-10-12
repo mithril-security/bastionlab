@@ -187,6 +187,7 @@ impl TryFrom<&Module> for SizedObjectsBytes {
 ///
 /// Contains the emta information for checkpointing a model during training
 /// This is reused to test the model or when it's fetched to the client.
+#[derive(Debug)]
 pub struct CheckPoint {
     pub data: Vec<Vec<u8>>,
     pub private: bool,

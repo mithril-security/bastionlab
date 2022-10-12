@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use super::{initialize_statistics, optimizer::OptimizerStateType, stats_to_bytes, Optimizer};
+use super::{
+    bytes_to_stats, initialize_statistics, optimizer::OptimizerStateType, stats_to_bytes, Optimizer,
+};
 use crate::nn::Parameters;
 use tch::{TchError, Tensor};
 
@@ -26,9 +28,8 @@ pub struct SGD<'a> {
 impl<'a> SGD<'a> {
     /// Returns a new SGD optimizer to update given `parameters` using given `learning_rate`.
     pub fn new(parameters: Parameters<'a>, learning_rate: f64) -> Self {
-        println!("Params: {}", parameters.len());
         SGD {
-            learning_rate: learning_rate,
+            learning_rate,
             weight_decay: 0.,
             momentum: 0.,
             dampening: 0.,
@@ -37,6 +38,37 @@ impl<'a> SGD<'a> {
             parameters,
         }
     }
+    /// Restores an Optimizer to the latest training checkpoint with `optimizer_state` and
+    pub fn load_from_checkpoint(
+        optimizer_state: &'a Option<OptimizerStateType>,
+        weights: &[u8],
+        learning_rate: f64,
+        mut parameters: Parameters<'a>,
+    ) -> Result<Self, TchError> {
+        let statistics = match optimizer_state {
+            Some(v) => match v {
+                OptimizerStateType::SGD(v) => bytes_to_stats(v)?,
+                _ => initialize_statistics(),
+            },
+            None => initialize_statistics(),
+        };
+        let weights = bytes_to_stats(weights)?;
+        let weights = weights
+            .into_iter()
+            .map(|(k, v)| (k.clone(), v.unwrap()))
+            .collect::<Vec<_>>();
+        parameters.override_parameters(weights)?;
+        Ok(SGD {
+            learning_rate,
+            weight_decay: 0.,
+            momentum: 0.,
+            dampening: 0.,
+            nesterov: false,
+            statistics,
+            parameters,
+        })
+    }
+
     /// Sets weight_decay.
     pub fn weight_decay(mut self, weight_decay: f64) -> Self {
         self.weight_decay = weight_decay;

@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use super::{initialize_statistics, optimizer::OptimizerStateType, stats_to_bytes, Optimizer};
+use super::{
+    bytes_to_stats, initialize_statistics, optimizer::OptimizerStateType, stats_to_bytes, Optimizer,
+};
 use crate::nn::Parameters;
 use tch::{TchError, Tensor};
 
@@ -39,6 +41,51 @@ impl<'a> Adam<'a> {
             t: 1,
             parameters,
         }
+    }
+    /// Restores an Optimizer to the latest training checkpoint with `optimizer_state` and
+    pub fn load_from_checkpoint(
+        optimizer_state: &'a Option<OptimizerStateType>,
+        weights: &[u8],
+        learning_rate: f64,
+        mut parameters: Parameters<'a>,
+    ) -> Result<Self, TchError> {
+        let empty_stats = (
+            initialize_statistics(),
+            initialize_statistics(),
+            initialize_statistics(),
+            1,
+        );
+        let (m, v, v_hat_max, t) = match optimizer_state {
+            Some(v) => match v {
+                OptimizerStateType::Adam(m, v, v_hat_max, t) => (
+                    bytes_to_stats(m)?,
+                    bytes_to_stats(v)?,
+                    bytes_to_stats(v_hat_max)?,
+                    *t,
+                ),
+                _ => empty_stats,
+            },
+            None => empty_stats,
+        };
+        let weights = bytes_to_stats(weights)?;
+        let weights = weights
+            .into_iter()
+            .map(|(k, v)| (k.clone(), v.unwrap()))
+            .collect::<Vec<_>>();
+        parameters.override_parameters(weights)?;
+        Ok(Adam {
+            learning_rate,
+            beta_1: 0.9,
+            beta_2: 0.999,
+            epsilon: 1e-8,
+            weight_decay: 0.,
+            amsgrad: false,
+            m,
+            v,
+            v_hat_max,
+            t,
+            parameters,
+        })
     }
     pub fn beta_1(mut self, beta_1: f64) -> Self {
         self.beta_1 = beta_1;

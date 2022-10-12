@@ -6,7 +6,7 @@ use crate::CheckPoint;
 use bastionai_learning::data::privacy_guard::PrivacyBudget;
 use bastionai_learning::data::Dataset;
 use bastionai_learning::nn::{Forward, LossType, Module, Parameters};
-use bastionai_learning::optim::{Adam, Optimizer, SGD};
+use bastionai_learning::optim::{Adam, Optimizer, OptimizerStateType, SGD};
 use bastionai_learning::procedures::{self, Tester, Trainer};
 use bastionai_learning::serialization::BinaryModule;
 
@@ -79,6 +79,8 @@ fn build_train_context<'a>(
     module: &'a mut Module,
     dataset: &Dataset,
     config: TrainConfig,
+    optimizer_state: &'a Option<OptimizerStateType>,
+    weights: &[u8],
 ) -> Result<
     (
         Forward<'a>,
@@ -111,13 +113,24 @@ fn build_train_context<'a>(
             momentum,
             dampening,
             nesterov,
-        }) => Box::new(
-            SGD::new(parameters, learning_rate as f64)
-                .weight_decay(weight_decay as f64)
-                .momentum(momentum as f64)
-                .dampening(dampening as f64)
-                .nesterov(nesterov),
-        ) as Box<dyn Optimizer + 'a>,
+        }) => {
+            if config.resume {
+                Box::new(SGD::load_from_checkpoint(
+                    optimizer_state,
+                    weights,
+                    learning_rate as f64,
+                    parameters,
+                )?) as Box<dyn Optimizer + 'a>
+            } else {
+                Box::new(
+                    SGD::new(parameters, learning_rate as f64)
+                        .weight_decay(weight_decay as f64)
+                        .momentum(momentum as f64)
+                        .dampening(dampening as f64)
+                        .nesterov(nesterov),
+                ) as Box<dyn Optimizer + 'a>
+            }
+        }
         train_config::Optimizer::Adam(train_config::Adam {
             learning_rate,
             beta_1,
@@ -125,14 +138,27 @@ fn build_train_context<'a>(
             epsilon,
             weight_decay,
             amsgrad,
-        }) => Box::new(
-            Adam::new(parameters, learning_rate as f64)
-                .beta_1(beta_1 as f64)
-                .beta_2(beta_2 as f64)
-                .epsilon(epsilon as f64)
-                .weight_decay(weight_decay as f64)
-                .amsgrad(amsgrad),
-        ) as Box<dyn Optimizer + 'a>,
+        }) => {
+            if config.resume {
+                Box::new(
+                    Adam::new(parameters, learning_rate as f64)
+                        .beta_1(beta_1 as f64)
+                        .beta_2(beta_2 as f64)
+                        .epsilon(epsilon as f64)
+                        .weight_decay(weight_decay as f64)
+                        .amsgrad(amsgrad),
+                ) as Box<dyn Optimizer + 'a>
+            } else {
+                Box::new(
+                    Adam::new(parameters, learning_rate as f64)
+                        .beta_1(beta_1 as f64)
+                        .beta_2(beta_2 as f64)
+                        .epsilon(epsilon as f64)
+                        .weight_decay(weight_decay as f64)
+                        .amsgrad(amsgrad),
+                ) as Box<dyn Optimizer + 'a>
+            }
+        }
     };
 
     let (metric, metric_budget) = build_shared_context(
@@ -166,11 +192,25 @@ pub fn module_train(
         let per_n_step_checkpoint = config.per_n_step_checkpoint;
         let binary = binary.read().unwrap();
         let dataset = dataset.read().unwrap();
-        let mut chkpt = chkpt.write().unwrap();
 
+        let mut chkpt_guard = chkpt.write().unwrap();
+
+        let optimizer_state = chkpt_guard.optimizer_state.take();
+        let weights = chkpt_guard
+            .data
+            .iter()
+            .last()
+            .map(|v| &v[..])
+            .unwrap_or(&[]);
         let mut module: Module = (&*binary).try_into().unwrap();
         module.set_device(device);
-        match tcherror_to_status(build_train_context(&mut module, &dataset, config)) {
+        match tcherror_to_status(build_train_context(
+            &mut module,
+            &dataset,
+            config,
+            &optimizer_state,
+            weights,
+        )) {
             Ok((forward, optimizer, metric, metric_budget)) => {
                 let trainer = Trainer::new(
                     forward,
@@ -181,7 +221,7 @@ pub fn module_train(
                     device,
                     epochs as usize,
                     batch_size as usize,
-                    &mut chkpt,
+                    &mut chkpt_guard,
                     per_epoch_checkpoint,
                     per_n_step_checkpoint,
                 );

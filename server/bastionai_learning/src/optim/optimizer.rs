@@ -2,7 +2,8 @@ use tch::{COptimizer, TchError};
 
 /// Type for the state of the [`Optimizer`].
 ///
-/// **NB**: This enum has to updated once more optimizers are added.
+/// **NB**: This enum has to be updated once more optimizers are added.
+#[derive(Debug)]
 pub enum OptimizerStateType {
     SGD(Vec<u8>),
     Adam(Vec<u8>, Vec<u8>, Vec<u8>, i32),

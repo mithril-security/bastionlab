@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::io::Cursor;
 
 use tch::TchError;
 use tch::Tensor;
@@ -30,6 +31,15 @@ fn stats_to_bytes<'a>(
     let mut buf: Vec<u8> = Vec::new();
     Tensor::save_multi_to_stream(stats.as_slice(), &mut buf)?;
     Ok(buf)
+}
+
+fn bytes_to_stats(bytes: &[u8]) -> Result<HashMap<String, Option<Tensor>>, TchError> {
+    let mut stats = HashMap::new();
+    let output = Tensor::load_multi_from_stream(Cursor::new(bytes))?;
+    output.into_iter().for_each(|(k, v)| {
+        stats.insert(k.clone(), Some(v));
+    });
+    Ok(stats)
 }
 
 pub use adam::Adam;

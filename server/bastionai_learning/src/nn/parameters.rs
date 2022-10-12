@@ -79,7 +79,6 @@ impl<'a> Parameters<'a> {
         loss_type: LossType,
         dp_sgd_context: Arc<RwLock<Option<DpSGDContext>>>,
     ) -> Parameters<'a> {
-        println!("{:?}", vs.trainable_variables());
         Parameters::Private {
             parameters: vs.variables(),
             eps,
@@ -142,7 +141,6 @@ impl<'a> Parameters<'a> {
     }
     /// Overrides model parameters with saved update.
     pub fn override_parameters(&mut self, params: Vec<(String, Tensor)>) -> Result<(), TchError> {
-        println!("{:?}", params);
         match self {
             Parameters::Standard { parameters, .. } => {
                 for (name, param) in params.iter() {
