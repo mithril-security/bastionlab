@@ -40,14 +40,14 @@ message Empty {
 message TrainConfig {
     // Configuration for training sent to BastionAI.
     Reference model = 1;
-    Reference dataset = 2;
+    repeated Reference dataset = 2;
     int32 batch_size = 3;
     int32 epochs = 4;
     string device = 5;
     string metric = 6;
     float eps = 7;
     float max_grad_norm = 8;
-    float metric_eps = 9;
+    repeated float metric_eps = 9;
     
     oneof optimizer {
         // The type of optimizer to be used during training.
@@ -80,11 +80,11 @@ message TrainConfig {
 
 message TestConfig {
     Reference model = 1;
-    Reference dataset = 2;
+    repeated Reference dataset = 2;
     int32 batch_size = 3;
     string device = 4;
     string metric = 5;
-    float metric_eps = 6;
+    repeated float metric_eps = 6;
 }
 
 message References {

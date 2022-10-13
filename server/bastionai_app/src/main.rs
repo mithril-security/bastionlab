@@ -214,11 +214,10 @@ impl RemoteTorch for BastionAIServer {
 
     async fn train(&self, request: Request<TrainConfig>) -> Result<Response<Reference>, Status> {
         let config = request.into_inner();
-        let dataset_id = config
-            .dataset
-            .clone()
-            .ok_or(Status::invalid_argument("Invalid dataset reference"))?
-            .identifier;
+        println!("{:?}", config.metric_eps);
+        let dataset_ids: Vec<String> = config
+            .dataset.iter().map(|v| v.identifier.clone()).collect();
+
         let module_id = config
             .model
             .clone()
@@ -233,21 +232,26 @@ impl RemoteTorch for BastionAIServer {
             (Arc::clone(&module.data), module.client_info.clone())
         };
 
-        let dataset = {
+        let datasets = {
             let datasets = self.datasets.read().unwrap();
-            let dataset = datasets
-                .get(&dataset_id)
-                .ok_or(Status::not_found("Dataset not found"))?;
-            Arc::clone(&dataset.data)
+            let datasets = dataset_ids.clone().into_iter().map(|dataset_id| {
+                let dataset = datasets
+                    .get(&dataset_id).ok_or(Status::not_found("Dataset not found")).unwrap();
+                Arc::clone(&dataset.data)
+            }).collect::<Vec<_>>();
+
+            datasets
+            
         };
 
         let identifier = Uuid::new_v4();
+        let datasets_hash = dataset_ids.join("|");
         self.runs
             .write()
             .unwrap()
             .insert(identifier, Arc::new(RwLock::new(Run::Pending)));
         let run = Arc::clone(self.runs.read().unwrap().get(&identifier).unwrap());
-        module_train(module, dataset, run, config, device, module_id, dataset_id, client_info);
+        module_train(module, datasets, run, config, device, module_id, datasets_hash.to_string() , client_info);
         Ok(Response::new(Reference {
             identifier: format!("{}", identifier),
             name: format!("Run #{}", identifier),
@@ -258,11 +262,9 @@ impl RemoteTorch for BastionAIServer {
 
     async fn test(&self, request: Request<TestConfig>) -> Result<Response<Reference>, Status> {
         let config = request.into_inner();
-        let dataset_id = config
-            .dataset
-            .clone()
-            .ok_or(Status::invalid_argument("Invalid dataset reference"))?
-            .identifier;
+        let dataset_ids: Vec<String> = config
+        .dataset.iter().map(|v| v.identifier.clone()).collect();
+
         let module_id = config
             .model
             .clone()
@@ -277,21 +279,27 @@ impl RemoteTorch for BastionAIServer {
             (Arc::clone(&module.data), module.client_info.clone())
         };
 
-        let dataset = {
+        let datasets = {
             let datasets = self.datasets.read().unwrap();
-            let dataset = datasets
-                .get(&dataset_id)
-                .ok_or(Status::not_found("Dataset not found"))?;
-            Arc::clone(&dataset.data)
+            let datasets = dataset_ids.clone().into_iter().map(|dataset_id| {
+                let dataset = datasets
+                    .get(&dataset_id).ok_or(Status::not_found("Dataset not found")).unwrap();
+                Arc::clone(&dataset.data)
+            }).collect::<Vec<_>>();
+
+            datasets
+            
         };
 
         let identifier = Uuid::new_v4();
+        let datasets_hash = dataset_ids.join("|");
+
         self.runs
             .write()
             .unwrap()
             .insert(identifier, Arc::new(RwLock::new(Run::Pending)));
         let run = Arc::clone(self.runs.read().unwrap().get(&identifier).unwrap());
-        module_test(module, dataset, run, config, device, module_id, dataset_id, client_info);
+        module_test(module, datasets, run, config, device, module_id, datasets_hash.to_string(), client_info);
         Ok(Response::new(Reference {
             identifier: format!("{}", identifier),
             name: format!("Run #{}", identifier),

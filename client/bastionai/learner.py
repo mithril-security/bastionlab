@@ -11,11 +11,13 @@ from bastionai.optimizer_config import *
 from time import sleep
 from tqdm import tqdm  # type: ignore [import]
 
-import grpc # type: ignore [import]
+import grpc  # type: ignore [import]
 from grpc import StatusCode
 
 from bastionai.utils import bulk_deserialize
 from bastionai.errors import GRPCException
+
+from bastionai.utils import is_grpc_type
 
 
 class RemoteDataset:
@@ -100,7 +102,9 @@ class RemoteDataset:
     def __format__(self, __format_spec: str) -> str:
         return self.__str__()
 
-    def _set_test_dataset(self, test_dataset: Union[Dataset, Reference], progress: bool = True) -> None:
+    def _set_test_dataset(
+        self, test_dataset: Union[Dataset, Reference], progress: bool = True
+    ) -> None:
         if not type(test_dataset) == Reference:
             self.test_dataset_ref = self.client.send_dataset(
                 test_dataset,
@@ -145,13 +149,13 @@ class RemoteLearner:
         self,
         client: Client,
         model: Union[Module, Reference],
-        remote_dataset: Union[RemoteDataset, Reference],
+        remote_dataset: Union[RemoteDataset, Reference, List[Reference]],
         loss: str,
         max_batch_size: int,
         optimizer: OptimizerConfig = Adam(),
         device: str = "cpu",
         max_grad_norm: float = 1.0,
-        metric_eps_per_batch: Optional[float] = None,
+        metric_eps_per_batch: Optional[Union[float, List[float]]] = None,
         model_name: Optional[str] = None,
         model_description: str = "",
         secret: Optional[bytes] = None,
@@ -181,23 +185,35 @@ class RemoteLearner:
             )
         else:
             self.model_ref = model
-        self.remote_dataset = (
-            remote_dataset
-            if type(remote_dataset) == RemoteDataset
-            else RemoteDataset(client, remote_dataset)
-        )
+
+        if isinstance(remote_dataset, list):
+            if is_grpc_type(remote_dataset[0], Reference):
+                self.remote_dataset = [RemoteDataset(client, v) for v in remote_dataset]
+        else:
+            if is_grpc_type(remote_dataset, Reference):
+                self.remote_dataset = [RemoteDataset(client, remote_dataset)]
+            else:
+                self.remote_dataset = [remote_dataset]
         self.client = client
         self.loss = loss
         self.optimizer = optimizer
         self.device = device
         self.max_batch_size = max_batch_size
         self.max_grad_norm = max_grad_norm
-        self.metric_eps_per_batch = (
-            0.01
-            if self.remote_dataset.privacy_limit is not None
-            and metric_eps_per_batch is None
-            else (metric_eps_per_batch if metric_eps_per_batch is not None else -1.0)
-        )
+
+        if isinstance(metric_eps_per_batch, list):
+            self.metric_eps_per_batch = metric_eps_per_batch
+        elif not isinstance(metric_eps_per_batch, list) and metric_eps_per_batch:
+            self.metric_eps_per_batch = [metric_eps_per_batch]
+        else:
+            batch_eps_m = []
+            for dataset in self.remote_dataset:
+                if dataset.privacy_limit:
+                    batch_eps_m.append(0.01)
+                else:
+                    batch_eps_m.append(-1)
+            self.metric_eps_per_batch = batch_eps_m
+
         self.progress = progress
         self.log: List[Metric] = []
 
@@ -208,23 +224,29 @@ class RemoteLearner:
         batch_size: Optional[int] = None,
         max_grad_norm: Optional[float] = None,
         lr: Optional[float] = None,
-        metric_eps: Optional[float] = None,
+        metric_eps: Optional[Union[float, List[float]]] = None,
     ) -> TrainConfig:
         batch_size = batch_size if batch_size is not None else self.max_batch_size
+        if isinstance(metric_eps, list):
+            metric_eps = metric_eps
+        elif not isinstance(metric_eps, list) and metric_eps:
+            metric_eps = [metric_eps]
+        else:
+            metric_eps = [
+                m * float(nb_epochs) * float(d.nb_samples / batch_size)
+                for (d, m) in zip(self.remote_dataset, self.metric_eps_per_batch)
+            ]
+
         return TrainConfig(
             model=self.model_ref,
-            dataset=self.remote_dataset.train_dataset_ref,
+            dataset=[dataset.train_dataset_ref for dataset in self.remote_dataset],
             batch_size=batch_size,
             epochs=nb_epochs,
             device=self.device,
             metric=self.loss,
             eps=eps if eps is not None else -1.0,
             max_grad_norm=max_grad_norm if max_grad_norm else self.max_grad_norm,
-            metric_eps=metric_eps
-            if metric_eps
-            else self.metric_eps_per_batch
-            * float(nb_epochs)
-            * float(self.remote_dataset.nb_samples / batch_size),
+            metric_eps=metric_eps,
             **self.optimizer.to_msg_dict(lr),
         )
 
@@ -237,14 +259,18 @@ class RemoteLearner:
         batch_size = batch_size if batch_size is not None else self.max_batch_size
         return TestConfig(
             model=self.model_ref,
-            dataset=self.remote_dataset.test_dataset_ref,
+            dataset=[dataset.test_dataset_ref for dataset in self.remote_dataset],
             batch_size=batch_size,
             device=self.device,
             metric=metric if metric is not None else self.loss,
-            metric_eps=metric_eps
+            metric_eps=[metric_eps]
             if metric_eps
-            else self.metric_eps_per_batch
-            * float(self.remote_dataset.nb_samples / batch_size),
+            else [
+                metric * float(dataset.nb_samples / batch_size)
+                for metric, dataset in zip(
+                    self.metric_eps_per_batch, self.remote_dataset
+                )
+            ],
         )
 
     @staticmethod
@@ -330,7 +356,7 @@ class RemoteLearner:
                 )
             else:
                 self.log.append(metric)
-            
+
             if (
                 metric.epoch + 1 == metric.nb_epochs
                 and metric.batch + 1 == metric.nb_batches
@@ -344,7 +370,7 @@ class RemoteLearner:
         batch_size: Optional[int] = None,
         max_grad_norm: Optional[float] = None,
         lr: Optional[float] = None,
-        metric_eps: Optional[float] = None,
+        metric_eps: Optional[Union[float, List[float]]] = None,
         timeout: float = 60.0,
         poll_delay: float = 0.2,
     ) -> None:

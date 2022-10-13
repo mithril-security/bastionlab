@@ -40,21 +40,9 @@ fn build_shared_context(
 }
 
 /// Returns a forward pass, a metric and a metric budget from config.
-fn build_test_context<'a>(
-    module: &'a Module,
-    dataset: &Dataset,
-    config: TestConfig,
-) -> Result<(Forward<'a>, procedures::Metric, PrivacyBudget), TchError> {
+fn build_test_context<'a>(module: &'a Module) -> Result<Forward<'a>, TchError> {
     let forward = module.forward_fn();
-    let (metric, metric_budget) = build_shared_context(
-        &config.metric,
-        config.metric_eps,
-        config.batch_size,
-        dataset.len(),
-        1,
-    )?;
-
-    Ok((forward, metric, metric_budget))
+    Ok(forward)
 }
 
 /// Returns a forward pass, an optimizer, a metric and a metric budget from config.
@@ -62,15 +50,7 @@ fn build_train_context<'a>(
     module: &'a mut Module,
     dataset: &Dataset,
     config: TrainConfig,
-) -> Result<
-    (
-        Forward<'a>,
-        Box<dyn Optimizer + 'a>,
-        procedures::Metric,
-        PrivacyBudget,
-    ),
-    TchError,
-> {
+) -> Result<(Forward<'a>, Box<dyn Optimizer + 'a>), TchError> {
     let q = config.batch_size as f32 / dataset.len() as f32;
     let t = config.epochs as f32 / q;
     let (forward, parameters) = if config.eps < 0.0 {
@@ -118,21 +98,13 @@ fn build_train_context<'a>(
         ) as Box<dyn Optimizer + 'a>,
     };
 
-    let (metric, metric_budget) = build_shared_context(
-        &config.metric,
-        config.metric_eps,
-        config.batch_size,
-        dataset.len(),
-        config.epochs,
-    )?;
-
-    Ok((forward, optimizer, metric, metric_budget))
+    Ok((forward, optimizer))
 }
 
 /// Trains `module` on `dataset` outputing metrics to `run` with given `config` on `device`.
 pub fn module_train(
     module: Arc<RwLock<Module>>,
-    dataset: Arc<RwLock<Dataset>>,
+    datasets: Vec<Arc<RwLock<Dataset>>>,
     run: Arc<RwLock<Run>>,
     config: TrainConfig,
     device: Device,
@@ -145,91 +117,107 @@ pub fn module_train(
         let epochs = config.epochs;
         let batch_size = config.batch_size;
         let mut module = module.write().unwrap();
-        let dataset = dataset.read().unwrap();
+        let datasets = datasets
+            .iter()
+            .map(|d| d.read().unwrap())
+            .collect::<Vec<_>>();
         module.set_device(device);
-        match tcherror_to_status(build_train_context(&mut module, &dataset, config)) {
-            Ok((forward, optimizer, metric, metric_budget)) => {
-                let trainer = Trainer::new(
-                    forward,
-                    &dataset,
-                    optimizer,
-                    metric,
-                    metric_budget,
-                    device,
-                    epochs as usize,
-                    batch_size as usize,
-                );
-                let nb_epochs = trainer.nb_epochs() as i32;
-                let nb_batches = trainer.nb_batches() as i32;
+        let dataset_hash = dataset_hash.clone();
+        let model_hash = model_hash.clone();
+        let metric_eps_per_dataset = config.clone().metric_eps;
+        for (dataset, metric_eps) in datasets.iter().zip(metric_eps_per_dataset) {
+            let (metric, metric_budget) = build_shared_context(
+                &config.metric,
+                metric_eps,
+                config.batch_size,
+                dataset.len(),
+                config.epochs,
+            )
+            .unwrap();
+            match tcherror_to_status(build_train_context(&mut module, &dataset, config.clone())) {
+                Ok((forward, optimizer)) => {
+                    let trainer = Trainer::new(
+                        forward,
+                        &dataset,
+                        optimizer,
+                        metric,
+                        metric_budget,
+                        device,
+                        epochs as usize,
+                        batch_size as usize,
+                    );
+                    let nb_epochs = trainer.nb_epochs() as i32;
+                    let nb_batches = trainer.nb_batches() as i32;
 
-                telemetry::add_event(
-                    TelemetryEventProps::TrainerLog {
-                        log_type: Some("start_training".to_string()),
-                        model_hash: Some(model_hash.clone()),
-                        dataset_hash: Some(dataset_hash.clone()),
-                        time: SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .unwrap()
-                            .as_millis(),
-                    },
-                    client_info.clone(),
-                );
-                for res in trainer {
-                    match tcherror_to_status(res.map(|(epoch, batch, value, std)| Metric {
-                        epoch,
-                        batch,
-                        value,
-                        nb_epochs,
-                        nb_batches,
-                        uncertainty: 2.0 * std,
-                    })) {
-                        Ok(m) => *run.write().unwrap() = Run::Ok(m),
-                        Err(e) => {
-                            *run.write().unwrap() = Run::Error(e);
-                            break;
+                    telemetry::add_event(
+                        TelemetryEventProps::TrainerLog {
+                            log_type: Some("start_training".to_string()),
+                            model_hash: Some(model_hash.to_string()),
+                            dataset_hash: Some(dataset_hash.clone()),
+                            time: SystemTime::now()
+                                .duration_since(UNIX_EPOCH)
+                                .unwrap()
+                                .as_millis(),
+                        },
+                        client_info.clone(),
+                    );
+                    for res in trainer {
+                        match tcherror_to_status(res.map(|(epoch, batch, value, std)| Metric {
+                            epoch,
+                            batch,
+                            value,
+                            nb_epochs,
+                            nb_batches,
+                            uncertainty: 2.0 * std,
+                        })) {
+                            Ok(m) => *run.write().unwrap() = Run::Ok(m),
+                            Err(e) => {
+                                *run.write().unwrap() = Run::Error(e);
+                                break;
+                            }
                         }
                     }
+                    telemetry::add_event(
+                        TelemetryEventProps::TrainerLog {
+                            log_type: Some("end_training".to_string()),
+                            model_hash: Some(model_hash.to_string()),
+                            dataset_hash: Some(dataset_hash.clone()),
+                            time: SystemTime::now()
+                                .duration_since(UNIX_EPOCH)
+                                .unwrap()
+                                .as_millis(),
+                        },
+                        client_info.clone(),
+                    );
+                    match &*run.read().unwrap() {
+                        Run::Ok(_) => info!(
+                        target: "BastionAI",
+                                    "Model trained successfully in {}ms",
+                                    start_time.elapsed().as_millis()
+                                ),
+                        Run::Error(e) => info!(
+                        target: "BastionAI",
+                                    "Model training failed in {}ms: {}",
+                                    start_time.elapsed().as_millis(),
+                                    e
+                                ),
+                        _ => info!(
+                        target: "BastionAI",
+                                    "Model training failed in {}ms",
+                                    start_time.elapsed().as_millis()
+                                ),
+                    }
                 }
-                telemetry::add_event(
-                    TelemetryEventProps::TrainerLog {
-                        log_type: Some("end_training".to_string()),
-                        model_hash: Some(model_hash),
-                        dataset_hash: Some(dataset_hash),
-                        time: SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .unwrap()
-                            .as_millis(),
-                    },
-                    client_info,
-                );
-                match &*run.read().unwrap() {
-                    Run::Ok(_) => info!(
-                    target: "BastionAI",
-                                "Model trained successfully in {}ms",
-                                start_time.elapsed().as_millis()
-                            ),
-                    Run::Error(e) => info!(
-                    target: "BastionAI",
-                                "Model training failed in {}ms: {}",
-                                start_time.elapsed().as_millis(),
-                                e
-                            ),
-                    _ => info!(
-                    target: "BastionAI",
-                                "Model training failed in {}ms",
-                                start_time.elapsed().as_millis()
-                            ),
-                }
-            }
-            Err(e) => *run.write().unwrap() = Run::Error(e),
-        };
+                Err(e) => *run.write().unwrap() = Run::Error(e),
+            };
+        }
     });
 }
 
 /// Tests `module` on `dataset` outputing metrics to `run` with given `config` on `device`.
 pub fn module_test(
     module: Arc<RwLock<Module>>,
-    dataset: Arc<RwLock<Dataset>>,
+    datasets: Vec<Arc<RwLock<Dataset>>>,
     run: Arc<RwLock<Run>>,
     config: TestConfig,
     device: Device,
@@ -239,61 +227,76 @@ pub fn module_test(
 ) {
     tokio::spawn(async move {
         let mut module = module.write().unwrap();
-        let dataset = dataset.read().unwrap();
+        let datasets = datasets
+            .iter()
+            .map(|d| d.read().unwrap())
+            .collect::<Vec<_>>();
         let batch_size = config.batch_size as usize;
+        let metric_eps_per_dataset = config.metric_eps;
         module.set_device(device);
-        match tcherror_to_status(build_test_context(&module, &dataset, config)) {
-            Ok((forward, metric, metric_budget)) => {
-                let tester =
-                    Tester::new(forward, &dataset, metric, metric_budget, device, batch_size);
-                let nb_batches = tester.nb_batches() as i32;
 
-                let start_time = Instant::now();
-                telemetry::add_event(
-                    TelemetryEventProps::TrainerLog {
-                        log_type: Some("start_testing".to_string()),
-                        model_hash: Some(model_hash.clone()),
-                        dataset_hash: Some(dataset_hash.clone()),
-                        time: SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .unwrap()
-                            .as_millis(),
-                    },
-                    client_info.clone(),
-                );
-                for res in tester {
-                    *run.write().unwrap() =
-                        match tcherror_to_status(res.map(|(batch, value, std)| Metric {
-                            epoch: 0,
-                            batch,
-                            value,
-                            nb_epochs: 1,
-                            nb_batches,
-                            uncertainty: 2.0 * std,
-                        })) {
-                            Ok(m) => Run::Ok(m),
-                            Err(e) => Run::Error(e),
-                        };
+        for (dataset, metric_eps) in datasets.iter().zip(metric_eps_per_dataset) {
+            let (metric, metric_budget) = build_shared_context(
+                &config.metric,
+                metric_eps,
+                config.batch_size,
+                dataset.len(),
+                1,
+            )
+            .unwrap();
+            match tcherror_to_status(build_test_context(&module)) {
+                Ok(forward) => {
+                    let tester =
+                        Tester::new(forward, &dataset, metric, metric_budget, device, batch_size);
+                    let nb_batches = tester.nb_batches() as i32;
+
+                    let start_time = Instant::now();
+                    telemetry::add_event(
+                        TelemetryEventProps::TrainerLog {
+                            log_type: Some("start_testing".to_string()),
+                            model_hash: Some(model_hash.clone()),
+                            dataset_hash: Some(dataset_hash.clone()),
+                            time: SystemTime::now()
+                                .duration_since(UNIX_EPOCH)
+                                .unwrap()
+                                .as_millis(),
+                        },
+                        client_info.clone(),
+                    );
+                    for res in tester {
+                        *run.write().unwrap() =
+                            match tcherror_to_status(res.map(|(batch, value, std)| Metric {
+                                epoch: 0,
+                                batch,
+                                value,
+                                nb_epochs: 1,
+                                nb_batches,
+                                uncertainty: 2.0 * std,
+                            })) {
+                                Ok(m) => Run::Ok(m),
+                                Err(e) => Run::Error(e),
+                            };
+                    }
+                    telemetry::add_event(
+                        TelemetryEventProps::TrainerLog {
+                            log_type: Some("end_testing".to_string()),
+                            model_hash: Some(model_hash.clone()),
+                            dataset_hash: Some(dataset_hash.clone()),
+                            time: SystemTime::now()
+                                .duration_since(UNIX_EPOCH)
+                                .unwrap()
+                                .as_millis(),
+                        },
+                        client_info.clone(),
+                    );
+                    info!(
+                    target: "BastionAI",
+                                "Model tested successfully in {}ms",
+                                start_time.elapsed().as_millis()
+                            );
                 }
-                telemetry::add_event(
-                    TelemetryEventProps::TrainerLog {
-                        log_type: Some("end_testing".to_string()),
-                        model_hash: Some(model_hash),
-                        dataset_hash: Some(dataset_hash),
-                        time: SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .unwrap()
-                            .as_millis(),
-                    },
-                    client_info,
-                );
-                info!(
-                target: "BastionAI",
-                            "Model tested successfully in {}ms",
-                            start_time.elapsed().as_millis()
-                        );
+                Err(e) => *run.write().unwrap() = Run::Error(e),
             }
-            Err(e) => *run.write().unwrap() = Run::Error(e),
         }
     });
 }
