@@ -62,6 +62,38 @@ class LinRegTest(unittest.TestCase):
             bastion_lreg_model = remote_learner.get_model()
         self.assertEqual(bastion_lreg_model, lreg_model)
 
+    def test_multi_datasets_upload(self):
+        with Connection("localhost", 50051, default_secret=b"") as client:
+            _ = client.RemoteDataset(
+                train_dataset,
+                test_dataset,
+                name="1D Linear Regression",
+                description="Dummy 1D Linear Regression Dataset (param is 2)",
+                privacy_limit=8320.1,
+            )
+            _ = client.RemoteDataset(
+                train_dataset,
+                test_dataset,
+                name="1D Linear Regression",
+                description="Dummy 1D Linear Regression Dataset (param is 2)",
+                privacy_limit=8320.1,
+            )
+            remote_refs = list(
+                filter(lambda a: "test" not in a.name, client.get_available_datasets())
+            )
+            remote_learner = client.RemoteLearner(
+                lreg_model,
+                remote_dataset=remote_refs,
+                loss="l2",
+                optimizer=SGD(lr=0.1),
+                model_name="Linear 1x1",
+                model_description="1D Linear Regression Model",
+                expand=False,
+                max_batch_size=2,
+            )
+            bastion_lreg_model = remote_learner.get_model()
+        self.assertEqual(bastion_lreg_model, lreg_model)
+
 
 def setUpModule():
     global train_dataset, test_dataset, lreg_model
