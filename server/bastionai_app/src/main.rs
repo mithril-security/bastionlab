@@ -1,3 +1,4 @@
+use bastionai_common::BastionAIConfig;
 use env_logger::Env;
 use log::info;
 use std::collections::HashMap;
@@ -46,21 +47,23 @@ mod serialization;
 use serialization::*;
 
 use bastionai_learning::serialization::SizedObjectsBytes;
-use bastionai_common::auth::{auth_interceptor, setup_jwt};
+use bastionai_common::auth::{auth_interceptor, setup_jwt, AuthExtension};
 
 /// The server's state
 struct BastionAIServer {
     modules: RwLock<HashMap<String, Artifact<Module>>>,
     datasets: RwLock<HashMap<String, Artifact<Dataset>>>,
     runs: RwLock<HashMap<Uuid, Arc<RwLock<Run>>>>,
+    config: Arc<BastionAIConfig>
 }
 
 impl BastionAIServer {
-    pub fn new() -> Self {
+    pub fn new(config: BastionAIConfig) -> Self {
         BastionAIServer {
             modules: RwLock::new(HashMap::new()),
             datasets: RwLock::new(HashMap::new()),
             runs: RwLock::new(HashMap::new()),
+            config: Arc::new(config)
         }
     }
 }
@@ -74,6 +77,7 @@ impl RemoteTorch for BastionAIServer {
         &self,
         request: Request<Streaming<Chunk>>,
     ) -> Result<Response<Reference>, Status> {
+        let (username, userid) = fetch_username_and_userid(&request, self.config.send_dataset_requires_auth)?;
         let start_time = Instant::now();
 
         let artifact: Artifact<SizedObjectsBytes> = unstream_data(request.into_inner()).await?;
@@ -123,6 +127,8 @@ impl RemoteTorch for BastionAIServer {
         &self,
         request: Request<Streaming<Chunk>>,
     ) -> Result<Response<Reference>, Status> {
+        let (username, userid) = fetch_username_and_userid(&request, self.config.send_model_requires_auth)?;
+
         let start_time = Instant::now();
 
         let artifact: Artifact<SizedObjectsBytes> = unstream_data(request.into_inner()).await?;
@@ -172,6 +178,8 @@ impl RemoteTorch for BastionAIServer {
         &self,
         request: Request<Reference>,
     ) -> Result<Response<Self::FetchDatasetStream>, Status> {
+        let (username, userid) = fetch_username_and_userid(&request, self.config.fetch_dataset_requires_auth)?;
+
         let identifier = request.into_inner().identifier;
         let serialized = {
             let datasets = self.datasets.read().unwrap();
@@ -188,6 +196,8 @@ impl RemoteTorch for BastionAIServer {
         &self,
         request: Request<Reference>,
     ) -> Result<Response<Self::FetchModuleStream>, Status> {
+        let (username, userid) = fetch_username_and_userid(&request, self.config.fetch_module_requires_auth)?;
+
         let identifier = request.into_inner().identifier;
         let serialized = {
             let modules = self.modules.read().unwrap();
@@ -201,18 +211,24 @@ impl RemoteTorch for BastionAIServer {
     }
 
     async fn delete_dataset(&self, request: Request<Reference>) -> Result<Response<Empty>, Status> {
+        let (username, userid) = fetch_username_and_userid(&request, self.config.delete_dataset_requires_auth)?;
+        
         let identifier = request.into_inner().identifier;
         self.datasets.write().unwrap().remove(&identifier);
         Ok(Response::new(Empty {}))
     }
 
     async fn delete_module(&self, request: Request<Reference>) -> Result<Response<Empty>, Status> {
+        let (username, userid) = fetch_username_and_userid(&request, self.config.delete_module_requires_auth)?;
+
         let identifier = request.into_inner().identifier;
         self.modules.write().unwrap().remove(&identifier);
         Ok(Response::new(Empty {}))
     }
 
     async fn train(&self, request: Request<TrainConfig>) -> Result<Response<Reference>, Status> {
+        let (username, userid) = fetch_username_and_userid(&request, self.config.train_requires_auth)?;
+        
         let config = request.into_inner();
         let dataset_id = config
             .dataset
@@ -257,6 +273,8 @@ impl RemoteTorch for BastionAIServer {
     }
 
     async fn test(&self, request: Request<TestConfig>) -> Result<Response<Reference>, Status> {
+        let (username, userid) = fetch_username_and_userid(&request, self.config.test_requires_auth)?;
+
         let config = request.into_inner();
         let dataset_id = config
             .dataset
@@ -304,6 +322,8 @@ impl RemoteTorch for BastionAIServer {
         &self,
         _request: Request<Empty>,
     ) -> Result<Response<References>, Status> {
+        let (username, userid) = fetch_username_and_userid(&_request, self.config.available_models_requires_auth)?;
+
         let list = self
             .modules
             .read()
@@ -324,6 +344,8 @@ impl RemoteTorch for BastionAIServer {
         &self,
         _request: Request<Empty>,
     ) -> Result<Response<References>, Status> {
+        let (username, userid) = fetch_username_and_userid(&_request, self.config.available_datasets_requires_auth)?;
+
         let list = self
             .datasets
             .read()
@@ -344,6 +366,8 @@ impl RemoteTorch for BastionAIServer {
         &self,
         _request: Request<Empty>,
     ) -> Result<Response<Devices>, Status> {
+        let (username, userid) = fetch_username_and_userid(&_request, self.config.available_devices_requires_auth)?;
+
         let mut list = vec![String::from("cpu")];
         if tch::Cuda::is_available() {
             list.push(String::from("gpu"));
@@ -359,11 +383,15 @@ impl RemoteTorch for BastionAIServer {
         &self,
         _request: Request<Empty>,
     ) -> Result<Response<Optimizers>, Status> {
+        let (username, userid) = fetch_username_and_userid(&_request, self.config.available_optimizers_requires_auth)?;
+
         let list = vec!["SGD", "Adam"].iter().map(|v| v.to_string()).collect();
         Ok(Response::new(Optimizers { list }))
     }
 
     async fn get_metric(&self, request: Request<Reference>) -> Result<Response<Metric>, Status> {
+        let (username, userid) = fetch_username_and_userid(&request, self.config.get_metric_requires_auth)?;
+
         let identifier = Uuid::parse_str(&request.into_inner().identifier)
             .map_err(|_| Status::invalid_argument("Invalid run reference"))?;
 
@@ -406,12 +434,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     setup_jwt();
 
-    let server = BastionAIServer::new();
-
+    
     let mut file = File::open("config.toml")?;
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
-    let network_config: bastionai_common::NetworkConfig = toml::from_str(&contents)?;
+    let config: bastionai_common::BastionAIConfig = toml::from_str(&contents)?;
+    let server = BastionAIServer::new(config.clone());
 
     let platform: CString = CString::new(format!("{}", whoami::platform())).unwrap();
     let uid: CString = {
@@ -434,12 +462,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!(
         target: "BastionAI",
         "BastionAI listening on {}",
-        network_config.client_to_enclave_untrusted_socket()?
+        config.clone().client_to_enclave_untrusted_socket()?
     );
     Server::builder()
         .tls_config(ServerTlsConfig::new().identity(server_identity))?
         .add_service(RemoteTorchServer::with_interceptor(server, auth_interceptor))
-        .serve(network_config.client_to_enclave_untrusted_socket()?)
+        .serve(config.clone().client_to_enclave_untrusted_socket()?)
         .await?;
 
     Ok(())

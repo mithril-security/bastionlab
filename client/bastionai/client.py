@@ -1,21 +1,26 @@
 import getpass
-from hashlib import sha256
+import logging
+import os
 import platform
 import socket
 import ssl
-from bastionai.optimizer_config import *
 from dataclasses import dataclass
+from hashlib import sha256
+from typing import TYPE_CHECKING, Any, List
 
-from typing import Any, List, TYPE_CHECKING
-
-import grpc  # type: ignore [import]
-
-from bastionai.pb.remote_torch_pb2 import Empty, Metric, Reference, TestConfig, TrainConfig, ClientInfo  # type: ignore [import]
-
+from bastionai.errors import GRPCException
+from bastionai.optimizer_config import *
+from bastionai.pb.licensing_pb2 import GetBastionAiEnclaveRequest, GetEnclaveReply
+from bastionai.pb.licensing_pb2_grpc import LicensingServiceStub
+from bastionai.pb.remote_torch_pb2 import ClientInfo  # type: ignore [import]
+from bastionai.pb.remote_torch_pb2 import (
+    Empty,
+    Metric,
+    Reference,
+    TestConfig,
+    TrainConfig,
+)
 from bastionai.pb.remote_torch_pb2_grpc import RemoteTorchStub  # type: ignore [import]
-from torch.nn import Module
-from torch.utils.data import Dataset
-
 from bastionai.utils import (
     TensorDataset,
     dataset_from_chunks,
@@ -23,16 +28,24 @@ from bastionai.utils import (
     serialize_dataset,
     serialize_model,
 )
-
 from bastionai.version import __version__ as app_version
-from bastionai.errors import GRPCException
+from grpc import AuthMetadataPlugin, composite_channel_credentials, metadata_call_credentials, secure_channel  # type: ignore [import]
+from grpc import insecure_channel, ssl_channel_credentials
+from torch.nn import Module
+from torch.utils.data import Dataset
 
 if TYPE_CHECKING:
-    from bastionai.learner import RemoteLearner, RemoteDataset
+    from bastionai.learner import RemoteDataset, RemoteLearner
+
+MITHRIL_SERVICES_URL = os.getenv("MITHRIL_SERVICES_URL", "localhost:4001")
+MITHRIL_SERVICES_INSECURE = os.getenv("MITHRIL_SERVICES_INSECURE") == "true"
+
+log = logging.getLogger(__name__)
+
 
 class Client:
     """BastionAI client class.
-    
+
     Args:
         stub: The underlying gRPC client for the BastionAI protocol.
         client_info: Client information for telemetry purposes.
@@ -46,6 +59,7 @@ class Client:
         client_info: ClientInfo,
         default_secret: bytes = b"",
     ) -> None:
+
         self.stub = stub
         self.default_secret = default_secret
         self.client_info = client_info
@@ -74,17 +88,19 @@ class Client:
         Returns:
             BastionAI gRPC protocol's reference object.
         """
-        return GRPCException.map_error(lambda: self.stub.SendModel(
-            serialize_model(
-                model,
-                name=name,
-                description=description,
-                secret=secret if secret is not None else self.default_secret,
-                chunk_size=chunk_size,
-                client_info=self.client_info,
-                progress=progress,
+        return GRPCException.map_error(
+            lambda: self.stub.SendModel(
+                serialize_model(
+                    model,
+                    name=name,
+                    description=description,
+                    secret=secret if secret is not None else self.default_secret,
+                    chunk_size=chunk_size,
+                    client_info=self.client_info,
+                    progress=progress,
+                )
             )
-        ))
+        )
 
     def send_dataset(
         self,
@@ -115,20 +131,22 @@ class Client:
         Returns:
             BastionAI gRPC protocol's reference object.
         """
-        return GRPCException.map_error(lambda: self.stub.SendDataset(
-            serialize_dataset(
-                dataset,
-                name=name,
-                description=description,
-                secret=secret if secret is not None else self.default_secret,
-                chunk_size=chunk_size,
-                batch_size=batch_size,
-                privacy_limit=privacy_limit,
-                client_info=self.client_info,
-                train_dataset=train_dataset,
-                progress=progress,
+        return GRPCException.map_error(
+            lambda: self.stub.SendDataset(
+                serialize_dataset(
+                    dataset,
+                    name=name,
+                    description=description,
+                    secret=secret if secret is not None else self.default_secret,
+                    chunk_size=chunk_size,
+                    batch_size=batch_size,
+                    privacy_limit=privacy_limit,
+                    client_info=self.client_info,
+                    train_dataset=train_dataset,
+                    progress=progress,
+                ),
             )
-        ))
+        )
 
     def fetch_model_weights(self, model: Module, ref: Reference) -> None:
         """Fetches the weights of a distant trained model with a BastionAI gRPC protocol reference
@@ -150,7 +168,9 @@ class Client:
         Returns:
             A dataset instance built from received data.
         """
-        return dataset_from_chunks(GRPCException.map_error(lambda: self.stub.FetchDataset(ref)))
+        return dataset_from_chunks(
+            GRPCException.map_error(lambda: self.stub.FetchDataset(ref))
+        )
 
     def get_available_models(self) -> List[Reference]:
         """Returns the list of BastionAI gRPC protocol references of all available models on the server."""
@@ -158,15 +178,21 @@ class Client:
 
     def get_available_datasets(self) -> List[Reference]:
         """Returns the list of BastionAI gRPC protocol references of all datasets on the server."""
-        return GRPCException.map_error(lambda: self.stub.AvailableDatasets(Empty())).list
+        return GRPCException.map_error(
+            lambda: self.stub.AvailableDatasets(Empty())
+        ).list
 
     def get_available_devices(self) -> List[str]:
         """Returns the list of devices available on the server."""
-        return GRPCException.map_error(lambda: self.stub.AvailableDevices(Empty())).list
+        return GRPCException.map_error(
+            lambda: self.stub.AvailableDevices(Empty()),
+        ).list
 
     def get_available_optimizers(self) -> List[str]:
         """Returns the list of optimizers supported by the server."""
-        return GRPCException.map_error(lambda: self.stub.AvailableOptimizers(Empty())).list
+        return GRPCException.map_error(
+            lambda: self.stub.AvailableOptimizers(Empty())
+        ).list
 
     def train(self, config: TrainConfig) -> Reference:
         """Trains a model with hyperparameters defined in `config` on the BastionAI server.
@@ -174,7 +200,9 @@ class Client:
         Args:
             config: Training configuration that specifies the model, dataset and hyperparameters.
         """
-        return GRPCException.map_error(lambda: self.stub.Train(config))
+        return GRPCException.map_error(
+            lambda: self.stub.Train(config),
+        )
 
     def test(self, config: TestConfig) -> Reference:
         """Tests a dataset on a model according to `config` on the BastionAI server.
@@ -207,7 +235,7 @@ class Client:
             run: BastionAI gRPC protocol reference of the run whose metric is read.
         """
         return GRPCException.map_error(lambda: self.stub.GetMetric(run))
-    
+
     def list_remote_datasets(self) -> List["RemoteDataset"]:
         from bastionai.learner import RemoteDataset
 
@@ -238,24 +266,66 @@ class Client:
         return RemoteLearner(self, *args, **kwargs)
 
 
+class AuthPlugin(AuthMetadataPlugin):
+    def __init__(self, jwt):
+        self._jwt = jwt
+
+    def __call__(self, _, callback):
+        callback((("accesstoken", self._jwt),), None)
+
+
 @dataclass
 class Connection:
     """Context manger that handles a connection to a BastionAI server.
     It returns a `Client` to use the connexion within its context.
-    
+
     Args:
         host: Hostname of the BastionAI server.
         port: Port of the BastionAI server.
         default_secret: Default owner secret passed to the constructor of the return `Client`.
     """
 
-    host: str
-    port: int
+    host: Optional[str] = None
+    port: Optional[int] = None
     default_secret: bytes = b""  # we don't use the secrets yet
     channel: Any = None
     server_name: str = "bastionai-srv"
+    api_key: Optional[str] = None
+    _jwt: Optional[str] = None
 
     def __enter__(self) -> Client:
+        use_cloud = self.host is None
+        if use_cloud is True:
+            # Use Mithril Cloud services.
+            if MITHRIL_SERVICES_INSECURE:
+                channel = insecure_channel(MITHRIL_SERVICES_URL)
+            else:
+                channel = secure_channel(
+                    MITHRIL_SERVICES_URL,
+                    ssl_channel_credentials(),
+                )
+
+            stub = LicensingServiceStub(channel)
+            enclave_request = GetBastionAiEnclaveRequest(api_key=self.api_key)
+
+            response = stub.GetBastionAiEnclave(enclave_request)
+            host_ports = response.enclave_url.split(":")
+            ports = host_ports[1].split("/")
+
+            self.host = host_ports[0]
+            self.port = ports[0]
+
+            self._jwt = response.jwt if len(response.jwt) > 0 else None
+
+            if not response.private_cloud:
+                log.info("Successfully connected to Mithril Security Public Cloud")
+            else:
+                log.info("Successfully connected to Mithril Security Private Cloud")
+
+            log.debug(
+                f"Selected enclave {response.enclave_url} & has jwt? {len(response.jwt) > 0}"
+            )
+
         uname = platform.uname()
         client_info = ClientInfo(
             uid=sha256((socket.gethostname() + "-" + getpass.getuser()).encode("utf-8"))
@@ -268,18 +338,33 @@ class Connection:
             user_agent="bastionai_python",
             user_agent_version=app_version,
         )
+
         connection_options = (("grpc.ssl_target_name_override", self.server_name),)
         server_cert = ssl.get_server_certificate((self.host, self.port))
 
-        server_cred = grpc.ssl_channel_credentials(
+        server_cred = ssl_channel_credentials(
             root_certificates=bytes(server_cert, encoding="utf8")
         )
 
-        server_target = f"{self.host}:{self.port}"
-        self.channel = grpc.secure_channel(
-            server_target, server_cred, options=connection_options
+        channel_cred = (
+            server_cred
+            if self._jwt is None
+            else composite_channel_credentials(
+                server_cred, metadata_call_credentials(AuthPlugin(self._jwt))
+            )
         )
-        return Client(RemoteTorchStub(self.channel), client_info=client_info, default_secret=self.default_secret)
+
+        server_target = f"{self.host}:{self.port}"
+        self.channel = secure_channel(
+            server_target,
+            channel_cred,
+            options=connection_options,
+        )
+        return Client(
+            RemoteTorchStub(self.channel),
+            client_info=client_info,
+            default_secret=self.default_secret,
+        )
 
     def __exit__(self, exc_type: Any, exc_value: Any, exc_traceback: Any) -> None:
         self.channel.close()

@@ -22,10 +22,36 @@ use std::net::ToSocketAddrs;
 pub mod auth;
 
 #[derive(Deserialize, Clone, Debug)]
-pub struct NetworkConfig {
+pub struct BastionAIConfig {
     //  Connection for Client -> Enclave communication
     #[serde(deserialize_with = "deserialize_uri")]
     pub client_to_enclave_untrusted_url: Uri,
+    #[serde(default)]
+    pub send_dataset_requires_auth: bool,
+    #[serde(default)]
+    pub send_model_requires_auth: bool,
+    #[serde(default)]
+    pub fetch_module_requires_auth: bool,
+    #[serde(default)]
+    pub fetch_dataset_requires_auth: bool,
+    #[serde(default)]
+    pub delete_module_requires_auth: bool,
+    #[serde(default)]
+    pub delete_dataset_requires_auth: bool,
+    #[serde(default)]
+    pub train_requires_auth: bool,
+    #[serde(default)]
+    pub test_requires_auth: bool,
+    #[serde(default)]
+    pub available_models_requires_auth: bool,
+    #[serde(default)]
+    pub available_datasets_requires_auth: bool,
+    #[serde(default)]
+    pub available_devices_requires_auth: bool,
+    #[serde(default)]
+    pub available_optimizers_requires_auth: bool,
+    #[serde(default)]
+    pub get_metric_requires_auth: bool,
 }
 
 fn uri_to_socket(uri: &Uri) -> Result<SocketAddr> {
@@ -37,7 +63,7 @@ fn uri_to_socket(uri: &Uri) -> Result<SocketAddr> {
         .context("Uri could not be converted to socket")
 }
 
-impl NetworkConfig {
+impl BastionAIConfig {
     pub fn client_to_enclave_untrusted_socket(&self) -> Result<SocketAddr> {
         uri_to_socket(&self.client_to_enclave_untrusted_url)
     }

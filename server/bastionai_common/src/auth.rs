@@ -2,9 +2,9 @@ use once_cell::sync::OnceCell;
 use std::fs;
 
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
+use log::*;
 use serde::{Deserialize, Serialize};
 use tonic::{Request, Status};
-use log::*;
 
 static JWT_POLICY: OnceCell<(Validation, DecodingKey)> = OnceCell::new();
 
@@ -14,11 +14,11 @@ pub fn setup_jwt() {
         key
     } else {
         info!("NOT using JWT validation, since file `jwt_key.pem` does not exist.");
-        return
+        return;
     };
 
-    let key = DecodingKey::from_ec_pem(&key)
-        .expect("Parsing JWT validation ES256 `jwt_key.pem` file.");
+    let key =
+        DecodingKey::from_ec_pem(&key).expect("Parsing JWT validation ES256 `jwt_key.pem` file.");
 
     // See https://docs.rs/jsonwebtoken/8.1.1/jsonwebtoken/struct.Validation.html for more info about JWT validation policy
     let mut validation_policy = Validation::new(Algorithm::ES256);
@@ -30,6 +30,9 @@ pub fn setup_jwt() {
 pub struct JwtClaims {
     // pub login: String,
     pub userid: usize,
+
+    // pub username: String,
+    pub username: String,
 
     // Expiration time (as UTC timestamp)
     pub exp: usize,
@@ -56,6 +59,10 @@ impl AuthExtension {
     pub fn userid(&self) -> Option<usize> {
         self.claims.as_ref().map(|c| c.userid)
     }
+
+    pub fn username(&self) -> Option<String> {
+        self.claims.as_ref().map(|c| c.username.clone())
+    }
 }
 
 /// This tonic interceptor will extend the request with `AuthExtension` as an
@@ -74,13 +81,12 @@ pub fn auth_interceptor(mut req: Request<()>) -> Result<Request<()>, Status> {
         req.extensions_mut().insert(AuthExtension::default());
         return Ok(req);
     };
-
     let t = t
         .to_str()
         .map_err(|_| Status::invalid_argument("Invalid AccessToken header"))?;
 
     let token = jsonwebtoken::decode::<JwtClaims>(t, key, policy)
-        .map_err(|_| Status::invalid_argument("Invalid AccessToken header"))?;
+        .map_err(|_| Status::invalid_argument("Failed to decode AccessToken"))?;
 
     req.extensions_mut().insert(AuthExtension {
         claims: Some(token.claims),
