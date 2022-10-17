@@ -11,7 +11,6 @@ from bastionai.optimizer_config import *
 from time import sleep
 from tqdm import tqdm  # type: ignore [import]
 
-import grpc # type: ignore [import]
 from grpc import StatusCode
 
 from bastionai.utils import bulk_deserialize
