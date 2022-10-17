@@ -185,7 +185,6 @@ class RemoteLearner:
             )
         else:
             self.model_ref = model
-
         if isinstance(remote_dataset, list):
             if is_grpc_type(remote_dataset[0], Reference):
                 self.remote_dataset = [RemoteDataset(client, v) for v in remote_dataset]
