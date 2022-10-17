@@ -15,7 +15,7 @@ jobs:
         if: ${{ steps.cache-wheels.outputs.cache-hit != 'true' }}
         run: |
           ls -l server
-          cd client && cp -rf ../server/protos/ . 
+          cd client 
           python3 -m pip install --upgrade build && python3 -m build --wheel
 
 
