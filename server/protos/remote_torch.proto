@@ -15,32 +15,41 @@
 syntax = "proto3";
 package remote_torch;
 
-message Reference {
-    // BastionAI reference object. 
-    string identifier = 1;
+message ReferenceRequest {
+    bytes hash = 1;
+}
+
+message ReferenceResponse {
+    bytes hash = 1;
     string name = 2;
     string description = 3;
     bytes meta = 4;
 }
 
+message RunRequest {
+    string uuid = 1;
+}
+
+message RunResponse {
+    string uuid = 1;
+    bytes model = 2;
+    bytes dataset = 3;
+}
+
 message Chunk {
-    // Chunk of data sent from and to the BastionAI server.
     bytes data = 1;
     string name = 2;
     string description = 3;
-    bytes secret = 4;
+    string license = 4;
     ClientInfo client_info = 5;
     bytes meta = 6;
 }
 
-message Empty {
-    // Empty response object from BastionAI.
-}
+message Empty {}
 
-message TrainConfig {
-    // Configuration for training sent to BastionAI.
-    Reference model = 1;
-    Reference dataset = 2;
+message TrainRequest {
+    bytes model = 1;
+    bytes dataset = 2;
     int32 batch_size = 3;
     int32 epochs = 4;
     string device = 5;
@@ -78,32 +87,24 @@ message TrainConfig {
     }
 }
 
-message TestConfig {
-    Reference model = 1;
-    Reference dataset = 2;
+message TestRequest {
+    bytes model = 1;
+    bytes dataset = 2;
     int32 batch_size = 3;
     string device = 4;
     string metric = 5;
     float metric_eps = 6;
 }
 
-message References {
-    repeated Reference list = 1;
+message ReferenceListResponse {
+    repeated ReferenceResponse list = 1;
 }
 
-message Accuracy {
-    float value = 1;
-}
-
-message Devices {
+message ListResponse {
     repeated string list = 1;
 }
 
-message Optimizers {
-    repeated string list = 1;
-}
-
-message Metric {
+message MetricResponse {
     float value = 1;
     float uncertainty = 2;
     int32 batch = 3;
@@ -122,18 +123,23 @@ message ClientInfo {
     string user_agent_version = 7;
 }
 
+message ChallengeResponse {
+    bytes value = 1;
+}
+
 service RemoteTorch {
-    rpc SendDataset (stream Chunk) returns (Reference) {}
-    rpc SendModel (stream Chunk) returns (Reference) {}
-    rpc FetchDataset (Reference) returns (stream Chunk) {}
-    rpc FetchModule (Reference) returns (stream Chunk) {}
-    rpc DeleteDataset (Reference) returns (Empty) {}
-    rpc DeleteModule (Reference) returns (Empty) {}
-    rpc AvailableModels(Empty) returns (References) {}
-    rpc AvailableDatasets(Empty) returns (References) {}
-    rpc AvailableDevices(Empty) returns (Devices) {}
-    rpc AvailableOptimizers(Empty) returns (Optimizers) {}
-    rpc Train (TrainConfig) returns (Reference) {}
-    rpc Test (TestConfig) returns (Reference) {}
-    rpc GetMetric (Reference) returns (Metric) {}
+    rpc SendDataset (stream Chunk) returns (ReferenceResponse) {}
+    rpc SendModel (stream Chunk) returns (ReferenceResponse) {}
+    rpc FetchDataset (ReferenceRequest) returns (stream Chunk) {}
+    rpc FetchModel (ReferenceRequest) returns (stream Chunk) {}
+    rpc DeleteDataset (ReferenceRequest) returns (Empty) {}
+    rpc DeleteModel (ReferenceRequest) returns (Empty) {}
+    rpc AvailableModels(Empty) returns (ReferenceListResponse) {}
+    rpc AvailableDatasets(Empty) returns (ReferenceListResponse) {}
+    rpc AvailableDevices(Empty) returns (ListResponse) {}
+    rpc AvailableOptimizers(Empty) returns (ListResponse) {}
+    rpc Train (TrainRequest) returns (RunResponse) {}
+    rpc Test (TestRequest) returns (RunResponse) {}
+    rpc GetMetric (RunRequest) returns (MetricResponse) {}
+    rpc GetChallenge (Empty) returns (ChallengeResponse) {}
 }

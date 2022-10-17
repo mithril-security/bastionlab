@@ -1,5 +1,6 @@
 use super::ClientInfo;
-use crate::remote_torch::{train_config, Metric, TestConfig, TrainConfig};
+use crate::access_control::Rule;
+use crate::remote_torch::{train_request, MetricResponse, TestRequest, TrainRequest};
 use crate::telemetry::{self, TelemetryEventProps};
 use crate::utils::tcherror_to_status;
 use bastionai_learning::data::privacy_guard::PrivacyBudget;
@@ -14,10 +15,16 @@ use tch::{Device, TchError};
 use tonic::Status;
 
 #[derive(Debug)]
-pub enum Run {
-    Ok(Metric),
+pub enum RunStatus {
+    Ok(MetricResponse),
     Error(Status),
     Pending,
+}
+
+#[derive(Debug)]
+pub struct Run {
+    pub(crate) status: RunStatus,
+    pub(crate) license: Rule,
 }
 
 /// Returns a metric by name from config and computes per step privacy budget for metrics
@@ -43,7 +50,7 @@ fn build_shared_context(
 fn build_test_context<'a>(
     module: &'a Module,
     dataset: &Dataset,
-    config: TestConfig,
+    config: &TestRequest,
 ) -> Result<(Forward<'a>, procedures::Metric, PrivacyBudget), TchError> {
     let forward = module.forward_fn();
     let (metric, metric_budget) = build_shared_context(
@@ -61,7 +68,7 @@ fn build_test_context<'a>(
 fn build_train_context<'a>(
     module: &'a mut Module,
     dataset: &Dataset,
-    config: TrainConfig,
+    config: &TrainRequest,
 ) -> Result<
     (
         Forward<'a>,
@@ -88,7 +95,7 @@ fn build_train_context<'a>(
         .optimizer
         .ok_or(TchError::FileFormat(String::from("Invalid optimizer")))?
     {
-        train_config::Optimizer::Sgd(train_config::Sgd {
+        train_request::Optimizer::Sgd(train_request::Sgd {
             learning_rate,
             weight_decay,
             momentum,
@@ -101,7 +108,7 @@ fn build_train_context<'a>(
                 .dampening(dampening as f64)
                 .nesterov(nesterov),
         ) as Box<dyn Optimizer + 'a>,
-        train_config::Optimizer::Adam(train_config::Adam {
+        train_request::Optimizer::Adam(train_request::Adam {
             learning_rate,
             beta_1,
             beta_2,
@@ -134,20 +141,17 @@ pub fn module_train(
     module: Arc<RwLock<Module>>,
     dataset: Arc<RwLock<Dataset>>,
     run: Arc<RwLock<Run>>,
-    config: TrainConfig,
+    config: TrainRequest,
     device: Device,
-    model_hash: String,
-    dataset_hash: String,
     client_info: Option<ClientInfo>,
 ) {
     tokio::spawn(async move {
-        let start_time = Instant::now();
         let epochs = config.epochs;
         let batch_size = config.batch_size;
         let mut module = module.write().unwrap();
         let dataset = dataset.read().unwrap();
         module.set_device(device);
-        match tcherror_to_status(build_train_context(&mut module, &dataset, config)) {
+        match tcherror_to_status(build_train_context(&mut module, &dataset, &config)) {
             Ok((forward, optimizer, metric, metric_budget)) => {
                 let trainer = Trainer::new(
                     forward,
@@ -162,6 +166,10 @@ pub fn module_train(
                 let nb_epochs = trainer.nb_epochs() as i32;
                 let nb_batches = trainer.nb_batches() as i32;
 
+                let model_hash = hex::encode(config.model.clone());
+                let dataset_hash = hex::encode(config.dataset.clone());
+
+                let start_time = Instant::now();
                 telemetry::add_event(
                     TelemetryEventProps::TrainerLog {
                         log_type: Some("start_training".to_string()),
@@ -175,7 +183,7 @@ pub fn module_train(
                     client_info.clone(),
                 );
                 for res in trainer {
-                    match tcherror_to_status(res.map(|(epoch, batch, value, std)| Metric {
+                    match tcherror_to_status(res.map(|(epoch, batch, value, std)| MetricResponse {
                         epoch,
                         batch,
                         value,
@@ -183,9 +191,9 @@ pub fn module_train(
                         nb_batches,
                         uncertainty: 2.0 * std,
                     })) {
-                        Ok(m) => *run.write().unwrap() = Run::Ok(m),
+                        Ok(m) => run.write().unwrap().status = RunStatus::Ok(m),
                         Err(e) => {
-                            *run.write().unwrap() = Run::Error(e);
+                            run.write().unwrap().status = RunStatus::Error(e);
                             break;
                         }
                     }
@@ -202,13 +210,13 @@ pub fn module_train(
                     },
                     client_info,
                 );
-                match &*run.read().unwrap() {
-                    Run::Ok(_) => info!(
+                match &run.read().unwrap().status {
+                    RunStatus::Ok(_) => info!(
                     target: "BastionAI",
                                 "Model trained successfully in {}ms",
                                 start_time.elapsed().as_millis()
                             ),
-                    Run::Error(e) => info!(
+                    RunStatus::Error(e) => info!(
                     target: "BastionAI",
                                 "Model training failed in {}ms: {}",
                                 start_time.elapsed().as_millis(),
@@ -221,7 +229,7 @@ pub fn module_train(
                             ),
                 }
             }
-            Err(e) => *run.write().unwrap() = Run::Error(e),
+            Err(e) => run.write().unwrap().status = RunStatus::Error(e),
         };
     });
 }
@@ -231,10 +239,8 @@ pub fn module_test(
     module: Arc<RwLock<Module>>,
     dataset: Arc<RwLock<Dataset>>,
     run: Arc<RwLock<Run>>,
-    config: TestConfig,
+    config: TestRequest,
     device: Device,
-    model_hash: String,
-    dataset_hash: String,
     client_info: Option<ClientInfo>,
 ) {
     tokio::spawn(async move {
@@ -242,11 +248,14 @@ pub fn module_test(
         let dataset = dataset.read().unwrap();
         let batch_size = config.batch_size as usize;
         module.set_device(device);
-        match tcherror_to_status(build_test_context(&module, &dataset, config)) {
+        match tcherror_to_status(build_test_context(&module, &dataset, &config)) {
             Ok((forward, metric, metric_budget)) => {
                 let tester =
                     Tester::new(forward, &dataset, metric, metric_budget, device, batch_size);
                 let nb_batches = tester.nb_batches() as i32;
+
+                let model_hash = hex::encode(config.model.clone());
+                let dataset_hash = hex::encode(config.dataset.clone());
 
                 let start_time = Instant::now();
                 telemetry::add_event(
@@ -262,18 +271,20 @@ pub fn module_test(
                     client_info.clone(),
                 );
                 for res in tester {
-                    *run.write().unwrap() =
-                        match tcherror_to_status(res.map(|(batch, value, std)| Metric {
-                            epoch: 0,
-                            batch,
-                            value,
-                            nb_epochs: 1,
-                            nb_batches,
-                            uncertainty: 2.0 * std,
-                        })) {
-                            Ok(m) => Run::Ok(m),
-                            Err(e) => Run::Error(e),
-                        };
+                    match tcherror_to_status(res.map(|(batch, value, std)| MetricResponse {
+                        epoch: 0,
+                        batch,
+                        value,
+                        nb_epochs: 1,
+                        nb_batches,
+                        uncertainty: 2.0 * std,
+                    })) {
+                        Ok(m) => run.write().unwrap().status = RunStatus::Ok(m),
+                        Err(e) => {
+                            run.write().unwrap().status = RunStatus::Error(e);
+                            break;
+                        },
+                    };
                 }
                 telemetry::add_event(
                     TelemetryEventProps::TrainerLog {
@@ -293,7 +304,7 @@ pub fn module_test(
                             start_time.elapsed().as_millis()
                         );
             }
-            Err(e) => *run.write().unwrap() = Run::Error(e),
+            Err(e) => run.write().unwrap().status = RunStatus::Error(e),
         }
     });
 }

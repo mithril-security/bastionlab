@@ -7,8 +7,8 @@ use tch::Device;
 use tokio::sync::mpsc;
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use tonic::{Response, Status};
-use ring::hmac;
 use std::sync::{Arc, RwLock};
+use serde_json;
 
 /// Returns a raw artifact from a stream of chunks received over gRPC.
 /// 
@@ -23,7 +23,7 @@ pub async fn unstream_data(
     let mut data_bytes: Vec<u8> = Vec::new();
     let mut name: String = String::new();
     let mut description: String = String::new();
-    let mut secret: Vec<u8> = Vec::new();
+    let mut license: String = String::new();
     let mut meta: Vec<u8> = Vec::new();
     let mut client_info: Option<ClientInfo> = None;
 
@@ -35,7 +35,7 @@ pub async fn unstream_data(
             first = false;
             name = chunk.name;
             description = chunk.description;
-            secret = chunk.secret;
+            license = chunk.license;
             client_info = chunk.client_info;
             meta = chunk.meta;
         }
@@ -45,7 +45,7 @@ pub async fn unstream_data(
         data: Arc::new(RwLock::new(data_bytes.into())),
         name,
         description,
-        secret: hmac::Key::new(hmac::HMAC_SHA256, &secret),
+        license: serde_json::from_str(&license).map_err(|_| Status::invalid_argument("Unable to parse license specification"))?,
         meta,
         client_info,
     })
@@ -80,7 +80,11 @@ pub async fn stream_data(
                 } else {
                     String::from("")
                 },
-                secret: vec![],
+                license: if i == 0 { 
+                    serde_json::to_string(&artifact.license).unwrap() // Cannot fail: always obtained by deserializing JSON
+                } else {
+                    String::from("")
+                },
                 client_info: Some(ClientInfo::default()),
                 meta: if i == 0 {
                     artifact.meta.clone()

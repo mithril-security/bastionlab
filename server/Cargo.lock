@@ -98,7 +98,7 @@ checksum = "8a32fd6af2b5827bce66c29053ba0e7c42b9dcab01835835058558c10851a46b"
 
 [[package]]
 name = "bastionai_app"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "bastionai_common",
@@ -128,7 +128,7 @@ dependencies = [
 
 [[package]]
 name = "bastionai_common"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "http",
@@ -145,7 +145,7 @@ dependencies = [
 
 [[package]]
 name = "bastionai_learning"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "libc",
  "rand",
