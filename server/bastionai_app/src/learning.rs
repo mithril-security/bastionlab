@@ -79,7 +79,7 @@ fn build_train_context<'a>(
     module: &'a mut Module,
     dataset: &Dataset,
     config: TrainConfig,
-    optimizer_state: &'a Option<OptimizerStateType>,
+    optimizer_state: &Option<OptimizerStateType>,
     weights: &[u8],
 ) -> Result<
     (
@@ -114,7 +114,7 @@ fn build_train_context<'a>(
             dampening,
             nesterov,
         }) => {
-            if config.resume {
+            if config.resume && optimizer_state.is_some() {
                 Box::new(SGD::load_from_checkpoint(
                     optimizer_state,
                     weights,
@@ -188,20 +188,14 @@ pub fn module_train(
         let start_time = Instant::now();
         let epochs = config.epochs;
         let batch_size = config.batch_size;
-        let per_epoch_checkpoint = config.per_epoch_checkpoint;
-        let per_n_step_checkpoint = config.per_n_step_checkpoint;
+        let per_epoch_checkpoint = config.per_n_epochs_checkpoint;
+        let per_n_step_checkpoint = config.per_n_steps_checkpoint;
         let binary = binary.read().unwrap();
         let dataset = dataset.read().unwrap();
 
         let mut chkpt_guard = chkpt.write().unwrap();
 
-        let optimizer_state = chkpt_guard.optimizer_state.take();
-        let weights = chkpt_guard
-            .data
-            .iter()
-            .last()
-            .map(|v| &v[..])
-            .unwrap_or(&[]);
+        let (optimizer_state, weights) = chkpt_guard.get_chkpt();
         let mut module: Module = (&*binary).try_into().unwrap();
         module.set_device(device);
         match tcherror_to_status(build_train_context(

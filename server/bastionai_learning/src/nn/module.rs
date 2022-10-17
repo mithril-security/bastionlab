@@ -185,13 +185,13 @@ impl TryFrom<&Module> for SizedObjectsBytes {
 
 /// A Checkpointing object for a model.
 ///
-/// Contains the emta information for checkpointing a model during training
+/// Contains the meta information for checkpointing a model during training
 /// This is reused to test the model or when it's fetched to the client.
 #[derive(Debug)]
 pub struct CheckPoint {
     pub data: Vec<Vec<u8>>,
     pub private: bool,
-    pub optimizer_state: Option<OptimizerStateType>,
+    pub optimizer_state: Vec<Option<OptimizerStateType>>,
 }
 
 impl CheckPoint {
@@ -200,18 +200,31 @@ impl CheckPoint {
         Self {
             data: Vec::new(),
             private,
-            optimizer_state: None,
+            optimizer_state: Vec::new(),
         }
     }
-    /// Creates a new checkpoint for a model.
+    /// Creates a new checkpoint for a model and appends the current [`OptimizerStateType`] state.
     pub fn log_chkpt(
         &mut self,
         chkpt_bytes: &Vec<u8>,
         optim_state: OptimizerStateType,
     ) -> Result<(), TchError> {
         self.data.push(chkpt_bytes.to_vec());
-        self.optimizer_state = Some(optim_state);
+        self.optimizer_state.push(Some(optim_state));
         Ok(())
+    }
+
+    /// Fetch latest checkpoint for a checkpoint object.
+    pub fn get_chkpt(&self) -> (&Option<OptimizerStateType>, &[u8]) {
+        let optimizer_state = &self.optimizer_state;
+        let size = optimizer_state.len();
+        let optimizer_state = if size > 0 {
+            &optimizer_state[optimizer_state.len() - 1]
+        } else {
+            &(None as Option<OptimizerStateType>)
+        };
+        let weights = self.data.iter().last().map(|v| &v[..]).unwrap_or(&[]);
+        (optimizer_state, weights)
     }
 }
 

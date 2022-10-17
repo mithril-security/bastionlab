@@ -211,8 +211,8 @@ class RemoteLearner:
         max_grad_norm: Optional[float] = None,
         lr: Optional[float] = None,
         metric_eps: Optional[float] = None,
-        per_epoch_checkpoint: bool = False,
-        per_n_step_checkpoint: int = 0,
+        per_n_epochs_checkpoint: int = 0,
+        per_n_steps_checkpoint: int = 0,
         resume: bool = False,
     ) -> TrainConfig:
         batch_size = batch_size if batch_size is not None else self.max_batch_size
@@ -223,8 +223,8 @@ class RemoteLearner:
             epochs=nb_epochs,
             device=self.device,
             metric=self.loss,
-            per_n_step_checkpoint=per_n_step_checkpoint,
-            per_epoch_checkpoint=per_epoch_checkpoint,
+            per_n_steps_checkpoint=per_n_steps_checkpoint,
+            per_n_epochs_checkpoint=per_n_epochs_checkpoint,
             resume=resume,
             eps=eps if eps is not None else -1.0,
             max_grad_norm=max_grad_norm if max_grad_norm else self.max_grad_norm,
@@ -355,8 +355,8 @@ class RemoteLearner:
         metric_eps: Optional[float] = None,
         timeout: float = 60.0,
         poll_delay: float = 0.2,
-        per_epoch_checkpoint: bool = False,
-        per_n_step_checkpoint: int = 0,
+        per_n_epochs_checkpoint: int = 0,
+        per_n_steps_checkpoint: int = 0,
         resume: bool = False,
     ) -> None:
         """Fits the uploaded model to the training dataset with given hyperparameters.
@@ -380,8 +380,8 @@ class RemoteLearner:
                 max_grad_norm,
                 lr,
                 metric_eps,
-                per_epoch_checkpoint,
-                per_n_step_checkpoint,
+                per_n_epochs_checkpoint,
+                per_n_steps_checkpoint,
                 resume,
             )
         )

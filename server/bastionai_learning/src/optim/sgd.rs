@@ -40,14 +40,14 @@ impl<'a> SGD<'a> {
     }
     /// Restores an Optimizer to the latest training checkpoint with `optimizer_state` and
     pub fn load_from_checkpoint(
-        optimizer_state: &'a Option<OptimizerStateType>,
+        optimizer_state: &Option<OptimizerStateType>,
         weights: &[u8],
         learning_rate: f64,
         mut parameters: Parameters<'a>,
     ) -> Result<Self, TchError> {
         let statistics = match optimizer_state {
             Some(v) => match v {
-                OptimizerStateType::SGD(v) => bytes_to_stats(v)?,
+                OptimizerStateType::SGD { statistics } => bytes_to_stats(&statistics[..])?,
                 _ => initialize_statistics(),
             },
             None => initialize_statistics(),
@@ -144,7 +144,7 @@ impl<'a> Optimizer for SGD<'a> {
         self.parameters.into_bytes()
     }
     fn get_state(&mut self) -> Result<OptimizerStateType, TchError> {
-        let stats = stats_to_bytes(&self.statistics)?;
-        Ok(OptimizerStateType::SGD(stats))
+        let statistics = stats_to_bytes(&self.statistics)?;
+        Ok(OptimizerStateType::SGD { statistics })
     }
 }

@@ -1,12 +1,19 @@
-use tch::{COptimizer, TchError};
+use tch::TchError;
 
 /// Type for the state of the [`Optimizer`].
 ///
 /// **NB**: This enum has to be updated once more optimizers are added.
 #[derive(Debug)]
 pub enum OptimizerStateType {
-    SGD(Vec<u8>),
-    Adam(Vec<u8>, Vec<u8>, Vec<u8>, i32),
+    SGD {
+        statistics: Vec<u8>,
+    },
+    Adam {
+        m: Vec<u8>,
+        v: Vec<u8>,
+        v_hat_max: Vec<u8>,
+        t: i32,
+    },
 }
 
 /// Common interface for all optimizers
@@ -17,21 +24,6 @@ pub trait Optimizer {
     fn step(&mut self) -> Result<(), TchError>;
     /// Returns contained parameters as [`Vec<u8>`].
     fn into_bytes(&mut self) -> Result<Vec<u8>, TchError>;
-    /// Saves the current state of the [`Optimizer`] as [`OptimizerStateType`]
+    /// Saves the latest state of the [`Optimizer`] as [`OptimizerStateType`]
     fn get_state(&mut self) -> Result<OptimizerStateType, TchError>;
-}
-
-impl Optimizer for COptimizer {
-    fn zero_grad(&mut self) -> Result<(), TchError> {
-        COptimizer::zero_grad(self)
-    }
-    fn step(&mut self) -> Result<(), TchError> {
-        COptimizer::step(self)
-    }
-    fn into_bytes(&mut self) -> Result<Vec<u8>, TchError> {
-        todo!()
-    }
-    fn get_state(&mut self) -> Result<OptimizerStateType, TchError> {
-        todo!()
-    }
 }

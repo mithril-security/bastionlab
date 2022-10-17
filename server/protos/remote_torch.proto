@@ -48,8 +48,8 @@ message TrainConfig {
     float eps = 7;
     float max_grad_norm = 8;
     float metric_eps = 9;
-    int32 per_n_step_checkpoint = 12;
-    bool per_epoch_checkpoint = 13;
+    int32 per_n_steps_checkpoint = 12;
+    int32 per_n_epochs_checkpoint = 13;
     bool resume = 14;
     
     oneof optimizer {

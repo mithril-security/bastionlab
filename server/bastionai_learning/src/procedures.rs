@@ -31,7 +31,7 @@ pub struct Trainer<'a> {
     dataloader: std::iter::Enumerate<DatasetIter<'a>>,
     current_epoch: usize,
     chkpt: &'a mut CheckPoint,
-    per_epoch_chkpt: bool,
+    per_n_epochs_chkpt: i32,
     per_n_steps_chkpt: i32,
 }
 
@@ -46,7 +46,7 @@ impl<'a> Trainer<'a> {
         epochs: usize,
         batch_size: usize,
         chkpt: &'a mut CheckPoint,
-        per_epoch_chkpt: bool,
+        per_n_epochs_chkpt: i32,
         per_n_steps_chkpt: i32,
     ) -> Trainer<'a> {
         Trainer {
@@ -61,7 +61,7 @@ impl<'a> Trainer<'a> {
             dataloader: dataset.iter_shuffle(batch_size).enumerate(),
             current_epoch: 0,
             chkpt,
-            per_epoch_chkpt,
+            per_n_epochs_chkpt,
             per_n_steps_chkpt,
         }
     }
@@ -91,10 +91,11 @@ impl<'a> Trainer<'a> {
         self.dataset.len() / self.batch_size
     }
 
-    fn checkpoint(&mut self) {
-        let params = self.optimizer.into_bytes().unwrap(); // Fix later with more detailed errors.
-        let optim_state = self.optimizer.get_state().unwrap();
-        self.chkpt.log_chkpt(&params, optim_state).unwrap();
+    fn checkpoint(&mut self) -> Result<(), TchError> {
+        let params = self.optimizer.into_bytes()?; // Fix later with more detailed errors.
+        let optim_state = self.optimizer.get_state()?;
+        self.chkpt.log_chkpt(&params, optim_state)?;
+        Ok(())
     }
 }
 
@@ -105,8 +106,9 @@ impl<'a> Iterator for Trainer<'a> {
         if let Some((i, (inputs, labels))) = self.dataloader.next() {
             let v = Some(self.train_on_batch(i, inputs, labels));
 
+            // Per n-step checkpointing.
             if self.per_n_steps_chkpt > 0 && i % self.per_n_steps_chkpt as usize == 0 {
-                self.checkpoint()
+                self.checkpoint().unwrap()
             }
             v
         } else {
@@ -116,14 +118,17 @@ impl<'a> Iterator for Trainer<'a> {
                 self.dataloader = self.dataset.iter_shuffle(self.batch_size).enumerate();
                 let v = self.next();
 
-                // Per Epoch checkpointing
-                if self.per_epoch_chkpt {
-                    self.checkpoint()
+                // Per n-epoch checkpointing.
+                if self.per_n_epochs_chkpt > 0
+                    && self.current_epoch % self.per_n_epochs_chkpt as usize == 0
+                {
+                    self.checkpoint().unwrap()
                 }
                 v
             } else {
-                if !self.per_epoch_chkpt && self.per_n_steps_chkpt == 0 {
-                    self.checkpoint()
+                // Default checkpointing.
+                if self.per_n_epochs_chkpt == 0 && self.per_n_steps_chkpt == 0 {
+                    self.checkpoint().unwrap()
                 }
                 None
             }

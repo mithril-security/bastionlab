@@ -56,8 +56,8 @@ impl<'a> Adam<'a> {
             1,
         );
         let (m, v, v_hat_max, t) = match optimizer_state {
-            Some(v) => match v {
-                OptimizerStateType::Adam(m, v, v_hat_max, t) => (
+            Some(state) => match state {
+                OptimizerStateType::Adam { m, v, v_hat_max, t } => (
                     bytes_to_stats(m)?,
                     bytes_to_stats(v)?,
                     bytes_to_stats(v_hat_max)?,
@@ -216,6 +216,11 @@ impl<'a> Optimizer for Adam<'a> {
         let m = stats_to_bytes(&self.m)?;
         let v = stats_to_bytes(&self.v)?;
         let v_hat_max = stats_to_bytes(&self.v_hat_max)?;
-        Ok(OptimizerStateType::Adam(m, v, v_hat_max, self.t))
+        Ok(OptimizerStateType::Adam {
+            m,
+            v,
+            v_hat_max,
+            t: self.t,
+        })
     }
 }
