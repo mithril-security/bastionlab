@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::{collections::HashMap, marker::PhantomData};
 
 use super::{module::DpSGDContext, Module};
 use crate::data::privacy_guard::{compute_sigma, generate_noise_like, PrivacyBudget};
@@ -6,12 +6,19 @@ use std::sync::{Arc, RwLock};
 use tch::{nn::VarStore, IndexOp, TchError, Tensor};
 
 /// Securely copies the parameters to avoid leaking gradients.
-fn copy_parameters(params: &Vec<Tensor>) -> Result<Vec<Tensor>, TchError> {
+fn copy_parameters(params: &HashMap<String, Tensor>) -> Result<Vec<Tensor>, TchError> {
     let mut res = Vec::new();
-    for p in params.iter() {
+    for (_, p) in params.iter() {
         res.push(p.copy().f_detach_()?);
     }
     Ok(res)
+}
+/// Securely copies the parameters as [`Vec<u8>`] to avoid leaking gradients.
+fn save_to_stream(params: &HashMap<String, Tensor>) -> Result<Vec<u8>, TchError> {
+    let mut stream: Vec<u8> = Vec::new();
+    let named_tensors = params.iter().collect::<Vec<_>>();
+    Tensor::save_multi_to_stream(named_tensors.as_slice(), &mut stream)?;
+    Ok(stream.clone())
 }
 
 /// Type of batch aggregation used by a loss function
@@ -32,12 +39,12 @@ pub enum LossType {
 #[derive(Debug)]
 pub enum Parameters<'a> {
     Standard {
-        parameters: Vec<Tensor>,
+        parameters: HashMap<String, Tensor>,
         dp_sgd_context: Arc<RwLock<Option<DpSGDContext>>>,
         _phantom: PhantomData<&'a mut Module>,
     },
     Private {
-        parameters: Vec<Tensor>,
+        parameters: HashMap<String, Tensor>,
         eps: f32,
         max_grad_norm: f32,
         loss_type: LossType,
@@ -54,7 +61,7 @@ impl<'a> Parameters<'a> {
         dp_sgd_context: Arc<RwLock<Option<DpSGDContext>>>,
     ) -> Parameters<'a> {
         Parameters::Standard {
-            parameters: vs.trainable_variables(),
+            parameters: vs.variables(),
             dp_sgd_context,
             _phantom: PhantomData,
         }
@@ -73,7 +80,7 @@ impl<'a> Parameters<'a> {
         dp_sgd_context: Arc<RwLock<Option<DpSGDContext>>>,
     ) -> Parameters<'a> {
         Parameters::Private {
-            parameters: vs.trainable_variables(),
+            parameters: vs.variables(),
             eps,
             max_grad_norm,
             loss_type,
@@ -96,6 +103,18 @@ impl<'a> Parameters<'a> {
             Parameters::Private { parameters, .. } => copy_parameters(parameters),
         }
     }
+    /// Returns contained parameters as [`Vec<u8>`].
+    ///
+    /// This method is useful to inspect the weights during or after training.
+    /// Note that for privacy reasons, this method actually returns a copy of
+    /// the parameters that do not contain the accumulated gradients because
+    /// the gradients contain non DP protected information about the samples.
+    pub fn into_bytes(&self) -> Result<Vec<u8>, TchError> {
+        match self {
+            Parameters::Standard { parameters, .. } => save_to_stream(parameters),
+            Parameters::Private { parameters, .. } => save_to_stream(parameters),
+        }
+    }
 
     /// Returns the number of contained parameters.
     pub fn len(&self) -> usize {
@@ -109,16 +128,56 @@ impl<'a> Parameters<'a> {
     pub fn zero_grad(&mut self) {
         match self {
             Parameters::Standard { parameters, .. } => {
-                for param in parameters.iter_mut() {
+                for (_, param) in parameters.iter_mut() {
                     param.zero_grad();
                 }
             }
             Parameters::Private { parameters, .. } => {
-                for param in parameters.iter_mut() {
+                for (_, param) in parameters.iter_mut() {
                     param.zero_grad();
                 }
             }
         }
+    }
+    /// Overrides model parameters with saved update.
+    pub fn override_parameters(&mut self, params: Vec<(String, Tensor)>) -> Result<(), TchError> {
+        match self {
+            Parameters::Standard { parameters, .. } => {
+                for (name, param) in params.iter() {
+                    let param0 = match parameters.get_mut(name) {
+                        Some(v) => v,
+                        None => {
+                            return Err(TchError::Convert(
+                                "Unable to fetch module parameters".to_string(),
+                            ));
+                        }
+                    };
+                    tch::no_grad(|| -> Result<(), TchError> {
+                        let _ = param0.f_zero_()?;
+                        let _ = param0.f_add_(&param)?;
+                        Ok(())
+                    })?;
+                }
+            }
+            Parameters::Private { parameters, .. } => {
+                for (name, param) in params.iter() {
+                    let param0 = match parameters.get_mut(name) {
+                        Some(v) => v,
+                        None => {
+                            return Err(TchError::Convert(
+                                "Unable to fetch module parameters".to_string(),
+                            ));
+                        }
+                    };
+                    tch::no_grad(|| -> Result<(), TchError> {
+                        let _ = param0.i(0).f_zero_()?;
+                        let _ = param0.i(0).f_add_(&param.i(0))?;
+                        Ok(())
+                    })?;
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Iterates over the contained parameters and updates them using given update function.
@@ -126,7 +185,7 @@ impl<'a> Parameters<'a> {
     /// When called on a private variant, DP-SGD is applied.
     pub fn update(
         &mut self,
-        mut update_fn: impl FnMut(usize, &Tensor, Tensor) -> Result<Tensor, TchError>,
+        mut update_fn: impl FnMut(&String, &Tensor, Tensor) -> Result<Tensor, TchError>,
     ) -> Result<(), TchError> {
         match self {
             Parameters::Standard {
@@ -144,8 +203,8 @@ impl<'a> Parameters<'a> {
                 {
                     return Err(TchError::Kind(String::from("Privacy limit violation.")));
                 }
-                for (i, param) in parameters.iter_mut().enumerate() {
-                    let update = update_fn(i, param, param.f_grad()?)?;
+                for (name, param) in parameters.iter_mut() {
+                    let update = update_fn(name, param, param.f_grad()?)?;
                     let _ = param.f_sub_(&update)?;
                     dp_sgd_context
                         .write()
@@ -193,19 +252,20 @@ impl<'a> Parameters<'a> {
                 }
 
                 let mut per_param_norms = Vec::with_capacity(parameters.len());
-                for param in parameters.iter() {
+                for (_, param) in parameters.iter() {
                     let per_sample_grad = param.grad();
                     let dims: Vec<i64> = (1..per_sample_grad.dim()).map(|x| x as i64).collect();
                     per_param_norms.push(per_sample_grad.f_norm_scalaropt_dim(2, &dims, false)?);
                 }
                 let per_sample_norms =
                     Tensor::f_stack(&per_param_norms, 1).map_err(|e| TchError::Shape(format!("Failed to stack per-sample gradients, are you using a model with expanded weights? Initial error: {}", e)))?.f_norm_scalaropt_dim(2, &[1], false)?;
-                let max_grad_norm_t = Tensor::of_slice(&[*max_grad_norm as f32]).f_to_device(per_sample_norms.device())?;
+                let max_grad_norm_t = Tensor::of_slice(&[*max_grad_norm as f32])
+                    .f_to_device(per_sample_norms.device())?;
                 let per_sample_clip_factor = max_grad_norm_t
                     .f_div(&per_sample_norms.f_add_scalar(1e-6)?)?
                     .f_clamp(0., 1.)?;
 
-                for (i, param) in parameters.iter_mut().enumerate() {
+                for (i, (name, param)) in parameters.iter_mut().enumerate() {
                     let per_sample_grad = param.grad();
                     let mut update_size = per_sample_grad.size();
                     update_size.remove(0);
@@ -217,7 +277,7 @@ impl<'a> Parameters<'a> {
                     if let LossType::Mean(batch_size) = loss_type {
                         let _ = grad.f_div_scalar_(*batch_size)?;
                     }
-                    let update = update_fn(i, &param.i(0), grad)?;
+                    let update = update_fn(name, &param.i(0), grad)?;
                     let _ = param.i(0).f_sub_(&update)?;
                     if i == 0 {
                         dp_sgd_context

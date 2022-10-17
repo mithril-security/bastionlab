@@ -1,21 +1,26 @@
-pub mod optim;
-pub mod nn;
-pub mod serialization;
-pub mod procedures;
 pub mod data;
+pub mod nn;
+pub mod optim;
+pub mod procedures;
+pub mod serialization;
 
 #[cfg(test)]
 mod tests {
-    use tch::{TrainableCModule, Device, Tensor, TchError, Kind};
-    use tch::nn::VarStore;
     use std::sync::{Arc, RwLock};
+    use tch::nn::VarStore;
+    use tch::{Device, Kind, TchError, Tensor, TrainableCModule};
 
-    use crate::data::privacy_guard::{PrivacyContext, PrivacyBudget, PrivacyGuard, BatchDependence};
+    use crate::data::privacy_guard::{
+        BatchDependence, PrivacyBudget, PrivacyContext, PrivacyGuard,
+    };
     use crate::nn::{LossType, Module};
-    use crate::optim::{SGD, Optimizer};
+    use crate::optim::{Optimizer, SGD};
 
     fn l2_loss(output: &Tensor, target: &Tensor) -> Result<Tensor, TchError> {
-        output.f_sub(&target)?.f_norm_scalaropt_dim(2, &[1], false)?.f_mean(Kind::Float)
+        output
+            .f_sub(&target)?
+            .f_norm_scalaropt_dim(2, &[1], false)?
+            .f_mean(Kind::Float)
     }
 
     #[test]
@@ -54,6 +59,7 @@ mod tests {
     fn basic_sgd() {
         let mut module = Module::load_from_file("lreg_base.pt", Device::Cpu).unwrap();
         let (forward, parameters) = module.parameters();
+        // let mut chkpt = CheckPoint::new();
         let mut optimizer = SGD::new(parameters, 0.1);
 
         let data = vec![
@@ -65,14 +71,20 @@ mod tests {
             Tensor::of_slice::<f32>(&[2.]),
         ];
 
-        let context = Arc::new(RwLock::new(PrivacyContext::new(PrivacyBudget::NotPrivate, 4)));
+        let context = Arc::new(RwLock::new(PrivacyContext::new(
+            PrivacyBudget::NotPrivate,
+            4,
+        )));
 
         for _ in 0..100 {
             for (x, t) in data.iter().zip(target.iter()) {
                 let x = PrivacyGuard::new(x.copy(), BatchDependence::Dependent, context.clone());
                 let t = PrivacyGuard::new(t.copy(), BatchDependence::Dependent, context.clone());
                 let y = forward.forward(vec![x]).unwrap();
-                let loss = y.f_mse_loss(&t, (0.0, 10.0), tch::Reduction::Mean).unwrap().0;
+                let loss = y
+                    .f_mse_loss(&t, (0.0, 10.0), tch::Reduction::Mean)
+                    .unwrap()
+                    .0;
                 optimizer.zero_grad().unwrap();
                 loss.backward();
                 optimizer.step().unwrap();
@@ -86,6 +98,8 @@ mod tests {
     fn private_sgd() {
         let mut module = Module::load_from_file("lreg.pt", Device::Cpu).unwrap();
         let (forward, parameters) = module.private_parameters(30.0, 1.0, LossType::Mean(2));
+        // let mut chkpt = CheckPoint::new();
+
         let mut optimizer = SGD::new(parameters, 0.1);
 
         let data = vec![
@@ -97,15 +111,21 @@ mod tests {
             Tensor::of_slice::<f32>(&[1.0, 0.4]).f_view([2, 1]).unwrap(),
         ];
 
-        let context = Arc::new(RwLock::new(PrivacyContext::new(PrivacyBudget::Private(300.1), 4)));
-        
+        let context = Arc::new(RwLock::new(PrivacyContext::new(
+            PrivacyBudget::Private(300.1),
+            4,
+        )));
+
         for _ in 0..200 {
             for (x, t) in data.iter().zip(target.iter()) {
                 let x = PrivacyGuard::new(x.copy(), BatchDependence::Dependent, context.clone());
                 let t = PrivacyGuard::new(t.copy(), BatchDependence::Dependent, context.clone());
 
                 let y = forward.forward(vec![x]).unwrap();
-                let loss = y.f_mse_loss(&t, (0.0, 10.0), tch::Reduction::Mean).unwrap().0;
+                let loss = y
+                    .f_mse_loss(&t, (0.0, 10.0), tch::Reduction::Mean)
+                    .unwrap()
+                    .0;
                 optimizer.zero_grad().unwrap();
                 loss.backward();
                 optimizer.step().unwrap();
@@ -113,7 +133,11 @@ mod tests {
         }
         let w = &optimizer.parameters.into_inner().unwrap()[0];
         w.print();
-        assert!(l2_loss(w, &Tensor::of_slice::<f32>(&[2.])).unwrap().double_value(&[]) < 0.1);
+        assert!(
+            l2_loss(w, &Tensor::of_slice::<f32>(&[2.]))
+                .unwrap()
+                .double_value(&[])
+                < 0.1
+        );
     }
-
 }

@@ -1,6 +1,6 @@
 use crate::data::privacy_guard::{PrivacyBudget, PrivacyGuard};
 use crate::data::{Dataset, DatasetIter};
-use crate::nn::Forward;
+use crate::nn::{CheckPoint, Forward};
 use crate::optim::Optimizer;
 use tch::{Device, Kind, TchError, Tensor};
 
@@ -16,7 +16,7 @@ fn inputs_to_device(
 }
 
 /// A basic parametrizable loop for training a model.
-/// 
+///
 /// This struct implements [`std::Iter::Iterator`] and yields
 /// a metric value for every step (i.e. every batch of every epoch).
 pub struct Trainer<'a> {
@@ -30,6 +30,9 @@ pub struct Trainer<'a> {
     batch_size: usize,
     dataloader: std::iter::Enumerate<DatasetIter<'a>>,
     current_epoch: usize,
+    chkpt: &'a mut CheckPoint,
+    per_n_epochs_chkpt: i32,
+    per_n_steps_chkpt: i32,
 }
 
 impl<'a> Trainer<'a> {
@@ -42,6 +45,9 @@ impl<'a> Trainer<'a> {
         device: Device,
         epochs: usize,
         batch_size: usize,
+        chkpt: &'a mut CheckPoint,
+        per_n_epochs_chkpt: i32,
+        per_n_steps_chkpt: i32,
     ) -> Trainer<'a> {
         Trainer {
             forward,
@@ -54,6 +60,9 @@ impl<'a> Trainer<'a> {
             batch_size,
             dataloader: dataset.iter_shuffle(batch_size).enumerate(),
             current_epoch: 0,
+            chkpt,
+            per_n_epochs_chkpt,
+            per_n_steps_chkpt,
         }
     }
 
@@ -81,6 +90,13 @@ impl<'a> Trainer<'a> {
     pub fn nb_batches(&self) -> usize {
         self.dataset.len() / self.batch_size
     }
+
+    fn checkpoint(&mut self) -> Result<(), TchError> {
+        let params = self.optimizer.into_bytes()?; // Fix later with more detailed errors.
+        let optim_state = self.optimizer.get_state()?;
+        self.chkpt.log_chkpt(&params, optim_state)?;
+        Ok(())
+    }
 }
 
 impl<'a> Iterator for Trainer<'a> {
@@ -88,14 +104,32 @@ impl<'a> Iterator for Trainer<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some((i, (inputs, labels))) = self.dataloader.next() {
-            Some(self.train_on_batch(i, inputs, labels))
+            let v = Some(self.train_on_batch(i, inputs, labels));
+
+            // Per n-step checkpointing.
+            if self.per_n_steps_chkpt > 0 && i % self.per_n_steps_chkpt as usize == 0 {
+                self.checkpoint().unwrap()
+            }
+            v
         } else {
             self.current_epoch += 1;
             self.metric.reset();
             if self.current_epoch < self.epochs {
                 self.dataloader = self.dataset.iter_shuffle(self.batch_size).enumerate();
-                self.next()
+                let v = self.next();
+
+                // Per n-epoch checkpointing.
+                if self.per_n_epochs_chkpt > 0
+                    && self.current_epoch % self.per_n_epochs_chkpt as usize == 0
+                {
+                    self.checkpoint().unwrap()
+                }
+                v
             } else {
+                // Default checkpointing.
+                if self.per_n_epochs_chkpt == 0 && self.per_n_steps_chkpt == 0 {
+                    self.checkpoint().unwrap()
+                }
                 None
             }
         }
@@ -103,7 +137,7 @@ impl<'a> Iterator for Trainer<'a> {
 }
 
 /// A basic parametriazable loop for testing a model.
-/// 
+///
 /// This struct implements [`std::Iter::Iterator`] and yields
 /// a metric value for every step (i.e. every batch).
 pub struct Tester<'a> {
@@ -194,31 +228,40 @@ impl Metric {
             >,
             (f64, f64),
         ) = match loss_name {
-            "accuracy" => (Box::new(|output, label| {
-                let prediction = output
-                    .f_argmax(-1, false)?
-                    .f_sub(label)?
-                    .f_abs()?
-                    .f_clamp(0.0, 1.0)?
-                    .f_sum(Kind::Float)?
-                    .f_mul_scalar(-1.0 / label.batch_size()? as f64)?
-                    .f_add_scalar(1.0)?;
-                Ok((prediction.f_clone()?, prediction))
-            }), (0.0, 1.0)),
-            "l2" => (Box::new(|output, label| {
-                output.f_mse_loss(label, (0.0, 10.0), tch::Reduction::Mean)
-            }), (0.0, 10.0)),
-            "cross_entropy" => (Box::new(|output, label| {
-                let weight: Option<Tensor> = None;
-                output.f_cross_entropy_loss(
-                    label,
-                    (0.0, 10.0),
-                    weight,
-                    tch::Reduction::Mean,
-                    -100,
-                    0.,
-                )
-            }), (0.0, 10.0)),
+            "accuracy" => (
+                Box::new(|output, label| {
+                    let prediction = output
+                        .f_argmax(-1, false)?
+                        .f_sub(label)?
+                        .f_abs()?
+                        .f_clamp(0.0, 1.0)?
+                        .f_sum(Kind::Float)?
+                        .f_mul_scalar(-1.0 / label.batch_size()? as f64)?
+                        .f_add_scalar(1.0)?;
+                    Ok((prediction.f_clone()?, prediction))
+                }),
+                (0.0, 1.0),
+            ),
+            "l2" => (
+                Box::new(|output, label| {
+                    output.f_mse_loss(label, (0.0, 10.0), tch::Reduction::Mean)
+                }),
+                (0.0, 10.0),
+            ),
+            "cross_entropy" => (
+                Box::new(|output, label| {
+                    let weight: Option<Tensor> = None;
+                    output.f_cross_entropy_loss(
+                        label,
+                        (0.0, 10.0),
+                        weight,
+                        tch::Reduction::Mean,
+                        -100,
+                        0.,
+                    )
+                }),
+                (0.0, 10.0),
+            ),
             s => {
                 return Err(TchError::FileFormat(String::from(format!(
                     "Invalid loss name, unknown loss {}.",
@@ -263,9 +306,7 @@ impl Metric {
     pub fn value(&self, budget: PrivacyBudget) -> Result<(f32, f32), TchError> {
         match &self.value {
             Some(x) => {
-                let (value, std) = x
-                    .f_clone()?
-                    .get_private_with_std(budget)?;
+                let (value, std) = x.f_clone()?.get_private_with_std(budget)?;
                 Ok((
                     (value.f_double_value(&[])? as f32)
                         .clamp(self.clipping.0 as f32, self.clipping.1 as f32),

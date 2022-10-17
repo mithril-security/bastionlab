@@ -39,7 +39,7 @@ with Connection("localhost", 50051) as client:
         remote_dataloader,
         max_batch_size=2,
         loss="l2",
-        optimizer=SGD(lr=0.1),
+        optimizer=SGD(lr=0.1, momentum=0.9),
         model_name="Linear 1x1",
         model_description="1D Linear Regression Model",
         expand=False,
@@ -51,7 +51,13 @@ with Connection("localhost", 50051) as client:
 
     print(f"Optimizers: {(client.get_available_optimizers())}")
 
-    remote_learner.fit(nb_epochs=200, eps=300.0, metric_eps=8000.0)
+    remote_learner.fit(
+        nb_epochs=200,
+        eps=300.0,
+        metric_eps=8000.0,
+        per_epoch_checkpoint=True,
+        per_n_step_checkpoint=2,
+    )
 
     lreg_model = remote_learner.get_model()
 

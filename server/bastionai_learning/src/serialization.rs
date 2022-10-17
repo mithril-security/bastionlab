@@ -1,3 +1,5 @@
+use tch::TchError;
+
 fn read_le_usize(input: &mut &[u8]) -> usize {
     let (int_bytes, rest) = input.split_at(std::mem::size_of::<usize>());
     *input = rest;
@@ -60,5 +62,19 @@ impl Iterator for SizedObjectsBytes {
         } else {
             None
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct BinaryModule(pub(crate) Vec<u8>);
+
+impl TryFrom<SizedObjectsBytes> for BinaryModule {
+    type Error = TchError;
+
+    fn try_from(mut value: SizedObjectsBytes) -> Result<Self, Self::Error> {
+        let object = value.next().ok_or(TchError::FileFormat(String::from(
+            "Invalid data, expected at least one object in stream.",
+        )))?;
+        Ok(BinaryModule(object))
     }
 }
