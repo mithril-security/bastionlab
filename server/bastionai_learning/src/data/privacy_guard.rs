@@ -447,6 +447,18 @@ impl PrivacyGuard<Tensor> {
         }
     }
 
+    pub fn expand_batch_dim(&self, n: i64) -> Result<Self, TchError> {
+        let mut repeats = vec![1; self.value.dim()];
+        repeats[0] = n;
+
+        Ok(PrivacyGuard {
+            value: self.value.f_repeat(&repeats)?,
+            sensibility: Sensibility::Unknown,
+            batch_dependence: BatchDependence::Dependent,
+            context: Arc::clone(&self.context),
+        })
+    }
+
     pub fn backward(&self) {
         self.value.backward();
     }

@@ -240,7 +240,13 @@ impl Metric {
         output: &PrivacyGuard<Tensor>,
         label: &PrivacyGuard<Tensor>,
     ) -> Result<PrivacyGuard<Tensor>, TchError> {
-        let loss = (self.loss_fn)(output, label)?;
+        let expansion = output.batch_size()? / label.batch_size()?; 
+        let loss = if expansion != 1 {
+            (self.loss_fn)(output, &label.expand_batch_dim(expansion)?)?
+        } else {
+            (self.loss_fn)(output, label)?
+        };
+        // let loss = (self.loss_fn)(output, label)?;
         let detached_loss = loss.1.f_clone()?;
         self.value = match &self.value {
             Some(v) => Some(
