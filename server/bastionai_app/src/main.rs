@@ -2,23 +2,21 @@ use bastionai_learning::nn::Module;
 use env_logger::Env;
 use log::info;
 use std::collections::HashMap;
-
 use std::{
     hash::{Hash, Hasher},
     collections::hash_map::DefaultHasher};
 use std::ffi::CString;
 use std::fs;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, Mutex};
 use std::time::Instant;
 use std::{fs::File, io::Read};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Identity;
 use tonic::transport::ServerTlsConfig;
 
-use ring::digest;
+use ring::{digest, rand};
 
 use tonic::{transport::Server, Request, Response, Status, Streaming};
-use uuid::Uuid;
 
 use bastionai_learning::{data::Dataset, nn::CheckPoint};
 
@@ -27,8 +25,8 @@ mod remote_torch {
 }
 use remote_torch::remote_torch_server::{RemoteTorch, RemoteTorchServer};
 use remote_torch::{
-    Chunk, ClientInfo, Devices, Empty, Metric, Optimizers, Reference, References, TestConfig,
-    TrainConfig,
+    Chunk, ClientInfo, ListResponse, Empty, MetricResponse, ReferenceRequest, ReferenceResponse, ReferenceListResponse, TestRequest,
+    TrainRequest, ChallengeResponse
 };
 
 mod telemetry;
@@ -46,15 +44,18 @@ use learning::*;
 mod serialization;
 use serialization::*;
 
+mod access_control;
+
 use bastionai_learning::serialization::{SizedObjectsBytes, BinaryModule};
 use bastionai_common::auth::{auth_interceptor, setup_jwt};
 
 /// The server's state
 struct BastionAIServer {
-    binaries: RwLock<HashMap<String, Artifact<BinaryModule>>>,
-    checkpoints: RwLock<HashMap<String, Artifact<CheckPoint>>>,
-    datasets: RwLock<HashMap<String, Artifact<Dataset>>>,
-    runs: RwLock<HashMap<Uuid, Arc<RwLock<Run>>>>,
+    binaries: RwLock<HashMap<Vec<u8>, Artifact<BinaryModule>>>,
+    checkpoints: RwLock<HashMap<Vec<u8>, Artifact<CheckPoint>>>,
+    datasets: RwLock<HashMap<Vec<u8>, Artifact<Dataset>>>,
+    runs: RwLock<HashMap<Vec<u8>, Artifact<Run>>>,
+    challenges: Mutex<Vec<[u8; 32]>>,
 }
 
 impl BastionAIServer {
@@ -64,19 +65,38 @@ impl BastionAIServer {
             checkpoints: RwLock::new(HashMap::new()),
             datasets: RwLock::new(HashMap::new()),
             runs: RwLock::new(HashMap::new()),
+            challenges: Mutex::new(Vec::new()),
         }
+    }
+
+    fn check_challenge<T>(&self, request: &Request<T>) -> Result<(), Status> {
+        let challenge = if let Some(meta) = request.metadata().get_bin("challenge") {
+            meta.to_bytes().map_err(|_| {
+                Status::invalid_argument("Could not decode challenge")
+            })
+        } else {
+            Err(Status::permission_denied("Challenge not provided"))
+        }?;
+        let lock = self.challenges.lock().unwrap();
+        for c in lock.iter().rev() {
+            if c == &*challenge {
+                return Ok(())
+            }
+        }
+        Err(Status::permission_denied("Invalid or reused challenge"))
     }
 }
 
 #[tonic::async_trait]
 impl RemoteTorch for BastionAIServer {
     type FetchDatasetStream = ReceiverStream<Result<Chunk, Status>>;
-    type FetchModuleStream = ReceiverStream<Result<Chunk, Status>>;
+    type FetchModelStream = ReceiverStream<Result<Chunk, Status>>;
+    type FetchCheckpointStream = ReceiverStream<Result<Chunk, Status>>;
 
     async fn send_dataset(
         &self,
         request: Request<Streaming<Chunk>>,
-    ) -> Result<Response<Reference>, Status> {
+    ) -> Result<Response<ReferenceResponse>, Status> {
         let start_time = Instant::now();
 
         let artifact: Artifact<SizedObjectsBytes> = unstream_data(request.into_inner()).await?;
@@ -84,13 +104,14 @@ impl RemoteTorch for BastionAIServer {
         let (dataset_hash, dataset_size) = {
             let lock = artifact.data.read().unwrap();
             let data = lock.get();
-            let hash = hex::encode(digest::digest(&digest::SHA256, &data).as_ref());
+            let hash = digest::digest(&digest::SHA256, &data).as_ref().to_vec();
             (hash, data.len())
         };
 
         let dataset: Artifact<Dataset> = tcherror_to_status((artifact).deserialize())?;
         let name = dataset.name.clone();
         let description = dataset.description.clone();
+        let license = dataset.license.clone();
         let meta = dataset.meta.clone();
         let client_info = dataset.client_info.clone();
 
@@ -110,14 +131,15 @@ impl RemoteTorch for BastionAIServer {
                 dataset_name: Some(name.clone()),
                 dataset_size,
                 time_taken: elapsed.as_millis() as f64,
-                dataset_hash: Some(dataset_hash.clone())
+                dataset_hash: Some(hex::encode(&dataset_hash))
             },
             client_info,
         );
-        Ok(Response::new(Reference {
-            identifier: format!("{}", dataset_hash),
+        Ok(Response::new(ReferenceResponse {
+            hash: dataset_hash,
             name,
             description,
+            license: serde_json::to_string(&license).unwrap(),
             meta,
         }))
     }
@@ -125,7 +147,7 @@ impl RemoteTorch for BastionAIServer {
     async fn send_model(
         &self,
         request: Request<Streaming<Chunk>>,
-    ) -> Result<Response<Reference>, Status> {
+    ) -> Result<Response<ReferenceResponse>, Status> {
         let start_time = Instant::now();
 
         let artifact: Artifact<SizedObjectsBytes> = unstream_data(request.into_inner()).await?;
@@ -133,7 +155,7 @@ impl RemoteTorch for BastionAIServer {
         let (model_hash, model_size) = {
             let lock = artifact.data.read().unwrap();
             let data = lock.get();
-            let hash = hex::encode(digest::digest(&digest::SHA256, &data).as_ref());
+            let hash = digest::digest(&digest::SHA256, &data).as_ref().to_vec();
             (hash, data.len())
         };
         
@@ -141,6 +163,7 @@ impl RemoteTorch for BastionAIServer {
             
         let name = binary.name.clone();
         let description = binary.description.clone();
+        let license = binary.license.clone();
         let meta = binary.meta.clone();
         let client_info = binary.client_info.clone();
         
@@ -155,50 +178,67 @@ impl RemoteTorch for BastionAIServer {
         telemetry::add_event(
             TelemetryEventProps::SendModel {
                 model_name: Some(name.clone()),
-                model_hash: Some(model_hash.clone()),
+                model_hash: Some(hex::encode(&model_hash)),
                 model_size,
                 time_taken: elapsed.as_millis() as f64,
             },
             client_info,
         );
-        Ok(Response::new(Reference {
-            identifier: format!("{}", model_hash),
+        Ok(Response::new(ReferenceResponse {
+            hash: model_hash,
             name,
             description,
+            license: serde_json::to_string(&license).unwrap(),
             meta,
         }))
     }
 
     async fn fetch_dataset(
         &self,
-        request: Request<Reference>,
+        request: Request<ReferenceRequest>,
     ) -> Result<Response<Self::FetchDatasetStream>, Status> {
-        let identifier = request.into_inner().identifier;
+        self.check_challenge(&request)?;
         let serialized = {
             let datasets = self.datasets.read().unwrap();
             let artifact = datasets
-                .get(&identifier)
+                .get(&request.get_ref().hash)
                 .ok_or(Status::not_found("Dataset not found"))?;
+            artifact.license.verify_fetch(&request)?;
+            
             tcherror_to_status(artifact.serialize())?
         };
 
         Ok(stream_data(serialized, 4_194_285, "Dataset".to_string()).await)
     }
 
-    async fn fetch_module(
+    async fn fetch_model(&self, request: Request<ReferenceRequest>) -> Result<Response<Self::FetchModelStream>, Status> {
+        self.check_challenge(&request)?;
+        let serialized = {
+            let binaries = self.binaries.read().unwrap();
+            let artifact = binaries
+                .get(&request.get_ref().hash)
+                .ok_or(Status::not_found("Model not found"))?;
+            artifact.license.verify_fetch(&request)?;
+            
+            tcherror_to_status(artifact.serialize())?
+        };
+
+        Ok(stream_data(serialized, 4_194_285, "Model".to_string()).await)
+    }
+
+    async fn fetch_checkpoint(
         &self,
-        request: Request<Reference>,
-    ) -> Result<Response<Self::FetchModuleStream>, Status> {
-        let identifier = request.into_inner().identifier;
-        
+        request: Request<ReferenceRequest>,
+    ) -> Result<Response<Self::FetchCheckpointStream>, Status> {
+        self.check_challenge(&request)?;
         let serialized = {
             let checkpoints = self.checkpoints.read().unwrap();
             
             let checkpoint = checkpoints
-                .get(&identifier);
+                .get(&request.get_ref().hash);
             match checkpoint {
-                Some(chkpt) => {
-                    let artifact = chkpt;
+                Some(artifact) => {
+                    artifact.license.verify_fetch(&request)?;
                     let checkpoints = &artifact.data.read().unwrap().data;
                     let last_chkpt = &checkpoints[checkpoints.len() - 1];
         
@@ -209,22 +249,23 @@ impl RemoteTorch for BastionAIServer {
                         data: Arc::new(RwLock::new(chkpt_bytes)),
                         name: artifact.name.clone(),
                         client_info: artifact.client_info.clone(),
-                        secret: artifact.secret.clone(),
                         description: artifact.description.clone(),
-                        meta: artifact.meta.clone()
-                    }            
+                        meta: artifact.meta.clone(),
+                        license: artifact.license.clone(),
+                    }
                 }
                 None => {
                     let binaries = self.binaries.read().unwrap();
-                    let binary = binaries.get(&identifier).ok_or(Status::not_found("Module not found!"))?;
+                    let binary = binaries.get(&request.get_ref().hash).ok_or(Status::not_found("Module not found!"))?;
+                    binary.license.verify_fetch(&request)?;
                     let module: Module = (&*binary.data.read().unwrap()).try_into().unwrap();
                     let module = Artifact {
                         data: Arc::new(RwLock::new(module)),
                         name: binary.name.clone(),
                         client_info: binary.client_info.clone(),
-                        secret: binary.secret.clone(),
                         description: binary.description.clone(),
-                        meta: binary.meta.clone()
+                        meta: binary.meta.clone(),
+                        license: binary.license.clone(),
                     };
                     tcherror_to_status(module.serialize())?
 
@@ -235,173 +276,279 @@ impl RemoteTorch for BastionAIServer {
         Ok(stream_data(serialized, 4_194_285, "Model".to_string()).await)
     }
 
-    async fn delete_dataset(&self, request: Request<Reference>) -> Result<Response<Empty>, Status> {
-        let identifier = request.into_inner().identifier;
-        self.datasets.write().unwrap().remove(&identifier);
-        Ok(Response::new(Empty {}))
-    }
+    async fn fetch_run(&self, request: Request<ReferenceRequest>) -> Result<Response<ReferenceResponse>, Status> {
+        self.check_challenge(&request)?;
+        let mut runs = self.runs.read().unwrap();
+        let artifact = runs
+            .get(&request.get_ref().hash)
+            .ok_or(Status::not_found("Run not found"))?;
+        artifact.license.verify_fetch(&request)?;
 
-    async fn delete_module(&self, request: Request<Reference>) -> Result<Response<Empty>, Status> {
-        let identifier = request.into_inner().identifier;
-        self.binaries.write().unwrap().remove(&identifier);
-        self.checkpoints.write().unwrap().remove(&identifier);
-        Ok(Response::new(Empty {}))
-    }
-
-    async fn train(&self, request: Request<TrainConfig>) -> Result<Response<Reference>, Status> {
-        let config = request.into_inner();
-        let dataset_id = config
-            .dataset
-            .clone()
-            .ok_or(Status::invalid_argument("Invalid dataset reference"))?
-            .identifier;
-        let binary_id = config
-            .model
-            .clone()
-            .ok_or(Status::invalid_argument("Invalid module reference"))?
-            .identifier;
-            let device = parse_device(&config.device)?;
-        let (binary, chkpt, client_info) = {
-            let binaries = self.binaries.read().unwrap();
-            let binary: &Artifact<BinaryModule> = 
-            binaries
-            .get(&binary_id)
-            .ok_or(Status::not_found("Module binary not found"))?; 
-            let mut checkpoints = self.checkpoints.write().unwrap();
-            let chkpt = if config.resume {
-
-                let chkpt = checkpoints.get(&binary_id).ok_or(Status::not_found("CheckPoint not found!"))?;
-                chkpt
-            }else {
-                let chkpt = Artifact {
-                    data: Arc::new(RwLock::new(CheckPoint::new(config.eps >= 0.0))),
-                    name: binary.name.clone(),
-                    client_info: binary.client_info.clone(),
-                    secret: binary.secret.clone(),
-                    description: binary.description.clone(),
-                    meta: binary.meta.clone(),
-                };
-            checkpoints.insert(binary_id.clone(), chkpt);
-            let chkpt = checkpoints.get(&binary_id).ok_or(Status::not_found("Module binary not found"))?;
-            chkpt
-            };
-            (Arc::clone(&binary.data), Arc::clone(&chkpt.data) , binary.client_info.clone())
-        };            
-        let dataset = {
-            let datasets = self.datasets.read().unwrap();
-            let dataset = datasets
-                .get(&dataset_id)
-                .ok_or(Status::not_found("Dataset not found"))?;
-            Arc::clone(&dataset.data)
-        };
-
-        let identifier = Uuid::new_v4();
-        self.runs
-            .write()
-            .unwrap()
-            .insert(identifier, Arc::new(RwLock::new(Run::Pending)));
-        let run = Arc::clone(self.runs.read().unwrap().get(&identifier).unwrap());
-        module_train(binary, dataset, run, config, device, binary_id, dataset_id, client_info, chkpt);
-        Ok(Response::new(Reference {
-            identifier: format!("{}", identifier),
-            name: format!("Run #{}", identifier),
-            description: String::from(""),
+        Ok(Response::new(ReferenceResponse {
+            hash: request.into_inner().hash,
+            name: String::new(),
+            description: String::new(),
+            license: serde_json::to_string(&artifact.license).unwrap(),
             meta: Vec::new(),
         }))
     }
 
-    async fn test(&self, request: Request<TestConfig>) -> Result<Response<Reference>, Status> {
-        let config = request.into_inner();
-        let dataset_id = config
-            .dataset
-            .clone()
-            .ok_or(Status::invalid_argument("Invalid dataset reference"))?
-            .identifier;
-        let module_id = config
-            .model
-            .clone()
-            .ok_or(Status::invalid_argument("Invalid dataset reference"))?
-            .identifier;
-        let device = parse_device(&config.device)?;
-        let (module, binary, client_info) = {
-            let chkpts_store = self.checkpoints.read().unwrap();
-            let artifact = chkpts_store
-                .get(&module_id)
-                .ok_or(Status::not_found("Module not found"))?;
-            let binaries = self.binaries.read().unwrap();
-            let binary = binaries.get(&module_id).unwrap();
-            
-            (Arc::clone(&artifact.data), Arc::clone(&binary.data), artifact.client_info.clone())
-        };
-
-        let dataset = {
-            let datasets = self.datasets.read().unwrap();
-            let dataset = datasets
-                .get(&dataset_id)
+    async fn delete_dataset(&self, request: Request<ReferenceRequest>) -> Result<Response<Empty>, Status> {
+        self.check_challenge(&request)?;
+        {
+            let mut datasets = self.datasets.write().unwrap();
+            let artifact = datasets
+                .get(&request.get_ref().hash)
                 .ok_or(Status::not_found("Dataset not found"))?;
-            Arc::clone(&dataset.data)
+            artifact.license.verify_delete(&request)?;
+            datasets.remove(&request.get_ref().hash);
+        }
+        Ok(Response::new(Empty {}))
+    }
+
+    async fn delete_model(&self, request: Request<ReferenceRequest>) -> Result<Response<Empty>, Status> {
+        self.check_challenge(&request)?;
+        {
+            let mut binaries = self.binaries.write().unwrap();
+            let binary = binaries
+                .get(&request.get_ref().hash)
+                .ok_or(Status::not_found("Model not found"))?;
+            binary.license.verify_delete(&request)?;
+            binaries.remove(&request.get_ref().hash);
+        }
+        Ok(Response::new(Empty {}))
+    }
+
+    async fn delete_checkpoint(&self, request: Request<ReferenceRequest>) -> Result<Response<Empty>, Status> {
+        self.check_challenge(&request)?;
+        {
+            let mut checkpoints = self.checkpoints.write().unwrap();
+            let checkpoint = checkpoints
+                .get(&request.get_ref().hash)
+                .ok_or(Status::not_found("Model not found"))?;
+            checkpoint.license.verify_delete(&request)?;
+            checkpoints.remove(&request.get_ref().hash);
+        }
+        Ok(Response::new(Empty {}))
+    }
+
+    async fn delete_run(&self, request: Request<ReferenceRequest>) -> Result<Response<Empty>, Status> {
+        self.check_challenge(&request)?;
+        {
+            let mut runs = self.runs.write().unwrap();
+            let run = runs
+                .get(&request.get_ref().hash)
+                .ok_or(Status::not_found("Model not found"))?;
+            run.license.verify_delete(&request)?;
+            runs.remove(&request.get_ref().hash);
+        }
+        Ok(Response::new(Empty {}))
+    }
+
+    async fn train(&self, request: Request<TrainRequest>) -> Result<Response<ReferenceResponse>, Status> {
+        self.check_challenge(&request)?;
+        let config = request.get_ref();
+        let model_hash = config.model.clone();
+        let dataset_hash = config.dataset.clone();
+        let device = parse_device(&config.device)?;
+        
+        let (binary, checkpoint, dataset, license) = {
+            let binaries = self.binaries.read().unwrap();
+            let mut checkpoints = self.checkpoints.write().unwrap();
+            let datasets = self.datasets.read().unwrap();
+            
+            let binary = binaries
+                .get(&model_hash)
+                .ok_or(Status::not_found("Model not found"))?;
+            
+            let checkpoint = if config.resume {
+                checkpoints.get(&model_hash).ok_or(Status::not_found("CheckPoint not found!"))?
+            } else {
+                let binaries = self.binaries.read().unwrap();
+                let binary = binaries
+                    .get(&model_hash)
+                    .ok_or(Status::not_found("Model not found"))?;
+                let chkpt = Artifact {
+                    data: Arc::new(RwLock::new(CheckPoint::new(config.eps >= 0.0))),
+                    name: binary.name.clone(),
+                    client_info: binary.client_info.clone(),
+                    description: binary.description.clone(),
+                    meta: binary.meta.clone(),
+                    license: binary.license.clone(),
+                };
+                checkpoints.insert(model_hash.clone(), chkpt);
+                checkpoints.get(&model_hash).unwrap()
+            };
+
+            let dataset = datasets
+                .get(&dataset_hash)
+                .ok_or(Status::not_found("Dataset not found"))?;
+            
+            binary.license.verify_train(&request)?;
+            checkpoint.license.verify_train(&request)?;
+            dataset.license.verify_train(&request)?;
+
+            (
+                Arc::clone(&binary.data),
+                Arc::clone(&checkpoint.data),
+                Arc::clone(&dataset.data),
+                binary.license.combine(&checkpoint.license)?.combine(&dataset.license)?
+            )
         };
 
-
-        let identifier = Uuid::new_v4();
+        let identifier: [u8; 32] = rand::generate(&rand::SystemRandom::new()).map_err(|_| Status::internal("Could not generate random value"))?.expose();
         self.runs
             .write()
             .unwrap()
-            .insert(identifier, Arc::new(RwLock::new(Run::Pending)));
-        let run = Arc::clone(self.runs.read().unwrap().get(&identifier).unwrap());
-        module_test(module,binary, dataset, run, config, device, module_id, dataset_id, client_info);
-        Ok(Response::new(Reference {
-            identifier: format!("{}", identifier),
-            name: format!("Run #{}", identifier),
-            description: String::from(""),
+            .insert(identifier.clone().into(), Artifact {
+                data: Arc::new(RwLock::new(Run::new(RunConfig::Train(request.get_ref().clone())))),
+                name: String::new(),
+                description: String::new(),
+                license: license.clone(),
+                meta: Vec::new(),
+                client_info: request.get_ref().client_info.clone(),
+            });
+        let run = Arc::clone(&self.runs.read().unwrap().get(&identifier[..]).unwrap().data);
+        module_train(binary, dataset, checkpoint, run, request.into_inner(), device);
+        Ok(Response::new(ReferenceResponse {
+            hash: identifier.into(),
+            name: String::new(),
+            description: String::new(),
+            license: serde_json::to_string(&license).unwrap(),
+            meta: Vec::new(),
+        }))
+    }
+
+    async fn test(&self, request: Request<TestRequest>) -> Result<Response<ReferenceResponse>, Status> {
+        self.check_challenge(&request)?;
+        let config = request.get_ref();
+        let model_hash = config.model.clone();
+        let dataset_hash = config.dataset.clone();
+        let device = parse_device(&config.device)?;
+        
+        let (binary, checkpoint, dataset, license) = {
+            let binaries = self.binaries.read().unwrap();
+            let checkpoints = self.checkpoints.read().unwrap();
+            let datasets = self.datasets.read().unwrap();
+
+            let binary = binaries
+                .get(&model_hash)
+                .ok_or(Status::not_found("Model not found"))?;
+            let checkpoint = checkpoints
+                .get(&model_hash)
+                .ok_or(Status::not_found("Checkpoint not found"))?;
+            let dataset = datasets
+                .get(&dataset_hash)
+                .ok_or(Status::not_found("Dataset not found"))?;
+                
+            checkpoint.license.verify_test(&request)?;
+            binary.license.verify_test(&request)?;
+            dataset.license.verify_test(&request)?;
+
+            (
+                Arc::clone(&binary.data),
+                Arc::clone(&checkpoint.data),
+                Arc::clone(&dataset.data),
+                binary.license.combine(&checkpoint.license)?.combine(&dataset.license)?
+            )
+        };
+
+        let identifier: [u8; 32] = rand::generate(&rand::SystemRandom::new()).map_err(|_| Status::internal("Could not generate random value"))?.expose();
+        self.runs
+            .write()
+            .unwrap()
+            .insert(identifier.to_vec(), Artifact {
+                data: Arc::new(RwLock::new(Run::new(RunConfig::Test(request.get_ref().clone())))),
+                name: String::new(),
+                description: String::new(),
+                license: license.clone(),
+                meta: Vec::new(),
+                client_info: request.get_ref().client_info.clone(),
+            });
+        let run = Arc::clone(&self.runs.read().unwrap().get(&identifier[..]).unwrap().data);
+        module_test(binary, dataset, checkpoint, run, request.into_inner(), device);
+        Ok(Response::new(ReferenceResponse {
+            hash: identifier.into(),
+            name: String::new(),
+            description: String::new(),
+            license: serde_json::to_string(&license).unwrap(),
             meta: Vec::new(),
         }))
     }
 
     async fn available_models(
         &self,
-        _request: Request<Empty>,
-    ) -> Result<Response<References>, Status> {
+        request: Request<Empty>,
+    ) -> Result<Response<ReferenceListResponse>, Status> {
+        self.check_challenge(&request)?;
         let list = self
             .binaries
             .read()
             .unwrap()
             .iter()
-            .map(|(k, v)| Reference {
-                identifier: format!("{}", k),
+            .filter(|(_, artifact)| artifact.license.verify_list(&request).is_ok())
+            .map(|(k, v)| ReferenceResponse {
+                hash: k.clone(),
                 name: v.name.clone(),
                 description: v.description.clone(),
+                license: serde_json::to_string(&v.license).unwrap(),
                 meta: v.meta.clone(),
             })
             .collect();
 
-        Ok(Response::new(References { list }))
+        Ok(Response::new(ReferenceListResponse { list }))
+    }
+
+    async fn available_checkpoints(
+        &self,
+        request: Request<Empty>,
+    ) -> Result<Response<ReferenceListResponse>, Status> {
+        self.check_challenge(&request)?;
+        let list = self
+            .checkpoints
+            .read()
+            .unwrap()
+            .iter()
+            .filter(|(_, artifact)| artifact.license.verify_list(&request).is_ok())
+            .map(|(k, v)| ReferenceResponse {
+                hash: k.clone(),
+                name: v.name.clone(),
+                description: v.description.clone(),
+                license: serde_json::to_string(&v.license).unwrap(),
+                meta: v.meta.clone(),
+            })
+            .collect();
+
+        Ok(Response::new(ReferenceListResponse { list }))
     }
 
     async fn available_datasets(
         &self,
-        _request: Request<Empty>,
-    ) -> Result<Response<References>, Status> {
+        request: Request<Empty>,
+    ) -> Result<Response<ReferenceListResponse>, Status> {
+        self.check_challenge(&request)?;
         let list = self
             .datasets
             .read()
             .unwrap()
             .iter()
-            .map(|(k, v)| Reference {
-                identifier: format!("{}", k),
+            .filter(|(_, artifact)| artifact.license.verify_list(&request).is_ok())
+            .map(|(k, v)| ReferenceResponse {
+                hash: k.clone(),
                 name: v.name.clone(),
                 description: v.description.clone(),
+                license: serde_json::to_string(&v.license).unwrap(),
                 meta: v.meta.clone(),
             })
             .collect();
 
-        Ok(Response::new(References { list }))
+        Ok(Response::new(ReferenceListResponse { list }))
     }
 
     async fn available_devices(
         &self,
         _request: Request<Empty>,
-    ) -> Result<Response<Devices>, Status> {
+    ) -> Result<Response<ListResponse>, Status> {
         let mut list = vec![String::from("cpu")];
         if tch::Cuda::is_available() {
             list.push(String::from("gpu"));
@@ -410,34 +557,50 @@ impl RemoteTorch for BastionAIServer {
             }
         }
 
-        Ok(Response::new(Devices { list }))
+        Ok(Response::new(ListResponse { list }))
     }
 
     async fn available_optimizers(
         &self,
         _request: Request<Empty>,
-    ) -> Result<Response<Optimizers>, Status> {
+    ) -> Result<Response<ListResponse>, Status> {
         let list = vec!["SGD", "Adam"].iter().map(|v| v.to_string()).collect();
-        Ok(Response::new(Optimizers { list }))
+        Ok(Response::new(ListResponse { list }))
     }
 
-    async fn get_metric(&self, request: Request<Reference>) -> Result<Response<Metric>, Status> {
-        let identifier = Uuid::parse_str(&request.into_inner().identifier)
-            .map_err(|_| Status::invalid_argument("Invalid run reference"))?;
+    async fn get_metric(&self, request: Request<ReferenceRequest>) -> Result<Response<MetricResponse>, Status> {
+        self.check_challenge(&request)?;
+        let metric = {
+            let runs = self.runs.read().unwrap();
+            let run = runs
+                .get(&request.get_ref().hash)
+                .ok_or(Status::not_found("Module not found"))?;
+            
+            
+            // let run = Arc::clone(&runs
+            //     .get(&request.get_ref().hash)
+            //     .ok_or(Status::not_found("Module not found"))?
+            //     .data
+            // );
+            run.license.verify_fetch(&request);
 
-        match &*self
-            .runs
-            .read()
-            .unwrap()
-            .get(&identifier)
-            .unwrap()
-            .read()
-            .unwrap()
-        {
-            Run::Pending => Err(Status::out_of_range("Run has not started.")),
-            Run::Ok(m) => Ok(Response::new(m.clone())),
-            Run::Error(e) => Err(Status::internal(e.message())),
-        }
+            let x = &run.data.read().unwrap().status;
+            match x {
+                RunStatus::Pending => return Err(Status::out_of_range("Run has not started.")),
+                RunStatus::Ok(m) => m.clone(),
+                RunStatus::Error(e) => return Err(Status::internal(e.message())),
+            }
+        };
+        
+        Ok(Response::new(metric))
+    }
+
+    async fn get_challenge(&self, _request: Request<Empty>) -> Result<Response<ChallengeResponse>, Status> {
+        let rng = rand::SystemRandom::new();
+        let challenge: [u8; 32] = rand::generate(&rng).map_err(|_| Status::internal("Could not generate random value"))?.expose();
+        self.challenges.lock().unwrap().push(challenge);
+
+        Ok(Response::new(ChallengeResponse { value: Vec::from(challenge) }))
     }
 }
 

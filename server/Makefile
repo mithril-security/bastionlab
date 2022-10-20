@@ -1,65 +1,40 @@
-SERVER_DIR := $(shell pwd)
-BIN_DIR := $(SERVER_DIR)/bin
-SERVER_NAME := bastionai_app
-TOOLS_DIR := $(SERVER_DIR)/tools
-BUILD_TYPE :=
-# Check that given variables are set and all have non-empty values,
-# die with an error otherwise.
-#
-# Params:
-#   1. Variable name(s) to test.
-#   2. (optional) Error message to print.
-check_defined = \
-    $(strip $(foreach 1,$1, \
-        $(call __check_defined,$1,$(strip $(value 2)))))
-__check_defined = \
-    $(if $(value $1),, \
-      $(error Undefined $1$(if $2, ($2))))
+.PHONY: all build install run clean
 
-ifeq ($(MODE), debug)
-	TARGET_DIR := $(SERVER_DIR)/target/debug
+ifeq ($(origin LIBTORCH), undefined)
+	$(info "LIBTORCH environement variable not set, using default: ../libtorch")
+	export LIBTORCH=$(shell dirname $(shell pwd))/libtorch
 endif
 
-ifeq ($(MODE),)
+ifeq ($(origin CUDA), undefined)
+	$(info "CUDA environement variable not set, building against a GPU version of libtorch will likely fail")
 endif
 
-ifeq ($(MODE), release)
-	BUILD_TYPE :=--release
-	TARGET_DIR := $(SERVER_DIR)/target/release
-else
-	TARGET_DIR := $(SERVER_DIR)/target/debug
-endif
+all: build install
 
+bin:
+	mkdir bin
 
-all: init compile copy-bin
+bin/config.toml: bin
+	cp tools/config.toml bin/
 
-init:
-# Create server tls config
-	@echo Server Directory: $(SERVER_DIR)
-	@bash $(TOOLS_DIR)/create_tls_config.sh $(BIN_DIR)
+bin/tls/host_server.pem bin/tls/host_server.key &: bin
+	./tools/create_tls_config.sh bin/
 
-compile:
-	$(call check_defined, LIBTORCH_PATH)
+build:
+	cargo build --release
 
-	@mkdir -p $(BIN_DIR)
-	@cd $(SERVER_DIR) && cargo build $(BUILD_TYPE)
-	
-# Replace missing LIBTORCH shared library dependency with actual paths
-	@patchelf --replace-needed libtorch_cpu.so $(LIBTORCH_PATH)/lib/libtorch_cpu.so $(TARGET_DIR)/$(SERVER_NAME)
-	@patchelf --replace-needed libc10.so $(LIBTORCH_PATH)/lib/libc10.so $(TARGET_DIR)/$(SERVER_NAME)
+target/release/bastionai_app:
+	cargo build --release
 
-copy-bin:
-	@cp $(TOOLS_DIR)/config.toml $(BIN_DIR)
-	@cp $(TARGET_DIR)/$(SERVER_NAME) $(BIN_DIR)
-	
-run:
-	@cd $(BIN_DIR) && ./$(SERVER_NAME)
+bin/bastionai_app: target/release/bastionai_app
+	cp target/release/bastionai_app bin/
+
+install: bin/tls/host_server.pem bin/tls/host_server.key bin/config.toml
+	cp target/release/bastionai_app bin/
+
+run: bin/bastionai_app bin/tls/host_server.pem bin/tls/host_server.key bin/config.toml
+	cd bin && ./bastionai_app
 
 clean:
-	@rm -rf $(BIN_DIR)
-	
-fclean:
-	make clean
+	rm -rf bin/
 	cargo clean
-
-.PHONY: compile run clean fclean

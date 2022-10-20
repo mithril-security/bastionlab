@@ -78,3 +78,13 @@ impl TryFrom<SizedObjectsBytes> for BinaryModule {
         Ok(BinaryModule(object))
     }
 }
+
+impl TryFrom<&BinaryModule> for SizedObjectsBytes {
+    type Error = TchError;
+    
+    fn try_from(value: &BinaryModule) -> Result<Self, Self::Error> {
+        let mut buff = SizedObjectsBytes::new();
+        buff.append_back(value.0.clone());
+        Ok(buff)
+    }
+}
