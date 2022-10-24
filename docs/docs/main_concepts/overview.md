@@ -10,12 +10,14 @@ BastionAI is made of two components:
 ## Workflow
 BastionAI seemlessly integrates with common ML practices.
 
+![BastionAI](../../assets/workflow_bastionai.png)
+
 Here is the typical workflow when a Data Owner wants to collaborate with an untrusted Data Scientist using BastionAI:
 1. The Data Owners simply connect to the TEE through an encrypted channel and sends their private data along with a license describing what can be done with the data and who can use it.
 2. The Data Scientist, if they are alowed to by the Data Owner, lists datasets available to them and finds the one sent by the Data Owner.
 3. They upload their model and launch the training procedure on the selected dataset.
 4. If the Data Owner allows it, they may retrieve the trained weights for further local use.
-5. Optionally, they may also share the model with a BlindAI-enabled machine for deployment in production.
+5. Optionally, they may also share the model with a BlindAI-enabled machine for deployment in production (not yet available).
 
 Besides, the client library is fully compatible with Pytorch and in turn benefits from its interoperability with numpy, pandas and more!
 
@@ -26,3 +28,17 @@ Besides, the client library is fully compatible with Pytorch and in turn benefit
 - :link: Traceability in what operations run on your data or model weights.
 - :vertical_traffic_light: A strong licensing mechanism that ensures your data or models and the models and metrics derived from them are only accesible to the intended persons.
 - :game_die: Built-in Differential Privacy that applies both to the training (trained weights) and the metrics (loss, acuracy, etc.)
+
+## What you can do with BastionAI
+- Easily train state-of-the-art models from various ML subfields in a privacy-preserving manner: computer vision, computer hearing, natural language processing and more.
+- Collaborate with untrusted Data Owner and Data Scientist without exposing your data or models.
+- Perform computations on an untrusted environment.
+- Provide guarantees to third parties, for instance, clients or regulators, that you are indeed providing data protection, through code attestation.
+
+## What can't be achieved with BastionAI
+- Deploying Deep Learning models for production use (explore [BlindAI] that has been designed for this purpose)
+- Training non-Deep Learning models like sklearn (may be supported in the future).
+- Performing analytics, statistics or data visualization based on data frames or databases (may be supported in the future).
+- Securing an entire pipeline, including preprocessing and postprocessing steps (may be supported in the future).
+
+[BlindAI]: https://github.com/mithril-security/blindai
