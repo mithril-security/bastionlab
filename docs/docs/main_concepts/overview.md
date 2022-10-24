@@ -14,10 +14,9 @@ BastionAI seemlessly integrates with common ML practices.
 
 Here is the typical workflow when a Data Owner wants to collaborate with an untrusted Data Scientist using BastionAI:
 1. The Data Owners simply connect to the TEE through an encrypted channel and sends their private data along with a license describing what can be done with the data and who can use it.
-2. The Data Scientist, if they are alowed to by the Data Owner, lists datasets available to them and finds the one sent by the Data Owner.
-3. They upload their model and launch the training procedure on the selected dataset.
-4. If the Data Owner allows it, they may retrieve the trained weights for further local use.
-5. Optionally, they may also share the model with a BlindAI-enabled machine for deployment in production (not yet available).
+2. The Data Scientist, if they are alowed to by the Data Owner, lists datasets available to them and finds the one sent by the Data Owner. Then, they upload their model and launch the training procedure on the selected dataset.
+3. If the Data Owner allows it, they may retrieve the trained weights for further local use.
+4. Optionally, they may also share the model with a BlindAI-enabled machine for deployment in production (not yet available).
 
 Besides, the client library is fully compatible with Pytorch and in turn benefits from its interoperability with numpy, pandas and more!
 
