@@ -1,4 +1,3 @@
-use super::ClientInfo;
 use crate::remote_torch::{train_request, MetricResponse, TestRequest, TrainRequest};
 use crate::telemetry::{self, TelemetryEventProps};
 use crate::utils::tcherror_to_status;

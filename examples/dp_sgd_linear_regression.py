@@ -55,8 +55,8 @@ with Connection("localhost", 50051) as client:
         nb_epochs=200,
         eps=300.0,
         metric_eps=8000.0,
-        per_epoch_checkpoint=True,
-        per_n_step_checkpoint=2,
+        per_n_epochs_checkpoint=1,
+        per_n_steps_checkpoint=2,
     )
 
     lreg_model = remote_learner.get_model()

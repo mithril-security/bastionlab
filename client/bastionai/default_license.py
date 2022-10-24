@@ -1,0 +1,1 @@
+DEFAULT_LICENSE = '{"train":{"IssuedBy":[0,0]},"train_metric":{"IssuedBy":[0,0]},"test":{"IssuedBy":[0,0]},"test_metric":{"IssuedBy":[0,0]},"list":{"IssuedBy":[0,0]},"fetch":{"IssuedBy":[0,0]},"delete":{"IssuedBy":[0,0]},"result_strategy":"And"}'

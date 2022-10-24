@@ -1,11 +1,11 @@
 from typing import Optional, Union, List
 
-from bastionai.pb.remote_torch_pb2 import Metric, Reference, TestConfig, TrainConfig  # type: ignore [import]
+from bastionai.pb.remote_torch_pb2 import MetricResponse, TestRequest, TrainRequest  # type: ignore [import]
 from torch.nn import Module
 from torch.utils.data import Dataset
 import torch
 from bastionai.psg import expand_weights
-from bastionai.client import Client
+from bastionai.client import Client, Reference
 from bastionai.optimizer_config import *
 
 from time import sleep
@@ -28,7 +28,7 @@ class RemoteDataset:
         test_dataset: An optional `torch.utils.data.Dataset` instance for testing that will be uploaded on the server.
         name: A name for the uploaded dataset.
         description: A string description of the dataset being uploaded.
-        secret: [In progress] Owner secret override for the uploaded data.
+        license: [In progress] Owner license override for the uploaded data.
     """
 
     def __init__(
@@ -38,16 +38,15 @@ class RemoteDataset:
         test_dataset: Optional[Union[Dataset, Reference]] = None,
         privacy_limit: Optional[float] = None,
         name: Optional[str] = None,
-        description: str = "",
-        secret: Optional[bytes] = None,
+        description: Optional[str] = None,
+        license: Optional[str] = None,
         progress: bool = True,
     ) -> None:
         if isinstance(train_dataset, Dataset):
             self.train_dataset_ref = client.send_dataset(
                 train_dataset,
                 name=name if name is not None else type(train_dataset).__name__,
-                description=description,
-                secret=secret,
+                description=description or "",
                 privacy_limit=privacy_limit,
                 progress=progress,
             )
@@ -58,9 +57,9 @@ class RemoteDataset:
             self.privacy_limit = privacy_limit
         else:
             self.train_dataset_ref = train_dataset
-            self.name = self.train_dataset_ref.name
-            self.description = self.train_dataset_ref.description
-            meta = bulk_deserialize(train_dataset.meta)
+            self.name = name or self.train_dataset_ref.name or ""
+            self.description = description or self.train_dataset_ref.description or ""
+            meta = bulk_deserialize(train_dataset.meta or bytes())
             self.trace_input = [
                 torch.zeros(s, dtype=dtype)
                 if dtype
@@ -70,32 +69,33 @@ class RemoteDataset:
             ]
             self.nb_samples = meta["nb_samples"]
             self.privacy_limit = meta["privacy_limit"]
-        if test_dataset is not None and isinstance(test_dataset, Dataset):
-            self.test_dataset_ref = client.send_dataset(
-                test_dataset,
-                name=f"{name} (test)"
-                if name is not None
-                else type(test_dataset).__name__,
-                description=description,
-                secret=secret,
-                privacy_limit=privacy_limit,
-                train_dataset=self.train_dataset_ref,
-                progress=progress,
-            )
-        else:
-            self.test_dataset_ref = test_dataset
+        if test_dataset is not None:
+            if isinstance(test_dataset, Dataset):
+                self.test_dataset_ref = client.send_dataset(
+                    test_dataset,
+                    name=f"{name} (test)"
+                    if name is not None
+                    else type(test_dataset).__name__,
+                    description=description or "",
+                    license=license,
+                    privacy_limit=privacy_limit,
+                    train_dataset=self.train_dataset_ref,
+                    progress=progress,
+                )
+            else:
+                self.test_dataset_ref = test_dataset
         self.client = client
-        self.secret = secret
+        self.license = license
 
     @staticmethod
     def list_available(client: Client) -> List["RemoteDataset"]:
         """Returns the list of `RemoteDataset`s available on the server."""
         refs = client.get_available_datasets()
-        ds = [(ref, bulk_deserialize(ref.meta)["train_dataset"]) for ref in refs]
+        ds = [(ref, bulk_deserialize(ref.meta or bytes())["train_dataset"]) for ref in refs]
         return [RemoteDataset(client, d[1], d[0]) for d in ds if d[1] is not None]
 
     def __str__(self) -> str:
-        return f"{self.name} ({self.train_dataset_ref.identifier}): size={self.nb_samples}, desc={self.description if len(self.description) > 0 else 'N/A'}"
+        return f"{self.name} ({str(self.train_dataset_ref.hash)}): size={self.nb_samples}, desc={self.description if self.description is not None and len(self.description) > 0 else 'N/A'}"
 
     def __format__(self, __format_spec: str) -> str:
         return self.__str__()
@@ -103,14 +103,14 @@ class RemoteDataset:
     def _set_test_dataset(
         self, test_dataset: Union[Dataset, Reference], progress: bool = True
     ) -> None:
-        if not type(test_dataset) == Reference:
+        if not isinstance(test_dataset, Reference):
             self.test_dataset_ref = self.client.send_dataset(
                 test_dataset,
                 name=f"{self.name} (test)"
                 if self.description is not None
                 else type(test_dataset).__name__,
-                description=self.description,
-                secret=self.secret,
+                description=self.description or "",
+                license=self.license,
                 privacy_limit=self.privacy_limit,
                 train_dataset=self.train_dataset_ref,
                 progress=progress,
@@ -138,7 +138,7 @@ class RemoteLearner:
                               on calling the `fit` method.
         model_name: A name for the uploaded model.
         model_description: Provides additional description for the uploaded model.
-        secret: [In progress] Owner secret override for the uploaded model.
+        license: [In progress] Owner license override for the uploaded model.
         expand: Whether to expand model's weights prior to uploading it, or not.
         progress: Whether to display a tqdm progress bar or not.
     """
@@ -156,38 +156,39 @@ class RemoteLearner:
         metric_eps_per_batch: Optional[float] = None,
         model_name: Optional[str] = None,
         model_description: str = "",
-        secret: Optional[bytes] = None,
+        license: Optional[str] = None,
         expand: bool = True,
         progress: bool = True,
     ) -> None:
+        self.remote_dataset = (
+            remote_dataset
+            if not isinstance(remote_dataset, Reference)
+            else RemoteDataset(client, remote_dataset)
+        )
         if isinstance(model, Module):
             model_class_name = type(model).__name__
 
             if expand:
                 expand_weights(model, max_batch_size)
             self.model = model
+            
             try:
-                model = torch.jit.script(model)
+                module = torch.jit.script(model)
             except:
-                model = torch.jit.trace(  # Compile the model with the tracing strategy
+                module = torch.jit.trace(  # Compile the model with the tracing strategy
                     # Wrapp the model to use the first output only (and drop the others)
                     model,
-                    [x.unsqueeze(0) for x in remote_dataset.trace_input],
+                    [x.unsqueeze(0) for x in self.remote_dataset.trace_input],
                 )
             self.model_ref = client.send_model(
-                model,
+                module,
                 name=model_name if model_name is not None else model_class_name,
                 description=model_description,
-                secret=secret,
+                license=license,
                 progress=True,
             )
         else:
             self.model_ref = model
-        self.remote_dataset = (
-            remote_dataset
-            if type(remote_dataset) == RemoteDataset
-            else RemoteDataset(client, remote_dataset)
-        )
         self.client = client
         self.loss = loss
         self.optimizer = optimizer
@@ -201,7 +202,7 @@ class RemoteLearner:
             else (metric_eps_per_batch if metric_eps_per_batch is not None else -1.0)
         )
         self.progress = progress
-        self.log: List[Metric] = []
+        self.log: List[MetricResponse] = []
 
     def _train_config(
         self,
@@ -214,11 +215,11 @@ class RemoteLearner:
         per_n_epochs_checkpoint: int = 0,
         per_n_steps_checkpoint: int = 0,
         resume: bool = False,
-    ) -> TrainConfig:
+    ) -> TrainRequest:
         batch_size = batch_size if batch_size is not None else self.max_batch_size
-        return TrainConfig(
-            model=self.model_ref,
-            dataset=self.remote_dataset.train_dataset_ref,
+        return TrainRequest(
+            model=self.model_ref.hash,
+            dataset=self.remote_dataset.train_dataset_ref.hash,
             batch_size=batch_size,
             epochs=nb_epochs,
             device=self.device,
@@ -241,11 +242,11 @@ class RemoteLearner:
         batch_size: Optional[int] = None,
         metric: Optional[str] = None,
         metric_eps: Optional[float] = None,
-    ) -> TestConfig:
+    ) -> TestRequest:
         batch_size = batch_size if batch_size is not None else self.max_batch_size
-        return TestConfig(
-            model=self.model_ref,
-            dataset=self.remote_dataset.test_dataset_ref,
+        return TestRequest(
+            model=self.model_ref.hash,
+            dataset=self.remote_dataset.test_dataset_ref.hash,
             batch_size=batch_size,
             device=self.device,
             metric=metric if metric is not None else self.loss,
@@ -283,6 +284,7 @@ class RemoteLearner:
         for _ in range(timeout):
             try:
                 sleep(poll_delay)
+                print(type(run))
                 metric = self.client.get_metric(run)
                 break
             except GRPCException as e:
@@ -292,7 +294,7 @@ class RemoteLearner:
                     raise e
         if metric is None:
             raise Exception(
-                f"Run start timeout. Polling has stoped. You may query the server by hand later using: run id is {run.identifier}"
+                f"Run start timeout. Polling has stoped. You may query the server by hand later using: run id is {str(run.hash)}"
             )
 
         if self.progress:
@@ -428,5 +430,5 @@ class RemoteLearner:
         """Returns the model passed to the constructor with its weights
         updated with the weights obtained by training on the server.
         """
-        self.client.fetch_model_weights(self.model, self.model_ref)
+        self.client.load_checkpoint(self.model, self.model_ref)
         return self.model

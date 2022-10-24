@@ -1,20 +1,31 @@
 VENV := venv
+BASTIONAI_VERSION := $(shell cat bastionai/version.py | cut -d '"' -f 2)
 
-all: venv
+.PHONY = all venv build dev-install test clean
+
+all: build
 
 $(VENV)/bin/activate:
 	python3 -m venv $(VENV)
 
-venv: $(VENV)/bin/activate
+venv:
+	python3 -m venv $(VENV)
 
-build: venv
+dist/bastionai-$(BASTIONAI_VERSION)-py3-none-any.whl: $(VENV)/bin/activate
 	./$(VENV)/bin/pip install build
 	./$(VENV)/bin/python3 -m build . --wheel
 
-install: venv
+build: $(VENV)/bin/activate
+	./$(VENV)/bin/pip install build
+	./$(VENV)/bin/python3 -m build . --wheel
+
+venv/lib/python3.10/site-packages/bastionai-$(BASTIONAI_VERSION).dist-info/direct_url.json: $(VENV)/bin/activate
 	./$(VENV)/bin/pip install -e .
 
-test: venv
+dev-install: $(VENV)/bin/activate
+	./$(VENV)/bin/pip install -e .
+
+test: $(VENV)/bin/activate venv/lib/python3.10/site-packages/bastionai-$(BASTIONAI_VERSION).dist-info/direct_url.json
 	./$(VENV)/bin/pip install -r ./tests/requirements.txt
 	pytest --cov .
 
@@ -26,5 +37,3 @@ clean:
 	rm -rf bastionai.egg-info
 	find . -type f -name '*.pyc' -delete
 	find . -type d -name '__pycache__' -delete
-
-.PHONY: all venv build install clean test

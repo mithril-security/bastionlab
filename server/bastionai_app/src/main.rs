@@ -70,20 +70,20 @@ impl BastionAIServer {
     }
 
     fn check_challenge<T>(&self, request: &Request<T>) -> Result<(), Status> {
-        let challenge = if let Some(meta) = request.metadata().get_bin("challenge") {
-            meta.to_bytes().map_err(|_| {
+        if let Some(meta) = request.metadata().get_bin("challenge") {
+            let challenge = meta.to_bytes().map_err(|_| {
                 Status::invalid_argument("Could not decode challenge")
-            })
-        } else {
-            Err(Status::permission_denied("Challenge not provided"))
-        }?;
-        let lock = self.challenges.lock().unwrap();
-        for c in lock.iter().rev() {
-            if c == &*challenge {
-                return Ok(())
+            })?;
+            let lock = self.challenges.lock().unwrap();
+            for c in lock.iter().rev() {
+                if c == &*challenge {
+                    return Ok(())
+                }
             }
+            Err(Status::permission_denied("Invalid or reused challenge"))
+        } else {
+            Ok(())
         }
-        Err(Status::permission_denied("Invalid or reused challenge"))
     }
 }
 
@@ -278,7 +278,7 @@ impl RemoteTorch for BastionAIServer {
 
     async fn fetch_run(&self, request: Request<ReferenceRequest>) -> Result<Response<ReferenceResponse>, Status> {
         self.check_challenge(&request)?;
-        let mut runs = self.runs.read().unwrap();
+        let runs = self.runs.read().unwrap();
         let artifact = runs
             .get(&request.get_ref().hash)
             .ok_or(Status::not_found("Run not found"))?;
@@ -582,7 +582,7 @@ impl RemoteTorch for BastionAIServer {
             //     .ok_or(Status::not_found("Module not found"))?
             //     .data
             // );
-            run.license.verify_fetch(&request);
+            run.license.verify_fetch(&request)?;
 
             let x = &run.data.read().unwrap().status;
             match x {
@@ -606,8 +606,6 @@ impl RemoteTorch for BastionAIServer {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-
-
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
 
     let logo_str: &str = include_str!("../logo.txt");

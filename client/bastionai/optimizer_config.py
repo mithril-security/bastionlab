@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
-from bastionai.pb.remote_torch_pb2 import TrainConfig # type: ignore [import]
+from bastionai.pb.remote_torch_pb2 import TrainRequest # type: ignore [import]
 
 
 @dataclass
@@ -31,7 +31,7 @@ class SGD(OptimizerConfig):
     def to_msg_dict(self, lr: Optional[float] = None) -> Dict[str, Any]:
         """Please refer to the base class."""
         return {
-            "sgd": TrainConfig.SGD(
+            "sgd": TrainRequest.SGD(
                 learning_rate=lr if lr is not None else self.lr,
                 momentum=self.momentum,
                 dampening=self.dampening,
@@ -55,7 +55,7 @@ class Adam(OptimizerConfig):
     def to_msg_dict(self, lr: Optional[float] = None) -> Dict[str, Any]:
         """Please refer to the base class."""
         return {
-            "adam": TrainConfig.Adam(
+            "adam": TrainRequest.Adam(
                 learning_rate=lr if lr is not None else self.lr,
                 beta_1=self.betas[0],
                 beta_2=self.betas[1],

@@ -1,4 +1,5 @@
 import pytest
+from bastionai.default_license import DEFAULT_LICENSE
 from bastionai.utils import *
 from bastionai.pb.remote_torch_pb2 import ClientInfo
 from torch.nn.functional import relu
@@ -91,7 +92,7 @@ def test_simple_dataset_serialization(chunk_size, batch_size, simple_dataset):
         ds1,
         name="",
         description="",
-        secret=b"",
+        license=DEFAULT_LICENSE,
         chunk_size=chunk_size,
         batch_size=batch_size,
         client_info=empty_client_info,
@@ -117,7 +118,7 @@ def test_real_dataset_serialization(sms_spam_collection):
         ds1,
         name="",
         description="",
-        secret=b"",
+        license=DEFAULT_LICENSE,
         batch_size=10_000,
         client_info=empty_client_info,
     )
@@ -137,7 +138,7 @@ def run_model_test(model: Module, chunk_size: int, test_input: List[Tensor]):
         model1,
         name="",
         description="",
-        secret=b"",
+        license=DEFAULT_LICENSE,
         chunk_size=chunk_size,
         client_info=empty_client_info,
     )
@@ -184,7 +185,7 @@ def test_simple_model_deserialization():
     model2 = DummyModule()
 
     chunks = serialize_model(
-        Params(model1), name="", description="", secret=b"", client_info=empty_client_info
+        Params(model1), name="", description="", license=DEFAULT_LICENSE, client_info=empty_client_info
     )
     deserialize_weights_to_model(model2, chunks)
 

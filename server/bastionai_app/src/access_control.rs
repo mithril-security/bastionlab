@@ -17,14 +17,14 @@ pub enum Rule {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct License {
-    train: Rule,
-    train_metric: Rule,
-    test: Rule,
-    test_metric: Rule,
-    list: Rule,
-    fetch: Rule,
-    delete: Rule,
-    result_strategy: ResultStrategy,
+    pub train: Rule,
+    pub train_metric: Rule,
+    pub test: Rule,
+    pub test_metric: Rule,
+    pub list: Rule,
+    pub fetch: Rule,
+    pub delete: Rule,
+    pub result_strategy: ResultStrategy,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -137,27 +137,16 @@ impl Rule {
             }
         }
     }
-    pub fn verify_get_metric(&self, req: &Request<RunRequest>) -> Result<(), Status> {
-        self.verify(
-            &req.metadata(),
-            &get_message(b"get_metric", req)?,
-            None,
-            None,
-            None,
-        )
-    }
 }
 
 fn get_message<T: Message>(method: &[u8], req: &Request<T>) -> Result<Vec<u8>, Status> {
     let mut res = Vec::from(method);
-    let challenge = if let Some(meta) = req.metadata().get_bin("challenge") {
-        meta.to_bytes().map_err(|_| {
+    if let Some(meta) = req.metadata().get_bin("challenge") {
+        let challenge = meta.to_bytes().map_err(|_| {
             Status::invalid_argument("Could not decode challenge")
-        })
-    } else {
-        Err(Status::permission_denied("Challenge not provided"))
-    }?;
-    res.append(&mut challenge.to_vec());
+        })?;
+        res.append(&mut challenge.to_vec());
+    }
     res.append(&mut req.get_ref().encode_to_vec());
     Ok(res)
 }

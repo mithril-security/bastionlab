@@ -1,19 +1,61 @@
 import io
-from typing import Callable, Iterator, List, Tuple, TypeVar, Optional, Any
+from typing import Callable, Iterator, List, Tuple, TypeVar, Optional, Any, Union
+from dataclasses import dataclass
 
 import torch
 from torch import Tensor
 from torch.nn import Module
 from torch.nn.parameter import Parameter
 from torch.utils.data import Dataset
+from torch.jit import ScriptModule
 
 from tqdm import tqdm # type: ignore [import]
 
-from bastionai.pb.remote_torch_pb2 import Chunk, ClientInfo, Reference  # type: ignore [import]
+from bastionai.pb.remote_torch_pb2 import Chunk, ClientInfo, ReferenceRequest, ReferenceResponse  # type: ignore [import]
 
 T = TypeVar("T")
 U = TypeVar("U")
 SIZE_LEN = 8
+
+
+@dataclass
+class Reference:
+    reference: Union[ReferenceRequest, ReferenceResponse]
+
+    def request(self) -> ReferenceRequest:
+        return ReferenceRequest(hash=self.reference.hash)
+    
+    @property
+    def hash(self) -> bytes:
+        return self.reference.hash
+    
+    @property
+    def name(self) -> Optional[str]:
+        if hasattr(self.reference, "name"):
+            return getattr(self.reference, "name")
+        else:
+            return None
+
+    @property
+    def description(self) -> Optional[str]:
+        if hasattr(self.reference, "description"):
+            return getattr(self.reference, "description")
+        else:
+            return None
+
+    @property
+    def meta(self) -> Optional[bytes]:
+        if hasattr(self.reference, "meta"):
+            return getattr(self.reference, "meta")
+        else:
+            return None
+    
+    @property
+    def license(self) -> Optional[str]:
+        if hasattr(self.reference, "license"):
+            return getattr(self.reference, "license")
+        else:
+            return None
 
 
 class DataWrapper(Module):
@@ -99,6 +141,11 @@ def dataset_from_chunks(chunks: Iterator[Chunk]) -> TensorDataset:
     )
 
     return TensorDataset(columns, labels)
+
+def module_from_chunks(chunks: Iterator[Chunk]) -> ScriptModule:
+    return unstream_artifacts(
+        (chunk.data for chunk in chunks), deserialization_fn=torch.jit.load
+    ).__next__()
 
 
 def id(l: List[T], _: Optional[U] = None) -> U:
@@ -218,7 +265,7 @@ def data_chunks_generator(
     stream: Iterator[Tuple[int, bytes]],
     name: str,
     description: str,
-    secret: bytes,
+    license: str,
     client_info: ClientInfo,
     meta: bytes,
     progress: bool = False,
@@ -254,9 +301,9 @@ def data_chunks_generator(
 
         if first:
             first = False
-            yield Chunk(data=x, name=name, description=description, secret=secret, client_info=client_info, meta=meta)
+            yield Chunk(data=x, name=name, description=description, license=license, client_info=client_info, meta=meta)
         else:
-            yield Chunk(data=x, name=name, description="", secret=bytes(), client_info=ClientInfo(), meta=bytes())
+            yield Chunk(data=x, name=name, description="", license="", client_info=ClientInfo(), meta=bytes())
         
         if progress and t is not None:
             t.update(len(x))
@@ -276,7 +323,7 @@ def serialize_dataset(
     dataset: Dataset,
     name: str,
     description: str,
-    secret: bytes,
+    license: str,
     client_info: ClientInfo,
     privacy_limit: Optional[float] = None,
     chunk_size: int = 100_000_000,
@@ -308,21 +355,21 @@ def serialize_dataset(
         ),
         name=name,
         description=description,
-        secret=secret,
+        license=license,
         client_info=client_info,
         meta=bulk_serialize({
             "input_shape": [input.size() for input in dataset[0][0]],
             "input_dtype": [input.dtype for input in dataset[0][0]],
             "nb_samples": len(dataset), # type: ignore [arg-type]
             "privacy_limit": privacy_limit,
-            "train_dataset": train_dataset,
+            "train_dataset": train_dataset.hash if train_dataset is not None else None,
         }),
         progress=progress,
     )
 
 
 def serialize_model(
-    model: Module, name: str, description: str, secret: bytes, client_info: ClientInfo, chunk_size: int = 100_000_000, progress: bool = False,
+    model: Module, name: str, description: str, license: str, client_info: ClientInfo, chunk_size: int = 100_000_000, progress: bool = False,
 ) -> Iterator[Chunk]:
     """Coverts a model into an iterator of bytes chunks.
     
@@ -339,7 +386,7 @@ def serialize_model(
     """
     ts = torch.jit.script(model)
     return data_chunks_generator(
-        stream_artifacts(iter([ts]), chunk_size, torch.jit.save), name=name, description=description, secret=secret, client_info=client_info, meta=b"", progress=progress,
+        stream_artifacts(iter([ts]), chunk_size, torch.jit.save), name=name, description=description, license=license, client_info=client_info, meta=b"", progress=progress,
     )
 
 

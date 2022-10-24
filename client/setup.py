@@ -6,14 +6,14 @@ import pkg_resources
 import re
 
 
+def read(path):
+    return open(os.path.join(os.path.dirname(__file__), path)).read()
+
+
+DIR = os.path.dirname(__file__) or os.getcwd()
 PROTO_FILES = ["remote_torch.proto"]
-PROTO_PATH = os.path.join(os.path.dirname(__file__), "protos")
-
-this_directory = Path(__file__).parent
-long_description = (this_directory / "README.md").read_text()
-
-def read(filename):
-    return open(os.path.join(os.path.dirname(__file__), filename)).read()
+PROTO_PATH = os.path.join(os.path.dirname(DIR), "protos")
+LONG_DESCRIPTION = read("README.md")
 
 def find_version():
     version_file = read("bastionai/version.py")
@@ -26,7 +26,13 @@ def generate_stub():
     import grpc_tools.protoc
 
     proto_include = pkg_resources.resource_filename("grpc_tools", "_proto")
+
+    pb_dir = os.path.join(DIR, "bastionai", "pb")
+    if not os.path.exists(pb_dir):
+        os.mkdir(pb_dir)
+
     for file in PROTO_FILES:
+        print(PROTO_PATH, PROTO_FILES)
         res = grpc_tools.protoc.main(
             [
                 "grpc_tools.protoc",
@@ -56,7 +62,7 @@ setup(
     long_description_content_type="text/markdown",
     keywords="confidential computing training client enclave amd-sev machine learning",
     cmdclass={"build_py": BuildPackage},
-    long_description=long_description,
+    long_description=LONG_DESCRIPTION,
     author="Kwabena Amponsem, Lucas Bourtoule",
     author_email="kwabena.amponsem@mithrilsecurity.io, luacs.bourtoule@nithrilsecurity.io",
     classifiers=["Programming Language :: Python :: 3"],
