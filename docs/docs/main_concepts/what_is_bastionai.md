@@ -66,12 +66,15 @@ of the remote enclave.
     </div>
 </div>
 
-# Why are we building BastionAI🚀🔒
+# Why are we building BastionAI🚀🔒?
 Today, most AI tools offer no privacy by design mechanisms: when multiple parties pool data to train an AI model  (e.g. for healthcare purposes), sensitive data can be exposed to multiple third parties, posing security and privacy threats.
 
 Privacy Enhancing Technologies (PETs) have emerged as an answer to these issues. Differential Privacy, for instance, provides strong guarantees through mathematics on the amount of information leaked by a computation whose output is publicly disclosed. Confidential Computing with secure enclaves makes it possible for Data Owners to have third parties manipulate their data in the Cloud, without exposing them in clear to anyone else.
 
-However promising these technologies might be, finding secure and easy to use solutions still remains difficult. This is why we have built <a class="bastionai">BastionAI🚀🔒</a>, a confidential AI training framework, to make these technologies more accessible.
+However promising these technologies might be, finding secure and **easy-to-use** solutions still remains difficult. This is why we have built <a class="bastionai">BastionAI🚀🔒</a>, a confidential AI training framework, to make these technologies more accessible.
+
+In addition, democratizng AI privacy solutions is also a contributing factor to why we decided to develop this solution. A solution developed by data scientists for data scientists is primordial to open-source community, having the number one focus of being an **easy-to-use** AI training platform.
+
 
 # Comparisons
 
@@ -101,19 +104,17 @@ This feature can be easily disabled, by settin up the environment variable `BAST
 # Contributing
 There are many ways to contribute to the project:
 
-- If you have any feedback on the project, share it under the `#bastionai-contributors` channel in the [Mithril Security Community Discord]().
+- If you have any feedback on the project, share it under the `#bastionai-contributors` channel in the [Mithril Security Community Discord](https://discord.gg/TxEHagpWd4).
 - Report issues you're facing and "Thumbs up" on issues and feature requests that are relevant to you.
 - Investigate bugs and reviewing other developer's pull requests.
-- Contributing code or documentation to the project by submitting a GitHub pull request. Check out the [Development Guide](DEVELOPMENT.md).
-- Learn more in the [contributing guide](CONTRIBUTING.md).
+- Contributing code or documentation to the project by submitting a GitHub pull request. Check out the [Development Guide](CONTRIBUTING.md).
 
 # Contact Us
 ## Ask a question
-
 You can get community support in several ways:
 
 Join our Discord Channel and engage in discussions with other users and the BastionAI and Mithril Security communities .
-Ask a question about BastionAI and get community support by posting to discuss@mithrilsecurity.io. Posts can receive responses from the Groups community, and from engineers on the Mithril Security team who monitor the tag and offer unofficial support.
+Ask a question about BastionAI and get community support by posting to [contact@mithrilsecurity.io](mailto:contact@mithrilsecurity.io. Posts can receive responses from the Groups community, and from engineers on the Mithril Security team who monitor the tag and offer unofficial support.
 
 ## File an issue or feature request
 
