@@ -62,6 +62,8 @@ nav:
   - "Examples": 
     - 'Example of BastionAI deployment with ResNet18': 'resnet_example_notebook.ipynb'
     - 'Example of BastionAI deployment with DistilBert': 'distilbert_example_notebook.ipynb'
-  - "Benchmark": 'benchmarking/benchmarking.md'
+  - "Benchmarks": 
+    - "Benchmarking using AMD EPYC 773 CPU" : 'benchmarking/bench-amd-epyc-7763.md'
+    - "Benchmarking using NVIDIA A100 GPU" : 'benchmarking/bench-nvidia-a100.md'
   - "Deployement":
-    - 'deployement/on_premise.md'
+    - "On premise" : 'deployement/on_premise.md'
