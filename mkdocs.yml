@@ -33,11 +33,22 @@ extra_javascript:
   - 'https://code.jquery.com/jquery-3.3.1.min.js'
 
 markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - pymdownx.details
   - pymdownx.highlight:
       anchor_linenums: true
+  - pymdownx.betterem:
+      smart_enable: all
   - pymdownx.inlinehilite
   - pymdownx.snippets
   - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true 
 
 plugins:
 - search
@@ -48,6 +59,9 @@ nav:
   - "Getting Started":
       - 'getting-started/quick-start.md'
   - "Client API reference": "resources/bastionai/client.html"
-  - 'Integrating AI models from other frameworks': 
+  - "Examples": 
     - 'Example of BastionAI deployment with ResNet18': 'resnet_example_notebook.ipynb'
     - 'Example of BastionAI deployment with DistilBert': 'distilbert_example_notebook.ipynb'
+  - "Benchmark": 'benchmarking/benchmarking.md'
+  - "Deployement":
+    - 'deployement/on_premise.md'
