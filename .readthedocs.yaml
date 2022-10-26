@@ -8,6 +8,9 @@ build:
   tools:
     python: "3.9"
   jobs:
+    pre_create_environment:
+      - cp examples/*.ipynb docs
+      - sed -i "s/BastionAI example/Example of BastionAI deployment with DistilBert/g" docs/distilbert_example_notebook.ipynb
     post_install:
     - bash docs/generate_api_reference.sh
 

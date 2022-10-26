@@ -41,9 +41,13 @@ markdown_extensions:
 
 plugins:
 - search
+- mkdocs-jupyter
 
 nav:
   - Home: "index.md"
   - "Getting Started":
       - 'getting-started/quick-start.md'
   - "Client API reference": "resources/bastionai/client.html"
+  - 'Integrating AI models from other frameworks': 
+    - 'Example of BastionAI deployment with ResNet18': 'resnet_example_notebook.ipynb'
+    - 'Example of BastionAI deployment with CovidNet': 'distilbert_example_notebook.ipynb'
