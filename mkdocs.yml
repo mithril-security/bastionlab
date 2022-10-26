@@ -50,4 +50,4 @@ nav:
   - "Client API reference": "resources/bastionai/client.html"
   - 'Integrating AI models from other frameworks': 
     - 'Example of BastionAI deployment with ResNet18': 'resnet_example_notebook.ipynb'
-    - 'Example of BastionAI deployment with CovidNet': 'distilbert_example_notebook.ipynb'
+    - 'Example of BastionAI deployment with DistilBert': 'distilbert_example_notebook.ipynb'
