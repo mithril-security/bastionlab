@@ -76,6 +76,6 @@ nav:
     - 'Example of BastionAI deployment with DistilBert': 'distilbert_example_notebook.ipynb'
   - "Benchmarks": 
     - "Benchmarking using AMD EPYC 773 CPU" : 'benchmarking/bench-amd-epyc-7763.md'
-    - "Benchmarking using NVIDIA A100 GPU" : 'benchmarking/bench-nvidia-a100.md'
+    - "Benchmarking using NVIDIA V100 and A100 GPU" : 'benchmarking/bench-nvidia-a100-v100.md'
   - "Deployment":
     - "On premise" : 'deployment/on_premise.md'
