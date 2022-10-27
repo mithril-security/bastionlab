@@ -1,23 +1,21 @@
 ## Installing BastionAI Client
 
-BastionAI can easily be installed either through Pypi or you can build the client yourself from source.
+BastionAI Client is enough for the deployment, querying and training of models . It can easily be installed either with from [PyPI](https://pypi.org/project/bastionai/) or you can build the client yourself from source. The entire API is explained in this [section](../resources/bastionai/client.html). 
 
-### Install via pip
+### Install via Pip
 
 ```shell
 pip install bastionai
 ```
 
-This package is enough for the deployment and querying of models on our managed infrastructure. For on-premise deployment, you will have to deploy our Docker image, you can read how to deploy it [here](../deployment/on_premise.md).
-
 ### Build from source
 
 First clone our repo:
-```
+```bash
 git clone git@github.com:mithril-security/bastionai.git
 ```
 Then install the client library:
-```
+```bash
 cd ./bastionai/client
 make install
 ```
@@ -87,4 +85,4 @@ Finally, once training is over, the Data Scientist may pull the trained model us
 
 ## Installing BastionAI Server
 
-You can find out how to install and deploy BastionAI server right [here](../deployment/on_premise.md).
+To make use of the BastionAI Client, you'll need to deploy an instance of the BastionAI server. Find out how to install it and deploy it on-premise right [here](../deployment/on_premise.md).
