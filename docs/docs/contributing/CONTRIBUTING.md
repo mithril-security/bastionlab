@@ -17,6 +17,7 @@ The following is a set of guidelines for contributing to [BastionAI](https://git
   * [Pull Requests](#pull-requests)
   * [Setting Your Local Development Environment](#setting-your-local-development-environment)
   * [Issue Tracker](#issue-tracker-tags)
+
 ## Code of Conduct
 
 This project and everyone participating in it is governed by the [Mithril Security Code Of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior to [contact@mithrilsecurity.io](mailto:contact@mithrilsecurity.io).
