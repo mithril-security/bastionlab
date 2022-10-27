@@ -3,6 +3,14 @@ In the same way as on AMD EPYC 7763, the method used here was the same for testi
 
 For these benchmarks we set the batch size to be the maximum possible, fitting in 16GB of GPU RAM. 
 
+![](../assets/v100_exec_times_16GB.png)
+
+By using 40GB of GPU RAM you can obtain these results:
+
+![](../assets/v100_exec_times.png)
+
+Here you can have a look at the precise execution times.
+
 
 |                                   |  Privacy   | Nvidia V100 Training Time (s/epoch) | Nvidia V100 Batch size |
 | --------------------------------- | :--------: | :---------------------------------: | :--------------------: |
@@ -15,7 +23,6 @@ For these benchmarks we set the batch size to be the maximum possible, fitting i
 | BastionAI (no DP, TEE)            | Incomplete |                 N/A                 |        4 096,00        |
 | BastionAI (DP & TEE)              |     OK     |                 N/A                 |         256,00         |
 
-By using 40GB of GPU RAM you can obtain these results:
 
 |                                   |  Privacy   | Nvidia A100 Training Time (s/epoch) | Nvidia A100 Batch size |
 | --------------------------------- | :--------: | :---------------------------------: | :--------------------: |
