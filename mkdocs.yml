@@ -65,7 +65,7 @@ plugins:
          - custom-skip-class-name
        auto_caption: false
        caption_position: bottom
-       
+
 nav:
   - Home: "index.md"
   - "Getting Started":
@@ -77,5 +77,5 @@ nav:
   - "Benchmarks": 
     - "Benchmarking using AMD EPYC 773 CPU" : 'benchmarking/bench-amd-epyc-7763.md'
     - "Benchmarking using NVIDIA A100 GPU" : 'benchmarking/bench-nvidia-a100.md'
-  - "Deployement":
-    - "On premise" : 'deployement/on_premise.md'
+  - "Deployment":
+    - "On premise" : 'deployment/on_premise.md'

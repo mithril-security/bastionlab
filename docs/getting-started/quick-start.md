@@ -1,12 +1,16 @@
 ## Installing BastionAI Client
 
-### Via pip
+BastionAI can easily be installed either through Pypi or you can build the client yourself from source.
 
-```
+### Install via pip
+
+```shell
 pip install bastionai
 ```
 
-### From source
+This package is enough for the deployment and querying of models on our managed infrastructure. For on-premise deployment, you will have to deploy our Docker image, you can read how to deploy it [here](../deployment/on_premise.md).
+
+### Build from source
 
 First clone our repo:
 ```
@@ -83,51 +87,4 @@ Finally, once training is over, the Data Scientist may pull the trained model us
 
 ## Installing BastionAI Server
 
-### Using our official Docker image
-
-```
-docker run -p 50051:50051 -d mithrilsecuritysas/bastionai:latest
-```
-
-### By locally building our Docker image
-
-Clone our repository and build the image using our Dockerfile:
-```
-git clone git@github.com:mithril-security/bastionai.git
-cd ./bastionai/server
-docker build -t bastionai:0.1.2 -t bastionai:latest .
-```
-Then simply run a container based on the image:
-```
-docker run -p 50051:50051 -d bastionai
-```
-
-### From source
-
-First make sure that the following build dependences (Debian-like systems) are installed on your machine:
-```
-sudo apt update && apt install -y build-essential patchelf libssl-dev pkg-config curl unzip
-```
-
-Then, clone our repository:
-```
-git clone git@github.com:mithril-security/bastionai.git
-```
-Download and unzip libtorch (Pytorch's C++ backend) from [Pytorch's website](https://pytorch.org/) (you can chose the right build according to your cuda version):
-```
-cd ./bastionai
-curl -o libtorch.zip https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.12.1%2Bcpu.zip
-unzip libtorch.zip
-```
-Lib torch binaries are now available under the libtorch folder. You can now turn to building the server crates:
-```
-cd server
-LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make compile
-make copy-bin
-make init
-```
-
-To run the server, simply use:
-```
-make run
-```
+You can find out how to install and deploy BastionAI server right [here](../deployment/on_premise.md).
