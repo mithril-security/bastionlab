@@ -120,7 +120,7 @@ Ask a question about BastionAI and get community support by posting to [contact@
 
 If you’re experiencing an issue, find out if there’s already a solution:
 
-1. [Read the FAQs]()
+1. [Read the FAQs](FAQs.md)
 2. Search existing issues in GitHub
 
 If you still have an issue, file a new issue at mithril-security.

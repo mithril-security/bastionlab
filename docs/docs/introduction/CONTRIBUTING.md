@@ -15,7 +15,8 @@ The following is a set of guidelines for contributing to [BastionAI](https://git
   * [Reporting Bugs](#reporting-bugs)
   * [Suggesting Enhancements](#suggesting-enhancements)
   * [Pull Requests](#pull-requests)
-
+  * [Setting Your Local Development Environment](#setting-your-local-development-environment)
+  * [Issue Tracker](#issue-tracker-tags)
 ## Code of Conduct
 
 This project and everyone participating in it is governed by the [Mithril Security Code Of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior to [contact@mithrilsecurity.io](mailto:contact@mithrilsecurity.io).
@@ -122,6 +123,12 @@ In order to open a pull request:
 - Make sure to [link the related issues](https://docs.github.com/en/issues/tracking-your-work-with-issues/about-issues#efficient-communication) in the description.
 
 While the prerequisites above must be satisfied prior to having your pull request reviewed, the reviewer(s) may ask you to complete additional work, tests, or other changes before your pull request can be ultimately accepted.
+
+### Setting Your Local Development Environment
+You can find detailed explanation of how to install BlindAI in your local machine in the [official documentation](https://bastionai.mithrilsecurity.io/getting-started/installation).
+
+If you encounter any difficulties within that, don't hesitate to reach out to us through [Discord](https://discord.gg/TxEHagpWd4) and ask your questions. 
+
 
 ## Issue Tracker Tags
 
