@@ -85,6 +85,8 @@ Ordinarily, without the use of Trusted Execution Environments (TEEs), centralize
 
 With the advent of TEEs, especially AMD SEV SNP, computation can be done securely and confidentially, and once data is securely sent to the trainer, training happens in an isolated environment where not even very priveleged software like the operating system or the hypervisor could tamper.
 
+BastionAI seeks, at its core, to protect user data by running executions in isolated, secure virtual machine where security guarantees are provided by the hardware.
+
 <p>
 <a href="https://github.com/mithril-security/bastionai.git" class="bastionai">BastionAI🚀🔒</a> versus Federated Learning (FL).
 </p>
@@ -95,6 +97,13 @@ Although this solution protects user's private data to some extent, it is rid of
 With BastionAI, once user's private data is sent securely sent through a trusted channel to the TEE, the model is trained in confidentiality and with differential privacy, data owner can express in quantities how much exposure they would want their data to be to models under training.
 
 BastionAI solves the high cost of communication by centralizing computation (both training and testing of models,) and also increase confidentiality and integrity by using TEEs.
+
+<p>
+<a href="https://github.com/mithril-security/bastionai.git" class="bastionai">BastionAI🚀🔒</a> versus Secure Multi-Party Computing.
+</p>
+BastionAI seeks to provide a new way of performing multi-party training but with less cryptography constraints and relinquishing trust to the TEE. Instead of using cumbersome mathematical facilities, we provide a centralized hardware-hardened environment were both model and data owners, distrusting one another, can successfully collaborate and train deep learning models.
+
+Multi-party computation involves intense encryption through multiple cryptographic schemes and in a certain like training of models, this could be costly: both _communication cost_ and _computation cost_. Having a fortified centralized server responsible for training release the trainer and other interested parties from this cryptographic cost. 
 
 # Telemetry
 BastionAI collects anonymous data regarding general usage, this allows us to understand how you are using the project. We only collect data regarding the which models and datasets are being used, and the usage metrics.
