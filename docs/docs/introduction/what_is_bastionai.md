@@ -114,7 +114,7 @@ There are many ways to contribute to the project:
 You can get community support in several ways:
 
 Join our Discord Channel and engage in discussions with other users and the BastionAI and Mithril Security communities .
-Ask a question about BastionAI and get community support by posting to [contact@mithrilsecurity.io](mailto:contact@mithrilsecurity.io. Posts can receive responses from the Groups community, and from engineers on the Mithril Security team who monitor the tag and offer unofficial support.
+Ask a question about BastionAI and get community support by posting to [contact@mithrilsecurity.io](mailto:contact@mithrilsecurity.io). Posts can receive responses from community, and from engineers on the Mithril Security team who monitor the tag and offer unofficial support.
 
 ## File an issue or feature request
 
