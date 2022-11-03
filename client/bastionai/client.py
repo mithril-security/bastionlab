@@ -292,7 +292,7 @@ class Connection:
         server_cert = ssl.get_server_certificate((self.host, self.port))
 
         server_cred = grpc.ssl_channel_credentials(
-            certificate_chain=cert_chain, private_key=cert_key,
+            # certificate_chain=cert_chain, private_key=cert_key,
             root_certificates=bytes(server_cert, encoding="utf8")
         )
 

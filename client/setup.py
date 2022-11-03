@@ -1,4 +1,3 @@
-from pathlib import Path
 import os
 from setuptools import find_packages, setup
 from setuptools.command.build_py import build_py
