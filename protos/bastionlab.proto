@@ -1,0 +1,25 @@
+syntax = "proto3";
+package bastionlab;
+
+message ReferenceRequest {
+    string identifier = 1;
+}
+
+message ReferenceResponse {
+    string identifier = 1;
+    string header = 2;
+}
+
+message Chunk {
+    bytes data = 1;
+}
+
+message Query {
+    string composite_plan = 1;
+}
+
+service BastionLab {
+    rpc SendDataFrame(stream Chunk) returns (ReferenceResponse) {}
+    rpc RunQuery (Query) returns (ReferenceResponse) {}
+    rpc FetchDataFrame(ReferenceRequest) returns (stream Chunk) {}
+}
