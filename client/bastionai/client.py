@@ -5,6 +5,7 @@ import socket
 import ssl
 from bastionai.optimizer_config import *
 from dataclasses import dataclass
+import logging
 
 from typing import Any, List, Optional, TYPE_CHECKING
 
@@ -12,6 +13,7 @@ import grpc  # type: ignore [import]
 
 from bastionai.pb.remote_torch_pb2 import Empty, MetricResponse, TestRequest, TrainRequest, ClientInfo  # type: ignore [import]
 from bastionai.pb.remote_torch_pb2_grpc import RemoteTorchStub  # type: ignore [import]
+from bastionai.license import LicenseBuilder
 from torch.nn import Module
 from torch.utils.data import Dataset
 
@@ -25,9 +27,10 @@ from bastionai.utils import (
     serialize_model,
 )
 
+from bastionai.keys import SigningKey
+
 from bastionai.version import __version__ as app_version
 from bastionai.errors import GRPCException
-from bastionai.default_license import DEFAULT_LICENSE
 
 if TYPE_CHECKING:
     from bastionai.learner import RemoteLearner, RemoteDataset
@@ -43,22 +46,39 @@ class Client:
                         may be overriden at the method level.
     """
 
+    def __make_grpc_call(self, call, arg, streaming: bool = False, signing_keys: List[SigningKey] = []):
+        # does not support streaming calls for now
+
+        data: bytes = arg.SerializeToString()
+
+        metadata = {}
+        for k in [*signing_keys, *self.default_signing_keys]:
+            metadata[f"signature-{(k.pubkey_hash.hex())}-bin"] = k.sign(data)
+
+        # todo challenges
+
+        logging.debug(f"GRPC Call {call.__module__}.{call.__name__}; using metadata", metadata)
+
+        GRPCException.map_error(lambda: call(self.stub, arg, metadata=metadata))
+
     def __init__(
         self,
         stub: RemoteTorchStub,
         client_info: ClientInfo,
-        default_license: str = DEFAULT_LICENSE,
+        default_license: Optional[LicenseBuilder] = None,
+        default_signing_keys: List[SigningKey] = []
     ) -> None:
         self.stub = stub
         self.default_license = default_license
         self.client_info = client_info
+        self.default_signing_keys = default_signing_keys
 
     def send_model(
         self,
         model: Module,
         name: str,
         description: str = "",
-        license: Optional[str] = None,
+        license: Optional[LicenseBuilder] = None,
         chunk_size: int = 4_194_285,
         progress: bool = False,
     ) -> Reference:
@@ -77,12 +97,16 @@ class Client:
         Returns:
             BastionAI gRPC protocol's reference object.
         """
+        li = license or self.default_license
+        if li is None:
+            raise ValueError("You must specify an access-control license")
+
         return Reference(GRPCException.map_error(lambda: self.stub.SendModel(
             serialize_model(
                 model,
                 name=name,
                 description=description,
-                license=license if license is not None else self.default_license,
+                license=li.ser(),
                 chunk_size=chunk_size,
                 client_info=self.client_info,
                 progress=progress,
@@ -94,7 +118,7 @@ class Client:
         dataset: Dataset,
         name: str,
         description: str = "",
-        license: Optional[str] = None,
+        license: Optional[LicenseBuilder] = None,
         privacy_limit: Optional[float] = None,
         chunk_size: int = 4_194_285,
         batch_size: int = 1024,
@@ -118,12 +142,16 @@ class Client:
         Returns:
             BastionAI gRPC protocol's reference object.
         """
+        li = license or self.default_license
+        if li is None:
+            raise ValueError("You must specify an access-control license")
+
         return Reference(GRPCException.map_error(lambda: self.stub.SendDataset(
             serialize_dataset(
                 dataset,
                 name=name,
                 description=description,
-                license=license if license is not None else self.default_license,
+                license=li.ser(),
                 chunk_size=chunk_size,
                 batch_size=batch_size,
                 privacy_limit=privacy_limit,
@@ -158,12 +186,12 @@ class Client:
     def fetch_model(self, ref: Reference) -> Module:
         return module_from_chunks(GRPCException.map_error(lambda: self.stub.FetchDataset(ref.request())))
     
-    def fetch_run(self, ref: Reference) -> Module:
-        return self.stub.FetchRun(ref.request())
+    def fetch_run(self, ref: Reference, *, signing_keys: List[SigningKey] = []) -> Module:
+        return self.__make_grpc_call(RemoteTorchStub.FetchRun, ref.request(), signing_keys=signing_keys)
 
     def get_available_models(self) -> List[Reference]:
         """Returns the list of BastionAI gRPC protocol references of all available models on the server."""
-        return [Reference(x) for x in GRPCException.map_error(lambda: self.stub.AvailableModels(Empty())).list]
+        return [Reference(x) for x in (lambda: self.stub.AvailableModels(Empty())).list]
 
     def get_available_datasets(self) -> List[Reference]:
         """Returns the list of BastionAI gRPC protocol references of all datasets on the server."""
@@ -258,7 +286,7 @@ class Client:
         return RemoteLearner(self, *args, **kwargs)
 
 
-@dataclass
+# @dataclass
 class Connection:
     """Context manger that handles a connection to a BastionAI server.
     It returns a `Client` to use the connexion within its context.
@@ -269,11 +297,24 @@ class Connection:
         default_license: Default owner license passed to the constructor of the return `Client`.
     """
 
-    host: str
-    port: int
-    default_license: str = DEFAULT_LICENSE
-    channel: Any = None
-    server_name: str = "bastionai-srv"
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        *,
+        default_license: Optional[LicenseBuilder] = None,
+        channel: Any = None,
+        server_name: str = "bastionai-srv",
+        license_key = Optional[SigningKey],
+        default_signing_keys: List[SigningKey] = []
+    ):
+        self.host = host
+        self.port = port
+        self.default_license = default_license
+        self.channel = channel
+        self.server_name = server_name
+        self.license_key = license_key
+        self.default_signing_keys = default_signing_keys
 
     def __enter__(self) -> Client:
         uname = platform.uname()
@@ -300,7 +341,19 @@ class Connection:
         self.channel = grpc.secure_channel(
             server_target, server_cred, options=connection_options
         )
-        return Client(RemoteTorchStub(self.channel), client_info=client_info, default_license=self.default_license)
+
+        if self.license_key is not None:
+            if self.default_license is None:
+                self.default_license = LicenseBuilder.default_with_pubkey(self.license_key.pubkey)
+            if self.license_key not in self.default_signing_keys:
+                self.default_signing_keys.append(self.license_key)
+
+        return Client(
+            RemoteTorchStub(self.channel),
+            client_info=client_info,
+            default_license=self.default_license,
+            default_signing_keys=self.default_signing_keys,
+        )
 
     def __exit__(self, exc_type: Any, exc_value: Any, exc_traceback: Any) -> None:
         self.channel.close()

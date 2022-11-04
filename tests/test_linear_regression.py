@@ -11,14 +11,17 @@ from torch.utils.data import DataLoader
 
 import logging
 from bastionai.utils import TensorDataset  # type: ignore [import]
+from bastionai import SigningKey
 from server import launch_server  # type: ignore [import]
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
+
+access_control_key = SigningKey.from_pem_or_generate("./test.key.pem")
 
 
 class LinRegTest(unittest.TestCase):
     def test_model_and_data_upload(self):
-        with Connection("localhost", 50051, default_secret=b"") as client:
+        with Connection("localhost", 50051, license_key=access_control_key) as client:
             remote_dataloader = client.RemoteDataset(
                 train_dataset,
                 test_dataset,
@@ -40,7 +43,7 @@ class LinRegTest(unittest.TestCase):
         self.assertEqual(remote_learner.client, client)
 
     def test_weights_before_and_after_upload(self):
-        with Connection("localhost", 50051, default_secret=b"") as client:
+        with Connection("localhost", 50051, license_key=access_control_key) as client:
             remote_dataloader = client.RemoteDataset(
                 train_dataset,
                 test_dataset,

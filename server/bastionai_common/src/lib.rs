@@ -39,7 +39,9 @@ fn uri_to_socket(uri: &Uri) -> Result<SocketAddr> {
 
 impl NetworkConfig {
     pub fn client_to_enclave_untrusted_socket(&self) -> Result<SocketAddr> {
-        uri_to_socket(&self.client_to_enclave_untrusted_url)
+        uri_to_socket(&self.client_to_enclave_untrusted_url).context(
+            "Parsing the socket address in client_to_enclave_untrusted_url from the settings file",
+        )
     }
 }
 

@@ -13,6 +13,7 @@ use std::{fs::File, io::Read};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Identity;
 use tonic::transport::ServerTlsConfig;
+use anyhow::Context;
 
 use ring::{digest, rand};
 
@@ -621,18 +622,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     fill_blank_and_print(&version_str, text_size);
 
     // Identity for untrusted (non-attested) communication
-    let server_cert = fs::read("tls/host_server.pem")?;
-    let server_key = fs::read("tls/host_server.key")?;
+    let server_cert = fs::read("./tls/host_server.pem").context("Reading file ./tls/host_server.pem")?;
+    let server_key = fs::read("./tls/host_server.key").context("Reading file ./tls/host_server.key")?;
     let server_identity = Identity::from_pem(&server_cert, &server_key);
 
     setup_jwt();
 
     let server = BastionAIServer::new();
 
-    let mut file = File::open("config.toml")?;
+    let mut file = File::open("./config.toml").context("Reading file ./config.toml")?;
     let mut contents = String::new();
-    file.read_to_string(&mut contents)?;
-    let network_config: bastionai_common::NetworkConfig = toml::from_str(&contents)?;
+    file.read_to_string(&mut contents).context("Reading file ./config.toml")?;
+    let network_config: bastionai_common::NetworkConfig = toml::from_str(&contents).context("Parsing file ./config.toml")?;
 
     let platform: CString = CString::new(format!("{}", whoami::platform())).unwrap();
     let uid: CString = {
@@ -644,7 +645,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     if std::env::var("BASTIONAI_DISABLE_TELEMETRY").is_err() {
-        telemetry::setup(platform.into_string().unwrap(), uid.into_string().unwrap())?;
+        telemetry::setup(platform.into_string().unwrap(), uid.into_string().unwrap()).context("Starting telemetry")?;
     }
     else {
         info!(
@@ -660,10 +661,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 
     Server::builder()
-        .tls_config(ServerTlsConfig::new().identity(server_identity))?
+        .tls_config(ServerTlsConfig::new().identity(server_identity)).context("Configuring the TLS server identity")?
         .add_service(RemoteTorchServer::with_interceptor(server, auth_interceptor))
         .serve(network_config.client_to_enclave_untrusted_socket()?)
-        .await?;
+        .await.context("Running the server")?;
 
     Ok(())
 }

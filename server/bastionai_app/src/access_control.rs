@@ -3,7 +3,7 @@ use ring::{digest, signature};
 use tonic::{metadata::MetadataMap, Request, Status};
 use serde::{Serialize, Deserialize};
 
-use crate::remote_torch::{Empty, ReferenceRequest, TrainRequest, TestRequest, RunRequest};
+use crate::remote_torch::{Empty, ReferenceRequest, TrainRequest, TestRequest, RunRequest, self};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Rule {
@@ -74,7 +74,7 @@ impl Rule {
                 match header.get_bin(format!("signature-{}-bin", public_key_hash)) {
                     Some(meta) => {
                         let public_key = signature::UnparsedPublicKey::new(
-                            &signature::RSA_PKCS1_2048_8192_SHA256,
+                            &signature::ECDSA_P256_SHA256_ASN1,
                             raw_public_key,
                         );
                         let sign = meta.to_bytes().map_err(|_| {
