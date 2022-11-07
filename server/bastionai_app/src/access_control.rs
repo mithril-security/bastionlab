@@ -33,7 +33,7 @@ pub enum ResultStrategy {
     Checkpoint, // Copy checkpoint's license
     Dataset,    // Copy checkpoint's license
     And,        // Use checkpoint's licence AND dataset's
-    Or,         // Use checkpoint's licence AND dataset's
+    Or,         // Use checkpoint's licence OR dataset's
     Custom(Box<License>),
 }
 

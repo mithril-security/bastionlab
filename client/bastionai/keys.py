@@ -14,6 +14,9 @@ class PublicKey:
         hash.update(self.bytes)
         self.__hash = hash.finalize()
 
+    def __eq__(self, o: object) -> bool:
+        return self.__key.__eq__(o)
+
     def verify(self, signature: bytes, data: bytes) -> None:
         self.__key.verify(signature, data, signature_algorithm=ec.ECDSA(hashes.SHA256()))
 

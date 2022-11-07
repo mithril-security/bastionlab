@@ -294,7 +294,7 @@ class RemoteLearner:
                     raise e
         if metric is None:
             raise Exception(
-                f"Run start timeout. Polling has stoped. You may query the server by hand later using: run id is {str(run.hash)}"
+                f"Run start timeout. Polling has stopped. You may query the server by hand later using: run id is {str(run.hash)}"
             )
 
         if self.progress:

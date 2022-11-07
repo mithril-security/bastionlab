@@ -86,18 +86,28 @@ class LicenseDto:
 
 
 HashLike = Union[str, bytes]
+PublicKeyLike = Union[str, PublicKey]
 
+
+def translate_pubkey(s: PublicKeyLike) -> bytes:
+    if isinstance(s, str):
+        return PublicKey.from_pem_content(s).bytes
+    if isinstance(s, PublicKey):
+        return s.bytes
+    raise TypeError(f"Value of type {type(s)} is not supported as a publickey")
 
 def translate_hash(s: HashLike) -> bytes:
     if isinstance(s, str):
         return bytes.fromhex(s)
-    return s
+    if isinstance(s, bytes):
+        return s
+    raise TypeError(f"Value of type {type(s)} is not supported as a hash")
 
 
 class Rule(TypedDict):
     with_checkpoint: HashLike
     with_dataset: HashLike
-    signed_with: PublicKey
+    signed_with: PublicKeyLike
     either: List["Rule"]
     all: List["Rule"]
 
@@ -107,7 +117,7 @@ def translate_rule(rule: Rule) -> RuleDto:
         map(lambda en: en[0], filter(lambda en: en[1] is not None, rule.items()))
     )
     if keys == ["signed_with"]:
-        return RuleDto(SignedWith=rule["signed_with"].bytes)
+        return RuleDto(SignedWith=translate_hash(rule["signed_with"]))
     elif keys == ["with_checkpoint"]:
         return RuleDto(WithCheckpoint=translate_hash(rule["with_checkpoint"]))
     elif keys == ["with_dataset"]:
@@ -153,16 +163,17 @@ class LicenseBuilder:
         return cbor2.dumps(self.__obj, default=cbor_default_encoder)
 
     @staticmethod
-    def default_with_pubkey(key: PublicKey) -> "LicenseBuilder":
+    def default_with_pubkey(key: PublicKeyLike) -> "LicenseBuilder":
         builder = LicenseBuilder()
+        k = translate_pubkey(key)
         builder.__obj = LicenseDto(
-            train=RuleDto(SignedWith=key.bytes),
-            train_metric=RuleDto(SignedWith=key.bytes),
-            test=RuleDto(SignedWith=key.bytes),
-            test_metric=RuleDto(SignedWith=key.bytes),
-            list=RuleDto(SignedWith=key.bytes),
-            fetch=RuleDto(SignedWith=key.bytes),
-            delete=RuleDto(SignedWith=key.bytes),
+            train=RuleDto(SignedWith=k),
+            train_metric=RuleDto(SignedWith=k),
+            test=RuleDto(SignedWith=k),
+            test_metric=RuleDto(SignedWith=k),
+            list=RuleDto(SignedWith=k),
+            fetch=RuleDto(SignedWith=k),
+            delete=RuleDto(SignedWith=k),
             result_strategy="And",
         )
         return builder
@@ -218,7 +229,7 @@ class LicenseBuilder:
         *,
         with_checkpoint: Optional[HashLike] = None,
         with_dataset: Optional[HashLike] = None,
-        signed_with: Optional[PublicKey] = None,
+        signed_with: Optional[PublicKeyLike] = None,
         either: Optional[List[Rule]] = None,
         all: Optional[List[Rule]] = None,
     ) -> "LicenseBuilder":
@@ -239,7 +250,7 @@ class LicenseBuilder:
         *,
         with_checkpoint: Optional[HashLike] = None,
         with_dataset: Optional[HashLike] = None,
-        signed_with: Optional[PublicKey] = None,
+        signed_with: Optional[PublicKeyLike] = None,
         either: Optional[List[Rule]] = None,
         all: Optional[List[Rule]] = None,
     ) -> "LicenseBuilder":
@@ -262,7 +273,7 @@ class LicenseBuilder:
         *,
         with_checkpoint: Optional[HashLike] = None,
         with_dataset: Optional[HashLike] = None,
-        signed_with: Optional[PublicKey] = None,
+        signed_with: Optional[PublicKeyLike] = None,
         either: Optional[List[Rule]] = None,
         all: Optional[List[Rule]] = None,
     ) -> "LicenseBuilder":
@@ -283,7 +294,7 @@ class LicenseBuilder:
         *,
         with_checkpoint: Optional[HashLike] = None,
         with_dataset: Optional[HashLike] = None,
-        signed_with: Optional[PublicKey] = None,
+        signed_with: Optional[PublicKeyLike] = None,
         either: Optional[List[Rule]] = None,
         all: Optional[List[Rule]] = None,
     ) -> "LicenseBuilder":
@@ -304,7 +315,7 @@ class LicenseBuilder:
         *,
         with_checkpoint: Optional[HashLike] = None,
         with_dataset: Optional[HashLike] = None,
-        signed_with: Optional[PublicKey] = None,
+        signed_with: Optional[PublicKeyLike] = None,
         either: Optional[List[Rule]] = None,
         all: Optional[List[Rule]] = None,
     ) -> "LicenseBuilder":
@@ -325,7 +336,7 @@ class LicenseBuilder:
         *,
         with_checkpoint: Optional[HashLike] = None,
         with_dataset: Optional[HashLike] = None,
-        signed_with: Optional[PublicKey] = None,
+        signed_with: Optional[PublicKeyLike] = None,
         either: Optional[List[Rule]] = None,
         all: Optional[List[Rule]] = None,
     ) -> "LicenseBuilder":
@@ -346,7 +357,7 @@ class LicenseBuilder:
         *,
         with_checkpoint: Optional[HashLike] = None,
         with_dataset: Optional[HashLike] = None,
-        signed_with: Optional[PublicKey] = None,
+        signed_with: Optional[PublicKeyLike] = None,
         either: Optional[List[Rule]] = None,
         all: Optional[List[Rule]] = None,
     ) -> "LicenseBuilder":
