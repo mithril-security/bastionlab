@@ -40,6 +40,16 @@ The solution has two parts:
 - A server which uses [tch-rs](), which contains Rust bindings for [libtorch]() Pytorch's C++ backend. It's used training AI models with privacy guarantees (Built with **Rust**).
 - A client SDK to securely send datasets, and models to be trained on the server (Built with **Python**).
 
+### BastionAI Project Structure.
+```sh
+BastionAI🚀🔐/
+├─ Python Client /
+├─ Rust Server/
+│  ├─ BastionAI Learning/
+│  ├─ BastionAI App/
+│  ├─ BastionAI Common/
+
+```
 You can find more information about the **Roadmap** of the project [here](https://blog.mithrilsecurity.io/our-roadmap-at-mithril-security/#bastionai).
 
 ### Useful Resources
@@ -51,7 +61,7 @@ It is also recommeneded to see the [examples](https://github.com/mithril-securit
 * [Documentation - BastionAI Official Documentation](https://bastionai.mithrilsecurity.io)
 * [Blog - Mithril Security Blog](https://blog.mithrilsecurity.io/)
 * [Article - Mithril Security Roadmap](https://blog.mithrilsecurity.io/our-roadmap-at-mithril-security/)
-* [Notebooks - BastionAI Examples](https://github.com/mithril-security/bastionai/tree/master/examples)
+* [Notebooks and Python code - BastionAI Examples](https://github.com/mithril-security/bastionai/tree/master/examples)
 
 ## Contributing Code
 This section presents the different options that you can follow in order to contribute to the  BastionAI🚀🔐 project. You can either **Report Bugs**, **Suggest Enhancements** or **Open Pull Requests**.
