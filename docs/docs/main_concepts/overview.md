@@ -21,12 +21,12 @@ Here is the typical workflow when a Data Owner wants to collaborate with an untr
 Besides, the client library is fully compatible with Pytorch and in turn benefits from its interoperability with numpy, pandas and more!
 
 ## Key Features
-- :rocket: An intuitive high-level API inspired by FastAI that let you focus on what matters.
-- :factory: Hardware protection for data, models, checkpoints and metrics with TEEs.
-- :heavy_check_mark: The assurance that the intended code runs on the server (i.e. the right version of BastionAI server with the right primitives and backend).
-- :link: Traceability in what operations run on your data or model weights.
-- :vertical_traffic_light: A strong licensing mechanism that ensures your data or models and the models and metrics derived from them are only accesible to the intended persons.
-- :game_die: Built-in Differential Privacy that applies both to the training (trained weights) and the metrics (loss, acuracy, etc.)
+- 🚀 An intuitive high-level API inspired by FastAI that let you focus on what matters.
+- 🔒 Hardware protection for data, models, checkpoints and metrics with TEEs.
+- ✅ The assurance that the intended code runs on the server (i.e. the right version of BastionAI server with the right primitives and backend).
+- 🔗 Traceability in what operations run on your data or model weights.
+- 🚦 A strong licensing mechanism that ensures your data or models and the models and metrics derived from them are only accesible to the intended persons.
+- 🎲 Built-in Differential Privacy that applies both to the training (trained weights) and the metrics (loss, acuracy, etc.)
 
 ## What you can do with BastionAI
 - Easily train state-of-the-art models from various ML subfields in a privacy-preserving manner: computer vision, computer hearing, natural language processing and more.

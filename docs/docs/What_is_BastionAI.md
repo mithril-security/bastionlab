@@ -32,7 +32,7 @@
         font-weight: 600; font-size: 17px; margin: 8px 0;
     }
 </style>
-# Overview
+# What is BastionAI?
 <a href="https://github.com/mithril-security/bastionai.git" style="text-decoration: none; font-weight: 500; color: #fff; font-size: 18px">BastionAI🚀🔒</a> is a fast, easy-to-use confidential artificial intelligence (AI) platform for training AI models on private data.
 
 With BastionAI, users can:
@@ -50,7 +50,7 @@ Fortified learning allows for faster training,
 reasonable DP noise for the same budget, and simplifies deployment as each participating node only needs a lightweight interface to check the security features
 of the remote enclave.
 
-# Features
+## Features
 <div class="feature-grid">
     <div class="feature-card">
         <h4 class="feature-title">🔐 Confidentiality made easy</h4>
@@ -66,7 +66,7 @@ of the remote enclave.
     </div>
 </div>
 
-# Why are we building BastionAI🚀🔒?
+## Why are we building BastionAI🚀🔒?
 Today, most AI tools offer no privacy by design mechanisms: when multiple parties pool data to train an AI model  (e.g. for healthcare purposes), sensitive data can be exposed to multiple third parties, posing security and privacy threats.
 
 Privacy Enhancing Technologies (PETs) have emerged as an answer to these issues. Differential Privacy, for instance, provides strong guarantees through mathematics on the amount of information leaked by a computation whose output is publicly disclosed. Confidential Computing with secure enclaves makes it possible for Data Owners to have third parties manipulate their data in the Cloud, without exposing them in clear to anyone else.
@@ -76,7 +76,7 @@ However promising these technologies might be, finding secure and **easy-to-use*
 In addition, democratizng AI privacy solutions is also a contributing factor to why we decided to develop this solution. A solution developed by data scientists for data scientists is primordial to open-source community, having the number one focus of being an **easy-to-use** AI training platform.
 
 
-# Comparisons
+## Comparisons
 
 <p>
 <a href="https://github.com/mithril-security/bastionai.git" class="bastionai">BastionAI🚀🔒</a> versus Centralized Training.
@@ -105,12 +105,12 @@ BastionAI seeks to provide a new way of performing multi-party training but with
 
 Multi-party computation involves intense encryption through multiple cryptographic schemes and in a certain like training of models, this could be costly: both _communication cost_ and _computation cost_. Having a fortified centralized server responsible for training release the trainer and other interested parties from this cryptographic cost. 
 
-# Telemetry
+## Telemetry
 BastionAI collects anonymous data regarding general usage, this allows us to understand how you are using the project. We only collect data regarding the which models and datasets are being used, and the usage metrics.
 
 This feature can be easily disabled, by settin up the environment variable `BASTIONAI_DISABLE_TELEMETRY` to 1.
 
-# Contributing
+## Contributing
 There are many ways to contribute to the project:
 
 - If you have any feedback on the project, share it under the `#bastionai-contributors` channel in the [Mithril Security Community Discord](https://discord.gg/TxEHagpWd4).
@@ -118,14 +118,14 @@ There are many ways to contribute to the project:
 - Investigate bugs and reviewing other developer's pull requests.
 - Contributing code or documentation to the project by submitting a GitHub pull request. Check out the [Development Guide](CONTRIBUTING.md).
 
-# Contact Us
-## Ask a question
+## Contact Us
+### Ask a question
 You can get community support in several ways:
 
 Join our Discord Channel and engage in discussions with other users and the BastionAI and Mithril Security communities .
 Ask a question about BastionAI and get community support by posting to [contact@mithrilsecurity.io](mailto:contact@mithrilsecurity.io). Posts can receive responses from community, and from engineers on the Mithril Security team who monitor the tag and offer unofficial support.
 
-## File an issue or feature request
+### File an issue or feature request
 
 If you’re experiencing an issue, find out if there’s already a solution:
 

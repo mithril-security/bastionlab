@@ -67,15 +67,25 @@ plugins:
        caption_position: bottom
 
 nav:
-  - Home: "index.md"
+  - "Documentation":
+    - "What is BastionAI": "docs/What_is_BastionAI.md"
+    - "Examples":
+      - "docs/examples/resnet_example_notebook.ipynb"
+      - "docs/examples/distilbert_example_notebook.ipynb"
+    - "Main Concepts":
+      - "Overview": "docs/main_concepts/overview.md"
+      - "Remote Training": "docs/main_concepts/remote_training.md"
+      - "Data Privacy": "docs/main_concepts/data_privacy.md"
+    - "Interoperability": "docs/lib_interop.md"
+    - "Deployment":
+      - "On-premise" : "docs/deployment/on_premise.md"
+    - "Contributing":
+      - "Contributing": "docs/contributing/CONTRIBUTING.md"
+      - "Code of Conduct": "docs/contributing/Code_of_Conduct.md"
+    - "FAQ": "docs/FAQ.md"
   - "Getting Started":
-      - 'getting-started/quick-start.md'
-  - "Client API reference": "resources/bastionai/client.html"
-  - "Examples": 
-    - 'Example of BastionAI deployment with ResNet18': 'resnet_example_notebook.ipynb'
-    - 'Example of BastionAI deployment with DistilBert': 'distilbert_example_notebook.ipynb'
+      - "Quick Start": "getting-started/quick-start.md"
+  - "API reference": "resources/bastionai/client.html"
   - "Benchmarks": 
-    - "Benchmarking using AMD EPYC 773 CPU" : 'benchmarking/bench-amd-epyc-7763.md'
-    - "Benchmarking using NVIDIA V100 and A100 GPU" : 'benchmarking/bench-nvidia-a100-v100.md'
-  - "Deployment":
-    - "On premise" : 'deployment/on_premise.md'
+    - "AMD EPYC 773 CPU" : 'benchmarking/bench-amd-epyc-7763.md'
+    - "Nvidia V100 and A100 GPUs" : 'benchmarking/bench-nvidia-a100-v100.md'
