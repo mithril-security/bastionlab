@@ -10,6 +10,10 @@ message ReferenceResponse {
     string header = 2;
 }
 
+message References {
+    repeated ReferenceResponse list = 1;
+}
+
 message Chunk {
     bytes data = 1;
 }
@@ -18,8 +22,21 @@ message Query {
     string composite_plan = 1;
 }
 
+message Empty {
+
+}
+
+message TrainingRequest {
+    string records = 1;
+    string target = 2;
+    float ratio = 3;
+    string trainer = 4;
+}
+
 service BastionLab {
     rpc SendDataFrame(stream Chunk) returns (ReferenceResponse) {}
     rpc RunQuery (Query) returns (ReferenceResponse) {}
     rpc FetchDataFrame(ReferenceRequest) returns (stream Chunk) {}
+    rpc AvailableDatasets(Empty) returns (References) {}
+    rpc Train(TrainingRequest) returns (ReferenceResponse) {}
 }
