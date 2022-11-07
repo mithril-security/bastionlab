@@ -46,20 +46,23 @@ class Client:
                         may be overriden at the method level.
     """
 
-    def __make_grpc_call(self, call, arg, streaming: bool = False, signing_keys: List[SigningKey] = []):
+    def __make_grpc_call(self, call: str, arg: Any, streaming: bool = False, method: Optional[bytes] = None, signing_keys: List[SigningKey] = []) -> Any:
         # does not support streaming calls for now
 
         data: bytes = arg.SerializeToString()
 
-        metadata = {}
-        for k in [*signing_keys, *self.default_signing_keys]:
-            metadata[f"signature-{(k.pubkey_hash.hex())}-bin"] = k.sign(data)
+        metadata = ()
+        if method is not None:
+            for k in [*signing_keys, *self.default_signing_keys]:
+                to_sign = method + data
+                signed = k.sign(to_sign)
+                metadata += ((f"signature-{(k.pubkey.hash.hex())}-bin", signed),)
 
         # todo challenges
+        logging.debug(f"GRPC Call {call}; using metadata {metadata}")
 
-        logging.debug(f"GRPC Call {call.__module__}.{call.__name__}; using metadata", metadata)
-
-        GRPCException.map_error(lambda: call(self.stub, arg, metadata=metadata))
+        fn = getattr(self.stub, call)
+        return GRPCException.map_error(lambda: fn(arg, metadata=metadata))
 
     def __init__(
         self,
@@ -161,7 +164,7 @@ class Client:
             )
         )))
 
-    def load_checkpoint(self, model: Module, ref: Reference) -> None:
+    def load_checkpoint(self, model: Module, ref: Reference, signing_keys: List[SigningKey] = []) -> None:
         """Fetches the weights of a distant trained model with a BastionAI gRPC protocol reference
         and loads the weights into the passed model instance.
 
@@ -169,10 +172,10 @@ class Client:
             model: The Pytorch's nn.Module whose weights will be replaced by the fetched weights.
             ref: BastionAI gRPC protocol reference object corresponding to the distant trained model.
         """
-        chunks = GRPCException.map_error(lambda: self.stub.FetchCheckpoint(ref.request()))
+        chunks = self.__make_grpc_call("FetchCheckpoint", ref.request(), method=b"fetch", signing_keys=signing_keys)
         deserialize_weights_to_model(model, chunks)
 
-    def fetch_dataset(self, ref: Reference) -> TensorDataset:
+    def fetch_dataset(self, ref: Reference, *, signing_keys: List[SigningKey] = []) -> TensorDataset:
         """Fetches the distant dataset with a BastionAI gRPC protocol reference.
 
         Args:
@@ -181,80 +184,81 @@ class Client:
         Returns:
             A dataset instance built from received data.
         """
-        return dataset_from_chunks(GRPCException.map_error(lambda: self.stub.FetchDataset(ref.request())))
+        return dataset_from_chunks(self.__make_grpc_call("FetchDataset", ref.request(), method=b"fetch", signing_keys=signing_keys))
 
-    def fetch_model(self, ref: Reference) -> Module:
-        return module_from_chunks(GRPCException.map_error(lambda: self.stub.FetchDataset(ref.request())))
+    def fetch_model(self, ref: Reference, *, signing_keys: List[SigningKey] = []) -> Module:
+        return module_from_chunks(
+            self.__make_grpc_call("FetchModel", ref.request(), method=b"fetch", signing_keys=signing_keys))
     
     def fetch_run(self, ref: Reference, *, signing_keys: List[SigningKey] = []) -> Module:
-        return self.__make_grpc_call(RemoteTorchStub.FetchRun, ref.request(), signing_keys=signing_keys)
+        return self.__make_grpc_call("FetchRun", ref.request(), method=b"fetch", signing_keys=signing_keys)
 
-    def get_available_models(self) -> List[Reference]:
+    def get_available_models(self, *, signing_keys: List[SigningKey] = []) -> List[Reference]:
         """Returns the list of BastionAI gRPC protocol references of all available models on the server."""
-        return [Reference(x) for x in (lambda: self.stub.AvailableModels(Empty())).list]
+        return [Reference(x) for x in self.__make_grpc_call("AvailableModels", Empty(), method=b"list", signing_keys=signing_keys).list]
 
-    def get_available_datasets(self) -> List[Reference]:
+    def get_available_datasets(self, *, signing_keys: List[SigningKey] = []) -> List[Reference]:
         """Returns the list of BastionAI gRPC protocol references of all datasets on the server."""
-        return [Reference(x) for x in GRPCException.map_error(lambda: self.stub.AvailableDatasets(Empty())).list]
+        return [Reference(x) for x in self.__make_grpc_call("AvailableDatasets", Empty(), method=b"list", signing_keys=signing_keys).list]
     
-    def get_available_checkpoints(self) -> List[Reference]:
+    def get_available_checkpoints(self, *, signing_keys: List[SigningKey] = []) -> List[Reference]:
         """Returns the list of BastionAI gRPC protocol references of all datasets on the server."""
-        return [Reference(x) for x in GRPCException.map_error(lambda: self.stub.AvailableCheckpoints(Empty())).list]
+        return [Reference(x) for x in self.__make_grpc_call("AvailableCheckpoints", Empty(), method=b"list", signing_keys=signing_keys).list]
 
-    def get_available_devices(self) -> List[str]:
+    def get_available_devices(self, *, signing_keys: List[SigningKey] = []) -> List[str]:
         """Returns the list of devices available on the server."""
-        return GRPCException.map_error(lambda: self.stub.AvailableDevices(Empty())).list
+        return self.__make_grpc_call("AvailableDevices", Empty(), signing_keys=signing_keys).list
 
-    def get_available_optimizers(self) -> List[str]:
+    def get_available_optimizers(self, *, signing_keys: List[SigningKey] = []) -> List[str]:
         """Returns the list of optimizers supported by the server."""
-        return GRPCException.map_error(lambda: self.stub.AvailableOptimizers(Empty())).list
+        return self.__make_grpc_call("AvailableOptimizers", Empty(), signing_keys=signing_keys).list
 
-    def train(self, config: TrainRequest) -> Reference:
+    def train(self, config: TrainRequest, *, signing_keys: List[SigningKey] = []) -> Reference:
         """Trains a model with hyperparameters defined in `config` on the BastionAI server.
 
         Args:
             config: Training configuration that specifies the model, dataset and hyperparameters.
         """
         # challenge = GRPCException.map_error(lambda: self.stub.Train(config, metadata={ "challenge": "" }))
-        return Reference(GRPCException.map_error(lambda: self.stub.Train(config)))
+        return Reference(self.__make_grpc_call("Train", config, method=b"train", signing_keys=signing_keys))
 
-    def test(self, config: TestRequest) -> Reference:
+    def test(self, config: TestRequest, *, signing_keys: List[SigningKey] = []) -> Reference:
         """Tests a dataset on a model according to `config` on the BastionAI server.
 
         Args:
             config: Testing configuration that specifies the model, dataset and hyperparameters.
         """
-        return Reference(GRPCException.map_error(lambda: self.stub.Test(config)))
+        return Reference(self.__make_grpc_call("Test", config, method=b"test", signing_keys=signing_keys))
 
-    def delete_dataset(self, ref: Reference) -> None:
+    def delete_dataset(self, ref: Reference, *, signing_keys: List[SigningKey] = []) -> None:
         """Deletes the dataset correponding to the given `ref` reference on the BastionAI server.
 
         Args:
             ref: BastionAI gRPC protocol reference of the dataset to be deleted.
         """
-        GRPCException.map_error(lambda: self.stub.DeleteDataset(ref.request()))
+        self.__make_grpc_call("DeleteDataset", ref.request(), method=b"delete", signing_keys=signing_keys)
 
-    def delete_module(self, ref: Reference) -> None:
+    def delete_module(self, ref: Reference, *, signing_keys: List[SigningKey] = []) -> None:
         """Deletes the module correponding to the given `ref` reference on the BastionAI server.
 
         Args:
             ref: BastionAI gRPC protocol reference of the module to be deleted.
         """
-        GRPCException.map_error(lambda: self.stub.DeleteModule(ref.request()))
+        self.__make_grpc_call("DeleteModule", ref.request(), method=b"delete", signing_keys=signing_keys)
     
-    def delete_checkpoint(self, ref: Reference) -> None:
-        GRPCException.map_error(lambda: self.stub.DeleteCheckpoint(ref.request()))
+    def delete_checkpoint(self, ref: Reference, *, signing_keys: List[SigningKey] = []) -> None:
+        self.__make_grpc_call("DeleteCheckpoint", ref.request(), method=b"delete", signing_keys=signing_keys)
 
-    def delete_run(self, ref: Reference) -> None:
-        GRPCException.map_error(lambda: self.stub.DeleteRun(ref.request()))
+    def delete_run(self, ref: Reference, *, signing_keys: List[SigningKey] = []) -> None:
+        self.__make_grpc_call("DeleteRun", ref.request(), method=b"delete", signing_keys=signing_keys)
 
-    def get_metric(self, run: Reference) -> MetricResponse:
+    def get_metric(self, run: Reference, *, signing_keys: List[SigningKey] = []) -> MetricResponse:
         """Returns the value of the metric associated with the given `run` reference.
 
         Args:
             run: BastionAI gRPC protocol reference of the run whose metric is read.
         """
-        return GRPCException.map_error(lambda: self.stub.GetMetric(run.request()))
+        return self.__make_grpc_call("GetMetric", run.request(), method=b"fetch", signing_keys=signing_keys)
     
     def list_remote_datasets(self) -> List["RemoteDataset"]:
         from bastionai.learner import RemoteDataset

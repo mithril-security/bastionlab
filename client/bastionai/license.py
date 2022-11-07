@@ -1,21 +1,32 @@
 from typing import Tuple, Optional, List, Union, TypedDict, Literal
 from dataclasses import dataclass, is_dataclass
-import json
-from json import JSONEncoder
+import cbor2
 from .keys import PublicKey
 
-class Encoder(JSONEncoder):
-    def default(self, obj):
-        if is_dataclass(obj):
-            return obj.__dict__
-        return JSONEncoder.default(self, obj)
+
+def cbor_default_encoder(encoder, value):
+    if is_dataclass(value):
+        return encoder.encode(value.__dict__)
+    raise TypeError("unknown cbor obj", value)
+
 
 @dataclass
 class RuleDto:
     AtLeastNOf: Optional[Tuple[int, List["RuleDto"]]] = None
-    WithCheckpoint: Optional[str] = None
-    WithDataset: Optional[str] = None
-    SignedWith: Optional[str] = None
+    WithCheckpoint: Optional[bytes] = None
+    WithDataset: Optional[bytes] = None
+    SignedWith: Optional[bytes] = None
+
+    @property
+    def __dict__(self) -> dict:
+        if self.AtLeastNOf:
+            return { 'AtLeastNOf': self.AtLeastNOf }
+        if self.WithCheckpoint:
+            return { 'WithCheckpoint': self.WithCheckpoint }
+        if self.WithDataset:
+            return { 'WithDataset': self.WithDataset }
+        if self.SignedWith:
+            return { 'SignedWith': self.SignedWith }
 
     def __str__(self) -> str:
         b = ""
@@ -23,11 +34,11 @@ class RuleDto:
             rules = map(str, self.AtLeastNOf[1])
             b += f"AtLeastNOf({self.AtLeastNOf[0]}, [{', '.join(rules)}])"
         if self.SignedWith is not None:
-            b += f"SignedWith({self.SignedWith})"
+            b += f"SignedWith({self.SignedWith.hex()})"
         if self.WithCheckpoint is not None:
-            b += f"WithCheckpoint({self.WithCheckpoint})"
+            b += f"WithCheckpoint({self.WithCheckpoint.hex()})"
         if self.WithDataset is not None:
-            b += f"WithDataset({self.WithDataset})"
+            b += f"WithDataset({self.WithDataset.hex()})"
         b += ""
         return b
 
@@ -74,7 +85,13 @@ class LicenseDto:
         return b
 
 
-HashLike = str
+HashLike = Union[str, bytes]
+
+
+def translate_hash(s: HashLike) -> bytes:
+    if isinstance(s, str):
+        return bytes.fromhex(s)
+    return s
 
 
 class Rule(TypedDict):
@@ -90,11 +107,11 @@ def translate_rule(rule: Rule) -> RuleDto:
         map(lambda en: en[0], filter(lambda en: en[1] is not None, rule.items()))
     )
     if keys == ["signed_with"]:
-        return RuleDto(SignedWith=rule["signed_with"].bytes.hex())
+        return RuleDto(SignedWith=rule["signed_with"].bytes)
     elif keys == ["with_checkpoint"]:
-        return RuleDto(WithCheckpoint=rule["with_checkpoint"])
+        return RuleDto(WithCheckpoint=translate_hash(rule["with_checkpoint"]))
     elif keys == ["with_dataset"]:
-        return RuleDto(WithDataset=rule["with_dataset"])
+        return RuleDto(WithDataset=translate_hash(rule["with_dataset"]))
     elif keys == ["either"]:
         rules = list(map(translate_rule, rule["either"]))
         return RuleDto(AtLeastNOf=[1, rules])
@@ -132,20 +149,20 @@ class LicenseBuilder:
     def __str__(self) -> str:
         return self.__obj.__str__()
 
-    def ser(self) -> str:
-        return json.dumps(self.__obj, cls=Encoder)
+    def ser(self) -> bytes:
+        return cbor2.dumps(self.__obj, default=cbor_default_encoder)
 
     @staticmethod
     def default_with_pubkey(key: PublicKey) -> "LicenseBuilder":
         builder = LicenseBuilder()
         builder.__obj = LicenseDto(
-            train=RuleDto(SignedWith=key.bytes.hex()),
-            train_metric=RuleDto(SignedWith=key.bytes.hex()),
-            test=RuleDto(SignedWith=key.bytes.hex()),
-            test_metric=RuleDto(SignedWith=key.bytes.hex()),
-            list=RuleDto(SignedWith=key.bytes.hex()),
-            fetch=RuleDto(SignedWith=key.bytes.hex()),
-            delete=RuleDto(SignedWith=key.bytes.hex()),
+            train=RuleDto(SignedWith=key.bytes),
+            train_metric=RuleDto(SignedWith=key.bytes),
+            test=RuleDto(SignedWith=key.bytes),
+            test_metric=RuleDto(SignedWith=key.bytes),
+            list=RuleDto(SignedWith=key.bytes),
+            fetch=RuleDto(SignedWith=key.bytes),
+            delete=RuleDto(SignedWith=key.bytes),
             result_strategy="And",
         )
         return builder

@@ -1,18 +1,19 @@
+use log::*;
 use prost::Message;
 use ring::{digest, signature};
+use serde::{Deserialize, Serialize};
 use tonic::{metadata::MetadataMap, Request, Status};
-use serde::{Serialize, Deserialize};
 
-use crate::remote_torch::{Empty, ReferenceRequest, TrainRequest, TestRequest, RunRequest, self};
+use crate::remote_torch::{self, Empty, ReferenceRequest, RunRequest, TestRequest, TrainRequest};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Rule {
     AtLeastNOf(usize, Vec<Rule>),
-    WithCheckpoint(Vec<u8>),
-    WithDataset(Vec<u8>),
-    IssuedBy(Vec<u8>),
-    HasSecret(Vec<u8>),
-    SignedWith(Vec<u8>),
+    WithCheckpoint(serde_bytes::ByteBuf),
+    WithDataset(serde_bytes::ByteBuf),
+    // IssuedBy(serde_bytes::ByteBuf),
+    // HasSecret(serde_bytes::ByteBuf),
+    SignedWith(serde_bytes::ByteBuf),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -73,52 +74,62 @@ impl Rule {
                 let public_key_hash = hex::encode(digest::digest(&digest::SHA256, raw_public_key));
                 match header.get_bin(format!("signature-{}-bin", public_key_hash)) {
                     Some(meta) => {
+                        let public_key = spki::SubjectPublicKeyInfo::try_from(
+                            raw_public_key.as_ref(),
+                        )
+                        .map_err(|_| {
+                            Status::invalid_argument(format!(
+                                "Invalid SubjectPublicKeyInfo for pubkey {}",
+                                public_key_hash
+                            ))
+                        })?;
                         let public_key = signature::UnparsedPublicKey::new(
                             &signature::ECDSA_P256_SHA256_ASN1,
-                            raw_public_key,
+                            public_key.subject_public_key,
                         );
+
                         let sign = meta.to_bytes().map_err(|_| {
-                            Status::invalid_argument(&format!(
+                            Status::invalid_argument(format!(
                                 "Could not decode signature for public key {}",
                                 public_key_hash
                             ))
                         })?;
                         public_key.verify(message, &sign).map_err(|_| {
-                            Status::permission_denied(&format!(
+                            Status::permission_denied(format!(
                                 "Invalid signature for public key {}",
                                 public_key_hash
                             ))
                         })?;
                         Ok(())
                     }
-                    None => Err(Status::permission_denied(&format!(
+                    None => Err(Status::permission_denied(format!(
                         "No signature provided for public key {}",
                         hex::encode(public_key_hash)
                     ))),
                 }
             }
-            Rule::HasSecret(secret) => {
-                if let Some(meta) = header.get_bin("secret") {
-                    let header_secret = meta.to_bytes().map_err(|_| {
-                        Status::invalid_argument("Could not decode secret")
-                    })?;
-                    if &*secret == &*header_secret {
-                        return Ok(());
-                    }
-                }
-                Err(Status::permission_denied("Missing secret"))
-            }
-            Rule::IssuedBy(hash) => {
-                if let Some(user_public_key_hash) = user_public_key_hash {
-                    if user_public_key_hash == hash {
-                        Ok(())
-                    } else {
-                        Err(Status::permission_denied("The Issuer did not provide a certificate"))
-                    }
-                } else {
-                    Err(Status::permission_denied("Issuer mismatch"))
-                }
-            }
+            // Rule::HasSecret(secret) => {
+            //     if let Some(meta) = header.get_bin("secret") {
+            //         let header_secret = meta.to_bytes().map_err(|_| {
+            //             Status::invalid_argument("Could not decode secret")
+            //         })?;
+            //         if &*secret == &*header_secret {
+            //             return Ok(());
+            //         }
+            //     }
+            //     Err(Status::permission_denied("Missing secret"))
+            // }
+            // Rule::IssuedBy(hash) => {
+            //     if let Some(user_public_key_hash) = user_public_key_hash {
+            //         if user_public_key_hash == hash {
+            //             Ok(())
+            //         } else {
+            //             Err(Status::permission_denied("The Issuer did not provide a certificate"))
+            //         }
+            //     } else {
+            //         Err(Status::permission_denied("Issuer mismatch"))
+            //     }
+            // }
             Rule::WithCheckpoint(hash) => {
                 if let Some(checkpoint_hash) = checkpoint_hash {
                     if &*hash != checkpoint_hash {
@@ -142,9 +153,9 @@ impl Rule {
 fn get_message<T: Message>(method: &[u8], req: &Request<T>) -> Result<Vec<u8>, Status> {
     let mut res = Vec::from(method);
     if let Some(meta) = req.metadata().get_bin("challenge") {
-        let challenge = meta.to_bytes().map_err(|_| {
-            Status::invalid_argument("Could not decode challenge")
-        })?;
+        let challenge = meta
+            .to_bytes()
+            .map_err(|_| Status::invalid_argument("Could not decode challenge"))?;
         res.append(&mut challenge.to_vec());
     }
     res.append(&mut req.get_ref().encode_to_vec());
@@ -198,11 +209,21 @@ impl License {
         )
     }
     pub fn combine(&self, other: &License) -> Result<License, Status> {
-        let l1 = if let ResultStrategy::Custom(l) = &self.result_strategy { l } else { self };
-        let l2 = if let ResultStrategy::Custom(l) = &other.result_strategy { l } else { other };
+        let l1 = if let ResultStrategy::Custom(l) = &self.result_strategy {
+            l
+        } else {
+            self
+        };
+        let l2 = if let ResultStrategy::Custom(l) = &other.result_strategy {
+            l
+        } else {
+            other
+        };
 
         if l1.result_strategy != l2.result_strategy {
-            return Err(Status::permission_denied("Checkpoint and dataset licenses are not combatible"));
+            return Err(Status::permission_denied(
+                "Checkpoint and dataset licenses are not combatible",
+            ));
         }
 
         Ok(match l1.result_strategy {
@@ -210,9 +231,15 @@ impl License {
             ResultStrategy::Dataset => l2.clone(),
             ResultStrategy::And => License {
                 train: Rule::AtLeastNOf(2, vec![l1.train.clone(), l2.train.clone()]),
-                train_metric: Rule::AtLeastNOf(2, vec![l1.train_metric.clone(), l2.train_metric.clone()]),
+                train_metric: Rule::AtLeastNOf(
+                    2,
+                    vec![l1.train_metric.clone(), l2.train_metric.clone()],
+                ),
                 test: Rule::AtLeastNOf(2, vec![l1.test.clone(), l2.test.clone()]),
-                test_metric: Rule::AtLeastNOf(2, vec![l1.test_metric.clone(), l2.test_metric.clone()]),
+                test_metric: Rule::AtLeastNOf(
+                    2,
+                    vec![l1.test_metric.clone(), l2.test_metric.clone()],
+                ),
                 list: Rule::AtLeastNOf(2, vec![l1.list.clone(), l2.list.clone()]),
                 fetch: Rule::AtLeastNOf(2, vec![l1.fetch.clone(), l2.fetch.clone()]),
                 delete: Rule::AtLeastNOf(2, vec![l1.delete.clone(), l2.delete.clone()]),
@@ -220,17 +247,29 @@ impl License {
             },
             ResultStrategy::Or => License {
                 train: Rule::AtLeastNOf(1, vec![l1.train.clone(), l2.train.clone()]),
-                train_metric: Rule::AtLeastNOf(1, vec![l1.train_metric.clone(), l2.train_metric.clone()]),
+                train_metric: Rule::AtLeastNOf(
+                    1,
+                    vec![l1.train_metric.clone(), l2.train_metric.clone()],
+                ),
                 test: Rule::AtLeastNOf(1, vec![l1.test.clone(), l2.test.clone()]),
-                test_metric: Rule::AtLeastNOf(1, vec![l1.test_metric.clone(), l2.test_metric.clone()]),
+                test_metric: Rule::AtLeastNOf(
+                    1,
+                    vec![l1.test_metric.clone(), l2.test_metric.clone()],
+                ),
                 list: Rule::AtLeastNOf(1, vec![l1.list.clone(), l2.list.clone()]),
                 fetch: Rule::AtLeastNOf(1, vec![l1.fetch.clone(), l2.fetch.clone()]),
                 delete: Rule::AtLeastNOf(1, vec![l1.delete.clone(), l2.delete.clone()]),
                 result_strategy: l1.result_strategy.clone(),
             },
-            ResultStrategy::Custom(_) => if l1 == l2 { l1.clone() } else {
-                return Err(Status::permission_denied("Checkpoint and dataset licenses are not combatible"));
-            },
+            ResultStrategy::Custom(_) => {
+                if l1 == l2 {
+                    l1.clone()
+                } else {
+                    return Err(Status::permission_denied(
+                        "Checkpoint and dataset licenses are not combatible",
+                    ));
+                }
+            }
         })
     }
     pub fn train_metric(&self) -> Rule {
@@ -238,5 +277,18 @@ impl License {
     }
     pub fn test_metric(&self) -> Rule {
         self.test_metric.clone()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn t() {
+        let license = License {
+            train: Rule::SignedWith(vec![0, 1, 2]),
+            result_strategy: ResultStrategy::And,
+        };
+
+        let a = serde_cbor::to_vec(license);
     }
 }

@@ -14,6 +14,9 @@ class PublicKey:
         hash.update(self.bytes)
         self.__hash = hash.finalize()
 
+    def verify(self, signature: bytes, data: bytes) -> None:
+        self.__key.verify(signature, data, signature_algorithm=ec.ECDSA(hashes.SHA256()))
+
     @property
     def hash(self) -> bytes:
         return self.__hash
@@ -38,6 +41,16 @@ class PublicKey:
                 )
             )
 
+    @property
+    def pem(self) -> str:
+        return str(
+            self.__key.public_bytes(
+                serialization.Encoding.PEM,
+                serialization.PublicFormat.SubjectPublicKeyInfo,
+            ),
+            "utf-8",
+        )
+
     @staticmethod
     def from_pem_content(content: bytes) -> "PublicKey":
         return PublicKey(serialization.load_pem_public_key(content))
@@ -52,7 +65,7 @@ class SigningKey:
         self.__pubkey = PublicKey(self.__key.public_key())
 
     def sign(self, data: bytes) -> bytes:
-        return self.__key.sign(data)
+        return self.__key.sign(data, signature_algorithm=ec.ECDSA(hashes.SHA256()))
 
     def __eq__(self, o: object) -> bool:
         return self.__key.__eq__(o)
@@ -63,7 +76,7 @@ class SigningKey:
 
     @staticmethod
     def generate() -> "SigningKey":
-        return SigningKey(ec.generate_private_key(ec.SECP256K1()))
+        return SigningKey(ec.generate_private_key(ec.SECP256R1()))
 
     @staticmethod
     def from_pem_or_generate(

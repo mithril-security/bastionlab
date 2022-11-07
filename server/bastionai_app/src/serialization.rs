@@ -8,7 +8,6 @@ use tokio::sync::mpsc;
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use tonic::{Response, Status};
 use std::sync::{Arc, RwLock};
-use serde_json;
 
 /// Returns a raw artifact from a stream of chunks received over gRPC.
 /// 
@@ -23,7 +22,7 @@ pub async fn unstream_data(
     let mut data_bytes: Vec<u8> = Vec::new();
     let mut name: String = String::new();
     let mut description: String = String::new();
-    let mut license: String = String::new();
+    let mut license: Vec<u8> = Vec::new();
     let mut meta: Vec<u8> = Vec::new();
     let mut client_info: Option<ClientInfo> = None;
 
@@ -45,7 +44,7 @@ pub async fn unstream_data(
         data: Arc::new(RwLock::new(data_bytes.into())),
         name,
         description,
-        license: serde_json::from_str(&license).map_err(|_| Status::invalid_argument("Unable to parse license specification"))?,
+        license: serde_cbor::from_slice(&license).map_err(|e| Status::invalid_argument("Unable to parse license specification"))?,
         meta,
         client_info,
     })
@@ -81,9 +80,9 @@ pub async fn stream_data(
                     String::from("")
                 },
                 license: if i == 0 { 
-                    serde_json::to_string(&artifact.license).unwrap() // Cannot fail: always obtained by deserializing JSON
+                    serde_cbor::to_vec(&artifact.license).unwrap() // Cannot fail: always obtained by deserializing JSON
                 } else {
-                    String::from("")
+                    Default::default()
                 },
                 client_info: Some(ClientInfo::default()),
                 meta: if i == 0 {

@@ -23,7 +23,7 @@ message ReferenceResponse {
     bytes hash = 1;
     string name = 2;
     string description = 3;
-    string license = 4;
+    bytes license = 4;
     bytes meta = 5;
 }
 
@@ -41,7 +41,7 @@ message Chunk {
     bytes data = 1;
     string name = 2;
     string description = 3;
-    string license = 4;
+    bytes license = 4;
     bytes meta = 5;
     ClientInfo client_info = 6;
 }
