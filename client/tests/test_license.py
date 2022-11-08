@@ -87,10 +87,6 @@ class License(unittest.TestCase):
         pass
 
     def test_create(self):
-        import cbor2
-        print(cbor2.loads(LicenseBuilder.default_with_pubkey(pubkey_c).ser()))
-
-
         builder = (
             LicenseBuilder.default_with_pubkey(pubkey_c)
             .trainable(with_dataset=b"hash1")

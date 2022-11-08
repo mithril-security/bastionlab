@@ -51,9 +51,7 @@ class ResultStrategyCustom:
 @dataclass
 class LicenseDto:
     train: Optional[RuleDto] = None
-    train_metric: Optional[RuleDto] = None
     test: Optional[RuleDto] = None
-    test_metric: Optional[RuleDto] = None
     list: Optional[RuleDto] = None
     fetch: Optional[RuleDto] = None
     delete: Optional[RuleDto] = None
@@ -70,9 +68,7 @@ class LicenseDto:
     def __str__(self) -> str:
         b = "License {\n"
         b += f"  train={self.train},\n"
-        b += f"  train_metric={self.train_metric},\n"
         b += f"  test={self.test},\n"
-        b += f"  test_metric={self.test_metric},\n"
         b += f"  list={self.list},\n"
         b += f"  fetch={self.fetch},\n"
         b += f"  delete={self.delete},\n"
@@ -168,9 +164,7 @@ class LicenseBuilder:
         k = translate_pubkey(key)
         builder.__obj = LicenseDto(
             train=RuleDto(SignedWith=k),
-            train_metric=RuleDto(SignedWith=k),
             test=RuleDto(SignedWith=k),
-            test_metric=RuleDto(SignedWith=k),
             list=RuleDto(SignedWith=k),
             fetch=RuleDto(SignedWith=k),
             delete=RuleDto(SignedWith=k),
@@ -214,9 +208,7 @@ class LicenseBuilder:
                     rec(subrules, f"{path}.AtLeastNOf({n})[{i}]")
 
         rec(self.__obj.train, "train")
-        rec(self.__obj.train_metric, "train_metric")
         rec(self.__obj.test, "test")
-        rec(self.__obj.test_metric, "test_metric")
         rec(self.__obj.list, "list")
         rec(self.__obj.fetch, "fetch")
         rec(self.__obj.delete, "delete")
@@ -242,29 +234,6 @@ class LicenseBuilder:
                 all=all,
             )
         self.__obj.train = merge_rules(self.__obj.train, translate_rule(rule))
-        return self
-
-    def get_train_metrics(
-        self,
-        rule: Optional[Rule] = None,
-        *,
-        with_checkpoint: Optional[HashLike] = None,
-        with_dataset: Optional[HashLike] = None,
-        signed_with: Optional[PublicKeyLike] = None,
-        either: Optional[List[Rule]] = None,
-        all: Optional[List[Rule]] = None,
-    ) -> "LicenseBuilder":
-        if rule is None:
-            rule = Rule(
-                with_checkpoint=with_checkpoint,
-                with_dataset=with_dataset,
-                signed_with=signed_with,
-                either=either,
-                all=all,
-            )
-        self.__obj.train_metric = merge_rules(
-            self.__obj.train_metric, translate_rule(rule)
-        )
         return self
 
     def fetchable(
@@ -349,29 +318,6 @@ class LicenseBuilder:
                 all=all,
             )
         self.__obj.test = merge_rules(self.__obj.test, translate_rule(rule))
-        return self
-
-    def get_test_metrics(
-        self,
-        rule: Optional[Rule] = None,
-        *,
-        with_checkpoint: Optional[HashLike] = None,
-        with_dataset: Optional[HashLike] = None,
-        signed_with: Optional[PublicKeyLike] = None,
-        either: Optional[List[Rule]] = None,
-        all: Optional[List[Rule]] = None,
-    ) -> "LicenseBuilder":
-        if rule is None:
-            rule = Rule(
-                with_checkpoint=with_checkpoint,
-                with_dataset=with_dataset,
-                signed_with=signed_with,
-                either=either,
-                all=all,
-            )
-        self.__obj.test_metric = merge_rules(
-            self.__obj.test_metric, translate_rule(rule)
-        )
         return self
 
     def created_checkpoints_license(

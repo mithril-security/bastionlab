@@ -6,6 +6,7 @@ import ssl
 from bastionai.optimizer_config import *
 from dataclasses import dataclass
 import logging
+import itertools
 
 from typing import Any, List, Optional, TYPE_CHECKING
 
@@ -49,12 +50,19 @@ class Client:
     def __make_grpc_call(self, call: str, arg: Any, streaming: bool = False, method: Optional[bytes] = None, signing_keys: List[SigningKey] = []) -> Any:
         # does not support streaming calls for now
 
-        data: bytes = arg.SerializeToString()
+        needs_signing_and_challenge = method is not None and (len(signing_keys) > 0 or len(self.default_signing_keys) > 0)
 
         metadata = ()
-        if method is not None:
-            for k in [*signing_keys, *self.default_signing_keys]:
-                to_sign = method + data
+        if needs_signing_and_challenge:
+            data: bytes = arg.SerializeToString()
+
+            logging.debug(f"GRPC Call {call}: getting a challenge")
+            challenge = GRPCException.map_error(lambda: self.stub.GetChallenge(Empty())).value
+
+            metadata += (("challenge-bin", challenge),)
+            to_sign = method + challenge + data
+
+            for k in itertools.chain(signing_keys, self.default_signing_keys):
                 signed = k.sign(to_sign)
                 metadata += ((f"signature-{(k.pubkey.hash.hex())}-bin", signed),)
 
@@ -219,7 +227,6 @@ class Client:
         Args:
             config: Training configuration that specifies the model, dataset and hyperparameters.
         """
-        # challenge = GRPCException.map_error(lambda: self.stub.Train(config, metadata={ "challenge": "" }))
         return Reference(self.__make_grpc_call("Train", config, method=b"train", signing_keys=signing_keys))
 
     def test(self, config: TestRequest, *, signing_keys: List[SigningKey] = []) -> Reference:

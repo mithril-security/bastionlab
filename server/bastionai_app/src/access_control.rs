@@ -1,10 +1,9 @@
-use log::*;
 use prost::Message;
 use ring::{digest, signature};
 use serde::{Deserialize, Serialize};
 use tonic::{metadata::MetadataMap, Request, Status};
 
-use crate::remote_torch::{self, Empty, ReferenceRequest, RunRequest, TestRequest, TrainRequest};
+use crate::remote_torch::{Empty, ReferenceRequest, TestRequest, TrainRequest};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Rule {
@@ -19,9 +18,7 @@ pub enum Rule {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct License {
     pub train: Rule,
-    pub train_metric: Rule,
     pub test: Rule,
-    pub test_metric: Rule,
     pub list: Rule,
     pub fetch: Rule,
     pub delete: Rule,
@@ -151,14 +148,18 @@ impl Rule {
 }
 
 fn get_message<T: Message>(method: &[u8], req: &Request<T>) -> Result<Vec<u8>, Status> {
-    let mut res = Vec::from(method);
-    if let Some(meta) = req.metadata().get_bin("challenge") {
-        let challenge = meta
-            .to_bytes()
-            .map_err(|_| Status::invalid_argument("Could not decode challenge"))?;
-        res.append(&mut challenge.to_vec());
-    }
-    res.append(&mut req.get_ref().encode_to_vec());
+    let meta = req
+        .metadata()
+        .get_bin("challenge-bin")
+        .ok_or_else(|| Status::invalid_argument("No challenge in request metadata"))?;
+    let challenge = meta
+        .to_bytes()
+        .map_err(|_| Status::invalid_argument("Could not decode challenge"))?;
+
+    let mut res = Vec::with_capacity(method.len() + challenge.as_ref().len() + req.get_ref().encoded_len());
+    res.extend_from_slice(method);
+    res.extend_from_slice(challenge.as_ref());
+    req.get_ref().encode(&mut res).map_err(|e| Status::internal(format!("error while encoding the request: {:?}", e)))?;
     Ok(res)
 }
 
@@ -231,15 +232,7 @@ impl License {
             ResultStrategy::Dataset => l2.clone(),
             ResultStrategy::And => License {
                 train: Rule::AtLeastNOf(2, vec![l1.train.clone(), l2.train.clone()]),
-                train_metric: Rule::AtLeastNOf(
-                    2,
-                    vec![l1.train_metric.clone(), l2.train_metric.clone()],
-                ),
                 test: Rule::AtLeastNOf(2, vec![l1.test.clone(), l2.test.clone()]),
-                test_metric: Rule::AtLeastNOf(
-                    2,
-                    vec![l1.test_metric.clone(), l2.test_metric.clone()],
-                ),
                 list: Rule::AtLeastNOf(2, vec![l1.list.clone(), l2.list.clone()]),
                 fetch: Rule::AtLeastNOf(2, vec![l1.fetch.clone(), l2.fetch.clone()]),
                 delete: Rule::AtLeastNOf(2, vec![l1.delete.clone(), l2.delete.clone()]),
@@ -247,15 +240,7 @@ impl License {
             },
             ResultStrategy::Or => License {
                 train: Rule::AtLeastNOf(1, vec![l1.train.clone(), l2.train.clone()]),
-                train_metric: Rule::AtLeastNOf(
-                    1,
-                    vec![l1.train_metric.clone(), l2.train_metric.clone()],
-                ),
                 test: Rule::AtLeastNOf(1, vec![l1.test.clone(), l2.test.clone()]),
-                test_metric: Rule::AtLeastNOf(
-                    1,
-                    vec![l1.test_metric.clone(), l2.test_metric.clone()],
-                ),
                 list: Rule::AtLeastNOf(1, vec![l1.list.clone(), l2.list.clone()]),
                 fetch: Rule::AtLeastNOf(1, vec![l1.fetch.clone(), l2.fetch.clone()]),
                 delete: Rule::AtLeastNOf(1, vec![l1.delete.clone(), l2.delete.clone()]),
@@ -271,12 +256,6 @@ impl License {
                 }
             }
         })
-    }
-    pub fn train_metric(&self) -> Rule {
-        self.train_metric.clone()
-    }
-    pub fn test_metric(&self) -> Rule {
-        self.test_metric.clone()
     }
 }
 

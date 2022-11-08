@@ -71,7 +71,7 @@ impl BastionAIServer {
     }
 
     fn check_challenge<T>(&self, request: &Request<T>) -> Result<(), Status> {
-        if let Some(meta) = request.metadata().get_bin("challenge") {
+        if let Some(meta) = request.metadata().get_bin("challenge-bin") {
             let challenge = meta.to_bytes().map_err(|_| {
                 Status::invalid_argument("Could not decode challenge")
             })?;

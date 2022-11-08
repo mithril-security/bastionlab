@@ -44,7 +44,7 @@ pub async fn unstream_data(
         data: Arc::new(RwLock::new(data_bytes.into())),
         name,
         description,
-        license: serde_cbor::from_slice(&license).map_err(|e| Status::invalid_argument("Unable to parse license specification"))?,
+        license: serde_cbor::from_slice(&license).map_err(|_| Status::invalid_argument("Unable to parse license specification"))?,
         meta,
         client_info,
     })
