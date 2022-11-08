@@ -237,7 +237,7 @@ class LicenseBuilder:
             list=Rule(signed_with=k),
             fetch=Rule(signed_with=k),
             delete=Rule(signed_with=k),
-            result_strategy=ResultStrategy(strategy=ResultStrategyKind.And),
+            result_strategy=ResultStrategy(strategy=ResultStrategyKind.Or),
         )
         return builder
 

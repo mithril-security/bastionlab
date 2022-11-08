@@ -7,6 +7,7 @@ import torch
 from bastionai.psg import expand_weights
 from bastionai.client import Client, Reference
 from bastionai.optimizer_config import *
+from bastionai.license import LicenseBuilder, License
 
 from time import sleep
 from tqdm import tqdm  # type: ignore [import]
@@ -39,7 +40,7 @@ class RemoteDataset:
         privacy_limit: Optional[float] = None,
         name: Optional[str] = None,
         description: Optional[str] = None,
-        license: Optional[str] = None,
+        license: Optional[Union[License, LicenseBuilder]] = None,
         progress: bool = True,
     ) -> None:
         if isinstance(train_dataset, Dataset):
@@ -156,7 +157,7 @@ class RemoteLearner:
         metric_eps_per_batch: Optional[float] = None,
         model_name: Optional[str] = None,
         model_description: str = "",
-        license: Optional[str] = None,
+        license: Optional[Union[License, LicenseBuilder]] = None,
         expand: bool = True,
         progress: bool = True,
     ) -> None:

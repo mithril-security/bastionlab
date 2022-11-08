@@ -23,6 +23,10 @@ SIZE_LEN = 8
 class Reference:
     reference: Union[ReferenceRequest, ReferenceResponse]
 
+    @staticmethod
+    def from_hash(hash: bytes) -> "Reference":
+        return Reference(reference=ReferenceRequest(hash=hash))
+
     def request(self) -> ReferenceRequest:
         return ReferenceRequest(hash=self.reference.hash)
     
