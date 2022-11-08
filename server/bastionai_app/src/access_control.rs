@@ -1,38 +1,13 @@
+use crate::remote_torch;
+use anyhow::Result;
 use prost::Message;
 use ring::{digest, signature};
-use serde::{Deserialize, Serialize};
 use tonic::{metadata::MetadataMap, Request, Status};
 
-use crate::remote_torch::{Empty, ReferenceRequest, TestRequest, TrainRequest};
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum Rule {
-    AtLeastNOf(usize, Vec<Rule>),
-    WithCheckpoint(serde_bytes::ByteBuf),
-    WithDataset(serde_bytes::ByteBuf),
-    // IssuedBy(serde_bytes::ByteBuf),
-    // HasSecret(serde_bytes::ByteBuf),
-    SignedWith(serde_bytes::ByteBuf),
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct License {
-    pub train: Rule,
-    pub test: Rule,
-    pub list: Rule,
-    pub fetch: Rule,
-    pub delete: Rule,
-    pub result_strategy: ResultStrategy,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum ResultStrategy {
-    Checkpoint, // Copy checkpoint's license
-    Dataset,    // Copy checkpoint's license
-    And,        // Use checkpoint's licence AND dataset's
-    Or,         // Use checkpoint's licence OR dataset's
-    Custom(Box<License>),
-}
+pub use crate::remote_torch::{
+    result_strategy::Strategy as RStrategyKind, rule::AtLeastNOf, rule::Rule as IRule, License,
+    ResultStrategy, Rule,
+};
 
 impl Rule {
     fn verify(
@@ -43,11 +18,15 @@ impl Rule {
         checkpoint_hash: Option<&[u8]>,
         dataset_hash: Option<&[u8]>,
     ) -> Result<(), Status> {
-        match self {
-            Rule::AtLeastNOf(n, policies) => {
+        match self
+            .rule
+            .as_ref()
+            .ok_or_else(|| Status::invalid_argument("malformated rule"))?
+        {
+            IRule::AtLeastNOf(AtLeastNOf { n, rules }) => {
                 let mut m = 0;
                 let mut failed = String::new();
-                for (i, policy) in policies.iter().enumerate() {
+                for (i, policy) in rules.iter().enumerate() {
                     match policy.verify(
                         header,
                         message,
@@ -67,7 +46,7 @@ impl Rule {
                     m, n
                 )))
             }
-            Rule::SignedWith(raw_public_key) => {
+            IRule::SignedWith(raw_public_key) => {
                 let public_key_hash = hex::encode(digest::digest(&digest::SHA256, raw_public_key));
                 match header.get_bin(format!("signature-{}-bin", public_key_hash)) {
                     Some(meta) => {
@@ -127,7 +106,7 @@ impl Rule {
             //         Err(Status::permission_denied("Issuer mismatch"))
             //     }
             // }
-            Rule::WithCheckpoint(hash) => {
+            IRule::WithCheckpoint(hash) => {
                 if let Some(checkpoint_hash) = checkpoint_hash {
                     if &*hash != checkpoint_hash {
                         return Err(Status::permission_denied("Checkpoint mismatch"));
@@ -135,7 +114,7 @@ impl Rule {
                 }
                 Ok(())
             }
-            Rule::WithDataset(hash) => {
+            IRule::WithDataset(hash) => {
                 if let Some(dataset_hash) = dataset_hash {
                     if &*hash != dataset_hash {
                         return Err(Status::permission_denied("Dataset mismatch"));
@@ -156,67 +135,114 @@ fn get_message<T: Message>(method: &[u8], req: &Request<T>) -> Result<Vec<u8>, S
         .to_bytes()
         .map_err(|_| Status::invalid_argument("Could not decode challenge"))?;
 
-    let mut res = Vec::with_capacity(method.len() + challenge.as_ref().len() + req.get_ref().encoded_len());
+    let mut res =
+        Vec::with_capacity(method.len() + challenge.as_ref().len() + req.get_ref().encoded_len());
     res.extend_from_slice(method);
     res.extend_from_slice(challenge.as_ref());
-    req.get_ref().encode(&mut res).map_err(|e| Status::internal(format!("error while encoding the request: {:?}", e)))?;
+    req.get_ref()
+        .encode(&mut res)
+        .map_err(|e| Status::internal(format!("error while encoding the request: {:?}", e)))?;
     Ok(res)
 }
 
 impl License {
-    pub fn verify_fetch(&self, req: &Request<ReferenceRequest>) -> Result<(), Status> {
-        self.fetch.verify(
-            &req.metadata(),
-            &get_message(b"fetch", req)?,
-            None,
-            None,
-            None,
-        )
+    pub fn verify_fetch(
+        &self,
+        req: &Request<remote_torch::ReferenceRequest>,
+    ) -> Result<(), Status> {
+        self.fetch
+            .as_ref()
+            .ok_or_else(|| Status::permission_denied("license does not permit fetch"))?
+            .verify(
+                &req.metadata(),
+                &get_message(b"fetch", req)?,
+                None,
+                None,
+                None,
+            )
     }
-    pub fn verify_list(&self, req: &Request<Empty>) -> Result<(), Status> {
-        self.list.verify(
-            &req.metadata(),
-            &get_message(b"list", req)?,
-            None,
-            None,
-            None,
-        )
+    pub fn verify_list(&self, req: &Request<remote_torch::Empty>) -> Result<(), Status> {
+        self.list
+            .as_ref()
+            .ok_or_else(|| Status::permission_denied("license does not permit list"))?
+            .verify(
+                &req.metadata(),
+                &get_message(b"list", req)?,
+                None,
+                None,
+                None,
+            )
     }
-    pub fn verify_delete(&self, req: &Request<ReferenceRequest>) -> Result<(), Status> {
-        self.list.verify(
-            &req.metadata(),
-            &get_message(b"delete", req)?,
-            None,
-            None,
-            None,
-        )
+    pub fn verify_delete(
+        &self,
+        req: &Request<remote_torch::ReferenceRequest>,
+    ) -> Result<(), Status> {
+        self.delete
+            .as_ref()
+            .ok_or_else(|| Status::permission_denied("license does not permit delete"))?
+            .verify(
+                &req.metadata(),
+                &get_message(b"delete", req)?,
+                None,
+                None,
+                None,
+            )
     }
-    pub fn verify_train(&self, req: &Request<TrainRequest>) -> Result<(), Status> {
-        self.train.verify(
-            &req.metadata(),
-            &get_message(b"train", req)?,
-            None,
-            Some(&req.get_ref().model[..]),
-            Some(&req.get_ref().dataset[..]),
-        )
+    pub fn verify_train(&self, req: &Request<remote_torch::TrainRequest>) -> Result<(), Status> {
+        self.train
+            .as_ref()
+            .ok_or_else(|| Status::permission_denied("license does not permit train"))?
+            .verify(
+                &req.metadata(),
+                &get_message(b"train", req)?,
+                None,
+                Some(&req.get_ref().model[..]),
+                Some(&req.get_ref().dataset[..]),
+            )
     }
-    pub fn verify_test(&self, req: &Request<TestRequest>) -> Result<(), Status> {
-        self.train.verify(
-            &req.metadata(),
-            &get_message(b"test", req)?,
-            None,
-            Some(&req.get_ref().model[..]),
-            Some(&req.get_ref().dataset[..]),
-        )
+    pub fn verify_test(&self, req: &Request<remote_torch::TestRequest>) -> Result<(), Status> {
+        self.test
+            .as_ref()
+            .ok_or_else(|| Status::permission_denied("license does not permit test"))?
+            .verify(
+                &req.metadata(),
+                &get_message(b"test", req)?,
+                None,
+                Some(&req.get_ref().model[..]),
+                Some(&req.get_ref().dataset[..]),
+            )
     }
     pub fn combine(&self, other: &License) -> Result<License, Status> {
-        let l1 = if let ResultStrategy::Custom(l) = &self.result_strategy {
-            l
+        let l1 = if self
+            .result_strategy
+            .as_ref()
+            .ok_or_else(|| Status::permission_denied("no result strategy"))?
+            .strategy()
+            == RStrategyKind::Custom
+        {
+            self.result_strategy
+                .as_ref()
+                .unwrap()
+                .custom_license
+                .as_ref()
+                .ok_or_else(|| Status::permission_denied("no custom license in result strategy"))?
         } else {
             self
         };
-        let l2 = if let ResultStrategy::Custom(l) = &other.result_strategy {
-            l
+        let l2 = if other
+            .result_strategy
+            .as_ref()
+            .ok_or_else(|| Status::permission_denied("no result strategy"))?
+            .strategy()
+            == RStrategyKind::Custom
+        {
+            other
+                .result_strategy
+                .as_ref()
+                .unwrap()
+                .custom_license
+                .as_ref()
+                .ok_or_else(|| Status::permission_denied("no custom license in result strategy"))?
         } else {
             other
         };
@@ -227,26 +253,38 @@ impl License {
             ));
         }
 
-        Ok(match l1.result_strategy {
-            ResultStrategy::Checkpoint => l1.clone(),
-            ResultStrategy::Dataset => l2.clone(),
-            ResultStrategy::And => License {
-                train: Rule::AtLeastNOf(2, vec![l1.train.clone(), l2.train.clone()]),
-                test: Rule::AtLeastNOf(2, vec![l1.test.clone(), l2.test.clone()]),
-                list: Rule::AtLeastNOf(2, vec![l1.list.clone(), l2.list.clone()]),
-                fetch: Rule::AtLeastNOf(2, vec![l1.fetch.clone(), l2.fetch.clone()]),
-                delete: Rule::AtLeastNOf(2, vec![l1.delete.clone(), l2.delete.clone()]),
+        let make_rule = |n: u64, r1: Option<Rule>, r2: Option<Rule>| -> Result<_, Status> {
+            Ok(Some(Rule {
+                rule: Some(IRule::AtLeastNOf(AtLeastNOf {
+                    n,
+                    rules: vec![
+                        r1.ok_or_else(|| Status::permission_denied("malformated rule"))?,
+                        r2.ok_or_else(|| Status::permission_denied("malformated rule"))?,
+                    ],
+                })),
+            }))
+        };
+
+        Ok(match l1.result_strategy.as_ref().unwrap().strategy() {
+            RStrategyKind::Checkpoint => l1.clone(),
+            RStrategyKind::Dataset => l2.clone(),
+            RStrategyKind::And => License {
+                train: make_rule(2, l1.train.clone(), l2.train.clone())?,
+                test: make_rule(2, l1.test.clone(), l2.test.clone())?,
+                list: make_rule(2, l1.list.clone(), l2.list.clone())?,
+                fetch: make_rule(2, l1.fetch.clone(), l2.fetch.clone())?,
+                delete: make_rule(2, l1.delete.clone(), l2.delete.clone())?,
                 result_strategy: l1.result_strategy.clone(),
             },
-            ResultStrategy::Or => License {
-                train: Rule::AtLeastNOf(1, vec![l1.train.clone(), l2.train.clone()]),
-                test: Rule::AtLeastNOf(1, vec![l1.test.clone(), l2.test.clone()]),
-                list: Rule::AtLeastNOf(1, vec![l1.list.clone(), l2.list.clone()]),
-                fetch: Rule::AtLeastNOf(1, vec![l1.fetch.clone(), l2.fetch.clone()]),
-                delete: Rule::AtLeastNOf(1, vec![l1.delete.clone(), l2.delete.clone()]),
+            RStrategyKind::Or => License {
+                train: make_rule(1, l1.train.clone(), l2.train.clone())?,
+                test: make_rule(1, l1.test.clone(), l2.test.clone())?,
+                list: make_rule(1, l1.list.clone(), l2.list.clone())?,
+                fetch: make_rule(1, l1.fetch.clone(), l2.fetch.clone())?,
+                delete: make_rule(1, l1.delete.clone(), l2.delete.clone())?,
                 result_strategy: l1.result_strategy.clone(),
             },
-            ResultStrategy::Custom(_) => {
+            RStrategyKind::Custom => {
                 if l1 == l2 {
                     l1.clone()
                 } else {
@@ -256,18 +294,5 @@ impl License {
                 }
             }
         })
-    }
-}
-
-#[cfg(test)]
-mod test {
-    #[test]
-    fn t() {
-        let license = License {
-            train: Rule::SignedWith(vec![0, 1, 2]),
-            result_strategy: ResultStrategy::And,
-        };
-
-        let a = serde_cbor::to_vec(license);
     }
 }

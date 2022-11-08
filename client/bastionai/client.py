@@ -8,13 +8,13 @@ from dataclasses import dataclass
 import logging
 import itertools
 
-from typing import Any, List, Optional, TYPE_CHECKING
+from typing import Any, List, Optional, TYPE_CHECKING, Union
 
 import grpc  # type: ignore [import]
 
 from bastionai.pb.remote_torch_pb2 import Empty, MetricResponse, TestRequest, TrainRequest, ClientInfo  # type: ignore [import]
 from bastionai.pb.remote_torch_pb2_grpc import RemoteTorchStub  # type: ignore [import]
-from bastionai.license import LicenseBuilder
+from bastionai.license import LicenseBuilder, License
 from torch.nn import Module
 from torch.utils.data import Dataset
 
@@ -76,7 +76,7 @@ class Client:
         self,
         stub: RemoteTorchStub,
         client_info: ClientInfo,
-        default_license: Optional[LicenseBuilder] = None,
+        default_license: Optional[Union[LicenseBuilder, License]] = None,
         default_signing_keys: List[SigningKey] = []
     ) -> None:
         self.stub = stub
@@ -89,7 +89,7 @@ class Client:
         model: Module,
         name: str,
         description: str = "",
-        license: Optional[LicenseBuilder] = None,
+        license: Optional[Union[LicenseBuilder, License]] = None,
         chunk_size: int = 4_194_285,
         progress: bool = False,
     ) -> Reference:
@@ -117,7 +117,7 @@ class Client:
                 model,
                 name=name,
                 description=description,
-                license=li.ser(),
+                license=(li.build() if isinstance(li, LicenseBuilder) else li).ser(),
                 chunk_size=chunk_size,
                 client_info=self.client_info,
                 progress=progress,
@@ -129,7 +129,7 @@ class Client:
         dataset: Dataset,
         name: str,
         description: str = "",
-        license: Optional[LicenseBuilder] = None,
+        license: Optional[Union[LicenseBuilder, License]] = None,
         privacy_limit: Optional[float] = None,
         chunk_size: int = 4_194_285,
         batch_size: int = 1024,
@@ -162,7 +162,7 @@ class Client:
                 dataset,
                 name=name,
                 description=description,
-                license=li.ser(),
+                license=(li.build() if isinstance(li, LicenseBuilder) else li).ser(),
                 chunk_size=chunk_size,
                 batch_size=batch_size,
                 privacy_limit=privacy_limit,
@@ -313,7 +313,7 @@ class Connection:
         host: str,
         port: int,
         *,
-        default_license: Optional[LicenseBuilder] = None,
+        default_license: Optional[Union[LicenseBuilder, License]] = None,
         channel: Any = None,
         server_name: str = "bastionai-srv",
         license_key = Optional[SigningKey],
@@ -355,7 +355,7 @@ class Connection:
 
         if self.license_key is not None:
             if self.default_license is None:
-                self.default_license = LicenseBuilder.default_with_pubkey(self.license_key.pubkey)
+                self.default_license = LicenseBuilder.default_with_pubkey(self.license_key.pubkey).build()
             if self.license_key not in self.default_signing_keys:
                 self.default_signing_keys.append(self.license_key)
 

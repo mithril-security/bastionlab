@@ -2,6 +2,8 @@ from typing import Tuple, Optional, List, Union, TypedDict, Literal
 from dataclasses import dataclass, is_dataclass
 import cbor2
 from .keys import PublicKey
+import bastionai.pb.remote_torch_pb2 as pb  # type: ignore [import]
+from enum import Enum
 
 
 def cbor_default_encoder(encoder, value):
@@ -11,73 +13,131 @@ def cbor_default_encoder(encoder, value):
 
 
 @dataclass
-class RuleDto:
-    AtLeastNOf: Optional[Tuple[int, List["RuleDto"]]] = None
-    WithCheckpoint: Optional[bytes] = None
-    WithDataset: Optional[bytes] = None
-    SignedWith: Optional[bytes] = None
+class Rule:
+    at_least_n_of: Optional[Tuple[int, List["Rule"]]] = None
+    with_checkpoint: Optional[bytes] = None
+    with_dataset: Optional[bytes] = None
+    signed_with: Optional[PublicKey] = None
 
-    @property
-    def __dict__(self) -> dict:
-        if self.AtLeastNOf:
-            return { 'AtLeastNOf': self.AtLeastNOf }
-        if self.WithCheckpoint:
-            return { 'WithCheckpoint': self.WithCheckpoint }
-        if self.WithDataset:
-            return { 'WithDataset': self.WithDataset }
-        if self.SignedWith:
-            return { 'SignedWith': self.SignedWith }
+    def ser(self) -> pb.Rule:
+        if self.at_least_n_of is not None:
+            return pb.Rule(
+                at_least_n_of=pb.Rule.AtLeastNOf(
+                    n=self.at_least_n_of[0],
+                    rules=[el.ser() for el in self.at_least_n_of[1]],
+                )
+            )
+        if self.with_checkpoint is not None:
+            return pb.Rule(with_checkpoint=self.with_checkpoint)
+        if self.with_dataset is not None:
+            return pb.Rule(with_dataset=self.with_dataset)
+        if self.signed_with is not None:
+            return pb.Rule(signed_with=self.signed_with.bytes)
+
+    @staticmethod
+    def deser(rule: pb.Rule) -> "Rule":
+        if rule.HasField("at_least_n_of"):
+            return Rule(
+                at_least_n_of=(
+                    rule.at_least_n_of.n,
+                    [Rule.deser(r) for r in rule.at_least_n_of.rules],
+                )
+            )
+        if rule.HasField("with_checkpoint"):
+            return Rule(with_checkpoint=rule.with_checkpoint)
+        if rule.HasField("with_dataset"):
+            return Rule(with_dataset=rule.with_dataset)
+        if rule.HasField("signed_with"):
+            return Rule(signed_with=PublicKey.from_bytes_content(rule.signed_with))
 
     def __str__(self) -> str:
-        b = ""
-        if self.AtLeastNOf is not None:
-            rules = map(str, self.AtLeastNOf[1])
-            b += f"AtLeastNOf({self.AtLeastNOf[0]}, [{', '.join(rules)}])"
-        if self.SignedWith is not None:
-            b += f"SignedWith({self.SignedWith.hex()})"
-        if self.WithCheckpoint is not None:
-            b += f"WithCheckpoint({self.WithCheckpoint.hex()})"
-        if self.WithDataset is not None:
-            b += f"WithDataset({self.WithDataset.hex()})"
-        b += ""
+        b = "Rule("
+        if self.at_least_n_of is not None:
+            rules = map(str, self.at_least_n_of[1])
+            b += f"at_least_n_of({self.at_least_n_of[0]}, [{', '.join(rules)}])"
+        elif self.signed_with is not None:
+            b += f"signed_with(hash={self.signed_with.hash.hex()})"
+        elif self.with_checkpoint is not None:
+            b += f"with_checkpoint({self.with_checkpoint.hex()})"
+        elif self.with_dataset is not None:
+            b += f"with_dataset({self.with_dataset.hex()})"
+        b += ")"
         return b
 
 
 @dataclass
-class ResultStrategyCustom:
-    Custom: "LicenseDto"
+class ResultStrategyKind(Enum):
+    Checkpoint = 0
+    Dataset = 1
+    And = 2
+    Or = 3
+    Custom = 4
 
 
 @dataclass
-class LicenseDto:
-    train: Optional[RuleDto] = None
-    test: Optional[RuleDto] = None
-    list: Optional[RuleDto] = None
-    fetch: Optional[RuleDto] = None
-    delete: Optional[RuleDto] = None
-    result_strategy: Union[
-        Literal[
-            "Checkpoint",
-            "Dataset",
-            "And",
-            "Or",
-        ],
-        ResultStrategyCustom,
-    ] = "Or"
+class ResultStrategy:
+    strategy: ResultStrategyKind
+    custom_license: Optional["License"] = None
+
+    def ser(self) -> pb.ResultStrategy:
+        return pb.ResultStrategy(
+            strategy=self.strategy.value,
+            custom_license=self.custom_license.ser() if self.custom_license else None,
+        )
+
+    @staticmethod
+    def deser(rs: pb.ResultStrategy) -> "ResultStrategy":
+        return ResultStrategy(
+            strategy=ResultStrategyKind(rs.strategy), custom_license=None if not rs.HasField("custom_license") else License.deser(rs.custom_license)
+        )
 
     def __str__(self) -> str:
-        b = "License {\n"
-        b += f"  train={self.train},\n"
-        b += f"  test={self.test},\n"
-        b += f"  list={self.list},\n"
-        b += f"  fetch={self.fetch},\n"
-        b += f"  delete={self.delete},\n"
-        if isinstance(self.result_strategy, str):
-            b += f"  result_strategy={self.result_strategy},\n"
-        else:
-            s = "\n  ".join(str(self.result_strategy.Custom).split("\n"))
-            b += f"  result_strategy=Custom({s}),\n"
-        b += "}"
+        b = f"ResultStrategy(strategy={self.strategy}"
+        if self.custom_license:
+            b += f", custom_license={self.custom_license}"
+        b += ")"
+        return b
+
+
+@dataclass
+class License:
+    train: Optional[Rule] = None
+    test: Optional[Rule] = None
+    list: Optional[Rule] = None
+    fetch: Optional[Rule] = None
+    delete: Optional[Rule] = None
+    result_strategy: Optional[ResultStrategy] = None
+
+    def ser(self) -> pb.License:
+        return pb.License(
+            train=self.train.ser(),
+            test=self.test.ser(),
+            list=self.list.ser(),
+            fetch=self.fetch.ser(),
+            delete=self.delete.ser(),
+            result_strategy=self.result_strategy.ser(),
+        )
+
+    @staticmethod
+    def deser(l: pb.License) -> "License":
+        return License(
+            train=Rule.deser(l.train),
+            test=Rule.deser(l.test),
+            list=Rule.deser(l.list),
+            fetch=Rule.deser(l.fetch),
+            delete=Rule.deser(l.delete),
+            result_strategy=ResultStrategy.deser(l.result_strategy),
+        )
+
+    def __str__(self) -> str:
+        b = "License { "
+        b += f"train={self.train}, "
+        b += f"test={self.test}, "
+        b += f"list={self.list}, "
+        b += f"fetch={self.fetch}, "
+        b += f"delete={self.delete}, "
+        b += f"result_strategy={self.result_strategy}"
+        b += " }"
         return b
 
 
@@ -87,10 +147,11 @@ PublicKeyLike = Union[str, PublicKey]
 
 def translate_pubkey(s: PublicKeyLike) -> bytes:
     if isinstance(s, str):
-        return PublicKey.from_pem_content(s).bytes
+        return PublicKey.from_pem_content(s)
     if isinstance(s, PublicKey):
-        return s.bytes
+        return s
     raise TypeError(f"Value of type {type(s)} is not supported as a publickey")
+
 
 def translate_hash(s: HashLike) -> bytes:
     if isinstance(s, str):
@@ -100,31 +161,31 @@ def translate_hash(s: HashLike) -> bytes:
     raise TypeError(f"Value of type {type(s)} is not supported as a hash")
 
 
-class Rule(TypedDict):
+class RuleBuilder(TypedDict):
     with_checkpoint: HashLike
     with_dataset: HashLike
     signed_with: PublicKeyLike
-    either: List["Rule"]
-    all: List["Rule"]
+    either: List["RuleBuilder"]
+    all: List["RuleBuilder"]
 
 
-def translate_rule(rule: Rule) -> RuleDto:
+def translate_rule(rule: RuleBuilder) -> Rule:
     keys = list(
         map(lambda en: en[0], filter(lambda en: en[1] is not None, rule.items()))
     )
     if keys == ["signed_with"]:
-        return RuleDto(SignedWith=translate_hash(rule["signed_with"]))
+        return Rule(signed_with=translate_pubkey(rule["signed_with"]))
     elif keys == ["with_checkpoint"]:
-        return RuleDto(WithCheckpoint=translate_hash(rule["with_checkpoint"]))
+        return Rule(with_checkpoint=translate_hash(rule["with_checkpoint"]))
     elif keys == ["with_dataset"]:
-        return RuleDto(WithDataset=translate_hash(rule["with_dataset"]))
+        return Rule(with_dataset=translate_hash(rule["with_dataset"]))
     elif keys == ["either"]:
         rules = list(map(translate_rule, rule["either"]))
-        return RuleDto(AtLeastNOf=[1, rules])
+        return Rule(at_least_n_of=[1, rules])
     elif keys == ["all"]:
         rules = list(map(translate_rule, rule["all"]))
-        return RuleDto(
-            AtLeastNOf=[
+        return Rule(
+            at_least_n_of=[
                 len(rules),
             ]
         )
@@ -132,56 +193,64 @@ def translate_rule(rule: Rule) -> RuleDto:
         raise TypeError(f"Invalid rule: {rule}")
 
 
-def merge_rules(original: Optional[RuleDto], rule: RuleDto) -> RuleDto:
+def merge_rules(original: Optional[Rule], rule: Rule) -> Rule:
     if original is None:
         return rule
 
-    original_is_or = original.AtLeastNOf is not None and original.AtLeastNOf[0] == 1
-    rule_is_or = rule.AtLeastNOf is not None and rule.AtLeastNOf[0] == 1
+    original_is_or = (
+        original.at_least_n_of is not None and original.at_least_n_of[0] == 1
+    )
+    rule_is_or = rule.at_least_n_of is not None and rule.at_least_n_of[0] == 1
 
     if original_is_or and rule_is_or:
-        return RuleDto(AtLeastNOf=[1, [*original.AtLeastNOf[1], *rule.AtLeastNOf[1]]])
+        return Rule(
+            at_least_n_of=[1, [*original.at_least_n_of[1], *rule.at_least_n_of[1]]]
+        )
     if original_is_or:
-        return RuleDto(AtLeastNOf=[1, [*original.AtLeastNOf[1], rule]])
+        return Rule(at_least_n_of=[1, [*original.at_least_n_of[1], rule]])
     if rule_is_or:
-        return RuleDto(AtLeastNOf=[1, [original, *rule.AtLeastNOf[1]]])
+        return Rule(at_least_n_of=[1, [original, *rule.at_least_n_of[1]]])
 
-    return RuleDto(AtLeastNOf=[1, [original, rule]])
+    return Rule(at_least_n_of=[1, [original, rule]])
 
 
 class LicenseBuilder:
-    __obj: LicenseDto = LicenseDto()
+    __obj: License
+
+    def build(self) -> License:
+        self.validate()
+        return self.__obj
+
+    def __init__(self, obj: License = License()):
+        self.__obj = obj
 
     def __str__(self) -> str:
         return self.__obj.__str__()
-
-    def ser(self) -> bytes:
-        return cbor2.dumps(self.__obj, default=cbor_default_encoder)
 
     @staticmethod
     def default_with_pubkey(key: PublicKeyLike) -> "LicenseBuilder":
         builder = LicenseBuilder()
         k = translate_pubkey(key)
-        builder.__obj = LicenseDto(
-            train=RuleDto(SignedWith=k),
-            test=RuleDto(SignedWith=k),
-            list=RuleDto(SignedWith=k),
-            fetch=RuleDto(SignedWith=k),
-            delete=RuleDto(SignedWith=k),
-            result_strategy="And",
+        builder.__obj = License(
+            train=Rule(signed_with=k),
+            test=Rule(signed_with=k),
+            list=Rule(signed_with=k),
+            fetch=Rule(signed_with=k),
+            delete=Rule(signed_with=k),
+            result_strategy=ResultStrategy(strategy=ResultStrategyKind.And),
         )
         return builder
 
     def validate(self):
-        def rec(rule: Optional[RuleDto], path: str):
+        def rec(rule: Optional[Rule], path: str):
             if not rule:
                 raise TypeError(f"Error in license builder: rule {path} is missing")
 
             n = (
-                (rule.AtLeastNOf != None)
-                + (rule.WithDataset != None)
-                + (rule.WithCheckpoint != None)
-                + (rule.SignedWith != None)
+                (rule.at_least_n_of != None)
+                + (rule.with_dataset != None)
+                + (rule.with_checkpoint != None)
+                + (rule.signed_with != None)
             )
             if n == 0:
                 raise TypeError(
@@ -192,9 +261,9 @@ class LicenseBuilder:
                     f"Error in license builder: rule {path} contains multiple directives"
                 )
 
-            if rule.AtLeastNOf is not None:
-                n = rule.AtLeastNOf[0]
-                subrules = rule.AtLeastNOf[1]
+            if rule.at_least_n_of is not None:
+                n = rule.at_least_n_of[0]
+                subrules = rule.at_least_n_of[1]
                 if n == 0:
                     raise TypeError(
                         f"Error in license builder: rule {path} is always true"
@@ -205,7 +274,7 @@ class LicenseBuilder:
                     )
 
                 for i, rule in enumerate(subrules):
-                    rec(subrules, f"{path}.AtLeastNOf({n})[{i}]")
+                    rec(rule, f"{path}.at_least_n_of({n})[{i}]")
 
         rec(self.__obj.train, "train")
         rec(self.__obj.test, "test")
@@ -217,16 +286,16 @@ class LicenseBuilder:
 
     def trainable(
         self,
-        rule: Optional[Rule] = None,
+        rule: Optional[RuleBuilder] = None,
         *,
         with_checkpoint: Optional[HashLike] = None,
         with_dataset: Optional[HashLike] = None,
         signed_with: Optional[PublicKeyLike] = None,
-        either: Optional[List[Rule]] = None,
-        all: Optional[List[Rule]] = None,
+        either: Optional[List[RuleBuilder]] = None,
+        all: Optional[List[RuleBuilder]] = None,
     ) -> "LicenseBuilder":
         if rule is None:
-            rule = Rule(
+            rule = RuleBuilder(
                 with_checkpoint=with_checkpoint,
                 with_dataset=with_dataset,
                 signed_with=signed_with,
@@ -238,16 +307,16 @@ class LicenseBuilder:
 
     def fetchable(
         self,
-        rule: Optional[Rule] = None,
+        rule: Optional[RuleBuilder] = None,
         *,
         with_checkpoint: Optional[HashLike] = None,
         with_dataset: Optional[HashLike] = None,
         signed_with: Optional[PublicKeyLike] = None,
-        either: Optional[List[Rule]] = None,
-        all: Optional[List[Rule]] = None,
+        either: Optional[List[RuleBuilder]] = None,
+        all: Optional[List[RuleBuilder]] = None,
     ) -> "LicenseBuilder":
         if rule is None:
-            rule = Rule(
+            rule = RuleBuilder(
                 with_checkpoint=with_checkpoint,
                 with_dataset=with_dataset,
                 signed_with=signed_with,
@@ -259,16 +328,16 @@ class LicenseBuilder:
 
     def deletable(
         self,
-        rule: Optional[Rule] = None,
+        rule: Optional[RuleBuilder] = None,
         *,
         with_checkpoint: Optional[HashLike] = None,
         with_dataset: Optional[HashLike] = None,
         signed_with: Optional[PublicKeyLike] = None,
-        either: Optional[List[Rule]] = None,
-        all: Optional[List[Rule]] = None,
+        either: Optional[List[RuleBuilder]] = None,
+        all: Optional[List[RuleBuilder]] = None,
     ) -> "LicenseBuilder":
         if rule is None:
-            rule = Rule(
+            rule = RuleBuilder(
                 with_checkpoint=with_checkpoint,
                 with_dataset=with_dataset,
                 signed_with=signed_with,
@@ -280,16 +349,16 @@ class LicenseBuilder:
 
     def listable(
         self,
-        rule: Optional[Rule] = None,
+        rule: Optional[RuleBuilder] = None,
         *,
         with_checkpoint: Optional[HashLike] = None,
         with_dataset: Optional[HashLike] = None,
         signed_with: Optional[PublicKeyLike] = None,
-        either: Optional[List[Rule]] = None,
-        all: Optional[List[Rule]] = None,
+        either: Optional[List[RuleBuilder]] = None,
+        all: Optional[List[RuleBuilder]] = None,
     ) -> "LicenseBuilder":
         if rule is None:
-            rule = Rule(
+            rule = RuleBuilder(
                 with_checkpoint=with_checkpoint,
                 with_dataset=with_dataset,
                 signed_with=signed_with,
@@ -301,16 +370,16 @@ class LicenseBuilder:
 
     def testable(
         self,
-        rule: Optional[Rule] = None,
+        rule: Optional[RuleBuilder] = None,
         *,
         with_checkpoint: Optional[HashLike] = None,
         with_dataset: Optional[HashLike] = None,
         signed_with: Optional[PublicKeyLike] = None,
-        either: Optional[List[Rule]] = None,
-        all: Optional[List[Rule]] = None,
+        either: Optional[List[RuleBuilder]] = None,
+        all: Optional[List[RuleBuilder]] = None,
     ) -> "LicenseBuilder":
         if rule is None:
-            rule = Rule(
+            rule = RuleBuilder(
                 with_checkpoint=with_checkpoint,
                 with_dataset=with_dataset,
                 signed_with=signed_with,
@@ -327,7 +396,7 @@ class LicenseBuilder:
         get_from_dataset: bool = False,
         compute_from_checkpoint_or_dataset: bool = False,
         compute_from_checkpoint_and_dataset: bool = False,
-        use_license: Optional["LicenseBuilder"] = None,
+        use_license: Optional[Union["LicenseBuilder", License]] = None,
     ):
         n = (
             get_from_checkpoint
@@ -342,13 +411,22 @@ class LicenseBuilder:
             raise TypeError("You must supply only one rule")
 
         if get_from_checkpoint:
-            self.__obj.result_strategy = "Checkpoint"
+            self.__obj.result_strategy = ResultStrategy(
+                strategy=ResultStrategyKind.Checkpoint
+            )
         if get_from_dataset:
-            self.__obj.result_strategy = "Dataset"
+            self.__obj.result_strategy = ResultStrategy(
+                strategy=ResultStrategyKind.Dataset
+            )
         if compute_from_checkpoint_or_dataset:
-            self.__obj.result_strategy = "And"
+            self.__obj.result_strategy = ResultStrategy(strategy=ResultStrategyKind.Or)
         if compute_from_checkpoint_and_dataset:
-            self.__obj.result_strategy = "Or"
+            self.__obj.result_strategy = ResultStrategy(strategy=ResultStrategyKind.And)
         if use_license is not None:
-            self.__obj.result_strategy = ResultStrategyCustom(Custom=use_license.__obj)
+            self.__obj.result_strategy = ResultStrategy(
+                strategy=ResultStrategyKind.Custom,
+                custom_license=use_license.build()
+                if isinstance(use_license, LicenseBuilder)
+                else use_license,
+            )
         return self

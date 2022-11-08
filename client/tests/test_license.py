@@ -1,6 +1,6 @@
 import unittest
 
-from bastionai import LicenseBuilder, Rule, SigningKey, PublicKey
+from bastionai import LicenseBuilder, RuleBuilder, SigningKey, PublicKey, License
 import os
 
 # print(SigningKey.generate().pubkey.pem)
@@ -30,7 +30,7 @@ g42G4S62ur1BbTtvCF9Y187XJT/miGrfARLse7IgAUZkwgRuPL2UnQ==
 )
 
 
-class License(unittest.TestCase):
+class LicenseTest(unittest.TestCase):
     def test_privkey(self):
         try:
             os.remove("/tmp/hello.key.pem")
@@ -95,41 +95,38 @@ class License(unittest.TestCase):
 
         self.assertEqual(
             builder.__str__(),
-            """\
-License {
-  train=AtLeastNOf(1, [SignedWith(3056301006072a8648ce3d020106052b8104000a034200045ab39cb041725b271266ce14574c9ea94e62e5ea8cdc30cd40707e79f2c0b0f4b05651025e8a7570e02f119dab67468c04d1f5e37d1c39d03ee44123fa18c0dd), WithDataset(6861736831)]),
-  train_metric=SignedWith(3056301006072a8648ce3d020106052b8104000a034200045ab39cb041725b271266ce14574c9ea94e62e5ea8cdc30cd40707e79f2c0b0f4b05651025e8a7570e02f119dab67468c04d1f5e37d1c39d03ee44123fa18c0dd),
-  test=SignedWith(3056301006072a8648ce3d020106052b8104000a034200045ab39cb041725b271266ce14574c9ea94e62e5ea8cdc30cd40707e79f2c0b0f4b05651025e8a7570e02f119dab67468c04d1f5e37d1c39d03ee44123fa18c0dd),
-  test_metric=SignedWith(3056301006072a8648ce3d020106052b8104000a034200045ab39cb041725b271266ce14574c9ea94e62e5ea8cdc30cd40707e79f2c0b0f4b05651025e8a7570e02f119dab67468c04d1f5e37d1c39d03ee44123fa18c0dd),
-  list=SignedWith(3056301006072a8648ce3d020106052b8104000a034200045ab39cb041725b271266ce14574c9ea94e62e5ea8cdc30cd40707e79f2c0b0f4b05651025e8a7570e02f119dab67468c04d1f5e37d1c39d03ee44123fa18c0dd),
-  fetch=SignedWith(3056301006072a8648ce3d020106052b8104000a034200045ab39cb041725b271266ce14574c9ea94e62e5ea8cdc30cd40707e79f2c0b0f4b05651025e8a7570e02f119dab67468c04d1f5e37d1c39d03ee44123fa18c0dd),
-  delete=AtLeastNOf(1, [SignedWith(3056301006072a8648ce3d020106052b8104000a034200045ab39cb041725b271266ce14574c9ea94e62e5ea8cdc30cd40707e79f2c0b0f4b05651025e8a7570e02f119dab67468c04d1f5e37d1c39d03ee44123fa18c0dd), SignedWith(3056301006072a8648ce3d020106052b8104000a03420004ecb4b1cab661f910859395c8cc88e236b31c67393fec9ee4c559be988a985be91e3bf189a9bd43fd3698f2dfd52221bdbb15f17232c1c7fbafe0531668c18507)]),
-  result_strategy=And,
-}""",
+            "License { "
+            + "train=Rule(at_least_n_of(1, [Rule(signed_with(hash=bd9429166ae1b2cf019fb0f51ddbd69dc7ed3ccad5345696fa584d480f75bfc7)), Rule(with_dataset(6861736831))])), "
+            + "test=Rule(signed_with(hash=bd9429166ae1b2cf019fb0f51ddbd69dc7ed3ccad5345696fa584d480f75bfc7)), "
+            + "list=Rule(signed_with(hash=bd9429166ae1b2cf019fb0f51ddbd69dc7ed3ccad5345696fa584d480f75bfc7)), "
+            + "fetch=Rule(signed_with(hash=bd9429166ae1b2cf019fb0f51ddbd69dc7ed3ccad5345696fa584d480f75bfc7)), "
+            + "delete=Rule(at_least_n_of(1, [Rule(signed_with(hash=bd9429166ae1b2cf019fb0f51ddbd69dc7ed3ccad5345696fa584d480f75bfc7)), "
+            + "Rule(signed_with(hash=528b9a636d6145c9ddcd0d3c70a11a30bf4fb535a8834a42c452630dde0b3e0a))])), "
+            + "result_strategy=ResultStrategy(strategy=ResultStrategyKind.And) "
+            + "}",
         )
+        self.assertEqual(builder.build().ser(), License.deser(builder.build().ser()).ser())
 
         builder = (
             LicenseBuilder.default_with_pubkey(pubkey_c)
             .trainable(either=[{"signed_with": pubkey_c2}, {"signed_with": pubkey_c3}])
-            .trainable(Rule(signed_with=pubkey_c2))
-            .trainable(either=[Rule(with_checkpoint="bcbdbd")])
+            .trainable(RuleBuilder(signed_with=pubkey_c2))
+            .trainable(either=[RuleBuilder(with_checkpoint="bcbdbd")])
             .created_checkpoints_license(get_from_checkpoint=True)
         )
 
         self.assertEqual(
             builder.__str__(),
-            """\
-License {
-  train=AtLeastNOf(1, [SignedWith(3056301006072a8648ce3d020106052b8104000a034200045ab39cb041725b271266ce14574c9ea94e62e5ea8cdc30cd40707e79f2c0b0f4b05651025e8a7570e02f119dab67468c04d1f5e37d1c39d03ee44123fa18c0dd), SignedWith(3056301006072a8648ce3d020106052b8104000a03420004ecb4b1cab661f910859395c8cc88e236b31c67393fec9ee4c559be988a985be91e3bf189a9bd43fd3698f2dfd52221bdbb15f17232c1c7fbafe0531668c18507), SignedWith(3056301006072a8648ce3d020106052b8104000a034200048a66c53527f3d2c1b063db3ed6c3bb9cb4492fb438cf8bfd838d86e12eb6babd416d3b6f085f58d7ced7253fe6886adf0112ec7bb220014664c2046e3cbd949d), SignedWith(3056301006072a8648ce3d020106052b8104000a03420004ecb4b1cab661f910859395c8cc88e236b31c67393fec9ee4c559be988a985be91e3bf189a9bd43fd3698f2dfd52221bdbb15f17232c1c7fbafe0531668c18507), WithCheckpoint(bcbdbd)]),
-  train_metric=SignedWith(3056301006072a8648ce3d020106052b8104000a034200045ab39cb041725b271266ce14574c9ea94e62e5ea8cdc30cd40707e79f2c0b0f4b05651025e8a7570e02f119dab67468c04d1f5e37d1c39d03ee44123fa18c0dd),
-  test=SignedWith(3056301006072a8648ce3d020106052b8104000a034200045ab39cb041725b271266ce14574c9ea94e62e5ea8cdc30cd40707e79f2c0b0f4b05651025e8a7570e02f119dab67468c04d1f5e37d1c39d03ee44123fa18c0dd),
-  test_metric=SignedWith(3056301006072a8648ce3d020106052b8104000a034200045ab39cb041725b271266ce14574c9ea94e62e5ea8cdc30cd40707e79f2c0b0f4b05651025e8a7570e02f119dab67468c04d1f5e37d1c39d03ee44123fa18c0dd),
-  list=SignedWith(3056301006072a8648ce3d020106052b8104000a034200045ab39cb041725b271266ce14574c9ea94e62e5ea8cdc30cd40707e79f2c0b0f4b05651025e8a7570e02f119dab67468c04d1f5e37d1c39d03ee44123fa18c0dd),
-  fetch=SignedWith(3056301006072a8648ce3d020106052b8104000a034200045ab39cb041725b271266ce14574c9ea94e62e5ea8cdc30cd40707e79f2c0b0f4b05651025e8a7570e02f119dab67468c04d1f5e37d1c39d03ee44123fa18c0dd),
-  delete=SignedWith(3056301006072a8648ce3d020106052b8104000a034200045ab39cb041725b271266ce14574c9ea94e62e5ea8cdc30cd40707e79f2c0b0f4b05651025e8a7570e02f119dab67468c04d1f5e37d1c39d03ee44123fa18c0dd),
-  result_strategy=Checkpoint,
-}""",
+            "License { "
+            + "train=Rule(at_least_n_of(1, [Rule(signed_with(hash=bd9429166ae1b2cf019fb0f51ddbd69dc7ed3ccad5345696fa584d480f75bfc7)), Rule(signed_with(hash=528b9a636d6145c9ddcd0d3c70a11a30bf4fb535a8834a42c452630dde0b3e0a)), Rule(signed_with(hash=202420a4d277b17d82ad4a94425b5625b77c26fcb173da916609b19b30b8a4c6)), Rule(signed_with(hash=528b9a636d6145c9ddcd0d3c70a11a30bf4fb535a8834a42c452630dde0b3e0a)), Rule(with_checkpoint(bcbdbd))])), "
+            + "test=Rule(signed_with(hash=bd9429166ae1b2cf019fb0f51ddbd69dc7ed3ccad5345696fa584d480f75bfc7)), "
+            + "list=Rule(signed_with(hash=bd9429166ae1b2cf019fb0f51ddbd69dc7ed3ccad5345696fa584d480f75bfc7)), "
+            + "fetch=Rule(signed_with(hash=bd9429166ae1b2cf019fb0f51ddbd69dc7ed3ccad5345696fa584d480f75bfc7)), "
+            + "delete=Rule(signed_with(hash=bd9429166ae1b2cf019fb0f51ddbd69dc7ed3ccad5345696fa584d480f75bfc7)), "
+            + "result_strategy=ResultStrategy(strategy=ResultStrategyKind.Checkpoint) "
+            + "}",
         )
+        self.assertEqual(builder.build().ser(), License.deser(builder.build().ser()).ser())
 
         builder = LicenseBuilder.default_with_pubkey(
             pubkey_c
@@ -139,26 +136,21 @@ License {
 
         self.assertEqual(
             builder.__str__(),
-            """\
-License {
-  train=SignedWith(3056301006072a8648ce3d020106052b8104000a034200045ab39cb041725b271266ce14574c9ea94e62e5ea8cdc30cd40707e79f2c0b0f4b05651025e8a7570e02f119dab67468c04d1f5e37d1c39d03ee44123fa18c0dd),
-  train_metric=SignedWith(3056301006072a8648ce3d020106052b8104000a034200045ab39cb041725b271266ce14574c9ea94e62e5ea8cdc30cd40707e79f2c0b0f4b05651025e8a7570e02f119dab67468c04d1f5e37d1c39d03ee44123fa18c0dd),
-  test=SignedWith(3056301006072a8648ce3d020106052b8104000a034200045ab39cb041725b271266ce14574c9ea94e62e5ea8cdc30cd40707e79f2c0b0f4b05651025e8a7570e02f119dab67468c04d1f5e37d1c39d03ee44123fa18c0dd),
-  test_metric=SignedWith(3056301006072a8648ce3d020106052b8104000a034200045ab39cb041725b271266ce14574c9ea94e62e5ea8cdc30cd40707e79f2c0b0f4b05651025e8a7570e02f119dab67468c04d1f5e37d1c39d03ee44123fa18c0dd),
-  list=SignedWith(3056301006072a8648ce3d020106052b8104000a034200045ab39cb041725b271266ce14574c9ea94e62e5ea8cdc30cd40707e79f2c0b0f4b05651025e8a7570e02f119dab67468c04d1f5e37d1c39d03ee44123fa18c0dd),
-  fetch=SignedWith(3056301006072a8648ce3d020106052b8104000a034200045ab39cb041725b271266ce14574c9ea94e62e5ea8cdc30cd40707e79f2c0b0f4b05651025e8a7570e02f119dab67468c04d1f5e37d1c39d03ee44123fa18c0dd),
-  delete=SignedWith(3056301006072a8648ce3d020106052b8104000a034200045ab39cb041725b271266ce14574c9ea94e62e5ea8cdc30cd40707e79f2c0b0f4b05651025e8a7570e02f119dab67468c04d1f5e37d1c39d03ee44123fa18c0dd),
-  result_strategy=Custom(License {
-    train=SignedWith(3056301006072a8648ce3d020106052b8104000a03420004ecb4b1cab661f910859395c8cc88e236b31c67393fec9ee4c559be988a985be91e3bf189a9bd43fd3698f2dfd52221bdbb15f17232c1c7fbafe0531668c18507),
-    train_metric=SignedWith(3056301006072a8648ce3d020106052b8104000a03420004ecb4b1cab661f910859395c8cc88e236b31c67393fec9ee4c559be988a985be91e3bf189a9bd43fd3698f2dfd52221bdbb15f17232c1c7fbafe0531668c18507),
-    test=SignedWith(3056301006072a8648ce3d020106052b8104000a03420004ecb4b1cab661f910859395c8cc88e236b31c67393fec9ee4c559be988a985be91e3bf189a9bd43fd3698f2dfd52221bdbb15f17232c1c7fbafe0531668c18507),
-    test_metric=SignedWith(3056301006072a8648ce3d020106052b8104000a03420004ecb4b1cab661f910859395c8cc88e236b31c67393fec9ee4c559be988a985be91e3bf189a9bd43fd3698f2dfd52221bdbb15f17232c1c7fbafe0531668c18507),
-    list=SignedWith(3056301006072a8648ce3d020106052b8104000a03420004ecb4b1cab661f910859395c8cc88e236b31c67393fec9ee4c559be988a985be91e3bf189a9bd43fd3698f2dfd52221bdbb15f17232c1c7fbafe0531668c18507),
-    fetch=SignedWith(3056301006072a8648ce3d020106052b8104000a03420004ecb4b1cab661f910859395c8cc88e236b31c67393fec9ee4c559be988a985be91e3bf189a9bd43fd3698f2dfd52221bdbb15f17232c1c7fbafe0531668c18507),
-    delete=SignedWith(3056301006072a8648ce3d020106052b8104000a03420004ecb4b1cab661f910859395c8cc88e236b31c67393fec9ee4c559be988a985be91e3bf189a9bd43fd3698f2dfd52221bdbb15f17232c1c7fbafe0531668c18507),
-    result_strategy=And,
-  }),
-}""",
+            "License { "
+            + "train=Rule(signed_with(hash=bd9429166ae1b2cf019fb0f51ddbd69dc7ed3ccad5345696fa584d480f75bfc7)), "
+            + "test=Rule(signed_with(hash=bd9429166ae1b2cf019fb0f51ddbd69dc7ed3ccad5345696fa584d480f75bfc7)), "
+            + "list=Rule(signed_with(hash=bd9429166ae1b2cf019fb0f51ddbd69dc7ed3ccad5345696fa584d480f75bfc7)), "
+            + "fetch=Rule(signed_with(hash=bd9429166ae1b2cf019fb0f51ddbd69dc7ed3ccad5345696fa584d480f75bfc7)), "
+            + "delete=Rule(signed_with(hash=bd9429166ae1b2cf019fb0f51ddbd69dc7ed3ccad5345696fa584d480f75bfc7)), "
+            + "result_strategy=ResultStrategy(strategy=ResultStrategyKind.Custom, "
+            + "custom_license=License { "
+            + "train=Rule(signed_with(hash=528b9a636d6145c9ddcd0d3c70a11a30bf4fb535a8834a42c452630dde0b3e0a)), "
+            + "test=Rule(signed_with(hash=528b9a636d6145c9ddcd0d3c70a11a30bf4fb535a8834a42c452630dde0b3e0a)), "
+            + "list=Rule(signed_with(hash=528b9a636d6145c9ddcd0d3c70a11a30bf4fb535a8834a42c452630dde0b3e0a)), "
+            + "fetch=Rule(signed_with(hash=528b9a636d6145c9ddcd0d3c70a11a30bf4fb535a8834a42c452630dde0b3e0a)), "
+            + "delete=Rule(signed_with(hash=528b9a636d6145c9ddcd0d3c70a11a30bf4fb535a8834a42c452630dde0b3e0a)), "
+            + "result_strategy=ResultStrategy(strategy=ResultStrategyKind.And) "
+            + "}) "
+            + "}",
         )
-
-        serialized = builder.ser()
+        self.assertEqual(builder.build().ser(), License.deser(builder.build().ser()).ser())

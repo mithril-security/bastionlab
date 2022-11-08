@@ -12,6 +12,7 @@ from torch.jit import ScriptModule
 from tqdm import tqdm # type: ignore [import]
 
 from bastionai.pb.remote_torch_pb2 import Chunk, ClientInfo, ReferenceRequest, ReferenceResponse  # type: ignore [import]
+from .license import License
 
 T = TypeVar("T")
 U = TypeVar("U")
@@ -51,9 +52,9 @@ class Reference:
             return None
     
     @property
-    def license(self) -> Optional[str]:
+    def license(self) -> Optional[License]:
         if hasattr(self.reference, "license"):
-            return getattr(self.reference, "license")
+            return License.deser(getattr(self.reference, "license"))
         else:
             return None
 

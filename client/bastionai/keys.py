@@ -55,6 +55,10 @@ class PublicKey:
         )
 
     @staticmethod
+    def from_bytes_content(content: bytes) -> "PublicKey":
+        return PublicKey(serialization.load_der_public_key(content))
+
+    @staticmethod
     def from_pem_content(content: bytes) -> "PublicKey":
         return PublicKey(serialization.load_pem_public_key(content))
 

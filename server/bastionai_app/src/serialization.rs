@@ -1,28 +1,26 @@
 use super::{Chunk, ClientInfo};
+use crate::access_control::License;
 use crate::storage::Artifact;
 use bastionai_learning::serialization::SizedObjectsBytes;
 use log::info;
+use std::sync::{Arc, RwLock};
 use std::time::Instant;
 use tch::Device;
 use tokio::sync::mpsc;
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use tonic::{Response, Status};
-use std::sync::{Arc, RwLock};
 
 /// Returns a raw artifact from a stream of chunks received over gRPC.
-/// 
+///
 /// This function only parses header data such as the name and description
 /// of the artifact. The actual objects remains in binary format.
 pub async fn unstream_data(
     mut stream: tonic::Streaming<Chunk>,
-) -> Result<
-    Artifact<SizedObjectsBytes>,
-    Status,
-> {
+) -> Result<Artifact<SizedObjectsBytes>, Status> {
     let mut data_bytes: Vec<u8> = Vec::new();
     let mut name: String = String::new();
     let mut description: String = String::new();
-    let mut license: Vec<u8> = Vec::new();
+    let mut license: Option<License> = None;
     let mut meta: Vec<u8> = Vec::new();
     let mut client_info: Option<ClientInfo> = None;
 
@@ -44,7 +42,12 @@ pub async fn unstream_data(
         data: Arc::new(RwLock::new(data_bytes.into())),
         name,
         description,
-        license: serde_cbor::from_slice(&license).map_err(|_| Status::invalid_argument("Unable to parse license specification"))?,
+        license: license
+            .ok_or_else(|| Status::invalid_argument("No license specification"))?
+            .try_into()
+            .map_err(|e| {
+                Status::invalid_argument(format!("Invalid license specification: {:?}", e))
+            })?,
         meta,
         client_info,
     })
@@ -79,10 +82,10 @@ pub async fn stream_data(
                 } else {
                     String::from("")
                 },
-                license: if i == 0 { 
-                    serde_cbor::to_vec(&artifact.license).unwrap() // Cannot fail: always obtained by deserializing JSON
+                license: if i == 0 {
+                    Some(artifact.license.clone()) // Cannot fail: always obtained by deserializing JSON
                 } else {
-                    Default::default()
+                    None
                 },
                 client_info: Some(ClientInfo::default()),
                 meta: if i == 0 {

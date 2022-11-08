@@ -23,7 +23,7 @@ message ReferenceResponse {
     bytes hash = 1;
     string name = 2;
     string description = 3;
-    bytes license = 4;
+    License license = 4;
     bytes meta = 5;
 }
 
@@ -41,7 +41,7 @@ message Chunk {
     bytes data = 1;
     string name = 2;
     string description = 3;
-    bytes license = 4;
+    License license = 4;
     bytes meta = 5;
     ClientInfo client_info = 6;
 }
@@ -153,4 +153,42 @@ service RemoteTorch {
     rpc Test (TestRequest) returns (ReferenceResponse) {}
     rpc GetMetric (ReferenceRequest) returns (MetricResponse) {}
     rpc GetChallenge (Empty) returns (ChallengeResponse) {}
+}
+
+message Rule {
+    message AtLeastNOf {
+        uint64 n = 1;
+        repeated Rule rules = 2;
+    }
+    oneof rule {
+        AtLeastNOf at_least_n_of = 1;
+        // This is a hash
+        bytes with_checkpoint = 2;
+        // This is a hash
+        bytes with_dataset = 3;
+        // This is a DER-encoded SubjectPublicKeyInfo ECDSA_P256_SHA256_ASN1 pubkey
+        bytes signed_with = 4;
+    }
+}
+
+message ResultStrategy {
+    enum Strategy {
+        Checkpoint = 0;
+        Dataset = 1;
+        And = 2;
+        Or = 3;
+        Custom = 4;
+    }
+    Strategy strategy = 1;
+    // This field is present iff `strategy` == `Strategy::Custom`
+    License custom_license = 2;
+}
+
+message License {
+    Rule train = 1;
+    Rule test = 2;
+    Rule list = 3;
+    Rule fetch = 4;
+    Rule delete = 5;
+    ResultStrategy result_strategy = 6;
 }

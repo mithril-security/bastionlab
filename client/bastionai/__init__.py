@@ -5,5 +5,5 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "pb"))
 
 from .client import Connection
 
-from .license import LicenseBuilder, Rule, HashLike
+from .license import LicenseBuilder, License, RuleBuilder, HashLike, PublicKeyLike
 from .keys import SigningKey, PublicKey

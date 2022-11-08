@@ -146,7 +146,7 @@ impl RemoteTorch for BastionAIServer {
             hash: dataset_hash,
             name,
             description,
-            license: serde_cbor::to_vec(&license).unwrap(),
+            license: Some(license),
             meta,
         }))
     }
@@ -195,7 +195,7 @@ impl RemoteTorch for BastionAIServer {
             hash: model_hash,
             name,
             description,
-            license: serde_cbor::to_vec(&license).unwrap(),
+            license: Some(license),
             meta,
         }))
     }
@@ -295,7 +295,7 @@ impl RemoteTorch for BastionAIServer {
             hash: request.into_inner().hash,
             name: String::new(),
             description: String::new(),
-            license: serde_cbor::to_vec(&artifact.license).unwrap(),
+            license: Some(artifact.license.clone()),
             meta: Vec::new(),
         }))
     }
@@ -421,7 +421,7 @@ impl RemoteTorch for BastionAIServer {
             hash: identifier.into(),
             name: String::new(),
             description: String::new(),
-            license: serde_cbor::to_vec(&license).unwrap(),
+            license: Some(license),
             meta: Vec::new(),
         }))
     }
@@ -478,7 +478,7 @@ impl RemoteTorch for BastionAIServer {
             hash: identifier.into(),
             name: String::new(),
             description: String::new(),
-            license: serde_cbor::to_vec(&license).unwrap(),
+            license: Some(license),
             meta: Vec::new(),
         }))
     }
@@ -498,7 +498,7 @@ impl RemoteTorch for BastionAIServer {
                 hash: k.clone(),
                 name: v.name.clone(),
                 description: v.description.clone(),
-                license: serde_cbor::to_vec(&v.license).unwrap(),
+                license: Some(v.license.clone()),
                 meta: v.meta.clone(),
             })
             .collect();
@@ -521,7 +521,7 @@ impl RemoteTorch for BastionAIServer {
                 hash: k.clone(),
                 name: v.name.clone(),
                 description: v.description.clone(),
-                license: serde_cbor::to_vec(&v.license).unwrap(),
+                license: Some(v.license.clone()),
                 meta: v.meta.clone(),
             })
             .collect();
@@ -544,7 +544,7 @@ impl RemoteTorch for BastionAIServer {
                 hash: k.clone(),
                 name: v.name.clone(),
                 description: v.description.clone(),
-                license: serde_cbor::to_vec(&v.license).unwrap(),
+                license: Some(v.license.clone()),
                 meta: v.meta.clone(),
             })
             .collect();
