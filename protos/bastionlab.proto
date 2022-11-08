@@ -26,17 +26,9 @@ message Empty {
 
 }
 
-message TrainingRequest {
-    string records = 1;
-    string target = 2;
-    float ratio = 3;
-    string trainer = 4;
-}
-
 service BastionLab {
     rpc SendDataFrame(stream Chunk) returns (ReferenceResponse) {}
     rpc RunQuery (Query) returns (ReferenceResponse) {}
     rpc FetchDataFrame(ReferenceRequest) returns (stream Chunk) {}
     rpc AvailableDatasets(Empty) returns (References) {}
-    rpc Train(TrainingRequest) returns (ReferenceResponse) {}
 }

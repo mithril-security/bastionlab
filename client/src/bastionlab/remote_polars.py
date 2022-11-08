@@ -257,8 +257,3 @@ class FetchableLazyFrame(RemoteLazyFrame):
 class RemoteLazyGroupBy(Generic[LDF]):
     _inner: pl.internals.lazyframe.groupby.LazyGroupBy[LDF]
     _meta: Metadata
-
-@dataclass
-class Trainers:
-    GaussianNaiveBayes: str = "GaussianNaiveBayes"
-    ElasticNet: str = "ElasticNet"

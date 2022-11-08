@@ -42,7 +42,7 @@ class Client:
         )
         return FetchableLazyFrame._from_reference(self, res)
 
-    def available_datasets(self) -> List[str]:
+    def available_datasets(self) -> List[Dict]:
         def create_schema(obj: str) -> Dict:
             items = obj.split(', ')
             return {"field": items[0].split(": ")[1], "data_type": items[1].split(": ")[1]}
@@ -55,15 +55,6 @@ class Client:
 
         res = self.stub.AvailableDatasets(Empty()).list
         return [create_dataset(x.identifier, x.header) for x in res]
-
-    def train(self, records: "FetchableLazyFrame", target: "FetchableLazyFrame", ratio: float, trainer: str):
-        res = self.stub.Train(TrainingRequest(
-            records=records.identifier,
-            target=target.identifier,
-            ratio=ratio,
-            trainer=trainer))
-        return res
-
 
 @dataclass
 class Connection:

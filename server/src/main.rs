@@ -15,15 +15,8 @@ pub mod grpc {
 }
 use grpc::{
     bastion_lab_server::{BastionLab, BastionLabServer},
-    Chunk, Empty, Query, ReferenceRequest, ReferenceResponse, References, TrainingRequest,
+    Chunk, Empty, Query, ReferenceRequest, ReferenceResponse, References,
 };
-
-// Training routines
-mod operations;
-use operations::*;
-
-mod trainer;
-use trainer::*;
 
 mod serialization;
 use serialization::*;
@@ -35,7 +28,6 @@ use composite_plan::*;
 pub struct BastionLabState {
     // queries: Arc<Vec<String>>,
     dataframes: Arc<RwLock<HashMap<String, DataFrame>>>,
-    models: Arc<RwLock<HashMap<String, SupportedModels>>>,
 }
 
 impl BastionLabState {
@@ -43,7 +35,6 @@ impl BastionLabState {
         Self {
             // queries: Arc::new(Vec::new()),
             dataframes: Arc::new(RwLock::new(HashMap::new())),
-            models: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -73,19 +64,6 @@ impl BastionLabState {
         dfs.insert(identifier.clone(), df);
         identifier
     }
-
-    fn insert_model(&self, model: SupportedModels) -> String {
-        let mut models = self.models.write().unwrap();
-        let identifier = format!("{}", Uuid::new_v4());
-        models.insert(identifier.clone(), model);
-        identifier
-    }
-
-    // fn get_model(&self, identifier: &str) -> Result<SupportedModels, Status> {
-    //     let models = self.models.read().unwrap();
-    //     let model = models.get(identifier).unwrap();
-    //     Ok(model.clone())
-    // }
 }
 
 #[tonic::async_trait]
@@ -154,48 +132,6 @@ impl BastionLab for BastionLabState {
             .collect::<Vec<ReferenceResponse>>();
         println!("{:?}", list);
         Ok(Response::new(References { list }))
-    }
-
-    async fn train(
-        &self,
-        request: Request<TrainingRequest>,
-    ) -> Result<Response<ReferenceResponse>, Status> {
-        let (records, target, ratio, trainer): (String, String, f32, &str) = (
-            request.get_ref().records.clone(),
-            request.get_ref().target.clone(),
-            request.get_ref().ratio,
-            request.get_ref().trainer.as_str(),
-        );
-
-        let dfs = self.dataframes.read().unwrap();
-        let (records, target) = {
-            let records = dfs.get(&records).unwrap();
-            let target = dfs.get(&target).unwrap();
-            (records, target)
-        };
-
-        let trainer = match trainer {
-            "GaussianNaiveBayes" => Models::GaussianNaiveBayes,
-            "ElasticNet" => Models::ElasticNet,
-            _ => {
-                return Err(Status::aborted(format!(
-                    "Unsupported trainer type: {:?}!",
-                    trainer
-                )));
-            }
-        };
-        let model = to_polars_error(send_to_trainer(
-            records.clone(),
-            target.clone(),
-            ratio,
-            trainer,
-        ))
-        .map_err(|e| Status::aborted(e.to_string()))?;
-        let identifier = self.insert_model(model);
-        Ok(Response::new(ReferenceResponse {
-            identifier,
-            header: String::default(),
-        }))
     }
 }
 #[tokio::main]
