@@ -28,9 +28,8 @@ jobs:
           push: false
           load: true
           tags: ${{ matrix.image }}
-          context: ./server
-          file: ./server/docker/build.dockerfile
-          target: base-cpu
+          context: .
+          file: ./server/Dockerfile
           cache-from: type=gha
           cache-to: type=gha,mode=max
           outputs: type=docker,dest=/tmp/${{ matrix.image }}.tar
@@ -99,56 +98,56 @@ jobs:
           name: client-artifacts
           path: client/wheelhouse/*.whl
 
-  run-tests:
-    strategy:
-      matrix:
-        include:
-          - serverImage: bastionlab
-            clientImage: ubuntu-latest
-            os: ubuntu-latest
-    runs-on: ${{ matrix.os }}
-    needs: [build-server, build-client]
-    steps:
-      - uses: actions/checkout@master
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+  # run-tests:
+  #   strategy:
+  #     matrix:
+  #       include:
+  #         - serverImage: bastionlab
+  #           clientImage: ubuntu-latest
+  #           os: ubuntu-latest
+  #   runs-on: ${{ matrix.os }}
+  #   needs: [build-server, build-client]
+  #   steps:
+  #     - uses: actions/checkout@master
+  #     - name: Set up Docker Buildx
+  #       uses: docker/setup-buildx-action@v1
 
-      # Setup
+  #     # Setup
 
-      - uses: actions/setup-python@v3
-        with:
-          python-version: "3.9"
-          cache: "pip"
+  #     - uses: actions/setup-python@v3
+  #       with:
+  #         python-version: "3.9"
+  #         cache: "pip"
 
-      - name: Install dependencies
-        run: |
-          cd client && python -m pip install -e .
+  #     - name: Install dependencies
+  #       run: |
+  #         cd client && python -m pip install -e .
 
-      # Get server
+  #     # Get server
 
-      - name: Download artifact
-        uses: actions/download-artifact@v2
-        with:
-          name: ${{ matrix.serverImage }}
-          path: /tmp
-      - name: Load image
-        run: |
-          docker load --input /tmp/${{ matrix.serverImage }}.tar
-          docker image ls -a
-      # Get client
-      - name: Download artifact
-        uses: actions/download-artifact@v2
-        with:
-          name: client-artifacts
-          path: /tmp/client-artifacts
+  #     - name: Download artifact
+  #       uses: actions/download-artifact@v2
+  #       with:
+  #         name: ${{ matrix.serverImage }}
+  #         path: /tmp
+  #     - name: Load image
+  #       run: |
+  #         docker load --input /tmp/${{ matrix.serverImage }}.tar
+  #         docker image ls -a
+  #     # Get client
+  #     - name: Download artifact
+  #       uses: actions/download-artifact@v2
+  #       with:
+  #         name: client-artifacts
+  #         path: /tmp/client-artifacts
 
-      - name: Show artifacts
-        run: |
-          ls -l /tmp/client-artifacts 
-          unzip -l /tmp/client-artifacts/bastionlab-*.whl
+  #     - name: Show artifacts
+  #       run: |
+  #         ls -l /tmp/client-artifacts 
+  #         unzip -l /tmp/client-artifacts/bastionlab-*.whl
 
-      - name: Load package
-        run: python -m pip install /tmp/client-artifacts/*.whl
+  #     - name: Load package
+  #       run: python -m pip install /tmp/client-artifacts/*.whl
 
       # Run tests
 
