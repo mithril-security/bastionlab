@@ -1,7 +1,7 @@
 use bastionai_learning::nn::Module;
 use env_logger::Env;
 use log::info;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::{
     hash::{Hash, Hasher},
     collections::hash_map::DefaultHasher};
@@ -56,7 +56,7 @@ struct BastionAIServer {
     checkpoints: RwLock<HashMap<Vec<u8>, Artifact<CheckPoint>>>,
     datasets: RwLock<HashMap<Vec<u8>, Artifact<Dataset>>>,
     runs: RwLock<HashMap<Vec<u8>, Artifact<Run>>>,
-    challenges: Mutex<Vec<[u8; 32]>>,
+    challenges: Mutex<HashSet<[u8; 32]>>,
 }
 
 impl BastionAIServer {
@@ -66,7 +66,7 @@ impl BastionAIServer {
             checkpoints: RwLock::new(HashMap::new()),
             datasets: RwLock::new(HashMap::new()),
             runs: RwLock::new(HashMap::new()),
-            challenges: Mutex::new(Vec::new()),
+            challenges: Default::default(),
         }
     }
 
@@ -75,15 +75,21 @@ impl BastionAIServer {
             let challenge = meta.to_bytes().map_err(|_| {
                 Status::invalid_argument("Could not decode challenge")
             })?;
-            let lock = self.challenges.lock().unwrap();
-            for c in lock.iter().rev() {
-                if c == &*challenge {
-                    return Ok(())
-                }
+            let mut lock = self.challenges.lock().unwrap();
+            if !lock.remove(challenge.as_ref()) {
+                Err(Status::permission_denied("Invalid or reused challenge"))?
             }
-            Err(Status::permission_denied("Invalid or reused challenge"))
-        } else {
-            Ok(())
+        }
+        Ok(())
+    }
+
+    fn new_challenge(&self) -> [u8; 32] {
+        let rng = rand::SystemRandom::new();
+        loop {
+            let challenge: [u8; 32] = rand::generate(&rng).expect("Could not generate random value").expose();
+            if self.challenges.lock().unwrap().insert(challenge) {
+                return challenge
+            }
         }
     }
 }
@@ -597,11 +603,8 @@ impl RemoteTorch for BastionAIServer {
     }
 
     async fn get_challenge(&self, _request: Request<Empty>) -> Result<Response<ChallengeResponse>, Status> {
-        let rng = rand::SystemRandom::new();
-        let challenge: [u8; 32] = rand::generate(&rng).map_err(|_| Status::internal("Could not generate random value"))?.expose();
-        self.challenges.lock().unwrap().push(challenge);
-
-        Ok(Response::new(ChallengeResponse { value: Vec::from(challenge) }))
+        let challenge = self.new_challenge();
+        Ok(Response::new(ChallengeResponse { value: challenge.into() }))
     }
 }
 
