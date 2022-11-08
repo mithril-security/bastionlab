@@ -1,10 +1,11 @@
-name: Run the tests
+name: BastionLab CI
 on:
   push:
     paths:
       - "server/**"
       - "tests/**"
       - ".github/workflow/*"
+      - "client/src/**"
 jobs:
   build-server:
     strategy:
