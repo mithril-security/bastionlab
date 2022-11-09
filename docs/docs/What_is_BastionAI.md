@@ -14,7 +14,9 @@
         cursor: pointer;
         color: #C9D8E4;
     }
-
+    .comparison {
+        font-size: 20px;
+    }
     .feature-card {
     background: #384343;
     margin: 8px 8px 8px 0;
@@ -76,9 +78,9 @@ However promising these technologies might be, finding secure and **easy-to-use*
 In addition, democratizng AI privacy solutions is also a contributing factor to why we decided to develop this solution. A solution developed by data scientists for data scientists is primordial to open-source community, having the number one focus of being an **easy-to-use** AI training platform.
 
 
-## Comparisons
+# Comparisons
 
-<p>
+<p class="comparison">
 <a href="https://github.com/mithril-security/bastionai.git" class="bastionai">BastionAI🚀🔒</a> versus Centralized Training.
 </p>
 Ordinarily, without the use of Trusted Execution Environments (TEEs), centralized training of deep learning models would have an elevated security threat level if training occurs on private data. Cloud providers, model owners, and other malicious parties could view in clear the private data used to train these neural networks.
@@ -87,7 +89,7 @@ With the advent of TEEs, especially AMD SEV SNP, computation can be done securel
 
 BastionAI seeks, at its core, to protect user data by running executions in isolated, secure virtual machine where security guarantees are provided by the hardware.
 
-<p>
+<p class="comparison">
 <a href="https://github.com/mithril-security/bastionai.git" class="bastionai">BastionAI🚀🔒</a> versus Federated Learning (FL).
 </p>
 Google's solution to distributed and secure training was federated learning. It's the scheme where model weights are distributed to all interested parties, trained with each party's private dataset and then the results aggregated in a distributed fashion. 
@@ -98,7 +100,7 @@ With BastionAI, once user's private data is sent securely sent through a trusted
 
 BastionAI solves the high cost of communication by centralizing computation (both training and testing of models,) and also increase confidentiality and integrity by using TEEs.
 
-<p>
+<p class="comparison">
 <a href="https://github.com/mithril-security/bastionai.git" class="bastionai">BastionAI🚀🔒</a> versus Secure Multi-Party Computing.
 </p>
 BastionAI seeks to provide a new way of performing multi-party training but with less cryptography constraints and relinquishing trust to the TEE. Instead of using cumbersome mathematical facilities, we provide a centralized hardware-hardened environment were both model and data owners, distrusting one another, can successfully collaborate and train deep learning models.
