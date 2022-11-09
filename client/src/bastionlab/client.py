@@ -1,7 +1,12 @@
 from dataclasses import dataclass
 from typing import Any, Dict, List, TYPE_CHECKING, Optional
 import grpc
-from bastionlab.pb.bastionlab_pb2 import ReferenceRequest, TrainingRequest, Query, Empty
+from bastionlab.pb.bastionlab_pb2 import (
+    ReferenceRequest,
+    ReferenceResponse,
+    Query,
+    Empty,
+)
 from bastionlab.pb.bastionlab_pb2_grpc import BastionLabStub
 import polars as pl
 
@@ -37,24 +42,18 @@ class Client:
     ) -> "FetchableLazyFrame":
         from bastionlab.remote_polars import FetchableLazyFrame
 
-        res = self.stub.RunQuery(
-            Query(composite_plan=composite_plan)
-        )
+        res = self.stub.RunQuery(Query(composite_plan=composite_plan))
         return FetchableLazyFrame._from_reference(self, res)
 
     def available_datasets(self) -> List[Dict]:
-        def create_schema(obj: str) -> Dict:
-            items = obj.split(', ')
-            return {"field": items[0].split(": ")[1], "data_type": items[1].split(": ")[1]}
-
-        def remove_empty(s):
-            return list(filter(lambda a: len(a) > 0 and "Schema" not in a, s))
-
-        def create_dataset(identifier, schema: str):
-            return {"identifier": identifier, "schema": [create_schema(x) for x in remove_empty(schema.split("\n"))]}
+        from bastionlab.remote_polars import FetchableLazyFrame
+        
+        def create_dataset(ref: ReferenceResponse):
+            return FetchableLazyFrame._from_reference(self, ref)
 
         res = self.stub.AvailableDatasets(Empty()).list
-        return [create_dataset(x.identifier, x.header) for x in res]
+        return [create_dataset(x) for x in res]
+
 
 @dataclass
 class Connection:

@@ -1,7 +1,7 @@
 use polars::prelude::*;
 use serde_json;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     error::Error,
     fmt::Debug,
     sync::{Arc, RwLock},
@@ -49,14 +49,27 @@ impl BastionLabState {
             .clone())
     }
 
-    // fn get_dfs(&self, identifiers: &[String]) -> Result<VecDeque<DataFrame>, Status> {
-    //     let dfs = self.dataframes.read().unwrap();
-    //     let mut res = VecDeque::with_capacity(identifiers.len());
-    //     for identifier in identifiers.iter() {
-    //         res.push_back(dfs.get(identifier).ok_or(Status::not_found(format!("Could not find dataframe: identifier={}", identifier)))?.clone());
-    //     }
-    //     Ok(res)
-    // }
+    fn get_dfs(&self) -> Result<VecDeque<(String, DataFrame)>, Status> {
+        let identifiers = {
+            let identifiers = self.dataframes.read().unwrap();
+            let identifiers: Vec<String> = identifiers.keys().map(|v| v.clone()).collect();
+            identifiers
+        };
+        let dfs = self.dataframes.read().unwrap();
+        let mut res = VecDeque::with_capacity(identifiers.len());
+        for identifier in identifiers.iter() {
+            res.push_back((
+                identifier.clone(),
+                dfs.get(identifier)
+                    .ok_or(Status::not_found(format!(
+                        "Could not find dataframe: identifier={}",
+                        identifier
+                    )))?
+                    .clone(),
+            ));
+        }
+        Ok(res)
+    }
 
     fn insert_df(&self, df: DataFrame) -> String {
         let mut dfs = self.dataframes.write().unwrap();
@@ -122,22 +135,32 @@ impl BastionLab for BastionLabState {
         &self,
         _request: Request<Empty>,
     ) -> Result<Response<References>, Status> {
-        let dfs = self.dataframes.read().unwrap();
-        let list = dfs
+        let dfs = self.get_dfs()?;
+        let ids: Vec<ReferenceResponse> = dfs
             .iter()
-            .map(|(k, v)| ReferenceResponse {
-                identifier: k.clone(),
-                header: format!("{:?}", v.schema()),
+            .map(|(k, v)| {
+                let header = serde_json::to_string(&v.schema())
+                    .map_err(|e| {
+                        Status::internal(format!(
+                            "Could not serialize result data frame header: {}",
+                            e
+                        ))
+                    })
+                    .unwrap();
+                ReferenceResponse {
+                    identifier: k.clone(),
+                    header,
+                }
             })
-            .collect::<Vec<ReferenceResponse>>();
-        println!("{:?}", list);
-        Ok(Response::new(References { list }))
+            .collect();
+
+        Ok(Response::new(References { list: ids }))
     }
 }
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let state = BastionLabState::new();
-    let addr = "[::1]:50056".parse()?;
+    let addr = "0.0.0.0:50056".parse()?;
     println!("BastionLab server running...");
     // println!("{:?}", serde_json::from_str::<CompositePlan>("[{\"EntryPointPlanSegment\":\"1da61d9a-c8a8-4e8e-baec-b132db9009d9\"},{\"EntryPointPlanSegment\":\"1da61d9a-c8a8-4e8e-baec-b132db9009d9\"}]").unwrap());
     Server::builder()
