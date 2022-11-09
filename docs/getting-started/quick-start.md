@@ -1,6 +1,6 @@
 ## Installing BastionAI Client
 
-BastionAI Client is enough for the deployment, querying and training of models . It can easily be installed either with from [PyPI](https://pypi.org/project/bastionai/) or you can build the client yourself from source. The entire API is explained in this [section](../resources/bastionai/client.html). 
+BastionAI Client is enough for the deployment, querying and training of models . It can easily be installed either with [PyPI](https://pypi.org/project/bastionai/) or you can build the client yourself from source. The entire API is explained in this [section](../resources/bastionai/client.html). 
 
 ### Install via Pip
 
@@ -46,7 +46,7 @@ with bastionai.Connection() as client:
     )
 ```
 
-The dataset is simply a Pytorch [`Dataset`](https://pytorch.org/vision/stable/datasets.html) instance. The Data Owner connects to the remote server running inside the TEE and uploads the dataset. Under the hood, `bastionai.Connection()` secures the transfert with an attested TLS channel.
+The dataset is simply a Pytorch [`Dataset`](https://pytorch.org/vision/stable/datasets.html) instance. The Data Owner connects to the remote server running inside the TEE and uploads the dataset. Under the hood, `bastionai.Connection()` secures the transfer with an attested TLS channel.
 
 The Data Owner has the opportunity to set a `privacy_limit` which is the maximum Differential Privacy budget they allow the Data Scientist to consume. DP consumption is directly tracked by the code running inside the TEE for increased security gurantees. When the limit is reached the server does not allow any further processing.
 
@@ -85,4 +85,4 @@ Finally, once training is over, the Data Scientist may pull the trained model us
 
 ## Installing BastionAI Server
 
-To make use of the BastionAI Client, you'll need to deploy an instance of the BastionAI server. Find out how to install it and deploy it on-premise right [here](../deployment/on_premise.md).
+To make use of the BastionAI Client, you'll need to deploy an instance of the BastionAI server. Find out how to install and deploy it on-premise [here](../deployment/on_premise.md).
