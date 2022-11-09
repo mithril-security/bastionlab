@@ -182,7 +182,7 @@ class RemoteLazyFrame:
     def apply_udf(self: LDF, columns: List[str], udf: Callable) -> LDF:
         ts_udf = torch.jit.script(udf)
         df = pl.DataFrame([pl.Series(k, dtype=v) for k, v in self._inner.schema.items()])
-        return RemoteLazyFrame(df.lazy(), Metadata(self._meta._client, [*self._meta._prev_segments, UdfPlanSegment(ts_udf, columns)]))
+        return RemoteLazyFrame(df.lazy(), Metadata(self._meta._client, [*self._meta._prev_segments, PolarsPlanSegment(self._inner), UdfPlanSegment(ts_udf, columns)]))
 
     def join(
         self: LDF,
