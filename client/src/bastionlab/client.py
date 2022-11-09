@@ -45,9 +45,9 @@ class Client:
         res = self.stub.RunQuery(Query(composite_plan=composite_plan))
         return FetchableLazyFrame._from_reference(self, res)
 
-    def available_datasets(self) -> List[Dict]:
+    def available_datasets(self) -> List["FetchableLazyFrame"]:
         from bastionlab.remote_polars import FetchableLazyFrame
-        
+
         def create_dataset(ref: ReferenceResponse):
             return FetchableLazyFrame._from_reference(self, ref)
 
