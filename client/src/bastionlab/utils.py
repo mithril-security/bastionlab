@@ -18,14 +18,6 @@ def create_byte_chunk(data: bytes) -> Tuple[int, Iterator[bytes]]:
 
         sent_bytes += min(CHUNK_SIZE, len(data) - sent_bytes)
 
-
-def flatten(list: List[bytearray]):
-    res = bytearray()
-    for item in list:
-        res += item
-    return res
-
-
 def serialize_dataframe(df: pl.DataFrame) -> Iterator[Chunk]:
     END_PATTERN = b"[end]"
     df_bytes = bytearray()
