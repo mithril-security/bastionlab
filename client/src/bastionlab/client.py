@@ -1,3 +1,4 @@
+import seaborn as sns
 from dataclasses import dataclass
 from typing import Any, List, TYPE_CHECKING, Optional
 import grpc

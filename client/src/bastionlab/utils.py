@@ -1,7 +1,8 @@
 from typing import Iterator, List, Tuple
 from bastionlab.pb.bastionlab_pb2 import Chunk
-
+import torch
 import polars as pl
+
 CHUNK_SIZE = 32 * 1024
 
 END_PATTERN = b"[end]"
@@ -64,3 +65,12 @@ def deserialize_dataframe(joined_chunks: bytes) -> pl.DataFrame:
     for i in range(1, len(dfs)):
         out = pl.concat([out, dfs[i]], how="horizontal")
     return out
+class ApplyBins(torch.nn.Module):
+    def __init__(self, bin_size: int) -> None:
+        super().__init__()
+        self.bin_size = torch.Tensor([bin_size])
+
+    def forward(self, x):
+        bins = self.bin_size * torch.ones_like(x)
+        return round(x // bins) * bins
+

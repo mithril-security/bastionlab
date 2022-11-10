@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Callable, Generic, List, Optional, TypeVar, Sequence, Union
+import seaborn as sns
 import polars as pl
 from torch.jit import ScriptFunction
 import io
@@ -8,7 +9,8 @@ from bastionlab.pb.bastionlab_pb2 import ReferenceResponse
 import json
 from bastionlab.client import Client
 import torch
-
+import pyarrow as arr
+from bastionlab.utils import ApplyBins
 
 LDF = TypeVar("LDF", bound="pl.LazyFrame")
 
@@ -220,6 +222,65 @@ class RemoteLazyFrame:
         res = self._inner.join_asof(other._inner, left_on, right_on, on, by_left, by_right, by, strategy, suffix, tolerance, allow_parallel, force_parallel)
         return RemoteLazyFrame(res, Metadata(self._meta._client, [*self._meta._prev_segments, *other._meta._prev_segments]))
 
+    def barplot(
+        self: LDF,
+        col_x: str, 
+        col_y: str, 
+        bins: int = 10,
+        **kwargs
+        ):
+        model = ApplyBins(bins)
+        df = ( self.filter(pl.col(col_x) != None).filter(pl.col(col_y) != None)
+        .select([pl.col(col_y), pl.col(col_x)])
+        .apply_udf([col_x], model)
+        .groupby(pl.col(col_x))
+        .agg(pl.col(col_y).count())
+        .sort(col_x)
+        .collect()
+        .fetch()
+        .to_pandas()
+        )
+        sns.barplot(x=df[col_x], y=df[col_y], **kwargs)
+   
+    def curveplot(
+        self: LDF,
+        col_x: str, 
+        col_y: str, 
+        bins: int = 10,
+        order: int = 3,
+        ci: int | None = None,
+        scatter: bool = False,
+        **kwargs
+        ):
+        model = ApplyBins(bins)
+        df = (
+            self.filter(pl.col(col_x) != None).filter(pl.col(col_y) != None)
+            .select([pl.col(col_y), pl.col(col_x)])
+            .apply_udf([col_x], model)
+            .groupby(pl.col(col_x))
+            .agg(pl.col(col_y).count())
+            .sort(col_x).collect().fetch().to_pandas()
+        )
+        sns.regplot(x=df[col_x], y=df[col_y], order=order, ci=ci, scatter=scatter)
+
+    def scatterplot(
+        self: LDF,
+        col_x: str,
+        col_y: str, 
+        bins = 5,
+        **kwargs
+        ):
+        model = ApplyBins(bins)
+        df = (
+            self.filter(pl.col(col_x) != None).filter(pl.col(col_y) != None)
+            .select([pl.col(col_y), pl.col(col_x)])
+            .apply_udf([col_x], model)
+            .groupby(pl.col(col_x))
+            .agg(pl.col(col_y).count())
+            .sort(col_x)
+            .collect().fetch().to_pandas()
+        )
+        sns.scatterplot(x=df[col_x], y=df[col_y], **kwargs)
 
 @dataclass
 class FetchableLazyFrame(RemoteLazyFrame):
