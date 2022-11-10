@@ -1,7 +1,7 @@
-These benchmarks were done by finetuning the EfficientNet B0 model on CIFAR100 dataset. You can have a look to dataset used for it right [here](https://www.cs.toronto.edu/~kriz/cifar.html).
+These benchmarks were done by finetuning the EfficientNet B0 model on CIFAR100 dataset. You can have a look at the dataset used [here](https://www.cs.toronto.edu/~kriz/cifar.html).
 
 
-For these benchmarks we set the batch size to be the maximum possible, fitting in 8GB of RAM. 
+For these benchmarks, we set the batch size to be the maximum possible, fitting in 8GB of RAM. 
 
 
 ![](../assets/amd_epyc_exec_times.png)
