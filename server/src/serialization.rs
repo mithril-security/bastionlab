@@ -3,6 +3,8 @@ use tokio::sync::mpsc;
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use tonic::{Response, Status};
 
+use crate::grpc::ReferenceResponse;
+
 use super::grpc::Chunk;
 
 pub async fn df_from_stream(stream: tonic::Streaming<Chunk>) -> Result<DataFrame, Status> {
@@ -11,8 +13,7 @@ pub async fn df_from_stream(stream: tonic::Streaming<Chunk>) -> Result<DataFrame
         .iter()
         .map(|v| bincode::deserialize(&v[..]).unwrap())
         .collect::<Vec<Series>>();
-    DataFrame::new(series.clone())
-        .map_err(|_| Status::unknown("Failed to create DataFrame!"))
+    DataFrame::new(series.clone()).map_err(|_| Status::unknown("Failed to create DataFrame!"))
 }
 
 pub fn df_to_bytes(df: DataFrame) -> Vec<Vec<u8>> {
@@ -25,9 +26,7 @@ pub fn df_to_bytes(df: DataFrame) -> Vec<Vec<u8>> {
     series_bytes
 }
 
-pub async fn unstream_data(
-    mut stream: tonic::Streaming<Chunk>,
-) -> Result<Vec<Vec<u8>>, Status> {
+pub async fn unstream_data(mut stream: tonic::Streaming<Chunk>) -> Result<Vec<Vec<u8>>, Status> {
     let mut columns: Vec<u8> = Vec::new();
     while let Some(chunk) = stream.next().await {
         let mut chunk = chunk?;
@@ -98,4 +97,25 @@ pub async fn stream_data(
     });
 
     Response::new(ReceiverStream::new(rx))
+}
+
+pub fn df_to_reference(id: String, df: DataFrame) -> Result<ReferenceResponse, Status> {
+    let header = serde_json::to_string(&df.schema()).map_err(|e| {
+        Status::internal(format!(
+            "Could not serialize result data frame header: {}",
+            e
+        ))
+    })?;
+    Ok(ReferenceResponse {
+        identifier: id.clone(),
+        header,
+    })
+}
+pub fn dfs_to_references(dfs: Vec<(String, DataFrame)>) -> Result<Vec<ReferenceResponse>, Status> {
+    let mut res = Vec::new();
+
+    for (id, df) in dfs {
+        res.push(df_to_reference(id, df)?)
+    }
+    Ok(res)
 }

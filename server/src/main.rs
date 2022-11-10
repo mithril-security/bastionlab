@@ -1,7 +1,7 @@
 use polars::prelude::*;
 use serde_json;
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::HashMap,
     error::Error,
     fmt::Debug,
     sync::{Arc, RwLock},
@@ -49,16 +49,16 @@ impl BastionLabState {
             .clone())
     }
 
-    fn get_dfs(&self) -> Result<VecDeque<(String, DataFrame)>, Status> {
+    fn get_dfs(&self) -> Result<Vec<(String, DataFrame)>, Status> {
         let identifiers = {
             let identifiers = self.dataframes.read().unwrap();
             let identifiers: Vec<String> = identifiers.keys().map(|v| v.clone()).collect();
             identifiers
         };
         let dfs = self.dataframes.read().unwrap();
-        let mut res = VecDeque::with_capacity(identifiers.len());
+        let mut res = Vec::with_capacity(identifiers.len());
         for identifier in identifiers.iter() {
-            res.push_back((
+            res.push((
                 identifier.clone(),
                 dfs.get(identifier)
                     .ok_or(Status::not_found(format!(
@@ -136,25 +136,8 @@ impl BastionLab for BastionLabState {
         _request: Request<Empty>,
     ) -> Result<Response<References>, Status> {
         let dfs = self.get_dfs()?;
-        let ids: Vec<ReferenceResponse> = dfs
-            .iter()
-            .map(|(k, v)| {
-                let header = serde_json::to_string(&v.schema())
-                    .map_err(|e| {
-                        Status::internal(format!(
-                            "Could not serialize result data frame header: {}",
-                            e
-                        ))
-                    })
-                    .unwrap();
-                ReferenceResponse {
-                    identifier: k.clone(),
-                    header,
-                }
-            })
-            .collect();
-
-        Ok(Response::new(References { list: ids }))
+        let refs: Vec<ReferenceResponse> = dfs_to_references(dfs)?;
+        Ok(Response::new(References { list: refs }))
     }
 }
 #[tokio::main]
