@@ -1,7 +1,12 @@
 from dataclasses import dataclass
-from typing import Any, List, TYPE_CHECKING, Optional
+from typing import Any, Dict, List, TYPE_CHECKING, Optional
 import grpc
-from bastionlab.pb.bastionlab_pb2 import ReferenceRequest, Query
+from bastionlab.pb.bastionlab_pb2 import (
+    ReferenceRequest,
+    ReferenceResponse,
+    Query,
+    Empty,
+)
 from bastionlab.pb.bastionlab_pb2_grpc import BastionLabStub
 import polars as pl
 
@@ -37,9 +42,19 @@ class Client:
     ) -> "FetchableLazyFrame":
         from bastionlab.remote_polars import FetchableLazyFrame
 
-        res = self.stub.RunQuery(
-            Query(composite_plan=composite_plan)
-        )
+        res = self.stub.RunQuery(Query(composite_plan=composite_plan))
+        return FetchableLazyFrame._from_reference(self, res)
+
+    def list_dfs(self) -> List["FetchableLazyFrame"]:
+        from bastionlab.remote_polars import FetchableLazyFrame
+
+        res = self.stub.ListDataFrames(Empty()).list
+        return [FetchableLazyFrame._from_reference(self, ref) for ref in res]
+    
+    def get_df(self, identifier: str) -> "FetchableLazyFrame":
+        from bastionlab.remote_polars import FetchableLazyFrame
+
+        res = self.stub.GetDataFrameHeader(ReferenceRequest(identifier=identifier))
         return FetchableLazyFrame._from_reference(self, res)
 
 
@@ -56,7 +71,7 @@ class Connection:
             return self._client
         else:
             return self.__enter__()
-    
+
     def close(self):
         if self._client is not None:
             self.__exit__(None, None, None)
