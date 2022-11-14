@@ -2,6 +2,7 @@ from typing import Iterator, List, Tuple
 from bastionlab.pb.bastionlab_pb2 import Chunk
 
 import polars as pl
+
 CHUNK_SIZE = 32 * 1024
 
 END_PATTERN = b"[end]"
@@ -10,37 +11,29 @@ END_PATTERN = b"[end]"
 def create_byte_chunk(data: bytes) -> Tuple[int, Iterator[bytes]]:
     sent_bytes = 0
     while sent_bytes < len(data):
- 
+
         yield bytes(
             data[sent_bytes : sent_bytes + min(CHUNK_SIZE, len(data) - sent_bytes)]
         )
 
         sent_bytes += min(CHUNK_SIZE, len(data) - sent_bytes)
 
-
-def flatten(l):
-    return [item for sublist in l for item in sublist]
-
 def serialize_dataframe(df: pl.DataFrame) -> Iterator[Chunk]:
-    df_bytes: List[bytes] = [col.__getstate__() for col in df.__getstate__()]
     END_PATTERN = b"[end]"
-
-    def surround(col_bytes):
-        arr = bytearray(col_bytes)
-        arr += END_PATTERN
-        return arr
-
-    df_bytes = flatten([surround(col) for col in df_bytes])
+    df_bytes = bytearray()
+    for col in df.__getstate__():
+        df_bytes += col.__getstate__() + END_PATTERN
 
     for data in create_byte_chunk(df_bytes):
         yield Chunk(data=data)
+
 
 def deserialize_dataframe(joined_chunks: bytes) -> pl.DataFrame:
     step = len(END_PATTERN)
 
     indexes = [0]
     for i in range(0, len(joined_chunks) - step + 1):
-        batch = joined_chunks[i: i + step]
+        batch = joined_chunks[i : i + step]
         if batch == END_PATTERN:
             indexes.append(i)
     series = []
