@@ -10,7 +10,7 @@ message ReferenceResponse {
     string header = 2;
 }
 
-message References {
+message ReferenceList {
     repeated ReferenceResponse list = 1;
 }
 
@@ -27,8 +27,9 @@ message Empty {
 }
 
 service BastionLab {
-    rpc SendDataFrame(stream Chunk) returns (ReferenceResponse) {}
+    rpc SendDataFrame (stream Chunk) returns (ReferenceResponse) {}
     rpc RunQuery (Query) returns (ReferenceResponse) {}
-    rpc FetchDataFrame(ReferenceRequest) returns (stream Chunk) {}
-    rpc AvailableDatasets(Empty) returns (References) {}
+    rpc FetchDataFrame (ReferenceRequest) returns (stream Chunk) {}
+    rpc ListDataFrames (Empty) returns (ReferenceList) {}
+    rpc GetDataFrameHeader (ReferenceRequest) returns (ReferenceResponse) {}
 }

@@ -3,8 +3,6 @@ use tokio::sync::mpsc;
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use tonic::{Response, Status};
 
-use crate::grpc::ReferenceResponse;
-
 use super::grpc::Chunk;
 
 pub async fn df_from_stream(stream: tonic::Streaming<Chunk>) -> Result<DataFrame, Status> {
@@ -97,25 +95,4 @@ pub async fn stream_data(
     });
 
     Response::new(ReceiverStream::new(rx))
-}
-
-pub fn df_to_reference(id: String, df: DataFrame) -> Result<ReferenceResponse, Status> {
-    let header = serde_json::to_string(&df.schema()).map_err(|e| {
-        Status::internal(format!(
-            "Could not serialize result data frame header: {}",
-            e
-        ))
-    })?;
-    Ok(ReferenceResponse {
-        identifier: id.clone(),
-        header,
-    })
-}
-pub fn dfs_to_references(dfs: Vec<(String, DataFrame)>) -> Result<Vec<ReferenceResponse>, Status> {
-    let mut res = Vec::new();
-
-    for (id, df) in dfs {
-        res.push(df_to_reference(id, df)?)
-    }
-    Ok(res)
 }

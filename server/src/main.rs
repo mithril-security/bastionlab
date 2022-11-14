@@ -15,7 +15,7 @@ pub mod grpc {
 }
 use grpc::{
     bastion_lab_server::{BastionLab, BastionLabServer},
-    Chunk, Empty, Query, ReferenceRequest, ReferenceResponse, References,
+    Chunk, Empty, Query, ReferenceList, ReferenceRequest, ReferenceResponse,
 };
 
 mod serialization;
@@ -26,14 +26,12 @@ use composite_plan::*;
 
 #[derive(Debug, Default)]
 pub struct BastionLabState {
-    // queries: Arc<Vec<String>>,
     dataframes: Arc<RwLock<HashMap<String, DataFrame>>>,
 }
 
 impl BastionLabState {
     fn new() -> Self {
         Self {
-            // queries: Arc::new(Vec::new()),
             dataframes: Arc::new(RwLock::new(HashMap::new())),
         }
     }
@@ -49,24 +47,25 @@ impl BastionLabState {
             .clone())
     }
 
-    fn get_dfs(&self) -> Result<Vec<(String, DataFrame)>, Status> {
-        let identifiers = {
-            let identifiers = self.dataframes.read().unwrap();
-            let identifiers: Vec<String> = identifiers.keys().map(|v| v.clone()).collect();
-            identifiers
-        };
-        let dfs = self.dataframes.read().unwrap();
-        let mut res = Vec::with_capacity(identifiers.len());
-        for identifier in identifiers.iter() {
-            res.push((
-                identifier.clone(),
-                dfs.get(identifier)
-                    .ok_or(Status::not_found(format!(
-                        "Could not find dataframe: identifier={}",
-                        identifier
-                    )))?
-                    .clone(),
-            ));
+    fn get_header(&self, identifier: &str) -> Result<String, Status> {
+        Ok(get_df_header(
+            self.dataframes
+                .read()
+                .unwrap()
+                .get(identifier)
+                .ok_or(Status::not_found(format!(
+                    "Could not find dataframe: identifier={}",
+                    identifier
+                )))?,
+        )?)
+    }
+
+    fn get_headers(&self) -> Result<Vec<(String, String)>, Status> {
+        let dataframes = self.dataframes.read().unwrap();
+        let mut res = Vec::with_capacity(dataframes.len());
+        for (k, v) in dataframes.iter() {
+            let header = get_df_header(v)?;
+            res.push((k.clone(), header));
         }
         Ok(res)
     }
@@ -77,6 +76,11 @@ impl BastionLabState {
         dfs.insert(identifier.clone(), df);
         identifier
     }
+}
+
+fn get_df_header(df: &DataFrame) -> Result<String, Status> {
+    serde_json::to_string(&df.schema())
+        .map_err(|e| Status::internal(format!("Could not serialize data frame header: {}", e)))
 }
 
 #[tonic::async_trait]
@@ -100,12 +104,7 @@ impl BastionLab for BastionLabState {
             })?;
         let res = composite_plan.run(self)?;
 
-        let header = serde_json::to_string(&res.schema()).map_err(|e| {
-            Status::internal(format!(
-                "Could not serialize result data frame header: {}",
-                e
-            ))
-        })?;
+        let header = get_df_header(&res)?;
         let identifier = self.insert_df(res);
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
@@ -116,8 +115,7 @@ impl BastionLab for BastionLabState {
     ) -> Result<Response<ReferenceResponse>, Status> {
         let df = df_from_stream(request.into_inner()).await?;
 
-        let header = serde_json::to_string(&df.schema())
-            .map_err(|e| Status::internal(format!("Could not serialize header: {}", e)))?;
+        let header = get_df_header(&df)?;
         let identifier = self.insert_df(df);
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
@@ -131,21 +129,36 @@ impl BastionLab for BastionLabState {
         Ok(stream_data(df, 32).await)
     }
 
-    async fn available_datasets(
+    async fn list_data_frames(
         &self,
         _request: Request<Empty>,
-    ) -> Result<Response<References>, Status> {
-        let dfs = self.get_dfs()?;
-        let refs: Vec<ReferenceResponse> = dfs_to_references(dfs)?;
-        Ok(Response::new(References { list: refs }))
+    ) -> Result<Response<ReferenceList>, Status> {
+        let list = self
+            .get_headers()?
+            .into_iter()
+            .map(|(identifier, header)| ReferenceResponse { identifier, header })
+            .collect();
+
+        Ok(Response::new(ReferenceList { list }))
+    }
+
+    async fn get_data_frame_header(
+        &self,
+        request: Request<ReferenceRequest>,
+    ) -> Result<Response<ReferenceResponse>, Status> {
+        let identifier = String::from(&request.get_ref().identifier);
+        let header = self.get_header(&identifier)?;
+
+        Ok(Response::new(ReferenceResponse { identifier, header }))
     }
 }
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let state = BastionLabState::new();
     let addr = "0.0.0.0:50056".parse()?;
     println!("BastionLab server running...");
-    // println!("{:?}", serde_json::from_str::<CompositePlan>("[{\"EntryPointPlanSegment\":\"1da61d9a-c8a8-4e8e-baec-b132db9009d9\"},{\"EntryPointPlanSegment\":\"1da61d9a-c8a8-4e8e-baec-b132db9009d9\"}]").unwrap());
+
     Server::builder()
         .add_service(BastionLabServer::new(state))
         .serve(addr)
