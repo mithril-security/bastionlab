@@ -23,6 +23,8 @@ use serialization::*;
 mod composite_plan;
 use composite_plan::*;
 
+mod visitable;
+
 #[derive(Debug, Default)]
 pub struct BastionLabState {
     // queries: Arc<Vec<String>>,
