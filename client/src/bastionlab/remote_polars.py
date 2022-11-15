@@ -291,7 +291,7 @@ class RemoteLazyFrame:
             ),
         )
 
-    def barplot(self: LDF, col_x: str, col_y: str, bins: int = 10, **kwargs):
+    def histplot(self: LDF, col_x: str, col_y: str, bins: int = 10, **kwargs):
         model = ApplyBins(bins)
         df = (
             self.filter(pl.col(col_x) != None)
