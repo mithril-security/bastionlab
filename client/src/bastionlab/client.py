@@ -46,6 +46,18 @@ class Client:
         res = self.stub.RunQuery(Query(composite_plan=composite_plan))
         return FetchableLazyFrame._from_reference(self, res)
 
+    def list_dfs(self) -> List["FetchableLazyFrame"]:
+        from bastionlab.remote_polars import FetchableLazyFrame
+
+        res = self.stub.ListDataFrames(Empty()).list
+        return [FetchableLazyFrame._from_reference(self, ref) for ref in res]
+
+    def get_df(self, identifier: str) -> "FetchableLazyFrame":
+        from bastionlab.remote_polars import FetchableLazyFrame
+
+        res = self.stub.GetDataFrameHeader(ReferenceRequest(identifier=identifier))
+        return FetchableLazyFrame._from_reference(self, res)
+
 
 @dataclass
 class Connection:
