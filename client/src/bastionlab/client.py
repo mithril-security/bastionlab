@@ -38,9 +38,7 @@ class Client:
     ) -> "FetchableLazyFrame":
         from bastionlab.remote_polars import FetchableLazyFrame
 
-        res = self.stub.RunQuery(
-            Query(composite_plan=composite_plan)
-        )
+        res = self.stub.RunQuery(Query(composite_plan=composite_plan))
         return FetchableLazyFrame._from_reference(self, res)
 
 
@@ -57,7 +55,7 @@ class Connection:
             return self._client
         else:
             return self.__enter__()
-    
+
     def close(self):
         if self._client is not None:
             self.__exit__(None, None, None)
