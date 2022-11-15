@@ -45,7 +45,6 @@ impl CompositePlan {
                     let mut df = input_dfs.pop().ok_or(Status::invalid_argument(
                         "Could not apply udf: no input data frame",
                     ))?;
-                    println!("Before apply df: {}", df.height());
                     for name in columns {
                         let idx = df
                             .get_column_names()
@@ -61,16 +60,7 @@ impl CompositePlan {
                             Status::invalid_argument(format!("Error while running udf: {}", e))
                         })?;
                         *series = tensor_to_series(series.name(), series.dtype(), tensor)?;
-                        // df.apply(&name, |series| {
-                        //     let tensor = series_to_tensor(series).unwrap(); // FIX THIS
-                        //     let tensor = module.forward_ts(&[tensor]).unwrap(); // FIX THIS
-                        //     tensor_to_series(series.name(), series.dtype(), tensor).unwrap()
-                        // })
-                        // .map_err(|e| {
-                        //     Status::invalid_argument(format!("Could not apply udf: {}", e))
-                        // })?;
                     }
-                    println!("After apply df: {}", df.height());
                     input_dfs.push(df);
                 }
                 CompositePlanSegment::EntryPointPlanSegment(identifier) => {

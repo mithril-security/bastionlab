@@ -19,20 +19,11 @@ def create_byte_chunk(data: bytes) -> Tuple[int, Iterator[bytes]]:
         sent_bytes += min(CHUNK_SIZE, len(data) - sent_bytes)
 
 
-def flatten(l):
-    return [item for sublist in l for item in sublist]
-
-
 def serialize_dataframe(df: pl.DataFrame) -> Iterator[Chunk]:
-    df_bytes: List[bytes] = [col.__getstate__() for col in df.__getstate__()]
     END_PATTERN = b"[end]"
-
-    def surround(col_bytes):
-        arr = bytearray(col_bytes)
-        arr += END_PATTERN
-        return arr
-
-    df_bytes = flatten([surround(col) for col in df_bytes])
+    df_bytes = bytearray()
+    for col in df.__getstate__():
+        df_bytes += col.__getstate__() + END_PATTERN
 
     for data in create_byte_chunk(df_bytes):
         yield Chunk(data=data)

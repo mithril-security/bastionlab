@@ -1,8 +1,13 @@
 import seaborn as sns
 from dataclasses import dataclass
-from typing import Any, List, TYPE_CHECKING, Optional
+from typing import Any, Dict, List, TYPE_CHECKING, Optional
 import grpc
-from bastionlab.pb.bastionlab_pb2 import ReferenceRequest, Query
+from bastionlab.pb.bastionlab_pb2 import (
+    ReferenceRequest,
+    ReferenceResponse,
+    Query,
+    Empty,
+)
 from bastionlab.pb.bastionlab_pb2_grpc import BastionLabStub
 import polars as pl
 
