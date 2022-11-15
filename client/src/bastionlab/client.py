@@ -50,7 +50,7 @@ class Client:
 
         res = self.stub.ListDataFrames(Empty()).list
         return [FetchableLazyFrame._from_reference(self, ref) for ref in res]
-    
+
     def get_df(self, identifier: str) -> "FetchableLazyFrame":
         from bastionlab.remote_polars import FetchableLazyFrame
 
