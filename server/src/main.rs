@@ -26,9 +26,22 @@ use composite_plan::*;
 
 mod visitable;
 
+#[derive(Debug, Clone)]
+pub struct DataFrameArtifact {
+    dataframe: DataFrame,
+    fetchable: bool,
+    query_details: String,
+}
+
+impl DataFrameArtifact {
+    pub fn new(df: DataFrame) -> Self {
+        DataFrameArtifact { dataframe: df, fetchable: false, query_details: String::from("uploaded dataframe") }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct BastionLabState {
-    dataframes: Arc<RwLock<HashMap<String, DataFrame>>>,
+    dataframes: Arc<RwLock<HashMap<String, DataFrameArtifact>>>,
 }
 
 impl BastionLabState {
@@ -40,25 +53,67 @@ impl BastionLabState {
 
     fn get_df(&self, identifier: &str) -> Result<DataFrame, Status> {
         let dfs = self.dataframes.read().unwrap();
+        let artifact = dfs
+            .get(identifier)
+            .ok_or(Status::not_found(format!(
+                "Could not find dataframe: identifier={}",
+                identifier
+            )))?;
+        if !artifact.fetchable {
+            println!(
+                "=== A user request has been rejected ===
+        Reason: Cannot fetch non aggregated results with at least {} samples per group.
+        Logical plan:
+        {}",
+                10, artifact.query_details,
+            );
+        
+            loop {
+                let mut ans = String::new();
+                println!("Accept [y] or Reject [n]?");
+                std::io::stdin()
+                    .read_line(&mut ans)
+                    .expect("Failed to read line");
+        
+                match ans.trim() {
+                    "y" => break,
+                    "n" => return Err(Status::invalid_argument(format!(
+                        "The data owner rejected the fetch operation.
+        Fetching a dataframe obtained with a non privacy-preserving query requires the approval of the data owner.
+        This dataframe was obtained in a non privacy-preserving fashion as it does not aggregate results with at least {} samples per group.",
+                        10
+                    ))),
+                    _ => continue,
+                }
+            }
+        }
+        Ok(artifact.dataframe.clone())
+    }
+
+    fn get_df_unchecked(&self, identifier: &str) -> Result<DataFrame, Status> {
+        let dfs = self.dataframes.read().unwrap();
         Ok(dfs
             .get(identifier)
             .ok_or(Status::not_found(format!(
                 "Could not find dataframe: identifier={}",
                 identifier
             )))?
+            .dataframe
             .clone())
     }
 
     fn get_header(&self, identifier: &str) -> Result<String, Status> {
         Ok(get_df_header(
-            self.dataframes
+            &self
+                .dataframes
                 .read()
                 .unwrap()
                 .get(identifier)
                 .ok_or(Status::not_found(format!(
                     "Could not find dataframe: identifier={}",
                     identifier
-                )))?,
+                )))?
+                .dataframe,
         )?)
     }
 
@@ -66,13 +121,13 @@ impl BastionLabState {
         let dataframes = self.dataframes.read().unwrap();
         let mut res = Vec::with_capacity(dataframes.len());
         for (k, v) in dataframes.iter() {
-            let header = get_df_header(v)?;
+            let header = get_df_header(&v.dataframe)?;
             res.push((k.clone(), header));
         }
         Ok(res)
     }
 
-    fn insert_df(&self, df: DataFrame) -> String {
+    fn insert_df(&self, df: DataFrameArtifact) -> String {
         let mut dfs = self.dataframes.write().unwrap();
         let identifier = format!("{}", Uuid::new_v4());
         dfs.insert(identifier.clone(), df);
@@ -93,9 +148,6 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<Query>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        // let input_dfs = self.get_dfs(&request.get_ref().identifiers)?;
-        println!("{:?}", request);
-        println!("{}", &request.get_ref().composite_plan);
         let composite_plan: CompositePlan = serde_json::from_str(&request.get_ref().composite_plan)
             .map_err(|e| {
                 Status::invalid_argument(format!(
@@ -106,7 +158,7 @@ impl BastionLab for BastionLabState {
             })?;
         let res = composite_plan.run(self)?;
 
-        let header = get_df_header(&res)?;
+        let header = get_df_header(&res.dataframe)?;
         let identifier = self.insert_df(res);
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
@@ -118,7 +170,7 @@ impl BastionLab for BastionLabState {
         let df = df_from_stream(request.into_inner()).await?;
 
         let header = get_df_header(&df)?;
-        let identifier = self.insert_df(df);
+        let identifier = self.insert_df(DataFrameArtifact::new(df));
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
 

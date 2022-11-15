@@ -7,7 +7,7 @@ use tonic::Status;
 
 use crate::{
     visitable::{Visitable, VisitableMut},
-    BastionLabState,
+    BastionLabState, DataFrameArtifact,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -21,7 +21,7 @@ pub enum CompositePlanSegment {
 }
 
 impl CompositePlan {
-    pub fn run(self, state: &BastionLabState) -> Result<DataFrame, Status> {
+    pub fn run(self, state: &BastionLabState) -> Result<DataFrameArtifact, Status> {
         let mut input_dfs = Vec::new();
         let mut has_aggregation = false;
         let plan_str = serde_json::to_string(&self.0).unwrap(); // FIX THIS
@@ -70,7 +70,7 @@ impl CompositePlan {
                     input_dfs.push(df);
                 }
                 CompositePlanSegment::EntryPointPlanSegment(identifier) => {
-                    input_dfs.push(state.get_df(&identifier)?)
+                    input_dfs.push(state.get_df_unchecked(&identifier)?)
                 }
             }
         }
@@ -81,36 +81,7 @@ impl CompositePlan {
             ));
         }
 
-        if !has_aggregation {
-            println!(
-                "=== A user request has been rejected ===
-Reason: Cannot fetch non aggregated results with at least {} samples per group.
-Logical plan:
-{}",
-                10, plan_str,
-            );
-
-            loop {
-                let mut ans = String::new();
-                println!("Accept [y] or Reject [n]?");
-                std::io::stdin()
-                    .read_line(&mut ans)
-                    .expect("Failed to read line");
-
-                match &ans[..] {
-                    "y" => break,
-                    "n" => return Err(Status::invalid_argument(format!(
-                        "The data owner rejected non privacy-preserving query.
-Non privacy-preserving queries require the approval of the data owner.
-This query is not privacy preserving as it does not aggregate results with at least {} samples per group.",
-                        10
-                    ))),
-                    _ => continue,
-                }
-            }
-        }
-
-        Ok(input_dfs.pop().unwrap())
+        Ok(DataFrameArtifact { dataframe: input_dfs.pop().unwrap(), fetchable: has_aggregation, query_details: plan_str })
     }
 }
 
