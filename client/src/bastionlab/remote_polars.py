@@ -330,7 +330,7 @@ class RemoteLazyFrame:
             .fetch()
             .to_pandas()
         )
-        sns.regplot(x=df[col_x], y=df[col_y], order=order, ci=ci, scatter=scatter)
+        sns.regplot(x=df[col_x], y=df[col_y], order=order, ci=ci, scatter=scatter, **kwargs)
 
     def scatterplot(self: LDF, col_x: str, col_y: str, bins=5, **kwargs):
         model = ApplyBins(bins)
