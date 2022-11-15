@@ -5,7 +5,10 @@ use std::io::Cursor;
 use tch::{kind::Element, CModule, Tensor};
 use tonic::Status;
 
-use crate::BastionLabState;
+use crate::{
+    visitable::{Visitable, VisitableMut},
+    BastionLabState, DataFrameArtifact,
+};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CompositePlan(Vec<CompositePlanSegment>);
@@ -18,12 +21,15 @@ pub enum CompositePlanSegment {
 }
 
 impl CompositePlan {
-    pub fn run(self, state: &BastionLabState) -> Result<DataFrame, Status> {
+    pub fn run(self, state: &BastionLabState) -> Result<DataFrameArtifact, Status> {
         let mut input_dfs = Vec::new();
+        let mut has_aggregation = false;
+        let plan_str = serde_json::to_string(&self.0).unwrap(); // FIX THIS
         for seg in self.0 {
             match seg {
                 CompositePlanSegment::PolarsPlanSegment(mut plan) => {
                     initialize_inputs(&mut plan, &mut input_dfs)?;
+                    aggregation_check(&plan, &mut has_aggregation, 10)?;
                     let df = run_logical_plan(plan)?;
                     input_dfs.push(df);
                 }
@@ -64,7 +70,7 @@ impl CompositePlan {
                     input_dfs.push(df);
                 }
                 CompositePlanSegment::EntryPointPlanSegment(identifier) => {
-                    input_dfs.push(state.get_df(&identifier)?)
+                    input_dfs.push(state.get_df_unchecked(&identifier)?)
                 }
             }
         }
@@ -75,7 +81,7 @@ impl CompositePlan {
             ));
         }
 
-        Ok(input_dfs.pop().unwrap())
+        Ok(DataFrameArtifact { dataframe: input_dfs.pop().unwrap(), fetchable: has_aggregation, query_details: plan_str })
     }
 }
 
@@ -141,63 +147,68 @@ where
     ChunkedArray::new_vec(name, v)
 }
 
-fn run_logical_plan(plan: LogicalPlan) -> Result<DataFrame, Status> {
+fn lazy_frame_from_logical_plan(plan: LogicalPlan) -> LazyFrame {
     let mut ldf = LazyFrame::default();
     ldf.logical_plan = plan;
+    ldf
+}
+
+fn run_logical_plan(plan: LogicalPlan) -> Result<DataFrame, Status> {
+    let ldf = lazy_frame_from_logical_plan(plan);
     ldf.collect()
         .map_err(|e| Status::internal(format!("Could not run logical plan: {}", e)))
 }
 
 fn initialize_inputs(plan: &mut LogicalPlan, input_dfs: &mut Vec<DataFrame>) -> Result<(), Status> {
-    match plan {
-        x @ LogicalPlan::DataFrameScan { .. } => {
-            *x = input_dfs
+    plan.visit_mut(input_dfs, |plan, input_dfs| {
+        if let LogicalPlan::DataFrameScan { .. } = plan {
+            *plan = input_dfs
                 .pop()
                 .ok_or(Status::invalid_argument(
                     "Could not run logical plan: not enough input data frames",
                 ))?
                 .lazy()
-                .logical_plan
+                .logical_plan;
         }
-        LogicalPlan::Selection { input, .. } => initialize_inputs(input, input_dfs)?,
-        LogicalPlan::Cache { input, .. } => initialize_inputs(input, input_dfs)?,
-        LogicalPlan::LocalProjection { input, .. } => initialize_inputs(input, input_dfs)?,
-        LogicalPlan::Projection { input, .. } => initialize_inputs(input, input_dfs)?,
-        LogicalPlan::Aggregate { input, .. } => initialize_inputs(input, input_dfs)?,
-        LogicalPlan::Join {
-            input_left,
-            input_right,
-            ..
-        } => {
-            initialize_inputs(input_left, input_dfs)?;
-            initialize_inputs(input_right, input_dfs)?;
-        }
-        LogicalPlan::HStack { input, .. } => initialize_inputs(input, input_dfs)?,
-        LogicalPlan::Distinct { input, .. } => initialize_inputs(input, input_dfs)?,
-        LogicalPlan::Sort { input, .. } => initialize_inputs(input, input_dfs)?,
-        LogicalPlan::Explode { input, .. } => initialize_inputs(input, input_dfs)?,
-        LogicalPlan::Slice { input, .. } => initialize_inputs(input, input_dfs)?,
-        LogicalPlan::Melt { input, .. } => initialize_inputs(input, input_dfs)?,
-        LogicalPlan::MapFunction { input, .. } => initialize_inputs(input, input_dfs)?,
-        LogicalPlan::Union { inputs, .. } => {
-            for input in inputs {
-                initialize_inputs(input, input_dfs)?;
+        Ok(())
+    })
+}
+
+fn aggregation_check(
+    plan: &LogicalPlan,
+    state: &mut bool,
+    min_allowed_agg_size: usize,
+) -> Result<(), Status> {
+    plan.visit(state, |plan, state| {
+        match plan {
+            LogicalPlan::Aggregate { input, keys, .. } => {
+                let keys = &(**keys)[..];
+                let ldf = lazy_frame_from_logical_plan((&**input).clone());
+                let min_agg_size: usize = ldf
+                    .cache()
+                    .with_row_count("__count", None)
+                    .groupby(keys)
+                    .agg([col("__count").count()])
+                    .select([col("__count").min()])
+                    .collect()
+                    .map_err(|e| {
+                        Status::internal(format!(
+                            "Could not check aggregation minimal count: {}",
+                            e
+                        ))
+                    })?
+                    .get(0)
+                    .unwrap()[0]
+                    .try_extract()
+                    .unwrap();
+                *state = *state || min_agg_size >= min_allowed_agg_size;
             }
+            LogicalPlan::Join { .. } => *state = false,
+            // These are not currently supported
+            // LogicalPlan::ExtContext { .. } => *state = false,
+            // LogicalPlan::Union { .. } => *state = false,
+            _ => (),
         }
-        LogicalPlan::ExtContext {
-            input, contexts, ..
-        } => {
-            initialize_inputs(input, input_dfs)?;
-            for context in contexts {
-                initialize_inputs(context, input_dfs)?;
-            }
-        }
-        lp => {
-            return Err(Status::invalid_argument(format!(
-                "Logical plan contains unsupported variants: {:?}",
-                lp
-            )))
-        }
-    }
-    Ok(())
+        Ok(())
+    })
 }

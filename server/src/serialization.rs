@@ -15,7 +15,6 @@ pub async fn df_from_stream(stream: tonic::Streaming<Chunk>) -> Result<DataFrame
 }
 
 pub fn df_to_bytes(df: DataFrame) -> Vec<Vec<u8>> {
-    println!("{:?}", df);
     let series = df.get_columns();
     let series_bytes = series
         .iter()
