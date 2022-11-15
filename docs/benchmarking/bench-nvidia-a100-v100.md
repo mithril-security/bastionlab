@@ -1,7 +1,7 @@
 
-In the same way as on AMD EPYC 7763, the method used here was the same for testing.
+The method used here for testing was the same as in the previous benchmarking example with AMD EPYC 7763.
 
-For these benchmarks we set the batch size to be the maximum possible, fitting in 16GB of GPU RAM, using a NVIDIA V100 GPU.
+For these benchmarks, we set the batch size to be the maximum possible, fitting in 16GB of GPU RAM, using a NVIDIA V100 GPU.
 
 ![](../assets/v100_exec_times_16GB.png)
 
