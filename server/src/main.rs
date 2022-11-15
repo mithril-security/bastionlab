@@ -1,23 +1,20 @@
 use polars::prelude::*;
+use serde_json;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     error::Error,
-    sync::{Arc, RwLock},
+    sync::{Arc, Mutex, RwLock},
 };
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
 use uuid::Uuid;
-use serde_json;
 
 pub mod grpc {
     tonic::include_proto!("bastionlab");
 }
 use grpc::{
-    Chunk,
-    Query,
-    ReferenceRequest,
-    ReferenceResponse,
-    bastion_lab_server::{BastionLab, BastionLabServer}
+    bastion_lab_server::{BastionLab, BastionLabServer},
+    ChallengeResponse, Chunk, Empty, Query, ReferenceRequest, ReferenceResponse,
 };
 
 mod serialization;
@@ -26,23 +23,41 @@ use serialization::*;
 mod composite_plan;
 use composite_plan::*;
 
+mod access_control;
+use access_control::*;
+
+use ring::rand;
 #[derive(Debug, Default)]
 pub struct BastionLabState {
     // queries: Arc<Vec<String>>,
     dataframes: Arc<RwLock<HashMap<String, DataFrame>>>,
+    keys: Mutex<KeyManagement>,
+    challenges: Mutex<HashSet<[u8; 32]>>,
 }
 
 impl BastionLabState {
-    fn new() -> Self {
+    fn new(keys: KeyManagement) -> Self {
         Self {
             // queries: Arc::new(Vec::new()),
             dataframes: Arc::new(RwLock::new(HashMap::new())),
+            keys: Mutex::new(keys),
+            challenges: Default::default(),
         }
     }
 
     fn get_df(&self, identifier: &str) -> Result<DataFrame, Status> {
         let dfs = self.dataframes.read().unwrap();
-        Ok(dfs.get(identifier).ok_or(Status::not_found(format!("Could not find dataframe: identifier={}", identifier)))?.clone())
+        Ok(dfs
+            .get(identifier)
+            .ok_or(Status::not_found(format!(
+                "Could not find dataframe: identifier={}",
+                identifier
+            )))?
+            .clone())
+    }
+
+    fn verify_request<T>(&self, request: &Request<T>) -> Result<(), Status> {
+        Ok(())
     }
 
     // fn get_dfs(&self, identifiers: &[String]) -> Result<VecDeque<DataFrame>, Status> {
@@ -60,20 +75,59 @@ impl BastionLabState {
         dfs.insert(identifier.clone(), df);
         identifier
     }
+    fn check_challenge<T>(&self, request: &Request<T>) -> Result<(), Status> {
+        if let Some(meta) = request.metadata().get_bin("challenge-bin") {
+            let challenge = meta
+                .to_bytes()
+                .map_err(|_| Status::invalid_argument("Could not decode challenge"))?;
+            let mut lock = self.challenges.lock().unwrap();
+            if !lock.remove(challenge.as_ref()) {
+                Err(Status::permission_denied("Invalid or reused challenge"))?
+            }
+        }
+        Ok(())
+    }
+
+    fn new_challenge(&self) -> [u8; 32] {
+        let rng = rand::SystemRandom::new();
+        loop {
+            let challenge: [u8; 32] = rand::generate(&rng)
+                .expect("Could not generate random value")
+                .expose();
+            if self.challenges.lock().unwrap().insert(challenge) {
+                return challenge;
+            }
+        }
+    }
 }
 
 #[tonic::async_trait]
 impl BastionLab for BastionLabState {
     type FetchDataFrameStream = ReceiverStream<Result<Chunk, Status>>;
 
-    async fn run_query(&self, request: Request<Query>) -> Result<Response<ReferenceResponse>, Status> {
+    async fn run_query(
+        &self,
+        request: Request<Query>,
+    ) -> Result<Response<ReferenceResponse>, Status> {
         // let input_dfs = self.get_dfs(&request.get_ref().identifiers)?;
         println!("{:?}", request);
         println!("{}", &request.get_ref().composite_plan);
-        let composite_plan: CompositePlan = serde_json::from_str(&request.get_ref().composite_plan).map_err(|e| Status::invalid_argument(format!("Could not deserialize composite plan: {}{}", e, &request.get_ref().composite_plan)))?;
+        let composite_plan: CompositePlan = serde_json::from_str(&request.get_ref().composite_plan)
+            .map_err(|e| {
+                Status::invalid_argument(format!(
+                    "Could not deserialize composite plan: {}{}",
+                    e,
+                    &request.get_ref().composite_plan
+                ))
+            })?;
         let res = composite_plan.run(self)?;
 
-        let header = serde_json::to_string(&res.schema()).map_err(|e| Status::internal(format!("Could not serialize result data frame header: {}", e)))?;
+        let header = serde_json::to_string(&res.schema()).map_err(|e| {
+            Status::internal(format!(
+                "Could not serialize result data frame header: {}",
+                e
+            ))
+        })?;
         let identifier = self.insert_df(res);
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
@@ -83,29 +137,41 @@ impl BastionLab for BastionLabState {
         request: Request<Streaming<Chunk>>,
     ) -> Result<Response<ReferenceResponse>, Status> {
         let df = df_from_stream(request.into_inner()).await?;
-        
-        let header = serde_json::to_string(&df.schema()).map_err(|e| Status::internal(format!("Could not serialize header: {}", e)))?;
+
+        let header = serde_json::to_string(&df.schema())
+            .map_err(|e| Status::internal(format!("Could not serialize header: {}", e)))?;
         let identifier = self.insert_df(df);
-        Ok(Response::new(ReferenceResponse {
-            identifier,
-            header,
-        }))
+        Ok(Response::new(ReferenceResponse { identifier, header }))
     }
 
     async fn fetch_data_frame(
         &self,
         request: Request<ReferenceRequest>,
     ) -> Result<Response<Self::FetchDataFrameStream>, Status> {
+        self.check_challenge(&request)?;
+        self.verify_request(&request)?;
         let df = self.get_df(&request.get_ref().identifier)?;
 
         Ok(stream_data(df, 32).await)
     }
+
+    async fn get_challenge(
+        &self,
+        _request: Request<Empty>,
+    ) -> Result<Response<ChallengeResponse>, Status> {
+        let challenge = self.new_challenge();
+        Ok(Response::new(ChallengeResponse {
+            value: challenge.into(),
+        }))
+    }
 }
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let state = BastionLabState::new();
+    let keys = KeyManagement::load_from_dir("./keys".to_string())?;
+    let state = BastionLabState::new(keys);
     let addr = "[::1]:50056".parse()?;
     println!("BastionLab server running...");
+
     // println!("{:?}", serde_json::from_str::<CompositePlan>("[{\"EntryPointPlanSegment\":\"1da61d9a-c8a8-4e8e-baec-b132db9009d9\"},{\"EntryPointPlanSegment\":\"1da61d9a-c8a8-4e8e-baec-b132db9009d9\"}]").unwrap());
     Server::builder()
         .add_service(BastionLabServer::new(state))

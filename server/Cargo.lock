@@ -146,6 +146,8 @@ dependencies = [
  "bincode",
  "polars",
  "prost",
+ "rand",
+ "ring",
  "serde",
  "serde_derive",
  "serde_json",
