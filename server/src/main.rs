@@ -6,7 +6,7 @@ use std::{
     sync::{Arc, Mutex, RwLock},
 };
 use tokio_stream::wrappers::ReceiverStream;
-use tonic::{transport::Server, Request, Response, Status, Streaming};
+use tonic::{metadata::KeyRef, transport::Server, Request, Response, Status, Streaming};
 use uuid::Uuid;
 
 pub mod grpc {
@@ -57,6 +57,25 @@ impl BastionLabState {
     }
 
     fn verify_request<T>(&self, request: &Request<T>) -> Result<(), Status> {
+        let pat = "signing-key-";
+        for key in request.metadata().keys() {
+            match key {
+                KeyRef::Binary(key) => {
+                    let key = key.to_string();
+                    if let Some(key) = key.strip_suffix("-bin") {
+                        if key.contains(pat) {
+                            if let Some(key) = key.split(pat).last() {
+                                let lock = self.keys.lock().unwrap();
+                                lock.verify_key(key)?;
+                            }
+                            println!("key: {:?}", key);
+                        }
+                    }
+                }
+                _ => (),
+            }
+        }
+
         Ok(())
     }
 

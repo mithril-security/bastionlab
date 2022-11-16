@@ -1,25 +1,31 @@
 use std::{
-    ffi::OsStr,
-    fs::{self, read, File, ReadDir},
+    collections::HashSet,
+    fs::{self, read},
     path::{Path, PathBuf},
 };
 
+use ring::digest::{digest, SHA256};
 use tonic::Status;
+use x509_parser::prelude::Pem;
 pub type PubKey = Vec<u8>;
 #[derive(Debug, Default, Clone)]
 pub struct KeyManagement {
-    owners: Vec<PubKey>,
-    users: Vec<PubKey>,
+    owners: HashSet<PubKey>,
+    users: HashSet<PubKey>,
 }
 
 impl KeyManagement {
     fn read_from_file(path: PathBuf) -> Result<PubKey, Status> {
-        let file = read(path)?;
-        Ok(file)
+        let file = &read(path)?;
+        let (_, Pem { contents, .. }) = x509_parser::pem::parse_x509_pem(&file[..])
+            .map_err(|e| Status::aborted(e.to_string()))?;
+
+        let hash = hex::encode(digest(&SHA256, &contents[..]));
+        Ok(hash.as_bytes().to_vec())
     }
     pub fn load_from_dir(path: String) -> Result<Self, Status> {
-        let mut owners: Vec<PubKey> = Vec::new();
-        let mut users: Vec<PubKey> = Vec::new();
+        let mut owners: HashSet<PubKey> = HashSet::new();
+        let mut users: HashSet<PubKey> = HashSet::new();
         if Path::new(&path).is_dir() {
             // Contains sub-directories.
             let paths = fs::read_dir(path)?;
@@ -34,13 +40,13 @@ impl KeyManagement {
                                 "owners" => {
                                     for file in files {
                                         let file = file?;
-                                        owners.push(KeyManagement::read_from_file(file.path())?);
+                                        owners.insert(KeyManagement::read_from_file(file.path())?);
                                     }
                                 }
                                 "users" => {
                                     for file in files {
                                         let file = file?;
-                                        users.push(KeyManagement::read_from_file(file.path())?);
+                                        users.insert(KeyManagement::read_from_file(file.path())?);
                                     }
                                 }
                                 _ => (),
@@ -58,5 +64,14 @@ impl KeyManagement {
         }
 
         Ok(KeyManagement { owners, users })
+    }
+
+    pub fn verify_key(&self, pub_key: &str) -> Result<(), Status> {
+        let key = pub_key.as_bytes().to_vec();
+        println!("{:?} \t {:?} \t {:?}", key, self.owners, self.users);
+        if !(self.owners.contains(&key) || self.users.contains(&key)) {
+            Err(Status::aborted(format!("{:?} not authenticated!", pub_key)))?
+        }
+        Ok(())
     }
 }

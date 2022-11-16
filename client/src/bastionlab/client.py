@@ -45,15 +45,13 @@ class Client:
             metadata += (("challenge-bin", challenge),)
             to_sign = method + challenge + data
 
-            keys = ()
             for k in itertools.chain(signing_keys, self.default_signing_keys):
                 signed = k.sign(to_sign)
                 pubkey_hex = k.pubkey.hash.hex()
                 metadata += ((f"signature-{(pubkey_hex)}-bin", signed),)
-                keys += pubkey_hex
+                metadata += ((f"signing-key-{(pubkey_hex)}-bin", b""),)
 
-            metadata += (("signing-keys", keys),)
-
+        print(metadata)
         # todo challenges
         logging.debug(f"GRPC Call {call}; using metadata {metadata}")
 
@@ -75,6 +73,7 @@ class Client:
     def _fetch_df(
         self, ref: List[str], signing_keys: List[SigningKey] = []
     ) -> pl.DataFrame:
+        print(signing_keys)
         joined_bytes = b""
         for b in self.__make_grpc_call(
             "FetchDataFrame",
@@ -87,12 +86,16 @@ class Client:
         return deserialize_dataframe(joined_bytes)
 
     def _run_query(
-        self,
-        composite_plan: str,
+        self, composite_plan: str, signing_keys: List[SigningKey] = []
     ) -> "FetchableLazyFrame":
         from bastionlab.remote_polars import FetchableLazyFrame
 
-        res = self.stub.RunQuery(Query(composite_plan=composite_plan))
+        res = self.__make_grpc_call(
+            "RunQuery",
+            Query(composite_plan=composite_plan),
+            method=b"run",
+            signing_keys=signing_keys,
+        )
         return FetchableLazyFrame._from_reference(self, res)
 
 
@@ -100,6 +103,7 @@ class Client:
 class Connection:
     host: str
     port: int
+    license_key: Optional[SigningKey]
     channel: Any = None
     _client: Optional[Client] = None
     default_signing_keys: List[SigningKey] = field(default_factory=list)
@@ -118,6 +122,11 @@ class Connection:
     def __enter__(self) -> Client:
         server_target = f"{self.host}:{self.port}"
         self.channel = grpc.insecure_channel(server_target)
+
+        if self.license_key is not None:
+            if self.license_key not in self.default_signing_keys:
+                self.default_signing_keys.append(self.license_key)
+
         self._client = Client(
             BastionLabStub(self.channel),
             default_signing_keys=self.default_signing_keys,
