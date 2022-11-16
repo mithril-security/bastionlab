@@ -7,7 +7,16 @@ use std::{
 use ring::digest::{digest, SHA256};
 use tonic::Status;
 use x509_parser::prelude::Pem;
+
+/// Rename for [`Vec<u8>`].
 pub type PubKey = Vec<u8>;
+
+/// This struct holds the hash of the PEM formatted public keys loaded from the directory
+/// passed to the `KeyManagement` struct at start-up.
+///
+/// If the directory doesn't contain either of these directories (`owners`, `users`), then it fails to start
+/// All public keys in `owners` are stored in `KeyManagement::owners` and those for users are
+/// stored in `KeyManagement::owners`
 #[derive(Debug, Default, Clone)]
 pub struct KeyManagement {
     owners: HashSet<PubKey>,
@@ -23,6 +32,7 @@ impl KeyManagement {
         let hash = hex::encode(digest(&SHA256, &contents[..]));
         Ok(hash.as_bytes().to_vec())
     }
+
     pub fn load_from_dir(path: String) -> Result<Self, Status> {
         let mut owners: HashSet<PubKey> = HashSet::new();
         let mut users: HashSet<PubKey> = HashSet::new();
