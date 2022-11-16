@@ -46,12 +46,9 @@ class Client:
             to_sign = method + challenge + data
 
             for k in itertools.chain(signing_keys, self.default_signing_keys):
-                signed = k.sign(to_sign)
                 pubkey_hex = k.pubkey.hash.hex()
-                metadata += ((f"signature-{(pubkey_hex)}-bin", signed),)
                 metadata += ((f"signing-key-{(pubkey_hex)}-bin", b""),)
 
-        print(metadata)
         # todo challenges
         logging.debug(f"GRPC Call {call}; using metadata {metadata}")
 
@@ -73,7 +70,7 @@ class Client:
     def _fetch_df(
         self, ref: List[str], signing_keys: List[SigningKey] = []
     ) -> pl.DataFrame:
-        print(signing_keys)
+        
         joined_bytes = b""
         for b in self.__make_grpc_call(
             "FetchDataFrame",
@@ -95,6 +92,24 @@ class Client:
             Query(composite_plan=composite_plan),
             method=b"run",
             signing_keys=signing_keys,
+        )
+        res = self.stub.RunQuery(Query(composite_plan=composite_plan))
+        return FetchableLazyFrame._from_reference(self, res)
+
+    def list_dfs(self) -> List["FetchableLazyFrame"]:
+        from bastionlab.remote_polars import FetchableLazyFrame
+
+        res = self.stub.ListDataFrames(Empty()).list
+        return [FetchableLazyFrame._from_reference(self, ref) for ref in res]
+
+    def get_df(self, identifier: str) -> "FetchableLazyFrame":
+        from bastionlab.remote_polars import FetchableLazyFrame
+
+        res = self.__make_grpc_call(
+            "GetDataFrameHeader",
+            ReferenceRequest(identifier=identifier),
+            method=b"get",
+            signing_keys=[],
         )
         return FetchableLazyFrame._from_reference(self, res)
 

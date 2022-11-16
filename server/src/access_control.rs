@@ -26,41 +26,56 @@ impl KeyManagement {
     pub fn load_from_dir(path: String) -> Result<Self, Status> {
         let mut owners: HashSet<PubKey> = HashSet::new();
         let mut users: HashSet<PubKey> = HashSet::new();
-        if Path::new(&path).is_dir() {
-            // Contains sub-directories.
-            let paths = fs::read_dir(path)?;
-            for path in paths {
-                let path = path?;
-                if path.path().is_dir() {
-                    let files = path.path().read_dir()?;
-                    match path.path().file_name() {
-                        Some(v) => {
-                            let dir = v.to_str().ok_or_else(|| Status::aborted(""))?;
-                            match dir {
-                                "owners" => {
-                                    for file in files {
-                                        let file = file?;
-                                        owners.insert(KeyManagement::read_from_file(file.path())?);
-                                    }
+
+        // Check for this directory structure
+        // -- keys
+        // -----| owners
+        // -----| users
+
+        if !Path::new(&path).is_dir() {
+            Err(Status::aborted("Please provide a directory!"))?
+        }
+
+        // Contains sub-directories.
+        let paths = fs::read_dir(path.clone())?;
+
+        for path in paths {
+            let path = path?;
+            if path.path().is_dir() {
+                let files = path.path().read_dir()?;
+                match path.path().file_name() {
+                    Some(v) => {
+                        let dir = v.to_str().ok_or_else(|| Status::aborted(""))?;
+                        match dir {
+                            "owners" => {
+                                for file in files {
+                                    let file = file?;
+                                    owners.insert(KeyManagement::read_from_file(file.path())?);
                                 }
-                                "users" => {
-                                    for file in files {
-                                        let file = file?;
-                                        users.insert(KeyManagement::read_from_file(file.path())?);
-                                    }
-                                }
-                                _ => (),
                             }
+                            "users" => {
+                                for file in files {
+                                    let file = file?;
+                                    users.insert(KeyManagement::read_from_file(file.path())?);
+                                }
+                            }
+                            _ => (),
                         }
-                        None => {
-                            return Err(Status::internal(
-                                "owners and users public keys not provided!",
-                            ))?;
-                        }
+                    }
+                    None => {
+                        return Err(Status::internal(
+                            "owners and users public keys not provided!",
+                        ))?;
                     }
                 }
             }
-        } else {
+        }
+
+        if owners.is_empty() && users.is_empty() {
+            Err(Status::aborted(format!(
+                "Please provided these directories [`owners`, `users`] in {}",
+                path
+            )))?
         }
 
         Ok(KeyManagement { owners, users })
@@ -68,7 +83,6 @@ impl KeyManagement {
 
     pub fn verify_key(&self, pub_key: &str) -> Result<(), Status> {
         let key = pub_key.as_bytes().to_vec();
-        println!("{:?} \t {:?} \t {:?}", key, self.owners, self.users);
         if !(self.owners.contains(&key) || self.users.contains(&key)) {
             Err(Status::aborted(format!("{:?} not authenticated!", pub_key)))?
         }

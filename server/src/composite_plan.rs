@@ -46,14 +46,20 @@ impl CompositePlan {
                         "Could not apply udf: no input data frame",
                     ))?;
                     for name in columns {
-                        df.apply(&name, |series| {
-                            let tensor = series_to_tensor(series).unwrap(); // FIX THIS
-                            let tensor = module.forward_ts(&[tensor]).unwrap(); // FIX THIS
-                            tensor_to_series(series.name(), series.dtype(), tensor).unwrap()
-                        })
-                        .map_err(|e| {
-                            Status::invalid_argument(format!("Could not apply udf: {}", e))
+                        let idx = df
+                            .get_column_names()
+                            .iter()
+                            .position(|x| x == &&name)
+                            .ok_or(Status::invalid_argument(format!(
+                                "Could not apply udf: no column `{}` in data frame",
+                                name
+                            )))?;
+                        let series = df.get_columns_mut().get_mut(idx).unwrap();
+                        let tensor = series_to_tensor(series)?;
+                        let tensor = module.forward_ts(&[tensor]).map_err(|e| {
+                            Status::invalid_argument(format!("Error while running udf: {}", e))
                         })?;
+                        *series = tensor_to_series(series.name(), series.dtype(), tensor)?;
                     }
                     input_dfs.push(df);
                 }
@@ -116,11 +122,11 @@ where
         Ok(slice) => Tensor::from(slice),
         Err(_) => {
             if !series.has_validity() {
-                return Err(Status::invalid_argument("Cannot apply udf on a column that contains empty values"))
+                return Err(Status::invalid_argument(
+                    "Cannot apply udf on a column that contains empty values",
+                ));
             }
-            let v: Vec<T::Native> = series
-                .into_no_null_iter()
-                .collect();
+            let v: Vec<T::Native> = series.into_no_null_iter().collect();
             Tensor::from(&v[..])
         }
     })

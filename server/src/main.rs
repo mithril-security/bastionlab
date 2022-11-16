@@ -14,7 +14,7 @@ pub mod grpc {
 }
 use grpc::{
     bastion_lab_server::{BastionLab, BastionLabServer},
-    ChallengeResponse, Chunk, Empty, Query, ReferenceRequest, ReferenceResponse,
+    ChallengeResponse, Chunk, Empty, Query, ReferenceList, ReferenceRequest, ReferenceResponse,
 };
 
 mod serialization;
@@ -29,7 +29,6 @@ use access_control::*;
 use ring::rand;
 #[derive(Debug, Default)]
 pub struct BastionLabState {
-    // queries: Arc<Vec<String>>,
     dataframes: Arc<RwLock<HashMap<String, DataFrame>>>,
     keys: Mutex<KeyManagement>,
     challenges: Mutex<HashSet<[u8; 32]>>,
@@ -38,7 +37,6 @@ pub struct BastionLabState {
 impl BastionLabState {
     fn new(keys: KeyManagement) -> Self {
         Self {
-            // queries: Arc::new(Vec::new()),
             dataframes: Arc::new(RwLock::new(HashMap::new())),
             keys: Mutex::new(keys),
             challenges: Default::default(),
@@ -58,18 +56,22 @@ impl BastionLabState {
 
     fn verify_request<T>(&self, request: &Request<T>) -> Result<(), Status> {
         let pat = "signing-key-";
+        let end = "-bin";
         for key in request.metadata().keys() {
             match key {
                 KeyRef::Binary(key) => {
                     let key = key.to_string();
-                    if let Some(key) = key.strip_suffix("-bin") {
+                    if let Some(key) = key.strip_suffix(end) {
                         if key.contains(pat) {
                             if let Some(key) = key.split(pat).last() {
                                 let lock = self.keys.lock().unwrap();
                                 lock.verify_key(key)?;
+                            } else {
+                                Err(Status::aborted("User signing key not found in request!"))?
                             }
-                            println!("key: {:?}", key);
                         }
+                    } else {
+                        Err(Status::aborted("User signing key not found in request!"))?
                     }
                 }
                 _ => (),
@@ -78,15 +80,28 @@ impl BastionLabState {
 
         Ok(())
     }
+    fn get_header(&self, identifier: &str) -> Result<String, Status> {
+        Ok(get_df_header(
+            self.dataframes
+                .read()
+                .unwrap()
+                .get(identifier)
+                .ok_or(Status::not_found(format!(
+                    "Could not find dataframe: identifier={}",
+                    identifier
+                )))?,
+        )?)
+    }
 
-    // fn get_dfs(&self, identifiers: &[String]) -> Result<VecDeque<DataFrame>, Status> {
-    //     let dfs = self.dataframes.read().unwrap();
-    //     let mut res = VecDeque::with_capacity(identifiers.len());
-    //     for identifier in identifiers.iter() {
-    //         res.push_back(dfs.get(identifier).ok_or(Status::not_found(format!("Could not find dataframe: identifier={}", identifier)))?.clone());
-    //     }
-    //     Ok(res)
-    // }
+    fn get_headers(&self) -> Result<Vec<(String, String)>, Status> {
+        let dataframes = self.dataframes.read().unwrap();
+        let mut res = Vec::with_capacity(dataframes.len());
+        for (k, v) in dataframes.iter() {
+            let header = get_df_header(v)?;
+            res.push((k.clone(), header));
+        }
+        Ok(res)
+    }
 
     fn insert_df(&self, df: DataFrame) -> String {
         let mut dfs = self.dataframes.write().unwrap();
@@ -120,6 +135,11 @@ impl BastionLabState {
     }
 }
 
+fn get_df_header(df: &DataFrame) -> Result<String, Status> {
+    serde_json::to_string(&df.schema())
+        .map_err(|e| Status::internal(format!("Could not serialize data frame header: {}", e)))
+}
+
 #[tonic::async_trait]
 impl BastionLab for BastionLabState {
     type FetchDataFrameStream = ReceiverStream<Result<Chunk, Status>>;
@@ -128,6 +148,8 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<Query>,
     ) -> Result<Response<ReferenceResponse>, Status> {
+        self.check_challenge(&request)?;
+        self.verify_request(&request)?;
         // let input_dfs = self.get_dfs(&request.get_ref().identifiers)?;
         println!("{:?}", request);
         println!("{}", &request.get_ref().composite_plan);
@@ -141,12 +163,7 @@ impl BastionLab for BastionLabState {
             })?;
         let res = composite_plan.run(self)?;
 
-        let header = serde_json::to_string(&res.schema()).map_err(|e| {
-            Status::internal(format!(
-                "Could not serialize result data frame header: {}",
-                e
-            ))
-        })?;
+        let header = get_df_header(&res)?;
         let identifier = self.insert_df(res);
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
@@ -157,8 +174,7 @@ impl BastionLab for BastionLabState {
     ) -> Result<Response<ReferenceResponse>, Status> {
         let df = df_from_stream(request.into_inner()).await?;
 
-        let header = serde_json::to_string(&df.schema())
-            .map_err(|e| Status::internal(format!("Could not serialize header: {}", e)))?;
+        let header = get_df_header(&df)?;
         let identifier = self.insert_df(df);
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
@@ -183,15 +199,38 @@ impl BastionLab for BastionLabState {
             value: challenge.into(),
         }))
     }
+    async fn list_data_frames(
+        &self,
+        _request: Request<Empty>,
+    ) -> Result<Response<ReferenceList>, Status> {
+        let list = self
+            .get_headers()?
+            .into_iter()
+            .map(|(identifier, header)| ReferenceResponse { identifier, header })
+            .collect();
+
+        Ok(Response::new(ReferenceList { list }))
+    }
+
+    async fn get_data_frame_header(
+        &self,
+        request: Request<ReferenceRequest>,
+    ) -> Result<Response<ReferenceResponse>, Status> {
+        self.check_challenge(&request)?;
+        self.verify_request(&request)?;
+        let identifier = String::from(&request.get_ref().identifier);
+        let header = self.get_header(&identifier)?;
+
+        Ok(Response::new(ReferenceResponse { identifier, header }))
+    }
 }
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let keys = KeyManagement::load_from_dir("./keys".to_string())?;
     let state = BastionLabState::new(keys);
-    let addr = "[::1]:50056".parse()?;
+    let addr = "0.0.0.0:50056".parse()?;
     println!("BastionLab server running...");
-
-    // println!("{:?}", serde_json::from_str::<CompositePlan>("[{\"EntryPointPlanSegment\":\"1da61d9a-c8a8-4e8e-baec-b132db9009d9\"},{\"EntryPointPlanSegment\":\"1da61d9a-c8a8-4e8e-baec-b132db9009d9\"}]").unwrap());
     Server::builder()
         .add_service(BastionLabServer::new(state))
         .serve(addr)
