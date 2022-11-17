@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
 import itertools
 import logging
+from threading import Thread
+from time import sleep
 from typing import Any, List, TYPE_CHECKING, Optional
 import grpc
 from bastionlab.pb.bastionlab_pb2 import ReferenceRequest, Query, Empty
@@ -17,40 +19,15 @@ from bastionlab.utils import (
 if TYPE_CHECKING:
     from bastionlab.remote_polars import RemoteLazyFrame, FetchableLazyFrame
 
+HEART_BEAT_TICK = 25 * 60
 
 class Client:
     def __make_grpc_call(
         self,
         call: str,
         arg: Any,
-        streaming: bool = False,
-        method: Optional[bytes] = None,
-        signing_keys: List[SigningKey] = [],
     ) -> Any:
-        # does not support streaming calls for now
-
-        needs_signing_and_challenge = method is not None and (
-            len(signing_keys) > 0 or len(self.default_signing_keys) > 0
-        )
-
-        metadata = ()
-        if needs_signing_and_challenge:
-            data: bytes = arg.SerializeToString()
-
-            logging.debug(f"GRPC Call {call}: getting a challenge")
-            challenge = GRPCException.map_error(
-                lambda: self.stub.GetChallenge(Empty())
-            ).value
-
-            metadata += (("challenge-bin", challenge),)
-            to_sign = method + challenge + data
-
-            for k in itertools.chain(signing_keys, self.default_signing_keys):
-                pubkey_hex = k.pubkey.hash.hex()
-                signed = k.sign(to_sign)
-                metadata += ((f"signature-{(pubkey_hex)}-bin", signed),)
-                metadata += ((f"signing-key-{(pubkey_hex)}-bin", b""),)
-
+        metadata = (("accesstoken-bin", self.token),)
 
         # todo challenges
         logging.debug(f"GRPC Call {call}; using metadata {metadata}")
@@ -59,9 +36,13 @@ class Client:
         return GRPCException.map_error(lambda: fn(arg, metadata=metadata))
 
     def __init__(
-        self, stub: BastionLabStub, default_signing_keys: List[SigningKey] = []
+        self,
+        stub: BastionLabStub,
+        token: bytes,
+        default_signing_keys: List[SigningKey] = [],
     ):
         self.stub = stub
+        self.token = token
         self.default_signing_keys = default_signing_keys
 
     def send_df(self, df: pl.DataFrame) -> "FetchableLazyFrame":
@@ -71,32 +52,29 @@ class Client:
         return FetchableLazyFrame._from_reference(self, res)
 
     def _fetch_df(
-        self, ref: List[str], signing_keys: List[SigningKey] = []
+        self,
+        ref: List[str],
     ) -> pl.DataFrame:
-        
+
         joined_bytes = b""
         for b in self.__make_grpc_call(
             "FetchDataFrame",
             ReferenceRequest(identifier=ref),
-            method=b"fetch",
-            signing_keys=signing_keys,
         ):
             joined_bytes += b.data
 
         return deserialize_dataframe(joined_bytes)
 
     def _run_query(
-        self, composite_plan: str, signing_keys: List[SigningKey] = []
+        self,
+        composite_plan: str,
     ) -> "FetchableLazyFrame":
         from bastionlab.remote_polars import FetchableLazyFrame
 
         res = self.__make_grpc_call(
             "RunQuery",
             Query(composite_plan=composite_plan),
-            method=b"run",
-            signing_keys=signing_keys,
         )
-        res = self.stub.RunQuery(Query(composite_plan=composite_plan))
         return FetchableLazyFrame._from_reference(self, res)
 
     def list_dfs(self) -> List["FetchableLazyFrame"]:
@@ -111,10 +89,41 @@ class Client:
         res = self.__make_grpc_call(
             "GetDataFrameHeader",
             ReferenceRequest(identifier=identifier),
-            method=b"get",
-            signing_keys=[],
         )
         return FetchableLazyFrame._from_reference(self, res)
+
+
+def verify_user(server_target, signing_keys: List[SigningKey] = []):
+    # Set up initial connection to BastionLab for verification
+    # Drop if pubkey not known, if know, return token and add token to channel metadata
+    channel = grpc.insecure_channel(server_target)
+
+    stub = BastionLabStub(channel)
+
+    metadata = ()
+
+    empty_arg = Empty()
+    data: bytes = empty_arg.SerializeToString()
+
+    challenge = GRPCException.map_error(lambda: stub.GetChallenge(empty_arg)).value
+
+    metadata += (("challenge-bin", challenge),)
+    to_sign = b"create-session" + challenge + data
+
+    for k in signing_keys:
+        pubkey_hex = k.pubkey.hash.hex()
+        signed = k.sign(to_sign)
+        metadata += ((f"signature-{(pubkey_hex)}-bin", signed),)
+
+    return stub.CreateSession(empty_arg, metadata=metadata).token
+
+
+class AuthPlugin(grpc.AuthMetadataPlugin):
+    def __init__(self, token):
+        self._token = token
+
+    def __call__(self, _, callback):
+        callback((("accesstoken-bin", self._token),), None)
 
 
 @dataclass
@@ -137,18 +146,48 @@ class Connection:
         if self._client is not None:
             self.__exit__(None, None, None)
 
+    def heart_beat(self, stub, token):
+
+        while True:
+            stub.RefreshSession(Empty(), metadata=(("accesstoken-bin", token),))
+            sleep(HEART_BEAT_TICK)
+
     def __enter__(self) -> Client:
         server_target = f"{self.host}:{self.port}"
-        self.channel = grpc.insecure_channel(server_target)
 
         if self.license_key is not None:
             if self.license_key not in self.default_signing_keys:
                 self.default_signing_keys.append(self.license_key)
 
+            # Verify user by creating session
+        token = verify_user(server_target, self.default_signing_keys)
+        # connection_options = (("grpc.ssl_target_name_override", self.server_name),)
+        # server_cert = ssl.get_server_certificate((self.host, self.port))
+
+        # server_cred = ssl_channel_credentials(
+        #     root_certificates=bytes(server_cert, encoding="utf8")
+        # )
+
+        # channel_cred = (
+        #     server_cred
+        #     if self._jwt is None
+        #     else composite_channel_credentials(
+        #         server_cred, metadata_call_credentials(AuthPlugin(self._jwt))
+        #     )
+        # )
+
+        self.channel = grpc.insecure_channel(server_target)
+        stub = BastionLabStub(self.channel)
+
+        daemon = Thread(target=self.heart_beat, args=(stub, token,), daemon=True, name='HeartBeat')
+        daemon.start()
+
         self._client = Client(
-            BastionLabStub(self.channel),
+            stub,
+            token,
             default_signing_keys=self.default_signing_keys,
         )
+
         return self._client
 
     def __exit__(self, exc_type: Any, exc_value: Any, exc_traceback: Any) -> None:

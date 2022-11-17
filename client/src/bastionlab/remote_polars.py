@@ -202,8 +202,7 @@ class RemoteLazyFrame:
         return f"[{segments}]"
 
     def collect(self: LDF) -> LDF:
-        signing_keys = self._meta._client.default_signing_keys
-        return self._meta._client._run_query(self.composite_plan, signing_keys)
+        return self._meta._client._run_query(self.composite_plan)
     
     def apply_udf(self: LDF, columns: List[str], udf: Callable) -> LDF:
         ts_udf = torch.jit.script(udf)
@@ -377,8 +376,7 @@ class FetchableLazyFrame(RemoteLazyFrame):
         return str(self)
 
     def fetch(self) -> pl.DataFrame:
-        signing_keys = self._meta._client.default_signing_keys
-        return self._meta._client._fetch_df(self._identifier, signing_keys=signing_keys)
+        return self._meta._client._fetch_df(self._identifier)
 
 
 # TODO: implement apply method

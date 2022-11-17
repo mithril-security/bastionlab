@@ -4,7 +4,9 @@ use serde_json;
 use std::{
     collections::{HashMap, HashSet},
     error::Error,
+    net::SocketAddr,
     sync::{Arc, Mutex, RwLock},
+    time::{Duration, SystemTime},
 };
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{metadata::KeyRef, transport::Server, Request, Response, Status, Streaming};
@@ -16,6 +18,7 @@ pub mod grpc {
 use grpc::{
     bastion_lab_server::{BastionLab, BastionLabServer},
     ChallengeResponse, Chunk, Empty, Query, ReferenceList, ReferenceRequest, ReferenceResponse,
+    Session,
 };
 
 mod serialization;
@@ -28,11 +31,16 @@ mod access_control;
 use access_control::*;
 
 use ring::rand;
+
+/// Expiry time for session tokens.
+const EXPIRY: u64 = 25 * 60;
+
 #[derive(Debug, Default)]
 pub struct BastionLabState {
     dataframes: Arc<RwLock<HashMap<String, DataFrame>>>,
     keys: Mutex<KeyManagement>,
     challenges: Mutex<HashSet<[u8; 32]>>,
+    sessions: Arc<RwLock<HashMap<[u8; 32], (SocketAddr, SystemTime, String)>>>,
 }
 
 impl BastionLabState {
@@ -41,6 +49,7 @@ impl BastionLabState {
             dataframes: Arc::new(RwLock::new(HashMap::new())),
             keys: Mutex::new(keys),
             challenges: Default::default(),
+            sessions: Default::default(),
         }
     }
 
@@ -55,33 +64,28 @@ impl BastionLabState {
             .clone())
     }
 
-    fn verify_request<T: Message>(
-        &self,
-        request: &Request<T>,
-        method: &[u8],
-    ) -> Result<(), Status> {
-        let pat = "signing-key-";
-        let end = "-bin";
+    fn verify_request<T: Message>(&self, request: &Request<T>) -> Result<(), Status> {
+        let mut tokens = self.sessions.write().unwrap();
+        if let Some(user_ip) = request.remote_addr() {
+            let meta = request
+                .metadata()
+                .get_bin("accesstoken-bin")
+                .ok_or_else(|| Status::invalid_argument("No accesstoken in request metadata"))?;
+            let token = meta
+                .to_bytes()
+                .map_err(|_| Status::invalid_argument("Could not decode accesstoken"))?;
 
-        for key in request.metadata().keys() {
-            match key {
-                KeyRef::Binary(key) => {
-                    let key = key.to_string();
-                    if let Some(key) = key.strip_suffix(end) {
-                        if key.contains(pat) {
-                            if let Some(key) = key.split(pat).last() {
-                                let lock = self.keys.lock().unwrap();
-                                let message = get_message(method, request)?;
-                                lock.verify_signature(key, &message[..], request.metadata())?;
-                            } else {
-                                Err(Status::aborted("User signing key not found in request!"))?
-                            }
-                        }
-                    } else {
-                        Err(Status::aborted("User signing key not found in request!"))?
-                    }
+            if let Some((stored_ip, expiry, pub_key)) = tokens.get(token.as_ref()) {
+                let curr_time = SystemTime::now();
+                pub_key.clone().truncate(16);
+                println!("{:?} with {:?} issued request!", pub_key, user_ip);
+                if !verify_ip(&stored_ip, &user_ip) {
+                    return Err(Status::aborted("Unknown IP Address!"));
                 }
-                _ => (),
+                if curr_time.gt(expiry) {
+                    tokens.remove(token.as_ref());
+                    return Err(Status::aborted("Session Expired"));
+                }
             }
         }
 
@@ -116,18 +120,6 @@ impl BastionLabState {
         dfs.insert(identifier.clone(), df);
         identifier
     }
-    fn check_challenge<T>(&self, request: &Request<T>) -> Result<(), Status> {
-        if let Some(meta) = request.metadata().get_bin("challenge-bin") {
-            let challenge = meta
-                .to_bytes()
-                .map_err(|_| Status::invalid_argument("Could not decode challenge"))?;
-            let mut lock = self.challenges.lock().unwrap();
-            if !lock.remove(challenge.as_ref()) {
-                Err(Status::permission_denied("Invalid or reused challenge"))?
-            }
-        }
-        Ok(())
-    }
 
     fn new_challenge(&self) -> [u8; 32] {
         let rng = rand::SystemRandom::new();
@@ -139,6 +131,72 @@ impl BastionLabState {
                 return challenge;
             }
         }
+    }
+
+    fn create_session<T: Message>(&self, request: &Request<T>) -> Result<Session, Status> {
+        let end = "-bin";
+        let pat = "signature-";
+        let mut public_key = String::new();
+        if let Some(user_ip) = request.remote_addr() {
+            for key in request.metadata().keys() {
+                match key {
+                    KeyRef::Binary(key) => {
+                        let key = key.to_string();
+                        if let Some(key) = key.strip_suffix(end) {
+                            if key.contains(pat) {
+                                if let Some(key) = key.split(pat).last() {
+                                    let lock = self.keys.lock().unwrap();
+                                    let message = get_message(b"create-session", request)?;
+                                    lock.verify_signature(key, &message[..], request.metadata())?;
+                                    println!("{:?}", key);
+                                    public_key.push_str(key);
+                                } else {
+                                    Err(Status::aborted("User signing key not found in request!"))?
+                                }
+                            }
+                        } else {
+                            Err(Status::aborted("User signing key not found in request!"))?
+                        }
+                    }
+                    _ => (),
+                }
+            }
+            let mut sessions = self.sessions.write().unwrap();
+            let token = self.new_challenge();
+            let Some(expiry) = SystemTime::now().checked_add(Duration::from_secs(EXPIRY)) else {
+                return Err(Status::aborted("Could not create expiry for session"))?;
+            };
+
+            sessions.insert(token.clone(), (user_ip, expiry, public_key.clone()));
+            public_key.truncate(16);
+            println!("{:?} with IP {} created a session", public_key, user_ip,);
+            return Ok(Session {
+                token: token.to_vec(),
+            });
+        } else {
+            return Err(Status::aborted("Could not fetch IP Address from request"))?;
+        }
+    }
+
+    fn refresh_session<T: Message>(&self, request: &Request<T>) -> Result<(), Status> {
+        let mut sessions = self.sessions.write().unwrap();
+        let meta = request
+            .metadata()
+            .get_bin("accesstoken-bin")
+            .ok_or_else(|| Status::invalid_argument("No accesstoken in request metadata"))?;
+        let token = meta
+            .to_bytes()
+            .map_err(|_| Status::invalid_argument("Could not decode accesstoken"))?;
+        let Some((_, expiry, _)) = sessions.get_mut(token.as_ref()) else {
+            return Err(Status::aborted("Session not found!"))?;
+        };
+
+        let Some(e) = expiry.checked_add(Duration::from_secs(EXPIRY)) else {
+            return Err(Status::aborted("Malformed session expiry time!"))?;
+        };
+
+        *expiry = e;
+        Ok(())
     }
 }
 
@@ -155,8 +213,8 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<Query>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        self.check_challenge(&request)?;
-        self.verify_request(&request, b"run")?;
+        self.verify_request(&request)?;
+
         // let input_dfs = self.get_dfs(&request.get_ref().identifiers)?;
         println!("{:?}", request);
         println!("{}", &request.get_ref().composite_plan);
@@ -190,8 +248,7 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<ReferenceRequest>,
     ) -> Result<Response<Self::FetchDataFrameStream>, Status> {
-        self.check_challenge(&request)?;
-        self.verify_request(&request, b"fetch")?;
+        self.verify_request(&request)?;
         let df = self.get_df(&request.get_ref().identifier)?;
 
         Ok(stream_data(df, 32).await)
@@ -223,12 +280,21 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<ReferenceRequest>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        self.check_challenge(&request)?;
-        self.verify_request(&request, b"get")?;
+        self.verify_request(&request)?;
         let identifier = String::from(&request.get_ref().identifier);
         let header = self.get_header(&identifier)?;
 
         Ok(Response::new(ReferenceResponse { identifier, header }))
+    }
+
+    async fn create_session(&self, request: Request<Empty>) -> Result<Response<Session>, Status> {
+        let session = self.create_session(&request)?;
+        Ok(Response::new(session))
+    }
+
+    async fn refresh_session(&self, request: Request<Empty>) -> Result<Response<Empty>, Status> {
+        self.refresh_session(&request)?;
+        Ok(Response::new(Empty {}))
     }
 }
 

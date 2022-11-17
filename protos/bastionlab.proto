@@ -28,6 +28,11 @@ message ChallengeResponse {
     bytes value = 1;
 }
 
+message Session {
+    bytes token = 1;
+}
+
+
 service BastionLab {
     rpc SendDataFrame (stream Chunk) returns (ReferenceResponse) {}
     rpc RunQuery (Query) returns (ReferenceResponse) {}
@@ -35,4 +40,6 @@ service BastionLab {
     rpc GetChallenge (Empty) returns (ChallengeResponse) {}
     rpc ListDataFrames (Empty) returns (ReferenceList) {}
     rpc GetDataFrameHeader (ReferenceRequest) returns (ReferenceResponse) {}
+    rpc CreateSession (Empty) returns (Session) {}
+    rpc RefreshSession (Empty) returns (Empty) {}
 }
