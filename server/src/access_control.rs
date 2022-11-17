@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fs::{self, read},
     path::{Path, PathBuf},
 };
@@ -120,7 +120,6 @@ impl KeyManagement {
                     .collect::<HashMap<&String, &PubKey>>();
 
                 if let Some(raw_pubkey) = joined.get(&public_key_hash.to_string()) {
-                    println!("Found pubkey for {:?}", public_key_hash);
                     let raw_pub = *raw_pubkey;
                     let public_key = spki::SubjectPublicKeyInfo::try_from(raw_pub.as_ref())
                         .map_err(|_| {
@@ -140,7 +139,6 @@ impl KeyManagement {
                             public_key_hash
                         ))
                     })?;
-                    println!("Verifying signature {:?}", sign);
 
                     public_key.verify(message, &sign).map_err(|_| {
                         Status::permission_denied(format!(
