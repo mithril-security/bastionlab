@@ -3,9 +3,11 @@ use tokio::sync::mpsc;
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use tonic::{Response, Status};
 
-use super::grpc::Chunk;
+use crate::DelayedDataFrame;
 
-pub async fn df_from_stream(stream: tonic::Streaming<Chunk>) -> Result<DataFrame, Status> {
+use super::grpc::{SendChunk, FetchChunk};
+
+pub async fn df_from_stream(stream: tonic::Streaming<SendChunk>) -> Result<DataFrame, Status> {
     let df_bytes = unstream_data(stream).await?;
     let series = df_bytes
         .iter()
@@ -23,7 +25,7 @@ pub fn df_to_bytes(df: DataFrame) -> Vec<Vec<u8>> {
     series_bytes
 }
 
-pub async fn unstream_data(mut stream: tonic::Streaming<Chunk>) -> Result<Vec<Vec<u8>>, Status> {
+pub async fn unstream_data(mut stream: tonic::Streaming<SendChunk>) -> Result<Vec<Vec<u8>>, Status> {
     let mut columns: Vec<u8> = Vec::new();
     while let Some(chunk) = stream.next().await {
         let mut chunk = chunk?;
@@ -67,25 +69,43 @@ pub async fn unstream_data(mut stream: tonic::Streaming<Chunk>) -> Result<Vec<Ve
 
 /// Converts a raw artifact (a header and a binary object) into a stream of chunks to be sent over gRPC.
 pub async fn stream_data(
-    df: DataFrame,
+    df: DelayedDataFrame,
     chunk_size: usize,
-) -> Response<ReceiverStream<Result<Chunk, Status>>> {
+) -> Response<ReceiverStream<Result<FetchChunk, Status>>> {
     let (tx, rx) = mpsc::channel(4);
     let pattern = b"[end]";
 
-    let df_bytes = df_to_bytes(df)
-        .iter_mut()
-        .map(|v| {
-            v.append(&mut pattern.to_vec());
-            v.clone()
-        })
-        .flatten()
-        .collect::<Vec<_>>();
-    let raw_bytes: Vec<u8> = df_bytes;
+    if let Some(reason) = df.needs_approval {
+        tx.send(Ok(FetchChunk {
+            data: Vec::new(),
+            pending: reason,
+        })).await.unwrap(); // fix this
+    }
+
     tokio::spawn(async move {
+        let df: DataFrame = match df.future.await {
+            Ok(df) => df,
+            Err(e) => {
+                tx.send(Err(e)).await.unwrap(); // fix this
+                return;
+            }
+        };
+
+        let df_bytes = df_to_bytes(df)
+            .iter_mut()
+            .map(|v| {
+                v.append(&mut pattern.to_vec());
+                v.clone()
+            })
+            .flatten()
+            .collect::<Vec<_>>();
+        
+        let raw_bytes: Vec<u8> = df_bytes;
+        
         for (_, bytes) in raw_bytes.chunks(chunk_size).enumerate() {
-            tx.send(Ok(Chunk {
+            tx.send(Ok(FetchChunk {
                 data: bytes.to_vec(),
+                pending: String::new(),
             }))
             .await
             .unwrap(); // Fix this

@@ -4,7 +4,9 @@ use std::{
     collections::HashMap,
     error::Error,
     fmt::Debug,
+    future::Future,
     sync::{Arc, RwLock},
+    pin::Pin,
 };
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
@@ -15,7 +17,7 @@ pub mod grpc {
 }
 use grpc::{
     bastion_lab_server::{BastionLab, BastionLabServer},
-    Chunk, Empty, Query, ReferenceList, ReferenceRequest, ReferenceResponse,
+    SendChunk, FetchChunk, Empty, Query, ReferenceList, ReferenceRequest, ReferenceResponse,
 };
 
 mod serialization;
@@ -26,16 +28,30 @@ use composite_plan::*;
 
 mod visitable;
 
+mod access;
+use access::*;
+
+pub struct DelayedDataFrame {
+    future: Pin<Box<dyn Future<Output = Result<DataFrame, Status>> + Send>>,
+    needs_approval: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct DataFrameArtifact {
     dataframe: DataFrame,
-    fetchable: bool,
+    fetchable: Access,
     query_details: String,
 }
 
 impl DataFrameArtifact {
     pub fn new(df: DataFrame) -> Self {
-        DataFrameArtifact { dataframe: df, fetchable: false, query_details: String::from("uploaded dataframe") }
+        DataFrameArtifact {
+            dataframe: df,
+            fetchable: Access::Denied(String::from(
+                "DataFrames uploaded by the Data Owner are protected.",
+            )),
+            query_details: String::from("uploaded dataframe"),
+        }
     }
 }
 
@@ -51,43 +67,69 @@ impl BastionLabState {
         }
     }
 
-    fn get_df(&self, identifier: &str) -> Result<DataFrame, Status> {
+    fn get_df(&self, identifier: &str) -> Result<DelayedDataFrame, Status> {
         let dfs = self.dataframes.read().unwrap();
-        let artifact = dfs
-            .get(identifier)
-            .ok_or(Status::not_found(format!(
-                "Could not find dataframe: identifier={}",
-                identifier
-            )))?;
-        if !artifact.fetchable {
-            println!(
-                "=== A user request has been rejected ===
-        Reason: Cannot fetch non aggregated results with at least {} samples per group.
-        Logical plan:
-        {}",
-                10, artifact.query_details,
-            );
-        
-            loop {
-                let mut ans = String::new();
-                println!("Accept [y] or Reject [n]?");
-                std::io::stdin()
-                    .read_line(&mut ans)
-                    .expect("Failed to read line");
-        
-                match ans.trim() {
-                    "y" => break,
-                    "n" => return Err(Status::invalid_argument(format!(
-                        "The data owner rejected the fetch operation.
-        Fetching a dataframe obtained with a non privacy-preserving query requires the approval of the data owner.
-        This dataframe was obtained in a non privacy-preserving fashion as it does not aggregate results with at least {} samples per group.",
-                        10
-                    ))),
-                    _ => continue,
+        let artifact = dfs.get(identifier).ok_or(Status::not_found(format!(
+            "Could not find dataframe: identifier={}",
+            identifier
+        )))?;
+        Ok(match &artifact.fetchable {
+            Access::Granted => {
+                let df = artifact.dataframe.clone();
+                DelayedDataFrame {
+                    future: Box::pin(async { Ok(df) }),
+                    needs_approval: None,
                 }
             }
-        }
-        Ok(artifact.dataframe.clone())
+            Access::Denied(reason) => {
+                let reason = reason.clone();
+                let identifier = String::from(identifier);
+                let query_details = artifact.query_details.clone();
+                let dfs = Arc::clone(&self.dataframes);
+                DelayedDataFrame {
+                    needs_approval: Some(reason.clone()),
+                    future: Box::pin(async move {
+                        println!(
+                            "=== A user request has been rejected ===
+Reason: {}
+Logical plan:
+{}",
+                            reason, query_details,
+                        );
+
+                        loop {
+                            let mut ans = String::new();
+                            println!("Accept [y] or Reject [n]?");
+                            std::io::stdin()
+                                .read_line(&mut ans)
+                                .expect("Failed to read line");
+
+                            match ans.trim() {
+                                "y" => break,
+                                "n" => return Err(Status::invalid_argument(format!(
+                                    "The data owner rejected the fetch operation.
+Fetching a dataframe obtained with a non privacy-preserving query requires the approval of the data owner.
+This dataframe was obtained in a non privacy-preserving fashion.
+Reason: {}",
+                                    reason
+                                ))),
+                                _ => continue,
+                            }
+                        }
+                        Ok(dfs
+                            .read()
+                            .unwrap()
+                            .get(&identifier)
+                            .ok_or(Status::not_found(format!(
+                                "Could not find dataframe: identifier={}",
+                                identifier
+                            )))?
+                            .dataframe
+                            .clone())
+                    }),
+                }
+            }
+        })
     }
 
     fn get_df_unchecked(&self, identifier: &str) -> Result<DataFrame, Status> {
@@ -142,7 +184,7 @@ fn get_df_header(df: &DataFrame) -> Result<String, Status> {
 
 #[tonic::async_trait]
 impl BastionLab for BastionLabState {
-    type FetchDataFrameStream = ReceiverStream<Result<Chunk, Status>>;
+    type FetchDataFrameStream = ReceiverStream<Result<FetchChunk, Status>>;
 
     async fn run_query(
         &self,
@@ -165,7 +207,7 @@ impl BastionLab for BastionLabState {
 
     async fn send_data_frame(
         &self,
-        request: Request<Streaming<Chunk>>,
+        request: Request<Streaming<SendChunk>>,
     ) -> Result<Response<ReferenceResponse>, Status> {
         let df = df_from_stream(request.into_inner()).await?;
 
@@ -178,9 +220,13 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<ReferenceRequest>,
     ) -> Result<Response<Self::FetchDataFrameStream>, Status> {
-        let df = self.get_df(&request.get_ref().identifier)?;
+        let fut = {
+            let df = self.get_df(&request.get_ref().identifier)?;
+            stream_data(df, 32)
+        };
+        Ok(fut.await)
 
-        Ok(stream_data(df, 32).await)
+        // Ok(stream_data(df, 32).await)
     }
 
     async fn list_data_frames(
