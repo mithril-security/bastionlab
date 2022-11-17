@@ -2,7 +2,7 @@ use polars::prelude::*;
 use prost::Message;
 use serde_json;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     error::Error,
     net::SocketAddr,
     sync::{Arc, Mutex, RwLock},
@@ -39,7 +39,6 @@ const EXPIRY: u64 = 25 * 60;
 pub struct BastionLabState {
     dataframes: Arc<RwLock<HashMap<String, DataFrame>>>,
     keys: Mutex<KeyManagement>,
-    challenges: Mutex<HashSet<[u8; 32]>>,
     sessions: Arc<RwLock<HashMap<[u8; 32], (SocketAddr, SystemTime, String)>>>,
 }
 
@@ -48,7 +47,6 @@ impl BastionLabState {
         Self {
             dataframes: Arc::new(RwLock::new(HashMap::new())),
             keys: Mutex::new(keys),
-            challenges: Default::default(),
             sessions: Default::default(),
         }
     }
@@ -127,9 +125,7 @@ impl BastionLabState {
             let challenge: [u8; 32] = rand::generate(&rng)
                 .expect("Could not generate random value")
                 .expose();
-            if self.challenges.lock().unwrap().insert(challenge) {
-                return challenge;
-            }
+            return challenge;
         }
     }
 
@@ -148,7 +144,6 @@ impl BastionLabState {
                                     let lock = self.keys.lock().unwrap();
                                     let message = get_message(b"create-session", request)?;
                                     lock.verify_signature(key, &message[..], request.metadata())?;
-                                    println!("{:?}", key);
                                     public_key.push_str(key);
                                 } else {
                                     Err(Status::aborted("User signing key not found in request!"))?
