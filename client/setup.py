@@ -3,6 +3,7 @@ from setuptools import find_packages, setup
 from setuptools.command.build_py import build_py
 import pkg_resources
 import re
+from pybind11.setup_helpers import Pybind11Extension, build_ext
 
 
 def read(path):
@@ -10,10 +11,17 @@ def read(path):
 
 
 DIR = os.path.dirname(__file__) or os.getcwd()
-PROTO_FILES = ["bastionlab.proto"]
+PROTO_FILES = ["bastionlab.proto","attestation.proto"]
 PROTO_PATH = os.path.join(os.path.dirname(DIR), "protos")
 LONG_DESCRIPTION = read("README.md")
 PKG_NAME = "bastionlab"
+
+ext_modules = [
+    Pybind11Extension("_attestation_c",
+        ["attestation_C/lib.cpp"],
+        libraries = ['ssl', 'crypto'],
+        cxx_std=11)
+]
 
 def find_version():
     version_file = read(f"src/{PKG_NAME}/version.py")
@@ -72,6 +80,7 @@ setup(
         "typing-extensions==4.4.0",
         "grpcio==1.47.0",
         "grpcio-tools==1.47.0",
+        "pybind11==2.10.0",
     ],
     package_dir={"": "src"},
 )
