@@ -181,3 +181,5 @@ ex.c
 **/examples/models
 **/pb
 **/libtorch
+*.pem
+*.key.pem

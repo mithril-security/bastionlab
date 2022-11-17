@@ -1,4 +1,5 @@
 use polars::prelude::*;
+use prost::Message;
 use serde_json;
 use std::{
     collections::{HashMap, HashSet},
@@ -54,9 +55,14 @@ impl BastionLabState {
             .clone())
     }
 
-    fn verify_request<T>(&self, request: &Request<T>) -> Result<(), Status> {
+    fn verify_request<T: Message>(
+        &self,
+        request: &Request<T>,
+        method: &[u8],
+    ) -> Result<(), Status> {
         let pat = "signing-key-";
         let end = "-bin";
+
         for key in request.metadata().keys() {
             match key {
                 KeyRef::Binary(key) => {
@@ -65,7 +71,8 @@ impl BastionLabState {
                         if key.contains(pat) {
                             if let Some(key) = key.split(pat).last() {
                                 let lock = self.keys.lock().unwrap();
-                                lock.verify_key(key)?;
+                                let message = get_message(method, request)?;
+                                lock.verify_signature(key, &message[..], request.metadata())?;
                             } else {
                                 Err(Status::aborted("User signing key not found in request!"))?
                             }
@@ -149,7 +156,7 @@ impl BastionLab for BastionLabState {
         request: Request<Query>,
     ) -> Result<Response<ReferenceResponse>, Status> {
         self.check_challenge(&request)?;
-        self.verify_request(&request)?;
+        self.verify_request(&request, b"run")?;
         // let input_dfs = self.get_dfs(&request.get_ref().identifiers)?;
         println!("{:?}", request);
         println!("{}", &request.get_ref().composite_plan);
@@ -184,7 +191,7 @@ impl BastionLab for BastionLabState {
         request: Request<ReferenceRequest>,
     ) -> Result<Response<Self::FetchDataFrameStream>, Status> {
         self.check_challenge(&request)?;
-        self.verify_request(&request)?;
+        self.verify_request(&request, b"fetch")?;
         let df = self.get_df(&request.get_ref().identifier)?;
 
         Ok(stream_data(df, 32).await)
@@ -217,7 +224,7 @@ impl BastionLab for BastionLabState {
         request: Request<ReferenceRequest>,
     ) -> Result<Response<ReferenceResponse>, Status> {
         self.check_challenge(&request)?;
-        self.verify_request(&request)?;
+        self.verify_request(&request, b"get")?;
         let identifier = String::from(&request.get_ref().identifier);
         let header = self.get_header(&identifier)?;
 

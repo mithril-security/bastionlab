@@ -47,7 +47,10 @@ class Client:
 
             for k in itertools.chain(signing_keys, self.default_signing_keys):
                 pubkey_hex = k.pubkey.hash.hex()
+                signed = k.sign(to_sign)
+                metadata += ((f"signature-{(pubkey_hex)}-bin", signed),)
                 metadata += ((f"signing-key-{(pubkey_hex)}-bin", b""),)
+
 
         # todo challenges
         logging.debug(f"GRPC Call {call}; using metadata {metadata}")

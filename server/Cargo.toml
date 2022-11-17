@@ -22,7 +22,7 @@ rand = "0.8.5"
 ring = "0.16.20"
 hex = "0.4.3"
 x509-parser = "0.14.0"
-
+spki = "0.6.0"
 
 [dependencies.polars]
 version = "0.25.1"
