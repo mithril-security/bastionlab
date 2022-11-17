@@ -154,7 +154,8 @@ class Connection:
             server_target, server_cred, options=connection_options
         )
 
-        get_validate_attestation(Client(AttestationStub(self.channel)), server_cert)
+        if os.environ['ATTESTATION'] == "true":
+            get_validate_attestation(Client(AttestationStub(self.channel)), server_cert)
 
         self._client = Client(BastionLabStub(self.channel))
         return self._client

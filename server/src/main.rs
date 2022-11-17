@@ -260,12 +260,16 @@ impl BastionLab for BastionLabState {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    let run_attestation = std::env::var("ATTESTATION").ok().as_deref() == Some("true");
     let state = BastionLabState::new();
-    let attestation = BastionLabState::new();
+    let attestation = if run_attestation {
+        Some(BastionLabServer::new(BastionLabState::new()))
+    }
+    else { None };
     let addr = "0.0.0.0:50056".parse()?;
     println!("BastionLab server running...");
     Server::builder()
-        .add_service(BastionLabServer::new(attestation))
+        .add_optional_service(attestation)
         .add_service(BastionLabServer::new(state))
         .serve(addr)
         .await?;
