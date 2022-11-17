@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     fs::{self, read},
+    net::SocketAddr,
     path::{Path, PathBuf},
 };
 
@@ -179,8 +180,6 @@ pub fn get_message<T: Message>(method: &[u8], req: &Request<T>) -> Result<Vec<u8
         .map_err(|e| Status::internal(format!("error while encoding the request: {:?}", e)))?;
     Ok(res)
 }
-
-use crate::SocketAddr;
 
 pub fn verify_ip(stored: &SocketAddr, recv: &SocketAddr) -> bool {
     stored.ip().eq(&recv.ip())
