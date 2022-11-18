@@ -37,18 +37,10 @@ target/release/$(PKG_NAME):
 bin/$(PKG_NAME): target/release/$(PKG_NAME)
 	cp target/release/$(PKG_NAME) bin/
 	
-# Create server TLS keys
-	cd bin/ && mkdir tls && openssl req -newkey rsa:2048 -nodes -keyout tls/host_server.key  \
-		-x509 -days 365 -out tls/host_server.pem \
-		-subj "/C=FR/CN=bastionlab-server"
-
-# Copy `tools/config.toml` to `bin` directory
-	cp tools/config.toml bin/
-
 install: bin bin/tls/host_server.pem bin/tls/host_server.key bin/config.toml
 	cp target/release/$(PKG_NAME) bin/
 
-run: bin/$(PKG_NAME) #bin/tls/host_server.pem bin/tls/host_server.key bin/config.toml
+run: bin/$(PKG_NAME) bin/tls/host_server.pem bin/tls/host_server.key bin/config.toml
 	LIBTORCH=$(LIBTORCH) CUDA=$(CUDA) LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) sh -c 'cd bin && ./$(PKG_NAME)'
 
 clean:
