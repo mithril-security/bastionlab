@@ -4,12 +4,18 @@ use serde_json;
 use std::{
     collections::HashMap,
     error::Error,
+    fs::{self, File},
+    io::Read,
     net::SocketAddr,
     sync::{Arc, Mutex, RwLock},
     time::{Duration, SystemTime},
 };
 use tokio_stream::wrappers::ReceiverStream;
-use tonic::{metadata::KeyRef, transport::Server, Request, Response, Status, Streaming};
+use tonic::{
+    metadata::KeyRef,
+    transport::{Identity, Server, ServerTlsConfig},
+    Request, Response, Status, Streaming,
+};
 use uuid::Uuid;
 
 pub mod grpc {
@@ -27,8 +33,11 @@ use serialization::*;
 mod composite_plan;
 use composite_plan::*;
 
-mod access_control;
-use access_control::*;
+mod authentication;
+use authentication::*;
+
+mod config;
+use config::*;
 
 use ring::rand;
 
@@ -295,13 +304,23 @@ impl BastionLab for BastionLabState {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let keys = KeyManagement::load_from_dir("./keys".to_string())?;
+    let mut file = File::open("config.toml")?;
+    let mut contents = String::new();
+    file.read_to_string(&mut contents)?;
+
+    let config: BastionLabConfig = toml::from_str(&contents)?;
+    let keys = KeyManagement::load_from_dir(config.public_keys_directory()?)?;
     let state = BastionLabState::new(keys);
-    let addr = "0.0.0.0:50056".parse()?;
+
+    let server_cert = fs::read("tls/host_server.pem")?;
+    let server_key = fs::read("tls/host_server.key")?;
+    let server_identity = Identity::from_pem(&server_cert, &server_key);
+
     println!("BastionLab server running...");
     Server::builder()
+        .tls_config(ServerTlsConfig::new().identity(server_identity))?
         .add_service(BastionLabServer::new(state))
-        .serve(addr)
+        .serve(config.client_to_enclave_untrusted_socket()?)
         .await?;
     Ok(())
 }

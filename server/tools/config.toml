@@ -1,0 +1,2 @@
+client_to_enclave_untrusted_url = "https://0.0.0.0:50056"
+public_keys_directory = "keys"

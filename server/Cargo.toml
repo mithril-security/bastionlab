@@ -23,6 +23,9 @@ ring = "0.16.20"
 hex = "0.4.3"
 x509-parser = "0.14.0"
 spki = "0.6.0"
+http = "0.2.8"
+anyhow = "1.0.66"
+toml = "0.5.9"
 
 [dependencies.polars]
 version = "0.25.1"
