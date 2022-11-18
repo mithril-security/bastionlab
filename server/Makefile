@@ -1,3 +1,7 @@
+SERVER_DIR := $(shell pwd)
+BIN_DIR := $(SERVER_DIR)/bin
+TOOLS_DIR := $(SERVER_DIR)/tools
+
 .PHONY: all build install run clean
 
 ifeq ($(origin LIBTORCH), undefined)
@@ -28,6 +32,8 @@ bin:
 
 build:
 	LIBTORCH=$(LIBTORCH) CUDA=$(CUDA) LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) cargo build --release
+	@echo Server Directory: $(SERVER_DIR)
+	@bash $(TOOLS_DIR)/create_tls_config.sh $(BIN_DIR)
 
 target/release/$(PKG_NAME):
 	LIBTORCH=$(LIBTORCH) CUDA=$(CUDA) LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) cargo build --release
