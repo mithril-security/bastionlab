@@ -20,11 +20,11 @@ if TYPE_CHECKING:
 
 
 #<!-- Attestation dependencies -->
-from bastionai.pb.attestation_pb2 import ReportRequest, ReportResponse
-from bastionai.pb.attestation_pb2_grpc import AttestationStub
+from bastionlab.pb.attestation_pb2 import ReportRequest, ReportResponse
+from bastionlab.pb.attestation_pb2_grpc import AttestationStub
 import base64
 import _attestation_c
-
+import ssl,os
 
 class Client:
     def __init__(self, stub: BastionLabStub):
@@ -72,50 +72,65 @@ def get_validate_attestation(attestation_client: Client, server_cert: str):
 
     nonce = secrets.token_bytes(16)
     nonce = base64.b64encode(nonce)
-    
-    report_response = GRPCException.map_error(lambda: attestation_client.stub.ClientReportRequest(ReportRequest(nonce=nonce)))
-    report = report_response.report
+    try:
+        report_response =  attestation_client.stub.ClientReportRequest(ReportRequest(nonce=nonce))
+        report = report_response.report
 
-    hasher = hashlib.sha256()
-    hasher.update(nonce+server_cert.encode('utf-8'))
-    calc_measurement = hasher.digest()
- 
-    cert_start_line = '-----BEGIN CERTIFICATE-----'
+        hasher = hashlib.sha256()
+        hasher.update(nonce+server_cert.encode('utf-8'))
+        calc_measurement = hasher.digest()
     
-    cert_chain = requests.get("https://kdsintf.amd.com/vcek/v1/Milan/cert_chain")
-    certs = cert_chain.text.split(cert_start_line)
-    
-    #First ASK then ARK according to the AMD specifications
-    ARK = cert_start_line+certs[2]
-    ASK = cert_start_line+certs[1]
+        cert_start_line = '-----BEGIN CERTIFICATE-----'
+        
+        cert_chain = requests.get("https://kdsintf.amd.com/vcek/v1/Milan/cert_chain")
+        certs = cert_chain.text.split(cert_start_line)
+        
+        #First ASK then ARK according to the AMD specifications
+        ARK = cert_start_line+certs[2]
+        ASK = cert_start_line+certs[1]
 
-    #Comparison of expected MRENCLAVE against received MRENCLAVE
-    #This value is obtained when the UEFI image is generated
-    """
-    MRENCLACE="XXXXXXXXXXXXXXXXXXXXX"
-    if MRENCLAVE == report[48:80]:
-        print("MRENCLAVE is expected value")
-    else:
-        print("MRENCLAVE does not match expected value. Terminating ...")
-        exit()
-    """
-    
-    #This should cover the entire user-supplied data range (512 bits)
-    #currently it only compares the exact size of the hash 256 bits.
-    if calc_measurement != report[112:144]:     
-        print("Nonce and server certification validation failed. Terminating connection...")
-        exit()
-    else:
-        print("Nonce and server certificate validated successfully")
+        #Comparison of expected MRENCLAVE against received MRENCLAVE
+        #This value is obtained when the UEFI image is generated
+        """
+        MRENCLACE="XXXXXXXXXXXXXXXXXXXXX"
+        if MRENCLAVE == report[48:80]:
+            print("MRENCLAVE is expected value")
+        else:
+            print("MRENCLAVE does not match expected value. Terminating ...")
+            exit()
+        """
+        
+        #This should cover the entire user-supplied data range (512 bits)
+        #currently it only compares the exact size of the hash 256 bits.
+        if calc_measurement != report[112:144]:     
+            print("Nonce and server certification validation failed. Terminating connection...")
+            exit()
+        else:
+            print("Nonce and server certificate validated successfully")
 
-    vcek_pem = ssl.DER_cert_to_PEM_cert(report_response.vcek_cert)
+        vcek_pem = ssl.DER_cert_to_PEM_cert(report_response.vcek_cert)
+        
+        ret_val = 0
+        ret_val = _attestation_c.attest(report[32:1216],vcek_pem,ASK,ARK,len(vcek_pem),len(ASK),len(ARK))
+        
+        if ret_val != 0:
+            print("Attestation validation failed. Terminating connection...")
+            exit()
     
-    ret_val = 0
-    ret_val = _attestation_c.attest(report[32:1216],vcek_pem,ASK,ARK,len(vcek_pem),len(ASK),len(ARK))
-    
-    if ret_val != 0:
-        print("Attestation validation failed. Terminating connection...")
-        exit()
+    except grpc.RpcError as rpc_error:
+        if rpc_error.code() == grpc.StatusCode.UNIMPLEMENTED:
+            print("The server does not support attestation. Continue without attestation? [y]/[n]")
+            user_resp = input()
+            if user_resp == 'y' or user_resp == 'Y':
+                print("Continuing without attestation")
+                pass
+            else:
+                print("Exiting...")
+                exit()
+
+        else:
+            print(f"Received unknown RPC error: code={rpc_error.code()} message={rpc_error.details()}. Terminating connection...")
+            exit()
 
 @dataclass
 class Connection:
@@ -141,7 +156,7 @@ class Connection:
     def __enter__(self) -> Client:
         #server_target = f"{self.host}:{self.port}"
         #self.channel = grpc.insecure_channel(server_target)
-
+        
         connection_options = (("grpc.ssl_target_name_override", self.server_name),)
         server_cert = ssl.get_server_certificate((self.host, self.port))
 
@@ -153,6 +168,9 @@ class Connection:
         self.channel = grpc.secure_channel(
             server_target, server_cred, options=connection_options
         )
+        
+        os.environ['GRPC_TRACE'] = 'all' 
+        os.environ['GRPC_VERBOSITY'] = 'DEBUG'
 
         if os.environ['ATTESTATION'] == "true":
             get_validate_attestation(Client(AttestationStub(self.channel)), server_cert)

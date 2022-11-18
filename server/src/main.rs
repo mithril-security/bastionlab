@@ -26,13 +26,16 @@ use composite_plan::*;
 
 mod visitable;
 
+use tonic::transport::Identity;
+use tonic::transport::ServerTlsConfig;
 
 //<!--Attestation Deps -->
+use std::fs;
 use sha2::{Sha256, Digest};
 mod attestation_lib;
 use attestation_lib::*;
 
-mod attestation {
+pub mod attestation {
     tonic::include_proto!("attestation");
 }
 
@@ -262,13 +265,20 @@ impl BastionLab for BastionLabState {
 async fn main() -> Result<(), Box<dyn Error>> {
     let run_attestation = std::env::var("ATTESTATION").ok().as_deref() == Some("true");
     let state = BastionLabState::new();
-    let attestation = if run_attestation {
-        Some(BastionLabServer::new(BastionLabState::new()))
-    }
-    else { None };
+   
+    let attestation = match run_attestation {
+        true => Some(AttestationServer::new(BastionLabState::new())),
+        _ => None,
+    };
+
+    let server_cert = fs::read("tls/host_server.pem")?;
+    let server_key = fs::read("tls/host_server.key")?;
+    let server_identity = Identity::from_pem(&server_cert, &server_key);
     let addr = "0.0.0.0:50056".parse()?;
+    
     println!("BastionLab server running...");
     Server::builder()
+        .tls_config(ServerTlsConfig::new().identity(server_identity))?
         .add_optional_service(attestation)
         .add_service(BastionLabServer::new(state))
         .serve(addr)

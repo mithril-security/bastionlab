@@ -104,16 +104,18 @@ pub async fn validate_guest_attestation(report: [u8;1280]) ->  HashMap<String,Ve
     //tcb list can be retrieved from the report (current tcb) and parsed and converted to decimal
     let re = Regex::new(r"\[|\]").unwrap();
     let blSPL_temp = &format!("{:?}",&report[416..417]);
-    let blSPL =  re.replace_all(&blSPL_temp,"");
+    let blSPL =  re.replace_all(&blSPL_temp,"").to_string();
     let teeSPL_temp = &format!("{:?}",&report[417..418]);
-    let teeSPL = re.replace_all(&teeSPL_temp,"");
+    let teeSPL = re.replace_all(&teeSPL_temp,"").to_string();
     let snpSPL_temp = &format!("{:?}",&report[422..423]);
-    let snpSPL = re.replace_all(&snpSPL_temp,"");
+    let snpSPL = re.replace_all(&snpSPL_temp,"").to_string();
     let ucodeSPL_temp = &format!("{:?}",&report[423..424]);
-    let ucodeSPL = re.replace_all(&ucodeSPL_temp,"");
+    let ucodeSPL = re.replace_all(&ucodeSPL_temp,"").to_string();
 
+    let hex_hwid = &hex::encode(&hwid);
     //Retrieves vcek cert from amd server
-    let vcek_url = "https://kdsintf.amd.com/vcek/v1/Milan/".to_owned()+&hex::encode(&hwid)+"?blSPL="+&blSPL+"&teeSPL="+&teeSPL+"&snpSPL="+&snpSPL+"&ucodeSPL="+&ucodeSPL; 
+    let vcek_url = format!("{}{}{}{}{}{}{}{}{}{}","https://kdsintf.amd.com/vcek/v1/Milan/".to_owned(),hex_hwid,"?blSPL=",&blSPL,"&teeSPL=",&teeSPL,"&snpSPL=",&snpSPL,"&ucodeSPL=",&ucodeSPL);
+    //let vcek_url = "https://kdsintf.amd.com/vcek/v1/Milan/".to_owned()+hex_hwid+"?blSPL="+&blSPL+"&teeSPL="+&teeSPL+"&snpSPL="+&snpSPL+"&ucodeSPL="+&ucodeSPL; 
     
     //Retrieves ask and ark from amd server
     let cert_chain_url = "https://kdsintf.amd.com/vcek/v1/Milan/cert_chain";

@@ -71,10 +71,13 @@ setup(
     keywords="confidential computing training client enclave amd-sev machine learning",
     cmdclass={"build_py": BuildPackage},
     long_description=LONG_DESCRIPTION,
+    ext_modules=ext_modules,
     author="Kwabena Amponsem, Lucas Bourtoule",
     author_email="kwabena.amponsem@mithrilsecurity.io, luacs.bourtoule@nithrilsecurity.io",
     classifiers=["Programming Language :: Python :: 3"],
     install_requires=[
+        "seaborn==0.12.1",
+        "pyarrow==10.0.0",
         "polars==0.14.24",
         "torch==1.12.1",
         "typing-extensions==4.4.0",
