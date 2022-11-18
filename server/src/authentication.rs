@@ -19,14 +19,10 @@ pub type PubKey = Vec<u8>;
 /// This struct holds a hashmap of hashes of the PEM formatted public keys as keys and
 /// the loaded PEM formatted public key as value  loaded from the directory
 /// passed to the [`KeyManagement::load_from_file`] struct at start-up.
-///
-/// If the directory doesn't contain either of these directories (`owners`, `users`), then it fails to start
-/// All public keys in `owners` are stored in `KeyManagement::owners` and those for users are
-/// stored in `KeyManagement::owners`
+
 #[derive(Debug, Default, Clone)]
 pub struct KeyManagement {
-    owners: HashMap<String, PubKey>,
-    users: HashMap<String, PubKey>,
+    pub_keys: HashMap<String, PubKey>,
 }
 
 impl KeyManagement {
@@ -40,13 +36,7 @@ impl KeyManagement {
     }
 
     pub fn load_from_dir(path: String) -> Result<Self, Status> {
-        let mut owners: HashMap<String, PubKey> = HashMap::new();
-        let users: HashMap<String, PubKey> = HashMap::new();
-
-        // Check for this directory structure
-        // -- keys
-        // -----| owners
-        // -----| users
+        let mut pub_keys: HashMap<String, PubKey> = HashMap::new();
 
         if !Path::new(&path).is_dir() {
             Err(Status::aborted("Please provide a directory!"))?
@@ -57,46 +47,13 @@ impl KeyManagement {
 
         for path in paths {
             let path = path?;
-            if path.path().is_dir() {
-                let files = path.path().read_dir()?;
-                match path.path().file_name() {
-                    Some(v) => {
-                        let dir = v.to_str().ok_or_else(|| Status::aborted(""))?;
-                        match dir {
-                            "owners" => {
-                                for file in files {
-                                    let file = file?;
-                                    let (hash, raw) = KeyManagement::read_from_file(file.path())?;
-                                    owners.insert(hash, raw);
-                                }
-                            }
-                            "users" => {
-                                for file in files {
-                                    let file = file?;
-                                    let (hash, raw) = KeyManagement::read_from_file(file.path())?;
-                                    owners.insert(hash, raw);
-                                }
-                            }
-                            _ => (),
-                        }
-                    }
-                    None => {
-                        return Err(Status::internal(
-                            "owners and users public keys not provided!",
-                        ))?;
-                    }
-                }
-            }
+            let file = path.path();
+
+            let (hash, raw) = KeyManagement::read_from_file(file)?;
+            pub_keys.insert(hash, raw);
         }
 
-        if owners.is_empty() && users.is_empty() {
-            Err(Status::aborted(format!(
-                "Please provided these directories [`owners`, `users`] in {}",
-                path
-            )))?
-        }
-
-        Ok(KeyManagement { owners, users })
+        Ok(KeyManagement { pub_keys })
     }
 
     pub fn verify_signature(
@@ -114,14 +71,9 @@ impl KeyManagement {
         */
         match header.get_bin(format!("signature-{}-bin", public_key_hash)) {
             Some(signature) => {
-                let joined = self
-                    .owners
-                    .iter()
-                    .chain(self.users.iter())
-                    .collect::<HashMap<&String, &PubKey>>();
+                let keys = &self.pub_keys;
 
-                if let Some(raw_pubkey) = joined.get(&public_key_hash.to_string()) {
-                    let raw_pub = *raw_pubkey;
+                if let Some(raw_pub) = keys.get(&public_key_hash.to_string()) {
                     let public_key = spki::SubjectPublicKeyInfo::try_from(raw_pub.as_ref())
                         .map_err(|_| {
                             Status::invalid_argument(format!(
