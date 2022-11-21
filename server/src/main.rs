@@ -28,8 +28,10 @@ use composite_plan::*;
 
 mod visitable;
 
-mod access;
-use access::*;
+mod access_control;
+use access_control::*;
+
+mod utils;
 
 pub struct DelayedDataFrame {
     future: Pin<Box<dyn Future<Output = Result<DataFrame, Status>> + Send>>,
@@ -39,15 +41,17 @@ pub struct DelayedDataFrame {
 #[derive(Debug, Clone)]
 pub struct DataFrameArtifact {
     dataframe: DataFrame,
-    fetchable: Access,
+    policy: Policy,
+    fetchable: PolicyAction,
     query_details: String,
 }
 
 impl DataFrameArtifact {
-    pub fn new(df: DataFrame) -> Self {
+    pub fn new(df: DataFrame, policy: Policy) -> Self {
         DataFrameArtifact {
             dataframe: df,
-            fetchable: Access::Denied(String::from(
+            policy,
+            fetchable: PolicyAction::Reject(String::from(
                 "DataFrames uploaded by the Data Owner are protected.",
             )),
             query_details: String::from("uploaded dataframe"),
@@ -74,14 +78,25 @@ impl BastionLabState {
             identifier
         )))?;
         Ok(match &artifact.fetchable {
-            Access::Granted => {
+            PolicyAction::Accept => {
                 let df = artifact.dataframe.clone();
                 DelayedDataFrame {
                     future: Box::pin(async { Ok(df) }),
                     needs_approval: None,
                 }
             }
-            Access::Denied(reason) => {
+            PolicyAction::Reject(reason) => {
+                let reason = reason.clone();
+                DelayedDataFrame {
+                    future: Box::pin(async move { Err(Status::permission_denied(format!(
+                        "Cannot fetch this DataFrame: operation denied by the data owner's policy
+Reason: {}",
+                        reason,
+                    ))) }),
+                    needs_approval: None,
+                }
+            }
+            PolicyAction::Approval(reason) => {
                 let reason = reason.clone();
                 let identifier = String::from(identifier);
                 let query_details = artifact.query_details.clone();
@@ -106,7 +121,7 @@ Logical plan:
 
                             match ans.trim() {
                                 "y" => break,
-                                "n" => return Err(Status::invalid_argument(format!(
+                                "n" => return Err(Status::permission_denied(format!(
                                     "The data owner rejected the fetch operation.
 Fetching a dataframe obtained with a non privacy-preserving query requires the approval of the data owner.
 This dataframe was obtained in a non privacy-preserving fashion.
@@ -141,6 +156,18 @@ Reason: {}",
                 identifier
             )))?
             .dataframe
+            .clone())
+    }
+
+    fn get_policy_unchecked(&self, identifier: &str) -> Result<Policy, Status> {
+        let dfs = self.dataframes.read().unwrap();
+        Ok(dfs
+            .get(identifier)
+            .ok_or(Status::not_found(format!(
+                "Could not find dataframe: identifier={}",
+                identifier
+            )))?
+            .policy
             .clone())
     }
 
@@ -209,10 +236,10 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<Streaming<SendChunk>>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        let df = df_from_stream(request.into_inner()).await?;
+        let df = df_artifact_from_stream(request.into_inner()).await?;
 
-        let header = get_df_header(&df)?;
-        let identifier = self.insert_df(DataFrameArtifact::new(df));
+        let header = get_df_header(&df.dataframe)?;
+        let identifier = self.insert_df(df);
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
 
