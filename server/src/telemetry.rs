@@ -17,18 +17,12 @@ pub enum TelemetryEventProps {
     Started {},
     RunQuery {
         dataset_name: Option<String>,
-        dataset_size: usize,
         dataset_hash: Option<String>,
-        nb_rows: usize,
-        nb_colums: usize,
         time_taken: f64,
     },
     SendDataFrame {
         dataset_name: Option<String>,
-        dataset_size: usize,
         dataset_hash: Option<String>,
-        nb_rows: usize,
-        nb_colums: usize,
         time_taken: f64,
     },
     FetchDataFrame {

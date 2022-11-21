@@ -172,14 +172,9 @@ impl BastionLab for BastionLabState {
         let start_time = Instant::now();
 
         let res = composite_plan.run(self)?;
+        let dataframe_bytes: Vec<u8> = ref_df_to_bytes(&res.dataframe);
 
         let header = get_df_header(&res.dataframe)?;
-
-        let dataframe_bytes: Vec<u8> = ref_df_to_bytes(&res.dataframe);
-        let dataframe_mem_size = mem::size_of_val(&*dataframe_bytes);
-        let dataframe_colums = res.dataframe.width();
-        let dataframe_rows = res.dataframe.height();
-
         let identifier = self.insert_df(res);
 
         let elapsed = start_time.elapsed();
@@ -187,10 +182,7 @@ impl BastionLab for BastionLabState {
         telemetry::add_event(
             TelemetryEventProps::RunQuery {
                 dataset_name: Some(identifier.clone()),
-                dataset_size: dataframe_mem_size,
                 dataset_hash: Some(hash),
-                nb_colums: dataframe_colums,
-                nb_rows: dataframe_rows,
                 time_taken: elapsed.as_millis() as f64,
             },
             client_info,
@@ -204,13 +196,9 @@ impl BastionLab for BastionLabState {
     ) -> Result<Response<ReferenceResponse>, Status> {
         let start_time = Instant::now();
         let (df, client_info) = df_from_stream(request.into_inner()).await?;
+        let dataframe_bytes: Vec<u8> = ref_df_to_bytes(&df);
 
         let header = get_df_header(&df)?;
-
-        let dataframe_bytes: Vec<u8> = ref_df_to_bytes(&df);
-        let dataframe_mem_size = mem::size_of_val(&*dataframe_bytes);
-        let dataframe_colums = df.width();
-        let dataframe_rows = df.height();
 
         let identifier = self.insert_df(DataFrameArtifact::new(df));
         let elapsed = start_time.elapsed();
@@ -218,10 +206,7 @@ impl BastionLab for BastionLabState {
         telemetry::add_event(
             TelemetryEventProps::SendDataFrame {
                 dataset_name: Some(identifier.clone()),
-                dataset_size: dataframe_mem_size,
                 dataset_hash: Some(hash),
-                nb_colums: dataframe_colums,
-                nb_rows: dataframe_rows,
                 time_taken: elapsed.as_millis() as f64,
             },
             client_info,
