@@ -15,6 +15,7 @@ import platform
 import socket
 import getpass
 import polars as pl
+from colorama import Fore
 
 from bastionlab.utils import (
     deserialize_dataframe,
@@ -51,7 +52,17 @@ class Client:
 
     def _fetch_df(self, ref: List[str]) -> pl.DataFrame:
         joined_bytes = b""
+        blocked = False
         for b in self.stub.FetchDataFrame(ReferenceRequest(identifier=ref, client_info=self.client_info)):
+            if blocked:
+                blocked = False
+                print(f"{Fore.GREEN}The query has been approved by the data owner.{Fore.WHITE}")
+            if b.pending != "":
+                print(b.pending)
+                blocked = True
+                print(f"""{Fore.YELLOW}Warning: non privacy-preserving queries necessitate data owner's approval.
+Reason: {b.pending}
+A notification has been sent to the data owner. The request will be pending until the data owners accepts or denies it or until timeout seconds elapse.{Fore.WHITE}""")
             joined_bytes += b.data
 
         return deserialize_dataframe(joined_bytes)

@@ -7,7 +7,7 @@ use tonic::Status;
 
 use crate::{
     visitable::{Visitable, VisitableMut},
-    BastionLabState, DataFrameArtifact,
+    Access, BastionLabState, DataFrameArtifact,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -23,13 +23,13 @@ pub enum CompositePlanSegment {
 impl CompositePlan {
     pub fn run(self, state: &BastionLabState) -> Result<DataFrameArtifact, Status> {
         let mut input_dfs = Vec::new();
-        let mut has_aggregation = false;
+        let mut fetchable = Access::Denied(String::from("Denied by default"));
         let plan_str = serde_json::to_string(&self.0).unwrap(); // FIX THIS
         for seg in self.0 {
             match seg {
                 CompositePlanSegment::PolarsPlanSegment(mut plan) => {
                     initialize_inputs(&mut plan, &mut input_dfs)?;
-                    aggregation_check(&plan, &mut has_aggregation, 10)?;
+                    aggregation_check(&plan, &mut fetchable, 10)?;
                     let df = run_logical_plan(plan)?;
                     input_dfs.push(df);
                 }
@@ -83,7 +83,7 @@ impl CompositePlan {
 
         Ok(DataFrameArtifact {
             dataframe: input_dfs.pop().unwrap(),
-            fetchable: has_aggregation,
+            fetchable,
             query_details: plan_str,
         })
     }
@@ -180,7 +180,7 @@ fn initialize_inputs(plan: &mut LogicalPlan, input_dfs: &mut Vec<DataFrame>) -> 
 
 fn aggregation_check(
     plan: &LogicalPlan,
-    state: &mut bool,
+    state: &mut Access,
     min_allowed_agg_size: usize,
 ) -> Result<(), Status> {
     plan.visit(state, |plan, state| {
@@ -205,9 +205,13 @@ fn aggregation_check(
                     .unwrap()[0]
                     .try_extract()
                     .unwrap();
-                *state = *state || min_agg_size >= min_allowed_agg_size;
+                *state |= if min_agg_size >= min_allowed_agg_size {
+                    Access::Granted
+                } else {
+                    Access::Denied(format!("Cannot fetch a DataFrame that does not aggregate at least {} rows of the initial dataframe uploaded by the data owner.", min_allowed_agg_size))
+                }
             }
-            LogicalPlan::Join { .. } => *state = false,
+            LogicalPlan::Join { .. } => *state = Access::Denied(format!("Cannot fetch a DataFrame that does not aggregate at least {} rows of the initial dataframe uploaded by the data owner.", min_allowed_agg_size)),
             // These are not currently supported
             // LogicalPlan::ExtContext { .. } => *state = false,
             // LogicalPlan::Union { .. } => *state = false,

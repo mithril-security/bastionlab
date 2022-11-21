@@ -15,11 +15,16 @@ message ReferenceList {
     repeated ReferenceResponse list = 1;
 }
 
-message Chunk {
+message SendChunk {
     oneof chunk_type {
         bytes data = 1;
         ClientInfo client_info = 2;
     }
+}
+
+message FetchChunk {
+    bytes data = 1;
+    string pending = 2;
 }
 
 message Query {
@@ -42,9 +47,9 @@ message ClientInfo {
 }
 
 service BastionLab {
-    rpc SendDataFrame (stream Chunk) returns (ReferenceResponse) {}
+    rpc SendDataFrame (stream SendChunk) returns (ReferenceResponse) {}
     rpc RunQuery (Query) returns (ReferenceResponse) {}
-    rpc FetchDataFrame (ReferenceRequest) returns (stream Chunk) {}
+    rpc FetchDataFrame (ReferenceRequest) returns (stream FetchChunk) {}
     rpc ListDataFrames (ListDataFramesRequest) returns (ReferenceList) {}
     rpc GetDataFrameHeader (ReferenceRequest) returns (ReferenceResponse) {}
 }

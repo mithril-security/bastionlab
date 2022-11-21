@@ -3,13 +3,11 @@ from typing import Callable, Generic, List, Optional, TypeVar, Sequence, Union
 import seaborn as sns
 import polars as pl
 from torch.jit import ScriptFunction
-import io
 import base64
 from bastionlab.pb.bastionlab_pb2 import ReferenceResponse
 import json
 from bastionlab.client import Client
 import torch
-import pyarrow as arr
 from bastionlab.utils import ApplyBins
 
 LDF = TypeVar("LDF", bound="pl.LazyFrame")
