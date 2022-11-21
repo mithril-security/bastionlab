@@ -9,7 +9,6 @@ use std::{
     error::Error,
     fmt::Debug,
     hash::{Hash, Hasher},
-    mem,
     sync::{Arc, RwLock},
     time::Instant,
 };
