@@ -3,12 +3,19 @@ use serde_json;
 use std::{
     collections::HashMap,
     error::Error,
+    time::Instant,
     fmt::Debug,
     sync::{Arc, RwLock},
+    hash::{Hash, Hasher},
+    collections::hash_map::DefaultHasher,
+    mem,
 };
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
 use uuid::Uuid;
+use log::info;
+use env_logger::Env;
+use ring::digest;
 
 pub mod grpc {
     tonic::include_proto!("bastionlab");
@@ -25,6 +32,8 @@ mod composite_plan;
 use composite_plan::*;
 
 mod visitable;
+mod telemetry;
+use telemetry::TelemetryEventProps;
 
 #[derive(Debug, Clone)]
 pub struct DataFrameArtifact {
@@ -156,10 +165,34 @@ impl BastionLab for BastionLabState {
                     &request.get_ref().composite_plan
                 ))
             })?;
+
+        let client_info = request.get_ref().client_info.clone();
+        let start_time = Instant::now();
+
         let res = composite_plan.run(self)?;
 
         let header = get_df_header(&res.dataframe)?;
+
+        let dataframe_bytes: Vec<u8> = ref_df_to_bytes(&res.dataframe);
+        let dataframe_mem_size = mem::size_of_val(&*dataframe_bytes);
+        let dataframe_colums = res.dataframe.width();
+        let dataframe_rows = res.dataframe.height();
+
         let identifier = self.insert_df(res);
+
+        let elapsed = start_time.elapsed();
+        let hash = hex::encode(digest::digest(&digest::SHA256, &dataframe_bytes).as_ref());
+        telemetry::add_event(
+            TelemetryEventProps::RunQuery {
+                dataset_name: Some(identifier.clone()),
+                dataset_size: dataframe_mem_size,
+                dataset_hash: Some(hash),
+                nb_colums: dataframe_colums,
+                nb_rows: dataframe_rows,
+                time_taken: elapsed.as_millis() as f64,
+            },
+            client_info,
+        );
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
 
@@ -167,10 +200,30 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<Streaming<Chunk>>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        let df = df_from_stream(request.into_inner()).await?;
+        let start_time = Instant::now();
+        let (df, client_info) = df_from_stream(request.into_inner()).await?;
 
         let header = get_df_header(&df)?;
+
+        let dataframe_bytes: Vec<u8> = ref_df_to_bytes(&df);
+        let dataframe_mem_size = mem::size_of_val(&*dataframe_bytes);
+        let dataframe_colums = df.width();
+        let dataframe_rows = df.height();
+
         let identifier = self.insert_df(DataFrameArtifact::new(df));
+        let elapsed = start_time.elapsed();
+        let hash = hex::encode(digest::digest(&digest::SHA256, &dataframe_bytes).as_ref());
+        telemetry::add_event(
+            TelemetryEventProps::SendDataFrame {
+                dataset_name: Some(identifier.clone()),
+                dataset_size: dataframe_mem_size,
+                dataset_hash: Some(hash),
+                nb_colums: dataframe_colums,
+                nb_rows: dataframe_rows,
+                time_taken: elapsed.as_millis() as f64,
+            },
+            client_info,
+        );
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
 
@@ -178,9 +231,26 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<ReferenceRequest>,
     ) -> Result<Response<Self::FetchDataFrameStream>, Status> {
-        let df = self.get_df(&request.get_ref().identifier)?;
-
-        Ok(stream_data(df, 32).await)
+        let client_info = request.get_ref().client_info.clone();
+        let df_res = self.get_df(&request.get_ref().identifier);
+        match df_res {
+            Ok(df) => {
+                let res = TelemetryEventProps::FetchDataFrame { 
+                    dataset_name: Some(request.get_ref().identifier.clone()), 
+                    request_accepted: true
+                };
+                telemetry::add_event(res, client_info);
+                return Ok(stream_data(df, 32).await)
+            },
+            Err(err_status) => {
+                let res = TelemetryEventProps::FetchDataFrame { 
+                    dataset_name: Some(request.get_ref().identifier.clone()), 
+                    request_accepted: false
+                };
+                telemetry::add_event(res, client_info);
+                return Err(err_status)
+            }
+        };
     }
 
     async fn list_data_frames(
@@ -209,9 +279,30 @@ impl BastionLab for BastionLabState {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
     let state = BastionLabState::new();
     let addr = "0.0.0.0:50056".parse()?;
     println!("BastionLab server running...");
+
+    //TODO: Change it when specifying the TEE will be available
+    let tee_mode = String::from("None"); 
+    let platform: String = String::from(format!("{} - TEE Mode: {}", whoami::platform(), tee_mode));
+    let uid: String = {
+        let mut hasher = DefaultHasher::new();
+        whoami::username().hash(&mut hasher);
+        whoami::hostname().hash(&mut hasher);
+        platform.hash(&mut hasher);
+        String::from(format!("{:X}", hasher.finish()))
+    };
+
+    if std::env::var("BASTIONLAB_DISABLE_TELEMETRY").is_err() {
+        telemetry::setup(platform, uid, tee_mode)?;
+        info!("Telemetry is enabled.")
+    } else {
+        info!("Telemetry is disabled.")
+    }
+    telemetry::add_event(TelemetryEventProps::Started {}, None);
+
     Server::builder()
         .add_service(BastionLabServer::new(state))
         .serve(addr)

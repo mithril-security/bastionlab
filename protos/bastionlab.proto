@@ -3,6 +3,7 @@ package bastionlab;
 
 message ReferenceRequest {
     string identifier = 1;
+    ClientInfo client_info = 2;
 }
 
 message ReferenceResponse {
@@ -15,15 +16,29 @@ message ReferenceList {
 }
 
 message Chunk {
-    bytes data = 1;
+    oneof chunk_type {
+        bytes data = 1;
+        ClientInfo client_info = 2;
+    }
 }
 
 message Query {
     string composite_plan = 1;
+    ClientInfo client_info = 2;
 }
 
 message Empty {
 
+}
+
+message ClientInfo {
+    string uid = 1;
+    string platform_name = 2;
+    string platform_arch = 3;
+    string platform_version = 4;
+    string platform_release = 5;
+    string user_agent = 6;
+    string user_agent_version = 7;
 }
 
 service BastionLab {

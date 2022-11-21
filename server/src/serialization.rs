@@ -3,15 +3,28 @@ use tokio::sync::mpsc;
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use tonic::{Response, Status};
 
+use crate::grpc::{chunk::ChunkType, ClientInfo};
+
 use super::grpc::Chunk;
 
-pub async fn df_from_stream(stream: tonic::Streaming<Chunk>) -> Result<DataFrame, Status> {
+pub async fn df_from_stream(stream: tonic::Streaming<Chunk>) -> Result<(DataFrame, Option<ClientInfo>), Status> {
     let df_bytes = unstream_data(stream).await?;
-    let series = df_bytes
+    let series = df_bytes.0
         .iter()
         .map(|v| bincode::deserialize(&v[..]).unwrap())
         .collect::<Vec<Series>>();
-    DataFrame::new(series.clone()).map_err(|_| Status::unknown("Failed to create DataFrame!"))
+    let df = DataFrame::new(series.clone()).map_err(|_| Status::unknown("Failed to create DataFrame!"))?;
+    Ok((df, df_bytes.1))
+}
+
+pub fn ref_df_to_bytes(df: &DataFrame) -> Vec<u8> {
+    let series = df.get_columns();
+    let series_bytes = series
+        .iter()
+        .map(|s| bincode::serialize(s).unwrap())
+        .flatten()
+        .collect::<Vec<u8>>();
+    series_bytes
 }
 
 pub fn df_to_bytes(df: DataFrame) -> Vec<Vec<u8>> {
@@ -23,11 +36,16 @@ pub fn df_to_bytes(df: DataFrame) -> Vec<Vec<u8>> {
     series_bytes
 }
 
-pub async fn unstream_data(mut stream: tonic::Streaming<Chunk>) -> Result<Vec<Vec<u8>>, Status> {
+pub async fn unstream_data(mut stream: tonic::Streaming<Chunk>) -> Result<(Vec<Vec<u8>>, Option<ClientInfo>), Status> {
     let mut columns: Vec<u8> = Vec::new();
+    let mut client_info: Option<ClientInfo> = None;
     while let Some(chunk) = stream.next().await {
-        let mut chunk = chunk?;
-        columns.append(&mut chunk.data);
+        let chunk = chunk?;
+        match chunk.chunk_type {
+            Some(ChunkType::Data(mut data)) => columns.append(&mut data),
+            Some(ChunkType::ClientInfo(client)) => client_info = Some(client),
+            None => (),
+        }
     }
 
     let pattern = b"[end]";
@@ -62,7 +80,7 @@ pub async fn unstream_data(mut stream: tonic::Streaming<Chunk>) -> Result<Vec<Ve
             columns[start..end].to_vec()
         })
         .collect::<Vec<Vec<u8>>>();
-    Ok(output)
+    Ok((output, client_info))
 }
 
 /// Converts a raw artifact (a header and a binary object) into a stream of chunks to be sent over gRPC.
@@ -85,7 +103,7 @@ pub async fn stream_data(
     tokio::spawn(async move {
         for (_, bytes) in raw_bytes.chunks(chunk_size).enumerate() {
             tx.send(Ok(Chunk {
-                data: bytes.to_vec(),
+                chunk_type: Some(ChunkType::Data(bytes.to_vec())),
             }))
             .await
             .unwrap(); // Fix this

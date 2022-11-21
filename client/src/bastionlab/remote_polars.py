@@ -309,11 +309,11 @@ class RemoteLazyFrame:
 
     def curveplot(
         self: LDF,
+        ci: Union[int, None],
         col_x: str,
         col_y: str,
         bins: int = 10,
         order: int = 3,
-        ci: int | None = None,
         scatter: bool = False,
         **kwargs,
     ):
@@ -330,7 +330,9 @@ class RemoteLazyFrame:
             .fetch()
             .to_pandas()
         )
-        sns.regplot(x=df[col_x], y=df[col_y], order=order, ci=ci, scatter=scatter, **kwargs)
+        sns.regplot(
+            x=df[col_x], y=df[col_y], order=order, ci=ci, scatter=scatter, **kwargs
+        )
 
     def scatterplot(self: LDF, col_x: str, col_y: str, bins=5, **kwargs):
         model = ApplyBins(bins)
