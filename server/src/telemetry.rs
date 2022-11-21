@@ -35,11 +35,11 @@ pub enum TelemetryEventProps {
         dataset_name: Option<String>,
         request_accepted: bool,
     },
-    /*RunModel {
-        model_name: Option<String>,
-        sign: bool,
-        time_taken: f64,
-    },*/
+    ListDataFrame {
+    },
+    GetDataFrameHeader {
+        dataset_name: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -57,8 +57,8 @@ impl TelemetryEventProps {
             TelemetryEventProps::RunQuery { .. } => "run_query",
             TelemetryEventProps::FetchDataFrame { .. } => "fetch_data_frame",
             TelemetryEventProps::SendDataFrame { .. } => "send_data_frame",
-            //TelemetryEventProps::ListDataFrame { .. } => "list_data_frame",
-            //TelemetryEventProps::GetDataFrameHeader { .. } => "get_data_frame_header",
+            TelemetryEventProps::ListDataFrame { .. } => "list_data_frame",
+            TelemetryEventProps::GetDataFrameHeader { .. } => "get_data_frame_header",
         }
     }
 }

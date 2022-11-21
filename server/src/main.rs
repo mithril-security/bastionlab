@@ -22,7 +22,7 @@ pub mod grpc {
 }
 use grpc::{
     bastion_lab_server::{BastionLab, BastionLabServer},
-    Chunk, Empty, Query, ReferenceList, ReferenceRequest, ReferenceResponse,
+    Chunk, ListDataFramesRequest, Query, ReferenceList, ReferenceRequest, ReferenceResponse,
 };
 
 mod serialization;
@@ -261,14 +261,18 @@ impl BastionLab for BastionLabState {
 
     async fn list_data_frames(
         &self,
-        _request: Request<Empty>,
+        request: Request<ListDataFramesRequest>,
     ) -> Result<Response<ReferenceList>, Status> {
+        let client_info = request.get_ref().client_info.clone();
         let list = self
             .get_headers()?
             .into_iter()
             .map(|(identifier, header)| ReferenceResponse { identifier, header })
             .collect();
-
+        telemetry::add_event(
+            TelemetryEventProps::ListDataFrame {},
+            client_info,
+        );
         Ok(Response::new(ReferenceList { list }))
     }
 
@@ -276,9 +280,16 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<ReferenceRequest>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        let identifier = String::from(&request.get_ref().identifier);
+        let client_info = request.get_ref().client_info.clone();
+        let requested_identifier = &request.get_ref().identifier;
+        let identifier = String::from(requested_identifier);
         let header = self.get_header(&identifier)?;
-
+        telemetry::add_event(
+            TelemetryEventProps::GetDataFrameHeader {
+                dataset_name: Some(requested_identifier.clone()),
+            },
+            client_info,
+        );
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
 }

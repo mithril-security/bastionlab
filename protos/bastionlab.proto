@@ -27,8 +27,8 @@ message Query {
     ClientInfo client_info = 2;
 }
 
-message Empty {
-
+message ListDataFramesRequest {
+    ClientInfo client_info = 1;
 }
 
 message ClientInfo {
@@ -45,6 +45,6 @@ service BastionLab {
     rpc SendDataFrame (stream Chunk) returns (ReferenceResponse) {}
     rpc RunQuery (Query) returns (ReferenceResponse) {}
     rpc FetchDataFrame (ReferenceRequest) returns (stream Chunk) {}
-    rpc ListDataFrames (Empty) returns (ReferenceList) {}
+    rpc ListDataFrames (ListDataFramesRequest) returns (ReferenceList) {}
     rpc GetDataFrameHeader (ReferenceRequest) returns (ReferenceResponse) {}
 }

@@ -3,11 +3,11 @@ from typing import Any, Dict, List, TYPE_CHECKING, Optional
 from hashlib import sha256
 import grpc
 from bastionlab.pb.bastionlab_pb2 import (
+    ListDataFramesRequest,
     ReferenceRequest,
     ReferenceResponse,
     ClientInfo,
     Query,
-    Empty,
 )
 from bastionlab.version import __version__ as app_version
 from bastionlab.pb.bastionlab_pb2_grpc import BastionLabStub
@@ -68,13 +68,13 @@ class Client:
     def list_dfs(self) -> List["FetchableLazyFrame"]:
         from bastionlab.remote_polars import FetchableLazyFrame
 
-        res = self.stub.ListDataFrames(Empty()).list
+        res = self.stub.ListDataFrames(ListDataFramesRequest(client_info=self.client_info)).list
         return [FetchableLazyFrame._from_reference(self, ref) for ref in res]
 
     def get_df(self, identifier: str) -> "FetchableLazyFrame":
         from bastionlab.remote_polars import FetchableLazyFrame
 
-        res = self.stub.GetDataFrameHeader(ReferenceRequest(identifier=identifier))
+        res = self.stub.GetDataFrameHeader(ReferenceRequest(identifier=identifier, client_info=self.client_info))
         return FetchableLazyFrame._from_reference(self, res)
 
 
