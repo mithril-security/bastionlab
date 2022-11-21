@@ -1,21 +1,21 @@
+use env_logger::Env;
+use log::info;
 use polars::prelude::*;
+use ring::digest;
 use serde_json;
 use std::{
+    collections::hash_map::DefaultHasher,
     collections::HashMap,
     error::Error,
-    time::Instant,
     fmt::Debug,
-    sync::{Arc, RwLock},
     hash::{Hash, Hasher},
-    collections::hash_map::DefaultHasher,
     mem,
+    sync::{Arc, RwLock},
+    time::Instant,
 };
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
 use uuid::Uuid;
-use log::info;
-use env_logger::Env;
-use ring::digest;
 
 pub mod grpc {
     tonic::include_proto!("bastionlab");
@@ -31,8 +31,8 @@ use serialization::*;
 mod composite_plan;
 use composite_plan::*;
 
-mod visitable;
 mod telemetry;
+mod visitable;
 use telemetry::TelemetryEventProps;
 
 #[derive(Debug, Clone)]
@@ -44,7 +44,11 @@ pub struct DataFrameArtifact {
 
 impl DataFrameArtifact {
     pub fn new(df: DataFrame) -> Self {
-        DataFrameArtifact { dataframe: df, fetchable: false, query_details: String::from("uploaded dataframe") }
+        DataFrameArtifact {
+            dataframe: df,
+            fetchable: false,
+            query_details: String::from("uploaded dataframe"),
+        }
     }
 }
 
@@ -62,12 +66,10 @@ impl BastionLabState {
 
     fn get_df(&self, identifier: &str) -> Result<DataFrame, Status> {
         let dfs = self.dataframes.read().unwrap();
-        let artifact = dfs
-            .get(identifier)
-            .ok_or(Status::not_found(format!(
-                "Could not find dataframe: identifier={}",
-                identifier
-            )))?;
+        let artifact = dfs.get(identifier).ok_or(Status::not_found(format!(
+            "Could not find dataframe: identifier={}",
+            identifier
+        )))?;
         if !artifact.fetchable {
             println!(
                 "=== A user request has been rejected ===
@@ -76,14 +78,14 @@ impl BastionLabState {
         {}",
                 10, artifact.query_details,
             );
-        
+
             loop {
                 let mut ans = String::new();
                 println!("Accept [y] or Reject [n]?");
                 std::io::stdin()
                     .read_line(&mut ans)
                     .expect("Failed to read line");
-        
+
                 match ans.trim() {
                     "y" => break,
                     "n" => return Err(Status::invalid_argument(format!(
@@ -235,20 +237,24 @@ impl BastionLab for BastionLabState {
         let df_res = self.get_df(&request.get_ref().identifier);
         match df_res {
             Ok(df) => {
-                let res = TelemetryEventProps::FetchDataFrame { 
-                    dataset_name: Some(request.get_ref().identifier.clone()), 
-                    request_accepted: true
-                };
-                telemetry::add_event(res, client_info);
-                return Ok(stream_data(df, 32).await)
-            },
+                telemetry::add_event(
+                    TelemetryEventProps::FetchDataFrame {
+                        dataset_name: Some(request.get_ref().identifier.clone()),
+                        request_accepted: true,
+                    },
+                    client_info,
+                );
+                return Ok(stream_data(df, 32).await);
+            }
             Err(err_status) => {
-                let res = TelemetryEventProps::FetchDataFrame { 
-                    dataset_name: Some(request.get_ref().identifier.clone()), 
-                    request_accepted: false
-                };
-                telemetry::add_event(res, client_info);
-                return Err(err_status)
+                telemetry::add_event(
+                    TelemetryEventProps::FetchDataFrame {
+                        dataset_name: Some(request.get_ref().identifier.clone()),
+                        request_accepted: false,
+                    },
+                    client_info,
+                );
+                return Err(err_status);
             }
         };
     }
@@ -285,7 +291,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     println!("BastionLab server running...");
 
     //TODO: Change it when specifying the TEE will be available
-    let tee_mode = String::from("None"); 
+    let tee_mode = String::from("None");
     let platform: String = String::from(format!("{} - TEE Mode: {}", whoami::platform(), tee_mode));
     let uid: String = {
         let mut hasher = DefaultHasher::new();

@@ -1,13 +1,14 @@
 use once_cell::sync::OnceCell;
 
 use std::{
-    time::{Duration, SystemTime, UNIX_EPOCH}, error::Error,
+    error::Error,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use crate::grpc::ClientInfo;
+use log::debug;
 use serde::Serialize;
 use tokio::sync::mpsc::{self, UnboundedSender};
-use log::debug;
 
 static TELEMETRY_CHANNEL: OnceCell<UnboundedSender<TelemetryEvent>> = OnceCell::new();
 
@@ -62,10 +63,7 @@ impl TelemetryEventProps {
     }
 }
 
-pub fn add_event(
-    event: TelemetryEventProps,
-    client_info: Option<ClientInfo>,
-) {
+pub fn add_event(event: TelemetryEventProps, client_info: Option<ClientInfo>) {
     if let Some(sender) = TELEMETRY_CHANNEL.get() {
         let _ = sender.send(TelemetryEvent {
             event_type: event.event_type(),

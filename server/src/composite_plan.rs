@@ -81,7 +81,11 @@ impl CompositePlan {
             ));
         }
 
-        Ok(DataFrameArtifact { dataframe: input_dfs.pop().unwrap(), fetchable: has_aggregation, query_details: plan_str })
+        Ok(DataFrameArtifact {
+            dataframe: input_dfs.pop().unwrap(),
+            fetchable: has_aggregation,
+            query_details: plan_str,
+        })
     }
 }
 

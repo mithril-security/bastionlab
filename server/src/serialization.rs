@@ -7,13 +7,17 @@ use crate::grpc::{chunk::ChunkType, ClientInfo};
 
 use super::grpc::Chunk;
 
-pub async fn df_from_stream(stream: tonic::Streaming<Chunk>) -> Result<(DataFrame, Option<ClientInfo>), Status> {
+pub async fn df_from_stream(
+    stream: tonic::Streaming<Chunk>,
+) -> Result<(DataFrame, Option<ClientInfo>), Status> {
     let df_bytes = unstream_data(stream).await?;
-    let series = df_bytes.0
+    let series = df_bytes
+        .0
         .iter()
         .map(|v| bincode::deserialize(&v[..]).unwrap())
         .collect::<Vec<Series>>();
-    let df = DataFrame::new(series.clone()).map_err(|_| Status::unknown("Failed to create DataFrame!"))?;
+    let df = DataFrame::new(series.clone())
+        .map_err(|_| Status::unknown("Failed to create DataFrame!"))?;
     Ok((df, df_bytes.1))
 }
 
@@ -36,7 +40,9 @@ pub fn df_to_bytes(df: DataFrame) -> Vec<Vec<u8>> {
     series_bytes
 }
 
-pub async fn unstream_data(mut stream: tonic::Streaming<Chunk>) -> Result<(Vec<Vec<u8>>, Option<ClientInfo>), Status> {
+pub async fn unstream_data(
+    mut stream: tonic::Streaming<Chunk>,
+) -> Result<(Vec<Vec<u8>>, Option<ClientInfo>), Status> {
     let mut columns: Vec<u8> = Vec::new();
     let mut client_info: Option<ClientInfo> = None;
     while let Some(chunk) = stream.next().await {
