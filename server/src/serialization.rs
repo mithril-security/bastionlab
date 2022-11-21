@@ -5,7 +5,7 @@ use tonic::{Response, Status};
 
 use crate::DelayedDataFrame;
 
-use super::grpc::{SendChunk, FetchChunk, ClientInfo};
+use super::grpc::{send_chunk::ChunkType, SendChunk, FetchChunk, ClientInfo};
 
 pub async fn df_from_stream(stream: tonic::Streaming<SendChunk>) -> Result<(DataFrame, Option<ClientInfo>), Status> {
     let df_bytes = unstream_data(stream).await?;

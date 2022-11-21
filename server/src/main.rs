@@ -23,7 +23,7 @@ pub mod grpc {
 }
 use grpc::{
     bastion_lab_server::{BastionLab, BastionLabServer},
-    SendChunk, FetchChunk, ListDataFramesRequest, Query, ReferenceList, ReferenceRequest, ReferenceResponse,
+    SendChunk, FetchChunk, ListDataFramesRequest, Query, ReferenceList, ReferenceRequest, ReferenceResponse, ClientInfo,
 };
 
 mod serialization;
@@ -75,7 +75,7 @@ impl BastionLabState {
         }
     }
 
-    fn get_df(&self, identifier: &str) -> Result<DelayedDataFrame, Status> {
+    fn get_df(&self, identifier: &str, client_info: Option<ClientInfo>) -> Result<DelayedDataFrame, Status> {
         let dfs = self.dataframes.read().unwrap();
         let artifact = dfs.get(identifier).ok_or(Status::not_found(format!(
             "Could not find dataframe: identifier={}",
@@ -84,6 +84,13 @@ impl BastionLabState {
         Ok(match &artifact.fetchable {
             Access::Granted => {
                 let df = artifact.dataframe.clone();
+                telemetry::add_event(
+                    TelemetryEventProps::FetchDataFrame {
+                        dataset_name: Some(identifier.to_owned()),
+                        request_accepted: true,
+                    },
+                    client_info,
+                );
                 DelayedDataFrame {
                     future: Box::pin(async { Ok(df) }),
                     needs_approval: None,
@@ -114,16 +121,31 @@ Logical plan:
 
                             match ans.trim() {
                                 "y" => break,
-                                "n" => return Err(Status::invalid_argument(format!(
+                                "n" => { 
+                                    telemetry::add_event(
+                                        TelemetryEventProps::FetchDataFrame {
+                                            dataset_name: Some(identifier.to_owned()),
+                                            request_accepted: false,
+                                        },
+                                        client_info,
+                                    );
+                                    return Err(Status::invalid_argument(format!(
                                     "The data owner rejected the fetch operation.
 Fetching a dataframe obtained with a non privacy-preserving query requires the approval of the data owner.
 This dataframe was obtained in a non privacy-preserving fashion.
 Reason: {}",
                                     reason
-                                ))),
+                                )))},
                                 _ => continue,
                             }
                         }
+                        telemetry::add_event(
+                            TelemetryEventProps::FetchDataFrame {
+                                dataset_name: Some(identifier.to_owned()),
+                                request_accepted: true,
+                            },
+                            client_info,
+                        );
                         Ok(dfs
                             .read()
                             .unwrap()
@@ -259,29 +281,8 @@ impl BastionLab for BastionLabState {
     ) -> Result<Response<Self::FetchDataFrameStream>, Status> {
         let client_info = request.get_ref().client_info.clone();
         let fut = {
-            let df_res = self.get_df(&request.get_ref().identifier);
-            match df_res {
-            Ok(df) => {
-                telemetry::add_event(
-                    TelemetryEventProps::FetchDataFrame {
-                        dataset_name: Some(request.get_ref().identifier.clone()),
-                        request_accepted: true,
-                    },
-                    client_info,
-                );
-                stream_data(df, 32)
-            }
-            Err(err_status) => {
-                telemetry::add_event(
-                    TelemetryEventProps::FetchDataFrame {
-                        dataset_name: Some(request.get_ref().identifier.clone()),
-                        request_accepted: false,
-                    },
-                    client_info,
-                );
-                return Err(err_status);
-            }
-          };
+            let df = self.get_df(&request.get_ref().identifier, client_info)?;
+            stream_data(df, 32)
         };
         Ok(fut.await)
     }

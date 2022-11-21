@@ -28,8 +28,8 @@ def serialize_dataframe(df: pl.DataFrame) -> Iterator[SendChunk]:
     for data in create_byte_chunk(df_bytes):
         yield SendChunk(data=data)
 
-def send_clientinfo(client_info) -> Iterator[Chunk]:
-    yield Chunk(client_info=client_info)
+def send_clientinfo(client_info) -> Iterator[SendChunk]:
+    yield SendChunk(client_info=client_info)
 
 def deserialize_dataframe(joined_chunks: bytes) -> pl.DataFrame:
     step = len(END_PATTERN)
