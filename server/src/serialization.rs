@@ -5,7 +5,7 @@ use tonic::{Response, Status};
 
 use crate::DelayedDataFrame;
 
-use super::grpc::{SendChunk, FetchChunk};
+use super::grpc::{FetchChunk, SendChunk};
 
 pub async fn df_from_stream(stream: tonic::Streaming<SendChunk>) -> Result<DataFrame, Status> {
     let df_bytes = unstream_data(stream).await?;
@@ -25,7 +25,9 @@ pub fn df_to_bytes(df: DataFrame) -> Vec<Vec<u8>> {
     series_bytes
 }
 
-pub async fn unstream_data(mut stream: tonic::Streaming<SendChunk>) -> Result<Vec<Vec<u8>>, Status> {
+pub async fn unstream_data(
+    mut stream: tonic::Streaming<SendChunk>,
+) -> Result<Vec<Vec<u8>>, Status> {
     let mut columns: Vec<u8> = Vec::new();
     while let Some(chunk) = stream.next().await {
         let mut chunk = chunk?;
@@ -79,7 +81,9 @@ pub async fn stream_data(
         tx.send(Ok(FetchChunk {
             data: Vec::new(),
             pending: reason,
-        })).await.unwrap(); // fix this
+        }))
+        .await
+        .unwrap(); // fix this
     }
 
     tokio::spawn(async move {
@@ -99,9 +103,9 @@ pub async fn stream_data(
             })
             .flatten()
             .collect::<Vec<_>>();
-        
+
         let raw_bytes: Vec<u8> = df_bytes;
-        
+
         for (_, bytes) in raw_bytes.chunks(chunk_size).enumerate() {
             tx.send(Ok(FetchChunk {
                 data: bytes.to_vec(),

@@ -2,11 +2,19 @@ use polars::prelude::LogicalPlan;
 use tonic::Status;
 
 pub trait Visitable<S> {
-    fn visit<F: Fn(&Self, &mut S) -> Result<(), Status> + Clone>(&self, state: &mut S, f: F) -> Result<(), Status>;
+    fn visit<F: Fn(&Self, &mut S) -> Result<(), Status> + Clone>(
+        &self,
+        state: &mut S,
+        f: F,
+    ) -> Result<(), Status>;
 }
 
 pub trait VisitableMut<S> {
-    fn visit_mut<F: Fn(&mut Self, &mut S) -> Result<(), Status> + Clone>(&mut self, state: &mut S, f: F) -> Result<(), Status>;
+    fn visit_mut<F: Fn(&mut Self, &mut S) -> Result<(), Status> + Clone>(
+        &mut self,
+        state: &mut S,
+        f: F,
+    ) -> Result<(), Status>;
 }
 
 macro_rules! visitable_impl_logical_plan {
@@ -60,7 +68,7 @@ macro_rules! visitable_impl_logical_plan {
                 Ok(())
             }
         }
-        
+
     )*};
 }
 

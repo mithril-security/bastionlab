@@ -1,4 +1,4 @@
-use std::ops::{BitOr, BitAnd, BitOrAssign, BitAndAssign};
+use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign};
 
 #[derive(Debug, Clone)]
 pub enum Access {
@@ -26,7 +26,7 @@ impl BitOrAssign for Access {
 
 impl BitAnd for Access {
     type Output = Self;
-    
+
     fn bitand(mut self, rhs: Self) -> Self::Output {
         self &= rhs;
         self

@@ -35,13 +35,17 @@ class Client:
         for b in self.stub.FetchDataFrame(ReferenceRequest(identifier=ref)):
             if blocked:
                 blocked = False
-                print(f"{Fore.GREEN}The query has been approved by the data owner.{Fore.WHITE}")
+                print(
+                    f"{Fore.GREEN}The query has been approved by the data owner.{Fore.WHITE}"
+                )
             if b.pending != "":
                 print(b.pending)
                 blocked = True
-                print(f"""{Fore.YELLOW}Warning: non privacy-preserving queries necessitate data owner's approval.
+                print(
+                    f"""{Fore.YELLOW}Warning: non privacy-preserving queries necessitate data owner's approval.
 Reason: {b.pending}
-A notification has been sent to the data owner. The request will be pending until the data owners accepts or denies it or until timeout seconds elapse.{Fore.WHITE}""")
+A notification has been sent to the data owner. The request will be pending until the data owners accepts or denies it or until timeout seconds elapse.{Fore.WHITE}"""
+                )
             joined_bytes += b.data
 
         return deserialize_dataframe(joined_bytes)
