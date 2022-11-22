@@ -5,8 +5,8 @@ use std::{
     error::Error,
     fmt::Debug,
     future::Future,
-    sync::{Arc, RwLock},
     pin::Pin,
+    sync::{Arc, RwLock},
 };
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
@@ -17,7 +17,7 @@ pub mod grpc {
 }
 use grpc::{
     bastion_lab_server::{BastionLab, BastionLabServer},
-    SendChunk, FetchChunk, Empty, Query, ReferenceList, ReferenceRequest, ReferenceResponse,
+    Empty, FetchChunk, Query, ReferenceList, ReferenceRequest, ReferenceResponse, SendChunk,
 };
 
 mod serialization;
@@ -88,11 +88,13 @@ impl BastionLabState {
             PolicyAction::Reject(reason) => {
                 let reason = reason.clone();
                 DelayedDataFrame {
-                    future: Box::pin(async move { Err(Status::permission_denied(format!(
+                    future: Box::pin(async move {
+                        Err(Status::permission_denied(format!(
                         "Cannot fetch this DataFrame: operation denied by the data owner's policy
 Reason: {}",
                         reason,
-                    ))) }),
+                    )))
+                    }),
                     needs_approval: None,
                 }
             }

@@ -1,5 +1,5 @@
 import grpc  # type: ignore [import]
-from grpc._channel import _InactiveRpcError, _MultiThreadedRendezvous # type: ignore [import]
+from grpc._channel import _InactiveRpcError, _MultiThreadedRendezvous  # type: ignore [import]
 from dataclasses import dataclass
 from typing import Callable, TypeVar, Union
 
@@ -10,6 +10,7 @@ T = TypeVar("T")
 @dataclass
 class GRPCException(Exception):
     """A NewType arround gRPC errors to get nicer display."""
+
     err: Union[grpc._channel._InactiveRpcError, grpc._channel._MultiThreadedRendezvous]
 
     @property
@@ -35,7 +36,7 @@ class GRPCException(Exception):
             prefix = "Attestation is not available. Running in Simulation Mode"
         else:
             prefix = f"Received gRPC error"
-        
+
         return f"{prefix}: code={self.code} message={self.err.details()}"
 
     @staticmethod
