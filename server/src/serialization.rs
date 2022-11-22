@@ -3,17 +3,19 @@ use tokio::sync::mpsc;
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use tonic::{Response, Status};
 
-use crate::DelayedDataFrame;
+use crate::{DelayedDataFrame, access_control::Policy, DataFrameArtifact};
 
 use super::grpc::{FetchChunk, SendChunk};
 
-pub async fn df_from_stream(stream: tonic::Streaming<SendChunk>) -> Result<DataFrame, Status> {
-    let df_bytes = unstream_data(stream).await?;
+pub async fn df_artifact_from_stream(stream: tonic::Streaming<SendChunk>) -> Result<DataFrameArtifact, Status> {
+    let (df_bytes, policy) = unstream_data(stream).await?;
     let series = df_bytes
         .iter()
         .map(|v| bincode::deserialize(&v[..]).unwrap())
         .collect::<Vec<Series>>();
-    DataFrame::new(series.clone()).map_err(|_| Status::unknown("Failed to create DataFrame!"))
+    let df = DataFrame::new(series.clone()).map_err(|_| Status::unknown("Failed to deserialize DataFrame."))?;
+    let policy: Policy = serde_json::from_str(&policy).map_err(|_| Status::unknown("Failed to deserialize policy."))?;
+    Ok(DataFrameArtifact::new(df, policy))
 }
 
 pub fn df_to_bytes(df: DataFrame) -> Vec<Vec<u8>> {
@@ -25,13 +27,14 @@ pub fn df_to_bytes(df: DataFrame) -> Vec<Vec<u8>> {
     series_bytes
 }
 
-pub async fn unstream_data(
-    mut stream: tonic::Streaming<SendChunk>,
-) -> Result<Vec<Vec<u8>>, Status> {
+pub async fn unstream_data(mut stream: tonic::Streaming<SendChunk>) -> Result<(Vec<Vec<u8>>, String), Status> {
     let mut columns: Vec<u8> = Vec::new();
+    let mut policy = String::new();
+
     while let Some(chunk) = stream.next().await {
         let mut chunk = chunk?;
         columns.append(&mut chunk.data);
+        policy.push_str(&chunk.policy);
     }
 
     let pattern = b"[end]";
@@ -66,7 +69,7 @@ pub async fn unstream_data(
             columns[start..end].to_vec()
         })
         .collect::<Vec<Vec<u8>>>();
-    Ok(output)
+    Ok((output, policy))
 }
 
 /// Converts a raw artifact (a header and a binary object) into a stream of chunks to be sent over gRPC.
