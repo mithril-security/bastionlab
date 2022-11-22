@@ -6,9 +6,10 @@ use tch::CModule;
 use tonic::Status;
 
 use crate::{
+    access_control::Policy,
+    utils::*,
     visitable::{Visitable, VisitableMut},
-    BastionLabState, DataFrameArtifact, access_control::Policy,
-    utils::*
+    BastionLabState, DataFrameArtifact,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -145,7 +146,7 @@ impl CompositePlan {
                 })?;
             }
         }
-        
+
         Ok(state)
     }
 }

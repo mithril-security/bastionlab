@@ -36,10 +36,14 @@ class Client:
         self.stub = stub
         self.token = token
 
-    def send_df(self, df: pl.DataFrame, policy: Policy = DEFAULT_POLICY) -> "FetchableLazyFrame":
+    def send_df(
+        self, df: pl.DataFrame, policy: Policy = DEFAULT_POLICY
+    ) -> "FetchableLazyFrame":
         from bastionlab.remote_polars import FetchableLazyFrame
 
-        res = GRPCException.map_error(lambda: self.stub.SendDataFrame(serialize_dataframe(df, policy)))
+        res = GRPCException.map_error(
+            lambda: self.stub.SendDataFrame(serialize_dataframe(df, policy))
+        )
         return FetchableLazyFrame._from_reference(self, res)
 
 
@@ -51,13 +55,17 @@ class Client:
             for b in self.stub.FetchDataFrame(ReferenceRequest(identifier=ref)):
                 if blocked:
                     blocked = False
-                    print(f"{Fore.GREEN}The query has been accepted by the data owner.{Fore.WHITE}")
+                    print(
+                        f"{Fore.GREEN}The query has been accepted by the data owner.{Fore.WHITE}"
+                    )
                 if b.pending != "":
                     blocked = True
-                    print(f"""{Fore.YELLOW}Warning: non privacy-preserving queries necessitate data owner's approval.
+                    print(
+                        f"""{Fore.YELLOW}Warning: non privacy-preserving queries necessitate data owner's approval.
 Reason: {b.pending}
 
-A notification has been sent to the data owner. The request will be pending until the data owner accepts or denies it or until timeout seconds elapse.{Fore.WHITE}""")
+A notification has been sent to the data owner. The request will be pending until the data owner accepts or denies it or until timeout seconds elapse.{Fore.WHITE}"""
+                    )
                 joined_bytes += b.data
             return joined_bytes
 
@@ -66,7 +74,9 @@ A notification has been sent to the data owner. The request will be pending unti
             return deserialize_dataframe(joined_bytes)
         except GRPCException as e:
             if e.code == StatusCode.PERMISSION_DENIED:
-                print(f"{Fore.RED}The query has been rejected by the data owner.{Fore.WHITE}")
+                print(
+                    f"{Fore.RED}The query has been rejected by the data owner.{Fore.WHITE}"
+                )
                 return None
             else:
                 raise e
@@ -77,7 +87,9 @@ A notification has been sent to the data owner. The request will be pending unti
     ) -> "FetchableLazyFrame":
         from bastionlab.remote_polars import FetchableLazyFrame
 
-        res = GRPCException.map_error(lambda: self.stub.RunQuery(Query(composite_plan=composite_plan)))
+        res = GRPCException.map_error(
+            lambda: self.stub.RunQuery(Query(composite_plan=composite_plan))
+        )
         return FetchableLazyFrame._from_reference(self, res)
 
     def list_dfs(self) -> List["FetchableLazyFrame"]:
@@ -89,7 +101,11 @@ A notification has been sent to the data owner. The request will be pending unti
     def get_df(self, identifier: str) -> "FetchableLazyFrame":
         from bastionlab.remote_polars import FetchableLazyFrame
 
-        res = GRPCException.map_error(lambda: self.stub.GetDataFrameHeader(ReferenceRequest(identifier=identifier)))
+        res = GRPCException.map_error(
+            lambda: self.stub.GetDataFrameHeader(
+                ReferenceRequest(identifier=identifier)
+            )
+        )
         return FetchableLazyFrame._from_reference(self, res)
 
 
