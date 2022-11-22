@@ -4,19 +4,18 @@ use serde_json;
 use std::{
     collections::HashMap,
     error::Error,
+    fmt::Debug,
     fs::{self, File},
+    future::Future,
     io::Read,
     net::SocketAddr,
+    pin::Pin,
     sync::{Arc, Mutex, RwLock},
     time::{Duration, SystemTime},
-    fmt::Debug,
-    future::Future,
-    pin::Pin,
-    sync::{Arc, RwLock},
 };
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{
-    metadata::KeyRef,
+    metadata::{KeyRef, MetadataMap},
     transport::{Identity, Server, ServerTlsConfig},
     Request, Response, Status, Streaming,
 };
@@ -27,8 +26,8 @@ pub mod grpc {
 }
 use grpc::{
     bastion_lab_server::{BastionLab, BastionLabServer},
-    ChallengeResponse, SendChunk, FetchChunk, Empty, Query, ReferenceList, ReferenceRequest, ReferenceResponse,
-    Session, SendChunk,
+    ChallengeResponse, Empty, FetchChunk, Query, ReferenceList, ReferenceRequest,
+    ReferenceResponse, SendChunk, Session,
 };
 
 mod serialization;
@@ -44,9 +43,6 @@ mod config;
 use config::*;
 
 use ring::rand;
-
-/// Expiry time for session tokens.
-const EXPIRY: u64 = 25 * 60;
 
 mod visitable;
 
@@ -86,15 +82,16 @@ pub struct BastionLabState {
     dataframes: Arc<RwLock<HashMap<String, DataFrameArtifact>>>,
     keys: Mutex<KeyManagement>,
     sessions: Arc<RwLock<HashMap<[u8; 32], (SocketAddr, SystemTime, String)>>>,
+    session_expiry: u64,
 }
 
-
 impl BastionLabState {
-    fn new(keys: KeyManagement) -> Self {
+    fn new(keys: KeyManagement, session_expiry: u64) -> Self {
         Self {
             dataframes: Arc::new(RwLock::new(HashMap::new())),
             keys: Mutex::new(keys),
             sessions: Default::default(),
+            session_expiry,
         }
     }
 
@@ -200,21 +197,22 @@ Reason: {}",
             .clone())
     }
 
-    fn verify_request<T: Message>(&self, request: &Request<T>) -> Result<(), Status> {
+    fn verify_request(
+        &self,
+        remote_addr: Option<SocketAddr>,
+        metadata: &MetadataMap,
+    ) -> Result<(), Status> {
         let mut tokens = self.sessions.write().unwrap();
-        if let Some(user_ip) = request.remote_addr() {
-            let meta = request
-                .metadata()
+        if let Some(user_ip) = remote_addr {
+            let meta = metadata
                 .get_bin("accesstoken-bin")
                 .ok_or_else(|| Status::invalid_argument("No accesstoken in request metadata"))?;
             let token = meta
                 .to_bytes()
                 .map_err(|_| Status::invalid_argument("Could not decode accesstoken"))?;
 
-            if let Some((stored_ip, expiry, pub_key)) = tokens.get(token.as_ref()) {
+            if let Some((stored_ip, expiry, _)) = tokens.get(token.as_ref()) {
                 let curr_time = SystemTime::now();
-                pub_key.clone().truncate(16);
-                println!("{:?} with {:?} issued request!", pub_key, user_ip);
                 if !verify_ip(&stored_ip, &user_ip) {
                     return Err(Status::aborted("Unknown IP Address!"));
                 }
@@ -298,13 +296,11 @@ Reason: {}",
             }
             let mut sessions = self.sessions.write().unwrap();
             let token = self.new_challenge();
-            let Some(expiry) = SystemTime::now().checked_add(Duration::from_secs(EXPIRY)) else {
+            let Some(expiry) = SystemTime::now().checked_add(Duration::from_secs(self.session_expiry)) else {
                 return Err(Status::aborted("Could not create expiry for session"))?;
             };
 
             sessions.insert(token.clone(), (user_ip, expiry, public_key.clone()));
-            public_key.truncate(16);
-            println!("{:?} with IP {} created a session", public_key, user_ip,);
             return Ok(Session {
                 token: token.to_vec(),
             });
@@ -326,7 +322,7 @@ Reason: {}",
             return Err(Status::aborted("Session not found!"))?;
         };
 
-        let Some(e) = expiry.checked_add(Duration::from_secs(EXPIRY)) else {
+        let Some(e) = expiry.checked_add(Duration::from_secs(self.session_expiry)) else {
             return Err(Status::aborted("Malformed session expiry time!"))?;
         };
 
@@ -348,8 +344,8 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<Query>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        self.verify_request(&request)?;
-        
+        self.verify_request(request.remote_addr(), request.metadata())?;
+
         let composite_plan: CompositePlan = serde_json::from_str(&request.get_ref().composite_plan)
             .map_err(|e| {
                 Status::invalid_argument(format!(
@@ -369,6 +365,7 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<Streaming<SendChunk>>,
     ) -> Result<Response<ReferenceResponse>, Status> {
+        self.verify_request(request.remote_addr(), request.metadata())?;
         let df = df_artifact_from_stream(request.into_inner()).await?;
 
         let header = get_df_header(&df.dataframe)?;
@@ -380,7 +377,7 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<ReferenceRequest>,
     ) -> Result<Response<Self::FetchDataFrameStream>, Status> {
-        self.verify_request(&request)?;
+        self.verify_request(request.remote_addr(), request.metadata())?;
 
         let fut = {
             let df = self.get_df(&request.get_ref().identifier)?;
@@ -400,8 +397,9 @@ impl BastionLab for BastionLabState {
     }
     async fn list_data_frames(
         &self,
-        _request: Request<Empty>,
+        request: Request<Empty>,
     ) -> Result<Response<ReferenceList>, Status> {
+        self.verify_request(request.remote_addr(), request.metadata())?;
         let list = self
             .get_headers()?
             .into_iter()
@@ -415,7 +413,7 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<ReferenceRequest>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        self.verify_request(&request)?;
+        self.verify_request(request.remote_addr(), request.metadata())?;
         let identifier = String::from(&request.get_ref().identifier);
         let header = self.get_header(&identifier)?;
 
@@ -441,7 +439,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let config: BastionLabConfig = toml::from_str(&contents)?;
     let keys = KeyManagement::load_from_dir(config.public_keys_directory()?)?;
-    let state = BastionLabState::new(keys);
+    let state = BastionLabState::new(keys, config.session_expiry()?);
 
     let server_cert = fs::read("tls/host_server.pem")?;
     let server_key = fs::read("tls/host_server.key")?;

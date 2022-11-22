@@ -109,34 +109,6 @@ A notification has been sent to the data owner. The request will be pending unti
         return FetchableLazyFrame._from_reference(self, res)
 
 
-def _verify_user(server_target, server_creds, options, signing_key: SigningKey):
-    """ 
-        Set up initial connection to BastionLab for verification
-        if pubkey not known:
-            Drop connection and fail fast authentication
-
-        elif known:
-            return token and add token to channel metadata
-    """
-    channel = grpc.secure_channel(server_target, server_creds, options)
-
-    stub = BastionLabStub(channel)
-
-    metadata = ()
-
-    empty_arg = Empty()
-    data: bytes = empty_arg.SerializeToString()
-
-    challenge = stub.GetChallenge(empty_arg).value
-
-    metadata += (("challenge-bin", challenge),)
-    to_sign = b"create-session" + challenge + data
-
-    pubkey_hex = signing_key.pubkey.hash.hex()
-    signed = signing_key.sign(to_sign)
-    metadata += ((f"signature-{(pubkey_hex)}-bin", signed),)
-
-    return stub.CreateSession(empty_arg, metadata=metadata).token
 
 
 class AuthPlugin(grpc.AuthMetadataPlugin):
@@ -156,6 +128,35 @@ class Connection:
     _client: Optional[Client] = None
     server_name: Optional[str] = "bastionlab-server"
 
+    @staticmethod
+    def _verify_user(server_target, server_creds, options, signing_key: SigningKey):
+        """ 
+            Set up initial connection to BastionLab for verification
+            if pubkey not known:
+                Drop connection and fail fast authentication
+
+            elif known:
+                return token and add token to channel metadata
+        """
+        channel = grpc.secure_channel(server_target, server_creds, options)
+
+        stub = BastionLabStub(channel)
+
+        metadata = ()
+
+        empty_arg = Empty()
+        data: bytes = empty_arg.SerializeToString()
+
+        challenge = stub.GetChallenge(empty_arg).value
+
+        metadata += (("challenge-bin", challenge),)
+        to_sign = b"create-session" + challenge + data
+
+        pubkey_hex = signing_key.pubkey.hash.hex()
+        signed = signing_key.sign(to_sign)
+        metadata += ((f"signature-{(pubkey_hex)}-bin", signed),)
+
+        return stub.CreateSession(empty_arg, metadata=metadata).token
     @property
     def client(self) -> Client:
         if self._client is not None:
@@ -182,7 +183,7 @@ class Connection:
         connection_options = (("grpc.ssl_target_name_override", self.server_name),)
 
         # Verify user by creating session
-        token = _verify_user(
+        token = Connection._verify_user(
             server_target, server_creds, connection_options, self.signing_key
         )
 

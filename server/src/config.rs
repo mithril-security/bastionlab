@@ -25,6 +25,7 @@ pub struct BastionLabConfig {
     pub client_to_enclave_untrusted_url: Uri,
 
     pub public_keys_directory: String,
+    pub session_expiry_in_secs: u64,
 }
 
 fn uri_to_socket(uri: &Uri) -> Result<SocketAddr> {
@@ -43,6 +44,10 @@ impl BastionLabConfig {
 
     pub fn public_keys_directory(&self) -> Result<String> {
         Ok(self.public_keys_directory.clone())
+    }
+
+    pub fn session_expiry(&self) -> Result<u64> {
+        Ok(self.session_expiry_in_secs)
     }
 }
 

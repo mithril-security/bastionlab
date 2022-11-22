@@ -42,7 +42,6 @@ impl KeyManagement {
             Err(Status::aborted("Please provide a directory!"))?
         }
 
-        // Contains sub-directories.
         let paths = fs::read_dir(path.clone())?;
 
         for path in paths {
