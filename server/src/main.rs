@@ -9,6 +9,9 @@ use std::{
     net::SocketAddr,
     sync::{Arc, Mutex, RwLock},
     time::{Duration, SystemTime},
+    fmt::Debug,
+    future::Future,
+    pin::Pin,
 };
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{
@@ -23,7 +26,7 @@ pub mod grpc {
 }
 use grpc::{
     bastion_lab_server::{BastionLab, BastionLabServer},
-    ChallengeResponse, Chunk, Empty, Query, ReferenceList, ReferenceRequest, ReferenceResponse,
+    ChallengeResponse, SendChunk, FetchChunk, Empty, Query, ReferenceList, ReferenceRequest, ReferenceResponse,
     Session,
 };
 
@@ -44,12 +47,46 @@ use ring::rand;
 /// Expiry time for session tokens.
 const EXPIRY: u64 = 25 * 60;
 
+mod visitable;
+
+mod access_control;
+use access_control::*;
+
+mod utils;
+
+pub struct DelayedDataFrame {
+    future: Pin<Box<dyn Future<Output = Result<DataFrame, Status>> + Send>>,
+    needs_approval: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct DataFrameArtifact {
+    dataframe: DataFrame,
+    policy: Policy,
+    fetchable: PolicyAction,
+    query_details: String,
+}
+
+impl DataFrameArtifact {
+    pub fn new(df: DataFrame, policy: Policy) -> Self {
+        DataFrameArtifact {
+            dataframe: df,
+            policy,
+            fetchable: PolicyAction::Reject(String::from(
+                "DataFrames uploaded by the Data Owner are protected.",
+            )),
+            query_details: String::from("uploaded dataframe"),
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct BastionLabState {
-    dataframes: Arc<RwLock<HashMap<String, DataFrame>>>,
+    dataframes: Arc<RwLock<HashMap<String, DataFrameArtifact>>>,
     keys: Mutex<KeyManagement>,
     sessions: Arc<RwLock<HashMap<[u8; 32], (SocketAddr, SystemTime, String)>>>,
 }
+
 
 impl BastionLabState {
     fn new(keys: KeyManagement) -> Self {
@@ -60,7 +97,83 @@ impl BastionLabState {
         }
     }
 
-    fn get_df(&self, identifier: &str) -> Result<DataFrame, Status> {
+    fn get_df(&self, identifier: &str) -> Result<DelayedDataFrame, Status> {
+        let dfs = self.dataframes.read().unwrap();
+        let artifact = dfs.get(identifier).ok_or(Status::not_found(format!(
+            "Could not find dataframe: identifier={}",
+            identifier
+        )))?;
+        Ok(match &artifact.fetchable {
+            PolicyAction::Accept => {
+                let df = artifact.dataframe.clone();
+                DelayedDataFrame {
+                    future: Box::pin(async { Ok(df) }),
+                    needs_approval: None,
+                }
+            }
+            PolicyAction::Reject(reason) => {
+                let reason = reason.clone();
+                DelayedDataFrame {
+                    future: Box::pin(async move { Err(Status::permission_denied(format!(
+                        "Cannot fetch this DataFrame: operation denied by the data owner's policy
+Reason: {}",
+                        reason,
+                    ))) }),
+                    needs_approval: None,
+                }
+            }
+            PolicyAction::Approval(reason) => {
+                let reason = reason.clone();
+                let identifier = String::from(identifier);
+                let query_details = artifact.query_details.clone();
+                let dfs = Arc::clone(&self.dataframes);
+                DelayedDataFrame {
+                    needs_approval: Some(reason.clone()),
+                    future: Box::pin(async move {
+                        println!(
+                            "=== A user request has been rejected ===
+Reason: {}
+Logical plan:
+{}",
+                            reason, query_details,
+                        );
+
+                        loop {
+                            let mut ans = String::new();
+                            println!("Accept [y] or Reject [n]?");
+                            std::io::stdin()
+                                .read_line(&mut ans)
+                                .expect("Failed to read line");
+
+                            match ans.trim() {
+                                "y" => break,
+                                "n" => return Err(Status::permission_denied(format!(
+                                    "The data owner rejected the fetch operation.
+Fetching a dataframe obtained with a non privacy-preserving query requires the approval of the data owner.
+This dataframe was obtained in a non privacy-preserving fashion.
+Reason: {}",
+                                    reason
+                                ))),
+                                _ => continue,
+                            }
+                        }
+                        Ok(dfs
+                            .read()
+                            .unwrap()
+                            .get(&identifier)
+                            .ok_or(Status::not_found(format!(
+                                "Could not find dataframe: identifier={}",
+                                identifier
+                            )))?
+                            .dataframe
+                            .clone())
+                    }),
+                }
+            }
+        })
+    }
+
+    fn get_df_unchecked(&self, identifier: &str) -> Result<DataFrame, Status> {
         let dfs = self.dataframes.read().unwrap();
         Ok(dfs
             .get(identifier)
@@ -68,6 +181,19 @@ impl BastionLabState {
                 "Could not find dataframe: identifier={}",
                 identifier
             )))?
+            .dataframe
+            .clone())
+    }
+
+    fn get_policy_unchecked(&self, identifier: &str) -> Result<Policy, Status> {
+        let dfs = self.dataframes.read().unwrap();
+        Ok(dfs
+            .get(identifier)
+            .ok_or(Status::not_found(format!(
+                "Could not find dataframe: identifier={}",
+                identifier
+            )))?
+            .policy
             .clone())
     }
 
@@ -100,14 +226,16 @@ impl BastionLabState {
     }
     fn get_header(&self, identifier: &str) -> Result<String, Status> {
         Ok(get_df_header(
-            self.dataframes
+            &self
+                .dataframes
                 .read()
                 .unwrap()
                 .get(identifier)
                 .ok_or(Status::not_found(format!(
                     "Could not find dataframe: identifier={}",
                     identifier
-                )))?,
+                )))?
+                .dataframe,
         )?)
     }
 
@@ -115,13 +243,13 @@ impl BastionLabState {
         let dataframes = self.dataframes.read().unwrap();
         let mut res = Vec::with_capacity(dataframes.len());
         for (k, v) in dataframes.iter() {
-            let header = get_df_header(v)?;
+            let header = get_df_header(&v.dataframe)?;
             res.push((k.clone(), header));
         }
         Ok(res)
     }
 
-    fn insert_df(&self, df: DataFrame) -> String {
+    fn insert_df(&self, df: DataFrameArtifact) -> String {
         let mut dfs = self.dataframes.write().unwrap();
         let identifier = format!("{}", Uuid::new_v4());
         dfs.insert(identifier.clone(), df);
@@ -211,17 +339,14 @@ fn get_df_header(df: &DataFrame) -> Result<String, Status> {
 
 #[tonic::async_trait]
 impl BastionLab for BastionLabState {
-    type FetchDataFrameStream = ReceiverStream<Result<Chunk, Status>>;
+    type FetchDataFrameStream = ReceiverStream<Result<FetchChunk, Status>>;
 
     async fn run_query(
         &self,
         request: Request<Query>,
     ) -> Result<Response<ReferenceResponse>, Status> {
         self.verify_request(&request)?;
-
-        // let input_dfs = self.get_dfs(&request.get_ref().identifiers)?;
-        println!("{:?}", request);
-        println!("{}", &request.get_ref().composite_plan);
+        
         let composite_plan: CompositePlan = serde_json::from_str(&request.get_ref().composite_plan)
             .map_err(|e| {
                 Status::invalid_argument(format!(
@@ -232,18 +357,18 @@ impl BastionLab for BastionLabState {
             })?;
         let res = composite_plan.run(self)?;
 
-        let header = get_df_header(&res)?;
+        let header = get_df_header(&res.dataframe)?;
         let identifier = self.insert_df(res);
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
 
     async fn send_data_frame(
         &self,
-        request: Request<Streaming<Chunk>>,
+        request: Request<Streaming<SendChunk>>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        let df = df_from_stream(request.into_inner()).await?;
+        let df = df_artifact_from_stream(request.into_inner()).await?;
 
-        let header = get_df_header(&df)?;
+        let header = get_df_header(&df.dataframe)?;
         let identifier = self.insert_df(df);
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
@@ -253,9 +378,12 @@ impl BastionLab for BastionLabState {
         request: Request<ReferenceRequest>,
     ) -> Result<Response<Self::FetchDataFrameStream>, Status> {
         self.verify_request(&request)?;
-        let df = self.get_df(&request.get_ref().identifier)?;
 
-        Ok(stream_data(df, 32).await)
+        let fut = {
+            let df = self.get_df(&request.get_ref().identifier)?;
+            stream_data(df, 32)
+        };
+        Ok(fut.await)
     }
 
     async fn get_challenge(

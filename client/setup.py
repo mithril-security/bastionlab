@@ -72,6 +72,7 @@ setup(
         "typing-extensions==4.4.0",
         "grpcio==1.47.0",
         "grpcio-tools==1.47.0",
+        "colorama==0.4.6",
     ],
     package_dir={"": "src"},
 )
