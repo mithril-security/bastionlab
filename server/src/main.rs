@@ -88,11 +88,13 @@ impl BastionLabState {
             PolicyAction::Reject(reason) => {
                 let reason = reason.clone();
                 DelayedDataFrame {
-                    future: Box::pin(async move { Err(Status::permission_denied(format!(
+                    future: Box::pin(async move {
+                        Err(Status::permission_denied(format!(
                         "Cannot fetch this DataFrame: operation denied by the data owner's policy
 Reason: {}",
                         reason,
-                    ))) }),
+                    )))
+                    }),
                     needs_approval: None,
                 }
             }

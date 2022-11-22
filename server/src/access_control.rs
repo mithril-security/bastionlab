@@ -57,7 +57,10 @@ impl PolicyEntry {
     }
 
     pub fn allow_by_default() -> Self {
-        PolicyEntry { accept: Rule::True, approval: Rule::True }
+        PolicyEntry {
+            accept: Rule::True,
+            approval: Rule::True,
+        }
     }
 }
 
@@ -106,9 +109,11 @@ impl Rule {
                     min_allowed_agg_size
                 ))
                 })
-            },
+            }
             Rule::True => Ok(RuleMatch::Match),
-            Rule::False => Ok(RuleMatch::Mismatch(String::from("Operation denied by the data owner's policy."))),
+            Rule::False => Ok(RuleMatch::Mismatch(String::from(
+                "Operation denied by the data owner's policy.",
+            ))),
         }
     }
 }

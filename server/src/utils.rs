@@ -1,5 +1,5 @@
 use polars::prelude::*;
-use tch::{Tensor, kind::Element};
+use tch::{kind::Element, Tensor};
 use tonic::Status;
 
 pub fn series_to_tensor(series: &Series) -> Result<Tensor, Status> {

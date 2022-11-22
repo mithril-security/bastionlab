@@ -3,18 +3,22 @@ use tokio::sync::mpsc;
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use tonic::{Response, Status};
 
-use crate::{DelayedDataFrame, access_control::Policy, DataFrameArtifact};
+use crate::{access_control::Policy, DataFrameArtifact, DelayedDataFrame};
 
 use super::grpc::{FetchChunk, SendChunk};
 
-pub async fn df_artifact_from_stream(stream: tonic::Streaming<SendChunk>) -> Result<DataFrameArtifact, Status> {
+pub async fn df_artifact_from_stream(
+    stream: tonic::Streaming<SendChunk>,
+) -> Result<DataFrameArtifact, Status> {
     let (df_bytes, policy) = unstream_data(stream).await?;
     let series = df_bytes
         .iter()
         .map(|v| bincode::deserialize(&v[..]).unwrap())
         .collect::<Vec<Series>>();
-    let df = DataFrame::new(series.clone()).map_err(|_| Status::unknown("Failed to deserialize DataFrame."))?;
-    let policy: Policy = serde_json::from_str(&policy).map_err(|_| Status::unknown("Failed to deserialize policy."))?;
+    let df = DataFrame::new(series.clone())
+        .map_err(|_| Status::unknown("Failed to deserialize DataFrame."))?;
+    let policy: Policy = serde_json::from_str(&policy)
+        .map_err(|_| Status::unknown("Failed to deserialize policy."))?;
     Ok(DataFrameArtifact::new(df, policy))
 }
 
@@ -27,7 +31,9 @@ pub fn df_to_bytes(df: DataFrame) -> Vec<Vec<u8>> {
     series_bytes
 }
 
-pub async fn unstream_data(mut stream: tonic::Streaming<SendChunk>) -> Result<(Vec<Vec<u8>>, String), Status> {
+pub async fn unstream_data(
+    mut stream: tonic::Streaming<SendChunk>,
+) -> Result<(Vec<Vec<u8>>, String), Status> {
     let mut columns: Vec<u8> = Vec::new();
     let mut policy = String::new();
 
