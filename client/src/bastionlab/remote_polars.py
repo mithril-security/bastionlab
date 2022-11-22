@@ -201,7 +201,7 @@ class RemoteLazyFrame:
 
     def collect(self: LDF) -> LDF:
         return self._meta._client._run_query(self.composite_plan)
-    
+
     def apply_udf(self: LDF, columns: List[str], udf: Callable) -> LDF:
         ts_udf = torch.jit.script(udf)
         df = pl.DataFrame(

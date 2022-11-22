@@ -18,7 +18,9 @@ class PublicKey:
         return self.__key.__eq__(o)
 
     def verify(self, signature: bytes, data: bytes) -> None:
-        self.__key.verify(signature, data, signature_algorithm=ec.ECDSA(hashes.SHA256()))
+        self.__key.verify(
+            signature, data, signature_algorithm=ec.ECDSA(hashes.SHA256())
+        )
 
     @property
     def hash(self) -> bytes:
