@@ -311,7 +311,7 @@ class RemoteLazyFrame:
         col_y: str,
         bins: int = 10,
         order: int = 3,
-        ci: int | None = None,
+        ci: Union[int, None] = None,
         scatter: bool = False,
         **kwargs,
     ):

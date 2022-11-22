@@ -28,14 +28,24 @@ message Query {
     string composite_plan = 1;
 }
 
-message Empty {
+message Empty {}
 
+message ChallengeResponse {
+    bytes value = 1;
 }
+
+message Session {
+    bytes token = 1;
+}
+
 
 service BastionLab {
     rpc SendDataFrame (stream SendChunk) returns (ReferenceResponse) {}
     rpc RunQuery (Query) returns (ReferenceResponse) {}
+    rpc GetChallenge (Empty) returns (ChallengeResponse) {}
     rpc FetchDataFrame (ReferenceRequest) returns (stream FetchChunk) {}
     rpc ListDataFrames (Empty) returns (ReferenceList) {}
     rpc GetDataFrameHeader (ReferenceRequest) returns (ReferenceResponse) {}
+    rpc CreateSession (Empty) returns (Session) {}
+    rpc RefreshSession (Empty) returns (Empty) {}
 }

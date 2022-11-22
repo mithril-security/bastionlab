@@ -20,11 +20,13 @@ all: build install
 bin:
 	mkdir bin
 
-# bin/config.toml: bin
-# 	cp tools/config.toml bin/
+bin/config.toml: bin
+	cp tools/config.toml bin/
 
-# bin/tls/host_server.pem bin/tls/host_server.key &: bin
-# 	./tools/create_tls_config.sh bin/
+bin/tls/host_server.pem bin/tls/host_server.key &: bin
+	mkdir -p bin/tls && openssl req -newkey rsa:2048 -nodes -keyout bin/tls/host_server.key  \
+		-x509 -days 365 -out bin/tls/host_server.pem \
+		-subj "/C=FR/CN=bastionlab-server"
 
 build:
 	LIBTORCH=$(LIBTORCH) CUDA=$(CUDA) LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) cargo build --release
@@ -34,11 +36,11 @@ target/release/$(PKG_NAME):
 
 bin/$(PKG_NAME): target/release/$(PKG_NAME)
 	cp target/release/$(PKG_NAME) bin/
-
-install: bin #bin/tls/host_server.pem bin/tls/host_server.key bin/config.toml
+	
+install: bin bin/tls/host_server.pem bin/tls/host_server.key bin/config.toml
 	cp target/release/$(PKG_NAME) bin/
 
-run: bin/$(PKG_NAME) #bin/tls/host_server.pem bin/tls/host_server.key bin/config.toml
+run: bin/$(PKG_NAME) bin/tls/host_server.pem bin/tls/host_server.key bin/config.toml
 	LIBTORCH=$(LIBTORCH) CUDA=$(CUDA) LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) sh -c 'cd bin && ./$(PKG_NAME)'
 
 clean:
