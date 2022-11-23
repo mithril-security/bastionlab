@@ -37,12 +37,15 @@ class Client:
         self.token = token
 
     def send_df(
-        self, df: pl.DataFrame, policy: Policy = DEFAULT_POLICY
+        self,
+        df: pl.DataFrame,
+        policy: Policy = DEFAULT_POLICY,
+        blacklist: List[str] = [],
     ) -> "FetchableLazyFrame":
         from bastionlab.remote_polars import FetchableLazyFrame
 
         res = GRPCException.map_error(
-            lambda: self.stub.SendDataFrame(serialize_dataframe(df, policy))
+            lambda: self.stub.SendDataFrame(serialize_dataframe(df, policy, blacklist))
         )
         return FetchableLazyFrame._from_reference(self, res)
 

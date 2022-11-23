@@ -25,10 +25,9 @@ pub enum CompositePlanSegment {
 impl CompositePlan {
     pub fn run(self, state: &BastionLabState) -> Result<DataFrameArtifact, Status> {
         let mut input_dfs = Vec::new();
-        // let mut fetchable = Access::Denied(String::from("Denied by default"));
         let plan_str = serde_json::to_string(&self.0).unwrap(); // FIX THIS
 
-        let policy = self.output_policy(state)?;
+        let (policy, blacklist) = self.output_policy(state)?;
         let fetchable = policy.verify_fetch(&self, "")?;
 
         for seg in self.0 {
@@ -91,20 +90,25 @@ impl CompositePlan {
             dataframe: input_dfs.pop().unwrap(),
             policy,
             fetchable,
+            blacklist,
             query_details: plan_str,
         })
     }
 
-    fn output_policy(&self, state: &BastionLabState) -> Result<Policy, Status> {
+    fn output_policy(&self, state: &BastionLabState) -> Result<(Policy, Vec<String>), Status> {
         let mut policy = Policy::allow_by_default();
+        let mut blacklist = Vec::new();
 
         for seg in &self.0 {
             if let CompositePlanSegment::EntryPointPlanSegment(identifier) = seg {
-                policy = policy.merge(&state.get_policy_unchecked(&identifier)?);
+                state.with_df_artifact_ref(&identifier, |artifact| {
+                    policy = policy.merge(&artifact.policy);
+                    blacklist.extend_from_slice(&artifact.blacklist[..]);
+                })?;
             }
         }
 
-        Ok(policy)
+        Ok((policy, blacklist))
     }
 
     pub fn aggregation_match(&self, min_allowed_agg_size: usize) -> Result<bool, Status> {
