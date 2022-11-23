@@ -1,4 +1,4 @@
-from typing import Iterator, Tuple
+from typing import Iterator, Tuple, List
 import torch
 import polars as pl
 
@@ -21,14 +21,15 @@ def create_byte_chunk(data: bytes) -> Tuple[int, Iterator[bytes]]:
         sent_bytes += min(CHUNK_SIZE, len(data) - sent_bytes)
 
 
-def serialize_dataframe(df: pl.DataFrame, policy: Policy) -> Iterator[SendChunk]:
+def serialize_dataframe(df: pl.DataFrame, policy: Policy, blacklist: List[str]) -> Iterator[SendChunk]:
     END_PATTERN = b"[end]"
     df_bytes = bytearray()
     for col in df.__getstate__():
         df_bytes += col.__getstate__() + END_PATTERN
 
     for data in create_byte_chunk(df_bytes):
-        yield SendChunk(data=data, policy=policy.serialize())
+        cols = ",".join([f'"{col}"' for col in blacklist])
+        yield SendChunk(data=data, policy=policy.serialize(), metadata=f"[{cols}]")
 
 
 def deserialize_dataframe(joined_chunks: bytes) -> pl.DataFrame:

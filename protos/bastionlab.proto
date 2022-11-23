@@ -17,6 +17,7 @@ message ReferenceList {
 message SendChunk {
     bytes data = 1;
     string policy = 2;
+    string metadata = 3;
 }
 
 message FetchChunk {

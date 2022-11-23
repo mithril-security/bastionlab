@@ -37,7 +37,7 @@ target/release/$(PKG_NAME):
 bin/$(PKG_NAME): target/release/$(PKG_NAME)
 	cp target/release/$(PKG_NAME) bin/
 	
-install: bin bin/tls/host_server.pem bin/tls/host_server.key bin/config.toml
+install: bin/tls/host_server.pem bin/tls/host_server.key bin/config.toml
 	cp target/release/$(PKG_NAME) bin/
 
 run: bin/$(PKG_NAME) bin/tls/host_server.pem bin/tls/host_server.key bin/config.toml

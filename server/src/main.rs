@@ -1,6 +1,7 @@
 use polars::prelude::*;
 use prost::Message;
 use serde_json;
+use utils::sanitize_df;
 use std::{
     collections::HashMap,
     error::Error,
@@ -61,17 +62,19 @@ pub struct DataFrameArtifact {
     dataframe: DataFrame,
     policy: Policy,
     fetchable: PolicyAction,
+    blacklist: Vec<String>,
     query_details: String,
 }
 
 impl DataFrameArtifact {
-    pub fn new(df: DataFrame, policy: Policy) -> Self {
+    pub fn new(df: DataFrame, policy: Policy, blacklist: Vec<String>) -> Self {
         DataFrameArtifact {
             dataframe: df,
             policy,
             fetchable: PolicyAction::Reject(String::from(
                 "DataFrames uploaded by the Data Owner are protected.",
             )),
+            blacklist,
             query_details: String::from("uploaded dataframe"),
         }
     }
@@ -103,7 +106,8 @@ impl BastionLabState {
         )))?;
         Ok(match &artifact.fetchable {
             PolicyAction::Accept => {
-                let df = artifact.dataframe.clone();
+                let mut df = artifact.dataframe.clone();
+                sanitize_df(&mut df, &artifact.blacklist)?;
                 DelayedDataFrame {
                     future: Box::pin(async { Ok(df) }),
                     needs_approval: None,
@@ -157,16 +161,20 @@ Reason: {}",
                                 _ => continue,
                             }
                         }
-                        Ok(dfs
-                            .read()
-                            .unwrap()
-                            .get(&identifier)
-                            .ok_or(Status::not_found(format!(
-                                "Could not find dataframe: identifier={}",
-                                identifier
-                            )))?
-                            .dataframe
-                            .clone())
+                        Ok({
+                            let guard = dfs
+                                .read()
+                                .unwrap();
+                            let artifact = guard 
+                                .get(&identifier)
+                                .ok_or(Status::not_found(format!(
+                                    "Could not find dataframe: identifier={}",
+                                    identifier
+                                )))?;
+                            let mut df = artifact.dataframe.clone();
+                            sanitize_df(&mut df, &artifact.blacklist)?;
+                            df
+                        })
                     }),
                 }
             }
@@ -185,16 +193,14 @@ Reason: {}",
             .clone())
     }
 
-    fn get_policy_unchecked(&self, identifier: &str) -> Result<Policy, Status> {
+    fn with_df_artifact_ref<T>(&self, identifier: &str, mut f: impl FnMut(&DataFrameArtifact) -> T) -> Result<T, Status> {
         let dfs = self.dataframes.read().unwrap();
-        Ok(dfs
+        Ok(f(dfs
             .get(identifier)
             .ok_or(Status::not_found(format!(
                 "Could not find dataframe: identifier={}",
                 identifier
-            )))?
-            .policy
-            .clone())
+            )))?))
     }
 
     fn verify_request(
@@ -260,10 +266,9 @@ Reason: {}",
     fn new_challenge(&self) -> [u8; 32] {
         let rng = rand::SystemRandom::new();
         loop {
-            let challenge: [u8; 32] = rand::generate(&rng)
-                .expect("Could not generate random value")
-                .expose();
-            return challenge;
+            if let Ok(challenge) = rand::generate(&rng)  {
+                return challenge.expose();
+            }
         }
     }
 
@@ -284,11 +289,11 @@ Reason: {}",
                                     lock.verify_signature(key, &message[..], request.metadata())?;
                                     public_key.push_str(key);
                                 } else {
-                                    Err(Status::aborted("User signing key not found in request!"))?
+                                    return Err(Status::aborted("User signing key not found in request!"));
                                 }
                             }
                         } else {
-                            Err(Status::aborted("User signing key not found in request!"))?
+                            return Err(Status::aborted("User signing key not found in request!"));
                         }
                     }
                     _ => (),
@@ -297,15 +302,16 @@ Reason: {}",
             let mut sessions = self.sessions.write().unwrap();
             let token = self.new_challenge();
             let Some(expiry) = SystemTime::now().checked_add(Duration::from_secs(self.session_expiry)) else {
-                return Err(Status::aborted("Could not create expiry for session"))?;
+                return Err(Status::aborted("Could not create expiry for session"));
             };
 
             sessions.insert(token.clone(), (user_ip, expiry, public_key.clone()));
-            return Ok(Session {
+            
+            Ok(Session {
                 token: token.to_vec(),
-            });
+            })
         } else {
-            return Err(Status::aborted("Could not fetch IP Address from request"))?;
+            Err(Status::aborted("Could not fetch IP Address from request"))
         }
     }
 
@@ -319,11 +325,11 @@ Reason: {}",
             .to_bytes()
             .map_err(|_| Status::invalid_argument("Could not decode accesstoken"))?;
         let Some((_, expiry, _)) = sessions.get_mut(token.as_ref()) else {
-            return Err(Status::aborted("Session not found!"))?;
+            return Err(Status::aborted("Session not found!"));
         };
 
         let Some(e) = expiry.checked_add(Duration::from_secs(self.session_expiry)) else {
-            return Err(Status::aborted("Malformed session expiry time!"))?;
+            return Err(Status::aborted("Malformed session expiry time!"));
         };
 
         *expiry = e;
@@ -378,6 +384,8 @@ impl BastionLab for BastionLabState {
         request: Request<ReferenceRequest>,
     ) -> Result<Response<Self::FetchDataFrameStream>, Status> {
         self.verify_request(request.remote_addr(), request.metadata())?;
+
+        
 
         let fut = {
             let df = self.get_df(&request.get_ref().identifier)?;

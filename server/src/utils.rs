@@ -2,6 +2,23 @@ use polars::prelude::*;
 use tch::{kind::Element, Tensor};
 use tonic::Status;
 
+pub fn sanitize_df(df: &mut DataFrame, blacklist: &Vec<String>) -> Result<(), Status> {
+    for name in blacklist {
+        let idx = df
+            .get_column_names()
+            .iter()
+            .position(|x| x == name)
+            .ok_or(Status::invalid_argument(format!(
+                "Could not apply udf: no column `{}` in data frame",
+                name
+            )))?;
+        let series = df.get_columns_mut().get_mut(idx).unwrap();
+        *series = Series::new_empty(name, series.dtype());
+    }
+
+    Ok(())
+}
+
 pub fn series_to_tensor(series: &Series) -> Result<Tensor, Status> {
     Ok(match series.dtype() {
         DataType::Float32 => array_to_tensor(series.f32().unwrap())?,
