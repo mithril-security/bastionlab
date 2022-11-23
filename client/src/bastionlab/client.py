@@ -37,7 +37,10 @@ class Client:
         self.token = token
 
     def send_df(
-        self, df: pl.DataFrame, policy: Policy = DEFAULT_POLICY, blacklist: List[str] = []
+        self,
+        df: pl.DataFrame,
+        policy: Policy = DEFAULT_POLICY,
+        blacklist: List[str] = [],
     ) -> "FetchableLazyFrame":
         from bastionlab.remote_polars import FetchableLazyFrame
 
