@@ -1,7 +1,6 @@
 use polars::prelude::*;
 use prost::Message;
 use serde_json;
-use utils::sanitize_df;
 use std::{
     collections::HashMap,
     error::Error,
@@ -20,6 +19,7 @@ use tonic::{
     transport::{Identity, Server, ServerTlsConfig},
     Request, Response, Status, Streaming,
 };
+use utils::sanitize_df;
 use uuid::Uuid;
 
 pub mod grpc {
@@ -162,15 +162,10 @@ Reason: {}",
                             }
                         }
                         Ok({
-                            let guard = dfs
-                                .read()
-                                .unwrap();
-                            let artifact = guard 
-                                .get(&identifier)
-                                .ok_or(Status::not_found(format!(
-                                    "Could not find dataframe: identifier={}",
-                                    identifier
-                                )))?;
+                            let guard = dfs.read().unwrap();
+                            let artifact = guard.get(&identifier).ok_or(Status::not_found(
+                                format!("Could not find dataframe: identifier={}", identifier),
+                            ))?;
                             let mut df = artifact.dataframe.clone();
                             sanitize_df(&mut df, &artifact.blacklist)?;
                             df
@@ -193,14 +188,16 @@ Reason: {}",
             .clone())
     }
 
-    fn with_df_artifact_ref<T>(&self, identifier: &str, mut f: impl FnMut(&DataFrameArtifact) -> T) -> Result<T, Status> {
+    fn with_df_artifact_ref<T>(
+        &self,
+        identifier: &str,
+        mut f: impl FnMut(&DataFrameArtifact) -> T,
+    ) -> Result<T, Status> {
         let dfs = self.dataframes.read().unwrap();
-        Ok(f(dfs
-            .get(identifier)
-            .ok_or(Status::not_found(format!(
-                "Could not find dataframe: identifier={}",
-                identifier
-            )))?))
+        Ok(f(dfs.get(identifier).ok_or(Status::not_found(format!(
+            "Could not find dataframe: identifier={}",
+            identifier
+        )))?))
     }
 
     fn verify_request(
@@ -266,7 +263,7 @@ Reason: {}",
     fn new_challenge(&self) -> [u8; 32] {
         let rng = rand::SystemRandom::new();
         loop {
-            if let Ok(challenge) = rand::generate(&rng)  {
+            if let Ok(challenge) = rand::generate(&rng) {
                 return challenge.expose();
             }
         }
@@ -289,7 +286,9 @@ Reason: {}",
                                     lock.verify_signature(key, &message[..], request.metadata())?;
                                     public_key.push_str(key);
                                 } else {
-                                    return Err(Status::aborted("User signing key not found in request!"));
+                                    return Err(Status::aborted(
+                                        "User signing key not found in request!",
+                                    ));
                                 }
                             }
                         } else {
@@ -306,7 +305,7 @@ Reason: {}",
             };
 
             sessions.insert(token.clone(), (user_ip, expiry, public_key.clone()));
-            
+
             Ok(Session {
                 token: token.to_vec(),
             })
@@ -384,8 +383,6 @@ impl BastionLab for BastionLabState {
         request: Request<ReferenceRequest>,
     ) -> Result<Response<Self::FetchDataFrameStream>, Status> {
         self.verify_request(request.remote_addr(), request.metadata())?;
-
-        
 
         let fut = {
             let df = self.get_df(&request.get_ref().identifier)?;
