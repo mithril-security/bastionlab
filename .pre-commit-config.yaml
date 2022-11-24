@@ -5,6 +5,9 @@ repos:
     -   id: black
         args: [ "--check", "--force-exclude=bastionai" ]
         exclude: bastionai/
+    -   id: black-jupyter
+        args: [ "--check", "--force-exclude=bastionai" ]
+        exclude: bastionai/
 -   repo: https://github.com/doublify/pre-commit-rust
     rev: v1.0
     hooks:
