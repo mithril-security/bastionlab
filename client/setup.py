@@ -76,6 +76,8 @@ setup(
     author_email="kwabena.amponsem@mithrilsecurity.io, luacs.bourtoule@nithrilsecurity.io",
     classifiers=["Programming Language :: Python :: 3"],
     install_requires=[
+        "seaborn==0.12.1",
+        "pyarrow==10.0.0",
         "polars==0.14.24",
         "torch==1.12.1",
         "typing-extensions==4.4.0",
