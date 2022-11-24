@@ -29,8 +29,7 @@ pub enum TelemetryEventProps {
         dataset_name: Option<String>,
         request_accepted: bool,
     },
-    ListDataFrame {
-    },
+    ListDataFrame {},
     GetDataFrameHeader {
         dataset_name: Option<String>,
     },
