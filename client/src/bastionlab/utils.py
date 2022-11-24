@@ -34,6 +34,10 @@ def serialize_dataframe(
         yield SendChunk(data=data, policy=policy.serialize(), metadata=f"[{cols}]")
 
 
+def send_clientinfo(client_info) -> Iterator[SendChunk]:
+    yield SendChunk(client_info=client_info)
+
+
 def deserialize_dataframe(joined_chunks: bytes) -> pl.DataFrame:
     step = len(END_PATTERN)
 

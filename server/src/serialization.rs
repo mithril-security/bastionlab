@@ -24,7 +24,7 @@ pub async fn df_artifact_from_stream(
     Ok(DataFrameArtifact::new(df, policy, blacklist))
 }
 
-pub fn df_to_bytes(df: DataFrame) -> Vec<Vec<u8>> {
+pub fn df_to_bytes(df: &DataFrame) -> Vec<Vec<u8>> {
     let series = df.get_columns();
     let series_bytes = series
         .iter()
@@ -108,7 +108,7 @@ pub async fn stream_data(
             }
         };
 
-        let df_bytes = df_to_bytes(df)
+        let df_bytes = df_to_bytes(&df)
             .iter_mut()
             .map(|v| {
                 v.append(&mut pattern.to_vec());
