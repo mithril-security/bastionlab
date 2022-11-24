@@ -83,6 +83,7 @@ setup(
         "grpcio-tools==1.47.0",
         "colorama==0.4.6",
         "cryptography==38.0.3",
+        "seaborn==0.12.0",
     ],
     package_dir={"": "src"},
 )
