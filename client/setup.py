@@ -15,13 +15,11 @@ PROTO_PATH = os.path.join(os.path.dirname(DIR), "protos")
 LONG_DESCRIPTION = read("README.md")
 PKG_NAME = "bastionlab"
 
-
 def find_version():
     version_file = read(f"src/{PKG_NAME}/version.py")
     version_re = r"__version__ = \"(?P<version>.+)\""
     version = re.match(version_re, version_file).group("version")
     return version
-
 
 def generate_stub():
     import grpc_tools.protoc
