@@ -9,6 +9,6 @@ jobs:
       - uses: actions/checkout@v2
       - uses: psf/black@stable
         with:
-          options: "--check"
+          options: "--check --force-exclude=bastionai"
           jupyter: true
       - run: cargo fmt --manifest-path="./server/Cargo.toml" --check
