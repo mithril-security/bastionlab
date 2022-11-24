@@ -47,6 +47,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@master
+      
+      # Initialize submodules
+      - name: Init submodules
+        run: |
+          git submodule init
+          git submodule update
 
       # Reuse previous wheels if the client is unchanged
       - name: Cache wheels
