@@ -1,16 +1,15 @@
-name: BastionLab CI
+name: Run the tests
 on:
   push:
     paths:
       - "server/**"
       - "tests/**"
       - ".github/workflow/*"
-      - "client/src/**"
 jobs:
   build-server:
     strategy:
       matrix:
-        image: [bastionlab]
+        image: [bastionai]
 
     runs-on: ubuntu-latest
     steps:
@@ -28,8 +27,9 @@ jobs:
           push: false
           load: true
           tags: ${{ matrix.image }}
-          context: .
-          file: ./server/Dockerfile
+          context: ./server
+          file: ./server/docker/build.dockerfile
+          target: base-cpu
           cache-from: type=gha
           cache-to: type=gha,mode=max
           outputs: type=docker,dest=/tmp/${{ matrix.image }}.tar
@@ -73,14 +73,14 @@ jobs:
         with:
           path: |
             ./client/build
-            ./client/bastionlab.egg-info
-            ./client/src/bastionlab/lib
+            ./client/bastionai.egg-info
+            ./client/bastionai/lib
           key: client/build-${{ env.pythonLocation }}-${{ hashFiles('client/setup.py') }}
 
       - name: Building the client
         if: ${{ steps.cache-wheels.outputs.cache-hit != 'true' }}
         run: |
-          cd client && python -m pip wheel -w ./wheelhouse .
+          cd client &&  cp -rf ../server/protos/ . && python -m pip wheel -w ./wheelhouse .
         env:
           CIBW_BUILD: "cp39-manylinux_*" # force python 3.9 and manylinux for this build
           CIBW_ARCHS: x86_64 # ignore i686/x86 (32bit) for now, as well as arm and stuff
@@ -98,70 +98,70 @@ jobs:
           name: client-artifacts
           path: client/wheelhouse/*.whl
 
-  # run-tests:
-  #   strategy:
-  #     matrix:
-  #       include:
-  #         - serverImage: bastionlab
-  #           clientImage: ubuntu-latest
-  #           os: ubuntu-latest
-  #   runs-on: ${{ matrix.os }}
-  #   needs: [build-server, build-client]
-  #   steps:
-  #     - uses: actions/checkout@master
-  #     - name: Set up Docker Buildx
-  #       uses: docker/setup-buildx-action@v1
+  run-tests:
+    strategy:
+      matrix:
+        include:
+          - serverImage: bastionai
+            clientImage: ubuntu-latest
+            os: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    needs: [build-server, build-client]
+    steps:
+      - uses: actions/checkout@master
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
 
-  #     # Setup
+      # Setup
 
-  #     - uses: actions/setup-python@v3
-  #       with:
-  #         python-version: "3.9"
-  #         cache: "pip"
+      - uses: actions/setup-python@v3
+        with:
+          python-version: "3.9"
+          cache: "pip"
 
-  #     - name: Install dependencies
-  #       run: |
-  #         cd client && python -m pip install -e .
+      - name: Install dependencies
+        run: |
+          cd client && cp -rf ../server/protos/ . && python -m pip install -e .
 
-  #     # Get server
+      # Get server
 
-  #     - name: Download artifact
-  #       uses: actions/download-artifact@v2
-  #       with:
-  #         name: ${{ matrix.serverImage }}
-  #         path: /tmp
-  #     - name: Load image
-  #       run: |
-  #         docker load --input /tmp/${{ matrix.serverImage }}.tar
-  #         docker image ls -a
-  #     # Get client
-  #     - name: Download artifact
-  #       uses: actions/download-artifact@v2
-  #       with:
-  #         name: client-artifacts
-  #         path: /tmp/client-artifacts
+      - name: Download artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: ${{ matrix.serverImage }}
+          path: /tmp
+      - name: Load image
+        run: |
+          docker load --input /tmp/${{ matrix.serverImage }}.tar
+          docker image ls -a
+      # Get client
+      - name: Download artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: client-artifacts
+          path: /tmp/client-artifacts
 
-  #     - name: Show artifacts
-  #       run: |
-  #         ls -l /tmp/client-artifacts 
-  #         unzip -l /tmp/client-artifacts/bastionlab-*.whl
+      - name: Show artifacts
+        run: |
+          ls -l /tmp/client-artifacts 
+          unzip -l /tmp/client-artifacts/bastionai-*.whl
 
-  #     - name: Load package
-  #       run: python -m pip install /tmp/client-artifacts/*.whl
+      - name: Load package
+        run: python -m pip install /tmp/client-artifacts/*.whl
 
       # Run tests
 
-      # - name: Launch server
-      #   run: |
-      #     docker kill -f app > /dev/null 2>&1 || true
-      #     docker run --rm -d -e bastionlab_DISABLE_TELEMETRY=1 -p 50051:50051  --name app ${{ matrix.serverImage }}:latest
-      # - name: Run tests
-      #   run: cd tests && python -m unittest || (docker logs app; false)
-      #   env:
-      #     bastionlab_TEST_NO_LAUNCH_SERVER: "true"
+      - name: Launch server
+        run: |
+          docker kill -f app > /dev/null 2>&1 || true
+          docker run --rm -d -e BASTIONAI_DISABLE_TELEMETRY=1 -p 50051:50051  --name app ${{ matrix.serverImage }}:latest
+      - name: Run tests
+        run: cd tests && python -m unittest || (docker logs app; false)
+        env:
+          BASTIONAI_TEST_NO_LAUNCH_SERVER: "true"
        
-      # # - name: Install Jupyter and related test tools
-      # #   run: python -m pip install pytest nbmake
+      # - name: Install Jupyter and related test tools
+      #   run: python -m pip install pytest nbmake
 
-      # # - name: Test Jupyter notebooks
-      # #   run: pytest --nbmake-timeout=40 --nbmake-kernel=python3 --nbmake examples/*.ipynb || (docker logs app; false)
+      # - name: Test Jupyter notebooks
+      #   run: pytest --nbmake-timeout=40 --nbmake-kernel=python3 --nbmake examples/*.ipynb || (docker logs app; false)
