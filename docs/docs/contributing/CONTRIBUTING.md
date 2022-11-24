@@ -136,7 +136,7 @@ In order to open a pull request:
 While the prerequisites above must be satisfied prior to having your pull request reviewed, the reviewer(s) may ask you to complete additional work, tests, or other changes before your pull request can be ultimately accepted.
 
 ### Setting Your Local Development Environment
-You can find detailed explanation of how to install BastionAI in your local machine in the [official documentation](https://bastionai.mithrilsecurity.io/getting-started/installation).
+You can find detailed explanation of how to install BastionAI in your local machine in the [official documentation](../../getting-started/quick-start.md).
 
 If you encounter any difficulties within that, don't hesitate to reach out to us through [Discord](https://discord.gg/TxEHagpWd4) and ask your questions. 
 

@@ -81,7 +81,7 @@ nav:
       - "On-premise" : "docs/deployment/on_premise.md"
     - "Contributing":
       - "Contributing": "docs/contributing/CONTRIBUTING.md"
-      - "Code of Conduct": "docs/contributing/Code_of_Conduct.md"
+      - "Code of Conduct": "docs/contributing/CODE_OF_CONDUCT.md"
     - "FAQ": "docs/FAQ.md"
   - "Getting Started":
       - "Quick Start": "getting-started/quick-start.md"
