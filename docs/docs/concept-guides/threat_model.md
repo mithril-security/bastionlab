@@ -10,7 +10,7 @@ To guarantee privacy we must identify every threat leading to data exposure and 
 
 The parties involved are depicted below:
 
-![](../../assets/parties_involved.png)
+![](https://github.com/mithril-security/bastionlab/blob/master/docs/assets/parties_involved.png?raw=true)
 
 In green rectangle are out trusted parties: the data owner and his infrastructure. The untrusted party is the data scientist, which represents the threat. The data scientist, through external queries, could try to exfiltrate data from the data owner infrastructure without their knowledge. We provide one such example [here](), where model trained on-premise is used to steal data.
 

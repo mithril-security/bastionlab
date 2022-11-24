@@ -10,7 +10,7 @@ But how can we open data to outsiders while giving a good user-experience for th
 
 One of the most popular solutions is to give access to a Jupyter Python notebook installed on the data owner infrastructure. 
 
-![](../../assets/current_solution.png)
+![](https://github.com/mithril-security/bastionlab/blob/master/docs/assets/current_solution.png?raw=true)
 
 This is dangerous, because it exposes the dataset to serious data leakages. Jupyter was *not* made for this task and exfiltrating data can easily be done. For example, rows can be printed little by little until the whole dataset is extracted, or a malicious data scientist could exfiltrate a trained neural network in which the whole dataset has been hidden in the weights.
 
@@ -18,7 +18,7 @@ This is possible because the data scientist can run arbitrary Python scripts on 
 
 That is why we have built BastionLab, a data science framework to perform remote and secure Exploratory Data Analysis. 
 
-![](../../assets/proposed_solution.png)
+![](https://github.com/mithril-security/bastionlab/blob/master/docs/assets/proposed_solution.png?raw=true)
 
 There are a few key differences between a remotely accessed Jupyter notebook and the use of a remote data science framework.
 

@@ -32,7 +32,7 @@ AMD SEV-SNP provides full memory encryption during runtime. Data is individually
 
 AMD SEV-SNP ensures that virtual machines running on cloud environments are confidential from the cloud providers themselves. It allows users to run sensitive workloads on the cloud, while not having to trust anything other than their own code and the AMD SEV-SNP hardware. They don't need to trust cloud providers not to spy on their data. They also don't need to trust their infrastructure not to leak information because of bugs.
 
-![](../../assets/AMD_SEV_Architecture.png)
+![](https://github.com/mithril-security/bastionlab/blob/master/docs/assets/AMD_SEV_Architecture.png?raw=true)
 
 ## Attestation
 
@@ -94,7 +94,7 @@ BastionLab's Client performs all of these checks each time it connects to a serv
 
 >Side-note on Attestations in BastionLab: As BastionLab uses AMD SEV-SNP, the measurement is a hash of every file in the virtual machine image. This is because, unlike with Intel SGX, in AMD SEV-SNP the entire virtual machine *is the TEE. Any alteration, addition, or deletion of files in the virtual machine would change the measurement returned in the attestation report.
 
-![](../../assets/Architecture.png)
+![](https://github.com/mithril-security/bastionlab/blob/master/docs/assets/Architecture.png?raw=true)
 
 Data-in-use:
 

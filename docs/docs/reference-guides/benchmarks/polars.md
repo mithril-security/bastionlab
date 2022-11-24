@@ -12,7 +12,7 @@ Benchmarking a 10Mx7 JOIN 100x5
 |Polars Lazy API Rust  |       |AMD EPYC 7763v|11267.53197             |0.05090933117     |1.884 s           |10M x 7 (LHS) JOIN 100 x 5 (RHS)|INNER JOIN|10                          |
 
 
-![](../../../assets/benchmark_amd_epyc_7763.png)
+![](https://github.com/mithril-security/bastionlab/blob/master/docs/assets/benchmark_amd_epyc_7763.png?raw=true)
 
 Benchmarking a 100Mx7 JOIN 100x5
 
@@ -26,6 +26,6 @@ Benchmarking a 100Mx7 JOIN 100x5
 |Polars Lazy API Rust  |       |AMD EPYC 7763v|14339.72344             |0.0521602339      |4.507 s                 |100M x 7 (LHS) JOIN 100 x 5 (RHS)|INNER JOIN|10                          |16     |64 GB  |
 
 
-![](../../../assets/benchmark_amd_epyc_7763_2.png)
+![](https://github.com/mithril-security/bastionlab/blob/master/docs/assets/benchmark_amd_epyc_7763_2.png?raw=true)
 
 Based on the above benchmarks we see that BastionLab performs operations faster than available solutions. There is a slight overhead when using BastionLab within a TEE but it is still as fast as Polars and much faster than Pandas.
