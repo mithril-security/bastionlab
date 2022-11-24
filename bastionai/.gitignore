@@ -26,7 +26,6 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
-*.csv
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -177,9 +176,11 @@ ex.c
 ################
 # Custom stuff #
 ################
+ftenv
+*.pt
+
 **/examples/data
 **/examples/models
-**/pb
+**/bastionai/pb
+docs/resources/bastionai
 **/libtorch
-*.pem
-*.key.pem

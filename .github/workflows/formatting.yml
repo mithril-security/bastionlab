@@ -1,0 +1,14 @@
+name: formatting
+
+on: [push, pull_request]
+
+jobs:
+  formatting:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: psf/black@stable
+        with:
+          options: "--check"
+          jupyter: true
+      - run: cargo fmt --manifest-path="./server/Cargo.toml" --check

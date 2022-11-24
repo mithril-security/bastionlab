@@ -15,7 +15,7 @@ jobs:
         if: ${{ steps.cache-wheels.outputs.cache-hit != 'true' }}
         run: |
           ls -l server
-          cd client 
+          cd client && cp -rf ../server/protos/ . 
           python3 -m pip install --upgrade build && python3 -m build --wheel
 
 
@@ -23,5 +23,5 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
-          repository_url: https://test.pypi.org/legacy/
+#          repository_url: https://test.pypi.org/legacy/
           packages_dir: client/dist

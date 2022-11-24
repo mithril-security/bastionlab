@@ -1,0 +1,10 @@
+cargo-features = ["resolver"]
+[workspace]
+
+resolver = "2"
+
+members = [
+    "bastionai_app",
+    "bastionai_common",
+    "bastionai_learning",
+]
