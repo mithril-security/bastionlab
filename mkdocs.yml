@@ -21,6 +21,8 @@ theme:
       toggle:
         icon: material/weather-night
 
+use_directory_urls: false
+
 extra:
   homepage: https://mithrilsecurity.io
 
