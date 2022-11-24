@@ -1,7 +1,11 @@
+use env_logger::Env;
+use log::info;
 use polars::prelude::*;
-use prost::Message;
+use ring::{digest, rand};
+
 use serde_json;
 use std::{
+    collections::hash_map::DefaultHasher,
     collections::HashMap,
     error::Error,
     fmt::Debug,
@@ -9,13 +13,15 @@ use std::{
     future::Future,
     io::Read,
     net::SocketAddr,
+    hash::{Hash, Hasher},
+    time::Instant,
     pin::Pin,
     sync::{Arc, Mutex, RwLock},
     time::{Duration, SystemTime},
 };
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{
-    metadata::{KeyRef, MetadataMap},
+    metadata::KeyRef,
     transport::{Identity, Server, ServerTlsConfig},
     Request, Response, Status, Streaming,
 };
@@ -28,7 +34,7 @@ pub mod grpc {
 use grpc::{
     bastion_lab_server::{BastionLab, BastionLabServer},
     ChallengeResponse, Empty, FetchChunk, Query, ReferenceList, ReferenceRequest,
-    ReferenceResponse, SendChunk, Session,
+    ReferenceResponse, SendChunk, SessionInfo, ClientInfo,
 };
 
 mod serialization;
@@ -43,9 +49,10 @@ use authentication::*;
 mod config;
 use config::*;
 
-use ring::rand;
-
 mod visitable;
+
+mod telemetry;
+use telemetry::TelemetryEventProps;
 
 mod access_control;
 use access_control::*;
@@ -80,11 +87,19 @@ impl DataFrameArtifact {
     }
 }
 
+#[derive(Debug)]
+pub struct Session {
+    user_ip: SocketAddr,
+    expiry: SystemTime,
+    public_key: String,
+    client_info: ClientInfo,
+}
+
 #[derive(Debug, Default)]
 pub struct BastionLabState {
     dataframes: Arc<RwLock<HashMap<String, DataFrameArtifact>>>,
     keys: Mutex<KeyManagement>,
-    sessions: Arc<RwLock<HashMap<[u8; 32], (SocketAddr, SystemTime, String)>>>,
+    sessions: Arc<RwLock<HashMap<[u8; 32], Session>>>,
     session_expiry: u64,
 }
 
@@ -98,7 +113,7 @@ impl BastionLabState {
         }
     }
 
-    fn get_df(&self, identifier: &str) -> Result<DelayedDataFrame, Status> {
+    fn get_df(&self, identifier: &str, client_info: Option<ClientInfo>) -> Result<DelayedDataFrame, Status> {
         let dfs = self.dataframes.read().unwrap();
         let artifact = dfs.get(identifier).ok_or(Status::not_found(format!(
             "Could not find dataframe: identifier={}",
@@ -108,6 +123,13 @@ impl BastionLabState {
             PolicyAction::Accept => {
                 let mut df = artifact.dataframe.clone();
                 sanitize_df(&mut df, &artifact.blacklist)?;
+                telemetry::add_event(
+                    TelemetryEventProps::FetchDataFrame {
+                        dataset_name: Some(identifier.to_owned()),
+                        request_accepted: true,
+                    },
+                    client_info,
+                );
                 DelayedDataFrame {
                     future: Box::pin(async { Ok(df) }),
                     needs_approval: None,
@@ -151,16 +173,32 @@ Logical plan:
 
                             match ans.trim() {
                                 "y" => break,
-                                "n" => return Err(Status::permission_denied(format!(
-                                    "The data owner rejected the fetch operation.
+                                "n" => {
+                                    telemetry::add_event(
+                                        TelemetryEventProps::FetchDataFrame {
+                                            dataset_name: Some(identifier.to_owned()),
+                                            request_accepted: false,
+                                        },
+                                        client_info,
+                                    );
+                                    return Err(Status::permission_denied(format!(
+                                        "The data owner rejected the fetch operation.
 Fetching a dataframe obtained with a non privacy-preserving query requires the approval of the data owner.
 This dataframe was obtained in a non privacy-preserving fashion.
 Reason: {}",
-                                    reason
-                                ))),
+                                        reason
+                                    )))
+                                }
                                 _ => continue,
                             }
                         }
+                        telemetry::add_event(
+                            TelemetryEventProps::FetchDataFrame {
+                                dataset_name: Some(identifier.to_owned()),
+                                request_accepted: true,
+                            },
+                            client_info,
+                        );
                         Ok({
                             let guard = dfs.read().unwrap();
                             let artifact = guard.get(&identifier).ok_or(Status::not_found(
@@ -200,23 +238,17 @@ Reason: {}",
         )))?))
     }
 
-    fn verify_request(
+    fn verify_request<T>(
         &self,
-        remote_addr: Option<SocketAddr>,
-        metadata: &MetadataMap,
+        req: &Request<T>,
     ) -> Result<(), Status> {
+        let remote_addr = &req.remote_addr();
+        let token = get_token(req)?;
         let mut tokens = self.sessions.write().unwrap();
-        if let Some(user_ip) = remote_addr {
-            let meta = metadata
-                .get_bin("accesstoken-bin")
-                .ok_or_else(|| Status::invalid_argument("No accesstoken in request metadata"))?;
-            let token = meta
-                .to_bytes()
-                .map_err(|_| Status::invalid_argument("Could not decode accesstoken"))?;
-
-            if let Some((stored_ip, expiry, _)) = tokens.get(token.as_ref()) {
+        if let Some(recv_ip) = remote_addr {
+            if let Some(Session { user_ip, expiry, .. }) = tokens.get(token.as_ref()) {
                 let curr_time = SystemTime::now();
-                if !verify_ip(&stored_ip, &user_ip) {
+                if !verify_ip(&user_ip, &recv_ip) {
                     return Err(Status::aborted("Unknown IP Address!"));
                 }
                 if curr_time.gt(expiry) {
@@ -269,7 +301,7 @@ Reason: {}",
         }
     }
 
-    fn create_session<T: Message>(&self, request: &Request<T>) -> Result<Session, Status> {
+    fn create_session(&self, request: Request<ClientInfo>) -> Result<SessionInfo, Status> {
         let end = "-bin";
         let pat = "signature-";
         let mut public_key = String::new();
@@ -282,7 +314,7 @@ Reason: {}",
                             if key.contains(pat) {
                                 if let Some(key) = key.split(pat).last() {
                                     let lock = self.keys.lock().unwrap();
-                                    let message = get_message(b"create-session", request)?;
+                                    let message = get_message(b"create-session", &request)?;
                                     lock.verify_signature(key, &message[..], request.metadata())?;
                                     public_key.push_str(key);
                                 } else {
@@ -304,9 +336,9 @@ Reason: {}",
                 return Err(Status::aborted("Could not create expiry for session"));
             };
 
-            sessions.insert(token.clone(), (user_ip, expiry, public_key.clone()));
+            sessions.insert(token.clone(), Session { user_ip, expiry, public_key, client_info: request.into_inner() });
 
-            Ok(Session {
+            Ok(SessionInfo {
                 token: token.to_vec(),
             })
         } else {
@@ -314,25 +346,22 @@ Reason: {}",
         }
     }
 
-    fn refresh_session<T: Message>(&self, request: &Request<T>) -> Result<(), Status> {
+    fn refresh_session<T>(&self, req: &Request<T>) -> Result<(), Status> {
+        let token = get_token(req)?;
         let mut sessions = self.sessions.write().unwrap();
-        let meta = request
-            .metadata()
-            .get_bin("accesstoken-bin")
-            .ok_or_else(|| Status::invalid_argument("No accesstoken in request metadata"))?;
-        let token = meta
-            .to_bytes()
-            .map_err(|_| Status::invalid_argument("Could not decode accesstoken"))?;
-        let Some((_, expiry, _)) = sessions.get_mut(token.as_ref()) else {
-            return Err(Status::aborted("Session not found!"));
-        };
+        let session = sessions.get_mut(&token[..]).ok_or(Status::aborted("Session not found!"))?;
 
-        let Some(e) = expiry.checked_add(Duration::from_secs(self.session_expiry)) else {
-            return Err(Status::aborted("Malformed session expiry time!"));
-        };
+        let e = session.expiry.checked_add(Duration::from_secs(self.session_expiry)).ok_or(Status::aborted("Malformed session expiry time!"))?;
 
-        *expiry = e;
+        session.expiry = e;
         Ok(())
+    }
+
+    fn get_client_info<T>(&self, req: &Request<T>) -> Result<ClientInfo, Status> {
+        let token = get_token(req)?;
+        let sessions = self.sessions.write().unwrap();
+        let session = sessions.get(&token[..]).ok_or(Status::aborted("Session not found!"))?;
+        Ok(session.client_info.clone())
     }
 }
 
@@ -349,7 +378,7 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<Query>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        self.verify_request(request.remote_addr(), request.metadata())?;
+        self.verify_request(&request)?;
 
         let composite_plan: CompositePlan = serde_json::from_str(&request.get_ref().composite_plan)
             .map_err(|e| {
@@ -359,10 +388,25 @@ impl BastionLab for BastionLabState {
                     &request.get_ref().composite_plan
                 ))
             })?;
+
+        let start_time = Instant::now();
+
         let res = composite_plan.run(self)?;
+        let dataframe_bytes: Vec<u8> = df_to_bytes(&res.dataframe).iter_mut().fold(Vec::new(), |mut acc, x| {acc.append(x); acc}); // Not efficient fix this
 
         let header = get_df_header(&res.dataframe)?;
         let identifier = self.insert_df(res);
+
+        let elapsed = start_time.elapsed();
+        let hash = hex::encode(digest::digest(&digest::SHA256, &dataframe_bytes).as_ref());
+        telemetry::add_event(
+            TelemetryEventProps::RunQuery {
+                dataset_name: Some(identifier.clone()),
+                dataset_hash: Some(hash),
+                time_taken: elapsed.as_millis() as f64,
+            },
+            Some(self.get_client_info(&request)?),
+        );
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
 
@@ -370,11 +414,26 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<Streaming<SendChunk>>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        self.verify_request(request.remote_addr(), request.metadata())?;
-        let df = df_artifact_from_stream(request.into_inner()).await?;
+        let start_time = Instant::now();
 
+        self.verify_request(&request)?;
+
+        let client_info = self.get_client_info(&request)?;
+        let df = df_artifact_from_stream(request.into_inner()).await?;
+        let dataframe_bytes: Vec<u8> = df_to_bytes(&df.dataframe).iter_mut().fold(Vec::new(), |mut acc, x| {acc.append(x); acc}); // Not efficient fix this
         let header = get_df_header(&df.dataframe)?;
         let identifier = self.insert_df(df);
+
+        let elapsed = start_time.elapsed();
+        let hash = hex::encode(digest::digest(&digest::SHA256, &dataframe_bytes).as_ref());
+        telemetry::add_event(
+            TelemetryEventProps::SendDataFrame {
+                dataset_name: Some(identifier.clone()),
+                dataset_hash: Some(hash),
+                time_taken: elapsed.as_millis() as f64,
+            },
+            Some(client_info),
+        );
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
 
@@ -382,10 +441,10 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<ReferenceRequest>,
     ) -> Result<Response<Self::FetchDataFrameStream>, Status> {
-        self.verify_request(request.remote_addr(), request.metadata())?;
+        self.verify_request(&request)?;
 
         let fut = {
-            let df = self.get_df(&request.get_ref().identifier)?;
+            let df = self.get_df(&request.get_ref().identifier, Some(self.get_client_info(&request)?))?;
             stream_data(df, 32)
         };
         Ok(fut.await)
@@ -404,13 +463,16 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<Empty>,
     ) -> Result<Response<ReferenceList>, Status> {
-        self.verify_request(request.remote_addr(), request.metadata())?;
+        self.verify_request(&request)?;
         let list = self
             .get_headers()?
             .into_iter()
             .map(|(identifier, header)| ReferenceResponse { identifier, header })
             .collect();
-
+        telemetry::add_event(
+            TelemetryEventProps::ListDataFrame {},
+            Some(self.get_client_info(&request)?),
+        );
         Ok(Response::new(ReferenceList { list }))
     }
 
@@ -418,15 +480,20 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<ReferenceRequest>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        self.verify_request(request.remote_addr(), request.metadata())?;
+        self.verify_request(&request)?;
         let identifier = String::from(&request.get_ref().identifier);
         let header = self.get_header(&identifier)?;
-
+        telemetry::add_event(
+            TelemetryEventProps::GetDataFrameHeader {
+                dataset_name: Some(identifier.clone()),
+            },
+            Some(self.get_client_info(&request)?),
+        );
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
 
-    async fn create_session(&self, request: Request<Empty>) -> Result<Response<Session>, Status> {
-        let session = self.create_session(&request)?;
+    async fn create_session(&self, request: Request<ClientInfo>) -> Result<Response<SessionInfo>, Status> {
+        let session = self.create_session(request)?;
         Ok(Response::new(session))
     }
 
@@ -445,12 +512,33 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let config: BastionLabConfig = toml::from_str(&contents)?;
     let keys = KeyManagement::load_from_dir(config.public_keys_directory()?)?;
     let state = BastionLabState::new(keys, config.session_expiry()?);
+    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
 
     let server_cert = fs::read("tls/host_server.pem")?;
     let server_key = fs::read("tls/host_server.key")?;
     let server_identity = Identity::from_pem(&server_cert, &server_key);
 
     println!("BastionLab server running...");
+
+    //TODO: Change it when specifying the TEE will be available
+    let tee_mode = String::from("None");
+    let platform: String = String::from(format!("{} - TEE Mode: {}", whoami::platform(), tee_mode));
+    let uid: String = {
+        let mut hasher = DefaultHasher::new();
+        whoami::username().hash(&mut hasher);
+        whoami::hostname().hash(&mut hasher);
+        platform.hash(&mut hasher);
+        String::from(format!("{:X}", hasher.finish()))
+    };
+
+    if std::env::var("BASTIONLAB_DISABLE_TELEMETRY").is_err() {
+        telemetry::setup(platform, uid, tee_mode)?;
+        info!("Telemetry is enabled.")
+    } else {
+        info!("Telemetry is disabled.")
+    }
+    telemetry::add_event(TelemetryEventProps::Started {}, None);
+
     Server::builder()
         .tls_config(ServerTlsConfig::new().identity(server_identity))?
         .add_service(BastionLabServer::new(state))

@@ -5,6 +5,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use bytes::Bytes;
 use prost::Message;
 use ring::{
     digest::{digest, SHA256},
@@ -134,4 +135,14 @@ pub fn get_message<T: Message>(method: &[u8], req: &Request<T>) -> Result<Vec<u8
 
 pub fn verify_ip(stored: &SocketAddr, recv: &SocketAddr) -> bool {
     stored.ip().eq(&recv.ip())
+}
+
+pub fn get_token<T>(req: &Request<T>) -> Result<Bytes, Status> {
+    let meta = req
+        .metadata()
+        .get_bin("accesstoken-bin")
+        .ok_or_else(|| Status::invalid_argument("No accesstoken in request metadata"))?;
+    Ok(meta
+        .to_bytes()
+        .map_err(|_| Status::invalid_argument("Could not decode accesstoken"))?)
 }

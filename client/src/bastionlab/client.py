@@ -1,21 +1,32 @@
-from dataclasses import dataclass, field
-import itertools
-import logging
+from dataclasses import dataclass
 import ssl
 from threading import Thread
 from time import sleep
 from typing import Any, List, TYPE_CHECKING, Optional
+from hashlib import sha256
 import grpc
-from bastionlab.pb.bastionlab_pb2 import ReferenceRequest, Query, Empty
+
 from bastionlab.keys import SigningKey
 from grpc import StatusCode
+from bastionlab.pb.bastionlab_pb2 import (
+    ReferenceRequest,
+    ClientInfo,
+    Query,
+    Empty,
+)
+from bastionlab.version import __version__ as app_version
 from bastionlab.pb.bastionlab_pb2_grpc import BastionLabStub
+
+import platform
+import socket
+import getpass
 import polars as pl
 from colorama import Fore
 
 from bastionlab.utils import (
     deserialize_dataframe,
     serialize_dataframe,
+    send_clientinfo,
 )
 from bastionlab.policy import Policy, DEFAULT_POLICY
 from bastionlab.errors import GRPCException
@@ -25,7 +36,18 @@ if TYPE_CHECKING:
     from bastionlab.remote_polars import RemoteLazyFrame, FetchableLazyFrame
 
 HEART_BEAT_TICK = 25 * 60
-
+UNAME = platform.uname()
+CLIENT_INFO = ClientInfo(
+    uid=sha256((socket.gethostname() + "-" + getpass.getuser()).encode("utf-8"))
+    .digest()
+    .hex(),
+    platform_name=UNAME.system,
+    platform_arch=UNAME.machine,
+    platform_version=UNAME.version,
+    platform_release=UNAME.release,
+    user_agent="bastionlab_python",
+    user_agent_version=app_version,
+)
 
 class Client:
     def __init__(
@@ -143,11 +165,9 @@ class Connection:
         stub = BastionLabStub(channel)
 
         metadata = ()
+        data: bytes = CLIENT_INFO.SerializeToString()
 
-        empty_arg = Empty()
-        data: bytes = empty_arg.SerializeToString()
-
-        challenge = stub.GetChallenge(empty_arg).value
+        challenge = stub.GetChallenge(Empty()).value
 
         metadata += (("challenge-bin", challenge),)
         to_sign = b"create-session" + challenge + data
@@ -156,7 +176,7 @@ class Connection:
         signed = signing_key.sign(to_sign)
         metadata += ((f"signature-{(pubkey_hex)}-bin", signed),)
 
-        return stub.CreateSession(empty_arg, metadata=metadata).token
+        return stub.CreateSession(CLIENT_INFO, metadata=metadata).token
 
     @property
     def client(self) -> Client:
