@@ -11,12 +11,12 @@ use std::{
     fmt::Debug,
     fs::{self, File},
     future::Future,
+    hash::{Hash, Hasher},
     io::Read,
     net::SocketAddr,
-    hash::{Hash, Hasher},
-    time::Instant,
     pin::Pin,
     sync::{Arc, Mutex, RwLock},
+    time::Instant,
     time::{Duration, SystemTime},
 };
 use tokio_stream::wrappers::ReceiverStream;
@@ -33,8 +33,8 @@ pub mod grpc {
 }
 use grpc::{
     bastion_lab_server::{BastionLab, BastionLabServer},
-    ChallengeResponse, Empty, FetchChunk, Query, ReferenceList, ReferenceRequest,
-    ReferenceResponse, SendChunk, SessionInfo, ClientInfo,
+    ChallengeResponse, ClientInfo, Empty, FetchChunk, Query, ReferenceList, ReferenceRequest,
+    ReferenceResponse, SendChunk, SessionInfo,
 };
 
 mod serialization;
@@ -113,7 +113,11 @@ impl BastionLabState {
         }
     }
 
-    fn get_df(&self, identifier: &str, client_info: Option<ClientInfo>) -> Result<DelayedDataFrame, Status> {
+    fn get_df(
+        &self,
+        identifier: &str,
+        client_info: Option<ClientInfo>,
+    ) -> Result<DelayedDataFrame, Status> {
         let dfs = self.dataframes.read().unwrap();
         let artifact = dfs.get(identifier).ok_or(Status::not_found(format!(
             "Could not find dataframe: identifier={}",
@@ -187,7 +191,7 @@ Fetching a dataframe obtained with a non privacy-preserving query requires the a
 This dataframe was obtained in a non privacy-preserving fashion.
 Reason: {}",
                                         reason
-                                    )))
+                                    )));
                                 }
                                 _ => continue,
                             }
@@ -238,15 +242,15 @@ Reason: {}",
         )))?))
     }
 
-    fn verify_request<T>(
-        &self,
-        req: &Request<T>,
-    ) -> Result<(), Status> {
+    fn verify_request<T>(&self, req: &Request<T>) -> Result<(), Status> {
         let remote_addr = &req.remote_addr();
         let token = get_token(req)?;
         let mut tokens = self.sessions.write().unwrap();
         if let Some(recv_ip) = remote_addr {
-            if let Some(Session { user_ip, expiry, .. }) = tokens.get(token.as_ref()) {
+            if let Some(Session {
+                user_ip, expiry, ..
+            }) = tokens.get(token.as_ref())
+            {
                 let curr_time = SystemTime::now();
                 if !verify_ip(&user_ip, &recv_ip) {
                     return Err(Status::aborted("Unknown IP Address!"));
@@ -336,7 +340,15 @@ Reason: {}",
                 return Err(Status::aborted("Could not create expiry for session"));
             };
 
-            sessions.insert(token.clone(), Session { user_ip, expiry, public_key, client_info: request.into_inner() });
+            sessions.insert(
+                token.clone(),
+                Session {
+                    user_ip,
+                    expiry,
+                    public_key,
+                    client_info: request.into_inner(),
+                },
+            );
 
             Ok(SessionInfo {
                 token: token.to_vec(),
@@ -349,9 +361,14 @@ Reason: {}",
     fn refresh_session<T>(&self, req: &Request<T>) -> Result<(), Status> {
         let token = get_token(req)?;
         let mut sessions = self.sessions.write().unwrap();
-        let session = sessions.get_mut(&token[..]).ok_or(Status::aborted("Session not found!"))?;
+        let session = sessions
+            .get_mut(&token[..])
+            .ok_or(Status::aborted("Session not found!"))?;
 
-        let e = session.expiry.checked_add(Duration::from_secs(self.session_expiry)).ok_or(Status::aborted("Malformed session expiry time!"))?;
+        let e = session
+            .expiry
+            .checked_add(Duration::from_secs(self.session_expiry))
+            .ok_or(Status::aborted("Malformed session expiry time!"))?;
 
         session.expiry = e;
         Ok(())
@@ -360,7 +377,9 @@ Reason: {}",
     fn get_client_info<T>(&self, req: &Request<T>) -> Result<ClientInfo, Status> {
         let token = get_token(req)?;
         let sessions = self.sessions.write().unwrap();
-        let session = sessions.get(&token[..]).ok_or(Status::aborted("Session not found!"))?;
+        let session = sessions
+            .get(&token[..])
+            .ok_or(Status::aborted("Session not found!"))?;
         Ok(session.client_info.clone())
     }
 }
@@ -392,7 +411,13 @@ impl BastionLab for BastionLabState {
         let start_time = Instant::now();
 
         let res = composite_plan.run(self)?;
-        let dataframe_bytes: Vec<u8> = df_to_bytes(&res.dataframe).iter_mut().fold(Vec::new(), |mut acc, x| {acc.append(x); acc}); // Not efficient fix this
+        let dataframe_bytes: Vec<u8> =
+            df_to_bytes(&res.dataframe)
+                .iter_mut()
+                .fold(Vec::new(), |mut acc, x| {
+                    acc.append(x);
+                    acc
+                }); // Not efficient fix this
 
         let header = get_df_header(&res.dataframe)?;
         let identifier = self.insert_df(res);
@@ -420,7 +445,13 @@ impl BastionLab for BastionLabState {
 
         let client_info = self.get_client_info(&request)?;
         let df = df_artifact_from_stream(request.into_inner()).await?;
-        let dataframe_bytes: Vec<u8> = df_to_bytes(&df.dataframe).iter_mut().fold(Vec::new(), |mut acc, x| {acc.append(x); acc}); // Not efficient fix this
+        let dataframe_bytes: Vec<u8> =
+            df_to_bytes(&df.dataframe)
+                .iter_mut()
+                .fold(Vec::new(), |mut acc, x| {
+                    acc.append(x);
+                    acc
+                }); // Not efficient fix this
         let header = get_df_header(&df.dataframe)?;
         let identifier = self.insert_df(df);
 
@@ -444,7 +475,10 @@ impl BastionLab for BastionLabState {
         self.verify_request(&request)?;
 
         let fut = {
-            let df = self.get_df(&request.get_ref().identifier, Some(self.get_client_info(&request)?))?;
+            let df = self.get_df(
+                &request.get_ref().identifier,
+                Some(self.get_client_info(&request)?),
+            )?;
             stream_data(df, 32)
         };
         Ok(fut.await)
@@ -492,7 +526,10 @@ impl BastionLab for BastionLabState {
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
 
-    async fn create_session(&self, request: Request<ClientInfo>) -> Result<Response<SessionInfo>, Status> {
+    async fn create_session(
+        &self,
+        request: Request<ClientInfo>,
+    ) -> Result<Response<SessionInfo>, Status> {
         let session = self.create_session(request)?;
         Ok(Response::new(session))
     }

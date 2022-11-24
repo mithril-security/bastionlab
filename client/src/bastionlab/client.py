@@ -49,6 +49,7 @@ CLIENT_INFO = ClientInfo(
     user_agent_version=app_version,
 )
 
+
 class Client:
     def __init__(
         self,
