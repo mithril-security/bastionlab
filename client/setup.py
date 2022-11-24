@@ -15,13 +15,11 @@ PROTO_PATH = os.path.join(os.path.dirname(DIR), "protos")
 LONG_DESCRIPTION = read("README.md")
 PKG_NAME = "bastionlab"
 
-
 def find_version():
     version_file = read(f"src/{PKG_NAME}/version.py")
     version_re = r"__version__ = \"(?P<version>.+)\""
     version = re.match(version_re, version_file).group("version")
     return version
-
 
 def generate_stub():
     import grpc_tools.protoc
@@ -30,7 +28,15 @@ def generate_stub():
 
     pb_dir = os.path.join(DIR, "src", PKG_NAME, "pb")
     if not os.path.exists(pb_dir):
+        module_init = """
+import os
+import sys
+
+sys.path.append(os.path.join(os.path.dirname(__file__), __file__))
+        """
         os.mkdir(pb_dir)
+        init = open(f"{pb_dir}/__init__.py", "w+")
+        init.write(module_init)
 
     for file in PROTO_FILES:
         print(PROTO_PATH, PROTO_FILES)
@@ -74,6 +80,7 @@ setup(
         "grpcio==1.47.0",
         "grpcio-tools==1.47.0",
         "colorama==0.4.6",
+        "cryptography==38.0.3",
     ],
     package_dir={"": "src"},
 )
