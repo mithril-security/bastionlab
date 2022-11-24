@@ -6,3 +6,4 @@ then
 fi
 
 pre-commit autoupdate
+pre-commit install
