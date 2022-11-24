@@ -1,0 +1,142 @@
+/* Copyright 2022 Mithril Security. All rights reserved.
+*
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+*   http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License. */
+
+syntax = "proto3";
+package remote_torch;
+
+message Reference {
+    // BastionAI reference object. 
+    string identifier = 1;
+    string name = 2;
+    string description = 3;
+    bytes meta = 4;
+}
+
+message Chunk {
+    // Chunk of data sent from and to the BastionAI server.
+    bytes data = 1;
+    string name = 2;
+    string description = 3;
+    bytes secret = 4;
+    ClientInfo client_info = 5;
+    bytes meta = 6;
+}
+
+message Empty {
+    // Empty response object from BastionAI.
+}
+
+message TrainConfig {
+    // Configuration for training sent to BastionAI.
+    Reference model = 1;
+    Reference dataset = 2;
+    int32 batch_size = 3;
+    int32 epochs = 4;
+    string device = 5;
+    string metric = 6;
+    float eps = 7;
+    float max_grad_norm = 8;
+    float metric_eps = 9;
+    int32 per_n_steps_checkpoint = 12;
+    int32 per_n_epochs_checkpoint = 13;
+    bool resume = 14;
+    
+    oneof optimizer {
+        // The type of optimizer to be used during training.
+        // Currently, only SGD and Adam are supported.
+        SGD sgd = 10;
+        Adam adam = 11;
+    }
+
+    message SGD {
+        // SGD optimizer object.
+
+        float learning_rate = 1;
+        float weight_decay = 2;
+        float momentum = 3;
+        float dampening = 4;
+        bool nesterov = 5;
+    }
+
+    message Adam {
+        // Adam optimizer object.
+
+        float learning_rate = 1;
+        float beta_1 = 2;
+        float beta_2 = 3;
+        float epsilon = 4;
+        float weight_decay = 5;
+        bool amsgrad = 6;
+    }
+}
+
+message TestConfig {
+    Reference model = 1;
+    Reference dataset = 2;
+    int32 batch_size = 3;
+    string device = 4;
+    string metric = 5;
+    float metric_eps = 6;
+}
+
+message References {
+    repeated Reference list = 1;
+}
+
+message Accuracy {
+    float value = 1;
+}
+
+message Devices {
+    repeated string list = 1;
+}
+
+message Optimizers {
+    repeated string list = 1;
+}
+
+message Metric {
+    float value = 1;
+    float uncertainty = 2;
+    int32 batch = 3;
+    int32 epoch = 4;
+    int32 nb_epochs = 5;
+    int32 nb_batches = 6;
+}
+
+message ClientInfo {
+    string uid = 1;
+    string platform_name = 2;
+    string platform_arch = 3;
+    string platform_version = 4;
+    string platform_release = 5;
+    string user_agent = 6;
+    string user_agent_version = 7;
+}
+
+service RemoteTorch {
+    rpc SendDataset (stream Chunk) returns (Reference) {}
+    rpc SendModel (stream Chunk) returns (Reference) {}
+    rpc FetchDataset (Reference) returns (stream Chunk) {}
+    rpc FetchModule (Reference) returns (stream Chunk) {}
+    rpc DeleteDataset (Reference) returns (Empty) {}
+    rpc DeleteModule (Reference) returns (Empty) {}
+    rpc AvailableModels(Empty) returns (References) {}
+    rpc AvailableDatasets(Empty) returns (References) {}
+    rpc AvailableDevices(Empty) returns (Devices) {}
+    rpc AvailableOptimizers(Empty) returns (Optimizers) {}
+    rpc Train (TrainConfig) returns (Reference) {}
+    rpc Test (TestConfig) returns (Reference) {}
+    rpc GetMetric (Reference) returns (Metric) {}
+}

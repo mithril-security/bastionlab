@@ -1,0 +1,12 @@
+[package]
+name = "bastionai_learning"
+version = "0.2.1"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tch = "0.8.0"
+torch-sys = "0.8.0"
+libc = "0.2.126"
+rand = "0.8.5"

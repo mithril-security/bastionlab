@@ -4,8 +4,10 @@ repos:
     hooks:
     -   id: black
         args: [ "--check" ]
+        exclude: bastionai/
 -   repo: https://github.com/doublify/pre-commit-rust
     rev: v1.0
     hooks:
     -   id: fmt
         args: [ '--manifest-path=./server/Cargo.toml', '--check', '--' ]
+        exclude: bastionai/

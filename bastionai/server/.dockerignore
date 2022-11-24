@@ -1,0 +1,6 @@
+target
+docker/*.dockerfile
+Dockerfile*
+bin/
+target/
+tmp/

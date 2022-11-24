@@ -1,0 +1,58 @@
+name: test client
+
+on:
+  pull_request:
+    branches: [ master ]
+    paths: ['client/**', '.github/**']
+
+jobs:
+  python_ci:
+    defaults:
+      run:
+        working-directory: client
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [3.9]
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install flake8 mypy
+        python -m pip install -r tests/requirements.txt
+      
+    - name: Install bastionai
+      run: |
+        cp -rf ../server/protos/ .
+        python -m pip install -e .
+    
+    - name: Lint with flake8
+      run: |
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=120 --statistics
+
+    - name: Test with pytest
+      run: pytest --cov --cov-report=xml
+    
+    - name: Coverage report
+      uses: orgoro/coverage@v2
+      with:
+        coverageFile: client/coverage.xml
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Check types with mypy
+      run: |
+        rm -rf bastionai/pb/remote_torch*
+        mypy bastionai
+   
+
+

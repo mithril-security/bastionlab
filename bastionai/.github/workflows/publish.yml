@@ -1,0 +1,27 @@
+name: Publish to PyPI.org
+on:
+  release:
+    types: [published]
+jobs:
+  pypi:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Building the client
+        if: ${{ steps.cache-wheels.outputs.cache-hit != 'true' }}
+        run: |
+          ls -l server
+          cd client && cp -rf ../server/protos/ . 
+          python3 -m pip install --upgrade build && python3 -m build --wheel
+
+
+      - name: Publish package
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+#          repository_url: https://test.pypi.org/legacy/
+          packages_dir: client/dist
