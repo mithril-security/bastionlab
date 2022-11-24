@@ -30,7 +30,15 @@ def generate_stub():
 
     pb_dir = os.path.join(DIR, "src", PKG_NAME, "pb")
     if not os.path.exists(pb_dir):
+        module_init = """
+import os
+import sys
+
+sys.path.append(os.path.join(os.path.dirname(__file__), __file__))
+        """
         os.mkdir(pb_dir)
+        init = open(f"{pb_dir}/__init__.py", "w+")
+        init.write(module_init)
 
     for file in PROTO_FILES:
         print(PROTO_PATH, PROTO_FILES)
@@ -74,6 +82,7 @@ setup(
         "grpcio==1.47.0",
         "grpcio-tools==1.47.0",
         "colorama==0.4.6",
+        "cryptography==38.0.3",
     ],
     package_dir={"": "src"},
 )
