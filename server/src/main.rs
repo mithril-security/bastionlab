@@ -267,8 +267,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let state = BastionLabState::new();
    
     let attestation = match run_attestation {
-        true => Some(AttestationServer::new(BastionLabState::new())),
-        _ => None,
+        true => { 
+            println!("Attestation is turned on");
+            Some(AttestationServer::new(BastionLabState::new()))
+        }
+        _ => {
+            println!("Attestation is turned off");
+            None
+        }
     };
 
     let server_cert = fs::read("tls/host_server.pem")?;
