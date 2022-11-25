@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/assets/logo.png" alt="BastionAI" width="200" height="200" />
+  <img src="docs/assets/logo.png" alt="BastionLab" width="200" height="200" />
 </p>
 
-<h1 align="center">Mithril Security – BastionAI</h1>
+<h1 align="center">Mithril Security – BastionLab</h1>
 
 <h4 align="center">
   <a href="https://www.mithrilsecurity.io">Website</a> |
