@@ -1,0 +1,57 @@
+name: Test client
+
+on:
+  push:
+    branches: [main]
+    paths: ["client/**", ".github/**"]
+
+jobs:
+  python_ci:
+    defaults:
+      run:
+        working-directory: client
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [3.9]
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install bastionlab
+        run: |
+          make dev-install
+          source env/bin/activate
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install flake8 mypy pytest-cov
+
+      - name: Lint with flake8
+        if: always()
+        run: |
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=120 --statistics
+
+      - name: Test with pytest
+        if: always()
+        run: pytest --cov --cov-report=xml
+      # Need test to be written in order to work properly
+
+      - name: Coverage report
+        uses: orgoro/coverage@v2
+        with:
+          coverageFile: client/coverage.xml
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check types with mypy
+        if: always()
+        run: |
+          mypy src/bastionlab
