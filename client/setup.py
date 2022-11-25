@@ -28,17 +28,17 @@ def generate_stub():
 
     proto_include = pkg_resources.resource_filename("grpc_tools", "_proto")
 
-    pb_dir = os.path.join(DIR, "src", PKG_NAME, "pb")
-    if not os.path.exists(pb_dir):
-        module_init = """
-import os
-import sys
+    # pb_dir = os.path.join(DIR, "src", PKG_NAME, "pb")
+#     if not os.path.exists(pb_dir):
+#         module_init = """
+# import os
+# import sys
 
-sys.path.append(os.path.join(os.path.dirname(__file__), __file__))
-        """
-        os.mkdir(pb_dir)
-        init = open(f"{pb_dir}/__init__.py", "w+")
-        init.write(module_init)
+# #sys.path.append(os.path.join(os.path.dirname(__file__), __file__))
+#         """
+#         os.mkdir(pb_dir)
+#         with open(f"{pb_dir}/__init__.py", "w+") as init:
+#             init.write(module_init)
 
     for file in PROTO_FILES:
         print(PROTO_PATH, PROTO_FILES)
@@ -62,11 +62,9 @@ class BuildPackage(build_py):
         generate_stub()
         super(BuildPackage, self).run()
 
-
 setup(
     name=PKG_NAME,
     version=find_version(),
-    packages=find_packages(where="src"),
     description="Client for BastionLab Confidential Analytics.",
     long_description_content_type="text/markdown",
     keywords="confidential computing training client enclave amd-sev machine learning",
@@ -85,5 +83,4 @@ setup(
         "cryptography==38.0.3",
         "seaborn==0.12.0",
     ],
-    package_dir={"": "src"},
 )
