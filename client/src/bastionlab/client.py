@@ -26,7 +26,6 @@ from colorama import Fore
 from bastionlab.utils import (
     deserialize_dataframe,
     serialize_dataframe,
-    send_clientinfo,
 )
 from bastionlab.policy import Policy, DEFAULT_POLICY
 from bastionlab.errors import GRPCException

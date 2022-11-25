@@ -29,13 +29,14 @@ def serialize_dataframe(
     for col in df.__getstate__():
         df_bytes += col.__getstate__() + END_PATTERN
 
+    first = True
     for data in create_byte_chunk(df_bytes):
         cols = ",".join([f'"{col}"' for col in blacklist])
-        yield SendChunk(data=data, policy=policy.serialize(), metadata=f"[{cols}]")
-
-
-def send_clientinfo(client_info) -> Iterator[SendChunk]:
-    yield SendChunk(client_info=client_info)
+        if first:
+            first = False
+            yield SendChunk(data=data, policy=policy.serialize(), metadata=f"[{cols}]")
+        else:
+            yield SendChunk(data=data, policy="", metadata="")
 
 
 def deserialize_dataframe(joined_chunks: bytes) -> pl.DataFrame:
