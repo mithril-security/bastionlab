@@ -28,18 +28,6 @@ def generate_stub():
 
     proto_include = pkg_resources.resource_filename("grpc_tools", "_proto")
 
-    # pb_dir = os.path.join(DIR, "src", PKG_NAME, "pb")
-#     if not os.path.exists(pb_dir):
-#         module_init = """
-# import os
-# import sys
-
-# #sys.path.append(os.path.join(os.path.dirname(__file__), __file__))
-#         """
-#         os.mkdir(pb_dir)
-#         with open(f"{pb_dir}/__init__.py", "w+") as init:
-#             init.write(module_init)
-
     for file in PROTO_FILES:
         print(PROTO_PATH, PROTO_FILES)
         res = grpc_tools.protoc.main(
@@ -61,6 +49,7 @@ class BuildPackage(build_py):
     def run(self):
         generate_stub()
         super(BuildPackage, self).run()
+
 
 setup(
     name=PKG_NAME,
