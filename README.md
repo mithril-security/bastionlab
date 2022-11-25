@@ -1,3 +1,19 @@
+<p align="center">
+  <img src="docs/assets/logo.png" alt="BastionAI" width="200" height="200" />
+</p>
+
+<h1 align="center">Mithril Security – BastionAI</h1>
+
+<h4 align="center">
+  <a href="https://www.mithrilsecurity.io">Website</a> |
+  <a href="https://bastionlab.readthedocs.io/en/latest/">Documentation</a> |
+  <a href="https://blog.mithrilsecurity.io/">Blog</a> |
+  <a href="https://www.linkedin.com/company/mithril-security-company">LinkedIn</a> | 
+  <a href="https://www.twitter.com/mithrilsecurity">Twitter</a> | 
+  <a href="https://discord.gg/TxEHagpWd4">Discord</a>
+</h4><br>
+
+
 # 👋 Welcome to BastionLab!
 
 Where data owners and data scientists can securely collaborate without exposing data - opening the way to projects that were too risky to consider. 
