@@ -172,8 +172,11 @@ class Connection:
         os.environ['GRPC_TRACE'] = 'all' 
         os.environ['GRPC_VERBOSITY'] = 'DEBUG'
 
-        if os.environ['ATTESTATION'] == "true":
+        if "ATTESTATION" in os.environ and os.environ['ATTESTATION'] == "true":
             get_validate_attestation(Client(AttestationStub(self.channel)), server_cert)
+        else:
+            print("Attestation is turned off on this client, please set the approproate environment variable if you wish to use attestation")
+
 
         self._client = Client(BastionLabStub(self.channel))
         return self._client
