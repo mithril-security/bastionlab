@@ -126,7 +126,7 @@ impl BastionLabState {
         Ok(match &artifact.fetchable {
             PolicyAction::Accept => {
                 let mut df = artifact.dataframe.clone();
-                sanitize_df(&mut df, &artifact.blacklist)?;
+                sanitize_df(&mut df, &artifact.blacklist);
                 telemetry::add_event(
                     TelemetryEventProps::FetchDataFrame {
                         dataset_name: Some(identifier.to_owned()),
@@ -209,7 +209,7 @@ Reason: {}",
                                 format!("Could not find dataframe: identifier={}", identifier),
                             ))?;
                             let mut df = artifact.dataframe.clone();
-                            sanitize_df(&mut df, &artifact.blacklist)?;
+                            sanitize_df(&mut df, &artifact.blacklist);
                             df
                         })
                     }),
