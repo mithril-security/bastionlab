@@ -80,7 +80,7 @@ impl Rule {
                     }
                     None => Err(Status::permission_denied(format!(
                         "No signature provided for public key {}",
-                        hex::encode(public_key_hash)
+                        public_key_hash
                     ))),
                 }
             }

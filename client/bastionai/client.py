@@ -357,7 +357,7 @@ class Connection:
             if self.default_license is None:
                 self.default_license = LicenseBuilder.default_with_pubkey(self.license_key.pubkey).build()
             if self.license_key not in self.default_signing_keys:
-                self.default_signing_keys.append(self.license_key)
+                self.default_signing_keys = [*self.default_signing_keys, self.license_key]
 
         return Client(
             RemoteTorchStub(self.channel),

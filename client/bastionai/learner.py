@@ -48,6 +48,7 @@ class RemoteDataset:
                 train_dataset,
                 name=name if name is not None else type(train_dataset).__name__,
                 description=description or "",
+                license=license,
                 privacy_limit=privacy_limit,
                 progress=progress,
             )

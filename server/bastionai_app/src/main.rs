@@ -167,7 +167,7 @@ impl RemoteTorch for BastionAIServer {
         };
         
         let binary = tcherror_to_status(artifact.deserialize())?;
-            
+
         let name = binary.name.clone();
         let description = binary.description.clone();
         let license = binary.license.clone();
