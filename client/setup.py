@@ -71,5 +71,6 @@ setup(
         "colorama==0.4.6",
         "cryptography==38.0.3",
         "seaborn==0.12.0",
+        "pyarrow==10.0.0",
     ],
 )
