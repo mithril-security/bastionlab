@@ -88,11 +88,9 @@ class SigningKey:
         return SigningKey(ec.generate_private_key(ec.SECP256R1()))
 
     @staticmethod
-    def keygen(
-        path: str, password: Optional[bytes] = None
-    ) -> "SigningKey":
+    def keygen(path: str, password: Optional[bytes] = None) -> "SigningKey":
         signing_key_path = path
-        pub_key_path = path+'.pub'
+        pub_key_path = path + ".pub"
         if os.path.exists(signing_key_path):
             return SigningKey.from_pem(signing_key_path, password)
         else:
