@@ -100,7 +100,7 @@ impl Rule {
             }),
             Rule::Aggregation(min_allowed_agg_size) => {
                 Ok(match ctx.min_agg_size {
-                    Some(min_agg_size) if min_agg_size <= *min_allowed_agg_size => RuleMatch::Match,
+                    Some(min_agg_size) if min_agg_size >= *min_allowed_agg_size => RuleMatch::Match,
                     _ => RuleMatch::Mismatch(format!(
                         "Cannot fetch a DataFrame that does not aggregate at least {} rows of the initial dataframe uploaded by the data owner.",
                         min_allowed_agg_size
