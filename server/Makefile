@@ -23,7 +23,9 @@ bin/config.toml: bin
 	cp tools/config.toml bin/
 
 bin/tls/host_server.pem bin/tls/host_server.key &: bin
-	./tools/create_tls_config.sh bin/
+	mkdir -p bin/tls && openssl req -newkey rsa:2048 -nodes -keyout bin/tls/host_server.key  \
+		-x509 -days 365 -out bin/tls/host_server.pem \
+		-subj "/C=FR/CN=bastionai-server"
 
 build:
 	LIBTORCH=$(LIBTORCH) CUDA=$(CUDA) LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) cargo build --release
@@ -33,7 +35,7 @@ target/release/bastionai_app:
 
 bin/bastionai_app: target/release/bastionai_app
 	cp target/release/bastionai_app bin/
-
+	
 install: bin/tls/host_server.pem bin/tls/host_server.key bin/config.toml
 	cp target/release/bastionai_app bin/
 
