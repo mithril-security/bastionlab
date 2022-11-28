@@ -432,6 +432,9 @@ impl BastionLab for BastionLabState {
             },
             Some(self.get_client_info(&request)?),
         );
+
+        info!("Succesfully ran query on {}", identifier.clone());
+
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
 
@@ -465,6 +468,11 @@ impl BastionLab for BastionLabState {
             },
             Some(client_info),
         );
+        info!(
+            "Succesfully sent dataframe {} to server",
+            identifier.clone()
+        );
+
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
 
@@ -556,6 +564,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let server_identity = Identity::from_pem(&server_cert, &server_key);
 
     println!("BastionLab server running...");
+    info!("Server ready to take requests");
 
     //TODO: Change it when specifying the TEE will be available
     let tee_mode = String::from("None");
