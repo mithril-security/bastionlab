@@ -142,7 +142,7 @@ class AuthPlugin(grpc.AuthMetadataPlugin):
 @dataclass
 class Connection:
     host: str
-    port: int
+    port: Optional[int] = 50056
     signing_key: Optional[SigningKey] = None
     channel: Any = None
     token: Optional[bytes] = None
