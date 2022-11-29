@@ -53,8 +53,9 @@ plugins:
 - mkdocs-jupyter
 
 nav:
-- Getting Started: 'index.md'
-- Quick Tour: 'docs/quick-tour/quick-tour.ipynb'
+- Home: 'index.md'
+- Getting Started: 
+  - Quick Tour: 'docs/quick-tour/quick-tour.ipynb'
 - Tutorials:
   - Data Visualization: 'docs/tutorials/visualization.ipynb'
 - Concept Guides:
