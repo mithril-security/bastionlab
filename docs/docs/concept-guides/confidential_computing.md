@@ -1,6 +1,8 @@
 # Confidential Computing
+__________________________________________________________________________
 
 ## Trusted Execution Environments
+__________________________________________________________________________
 
 **Bastion AI relies on hardware-backed privacy guarantees. It uses AMD SEV-SNP to ensure the confidentiality of the data provided to it.**
 
@@ -35,6 +37,7 @@ AMD SEV-SNP ensures that virtual machines running on cloud environments are conf
 ![](../../assets/AMD_SEV_Architecture.png)
 
 ## Attestation
+__________________________________________________________________________
 
 TEEs are, at the core, black boxes to run code. This is great for security and privacy because what happens there is guaranteed to stay there. But we're still missing crucial information: since we can't see inside, how do we know that what happens in the TEE is *what* we want to happen there? How do we know we're communicating with a TEE? How do we know if the TEE is secure? How can we verify that this TEE is the one we're expecting?\
 Attestations are the answer.
@@ -94,7 +97,8 @@ BastionLab's Client performs all of these checks each time it connects to a serv
 
 ![](../../assets/Architecture.png)
 
-Data-in-use:
+## Data-in-use
+__________________________________________________________________________
 
 BastionLab uses AMD SEV-SNP as its TEE. Data while being processed is secure through two security features of AMD SEV-SNP
 

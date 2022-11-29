@@ -1,10 +1,10 @@
 # 👋 Welcome to BastionLab!
 
-Where data owners and data scientists can securely collaborate without exposing data - opening the way to projects that were too risky to consider. 
+<font size="5"><span style="font-weight: 200"> Where data owners and data scientists can securely collaborate without exposing data, opening the way to projects that were too risky to consider.</font></span>
 
 ## What is BastionLab?
 
-**BastionLab is a data science framework to perform remote and secure Exploratory Data Analysis.**
+BastionLab is a **data science framework** to perform **remote and secure Exploratory Data Analysis.**
 
 - Data scientists can **remotely run queries on data frames without seeing the original data or intermediary results**.
 - Data owners can let **external or internal data scientists explore and extract values from their datasets, according to the strict privacy policies they defined**.
