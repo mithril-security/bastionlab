@@ -179,9 +179,9 @@ class Connection:
             metadata += ((f"signature-{(pubkey_hex)}-bin", signed),)
 
             return stub.CreateSession(CLIENT_INFO, metadata=metadata).token
-
-        stub.CreateSession(CLIENT_INFO)
-        return None
+        else:
+            stub.CreateSession(CLIENT_INFO)
+            return None
 
     @property
     def client(self) -> Client:
