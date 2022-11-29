@@ -1,6 +1,7 @@
 # Threat Model
 
 In this scenario:
+
 - **The data owner owns the infrastructure**, meaning the dataset does not leave its premises and the owner provides the computing and opens access to a remote data scientist to work on it. 
 - The **remote data scientist is not trusted**, and BastionLab aims to ensure minimal data exposure for the data owner while providing a smooth and interactive experience for the remote data scientist.
 
