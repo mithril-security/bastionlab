@@ -1,13 +1,8 @@
+use crate::prelude::*;
+use crate::session_proto::ClientInfo;
 use once_cell::sync::OnceCell;
-
-use std::{
-    error::Error,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
-
-use crate::grpc::ClientInfo;
-use log::debug;
 use serde::Serialize;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc::{self, UnboundedSender};
 
 static TELEMETRY_CHANNEL: OnceCell<UnboundedSender<TelemetryEvent>> = OnceCell::new();
@@ -33,6 +28,25 @@ pub enum TelemetryEventProps {
     GetDataFrameHeader {
         dataset_name: Option<String>,
     },
+    // Torch
+    SendModel {
+        model_name: Option<String>,
+        model_hash: Option<String>,
+        model_size: usize,
+        time_taken: f64,
+    },
+    SendDataset {
+        dataset_name: Option<String>,
+        dataset_hash: Option<String>,
+        dataset_size: usize,
+        time_taken: f64,
+    },
+    TrainerLog {
+        log_type: Option<String>,
+        model_hash: Option<String>,
+        dataset_hash: Option<String>,
+        time: u128,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -52,6 +66,10 @@ impl TelemetryEventProps {
             TelemetryEventProps::SendDataFrame { .. } => "send_data_frame",
             TelemetryEventProps::ListDataFrame { .. } => "list_data_frame",
             TelemetryEventProps::GetDataFrameHeader { .. } => "get_data_frame_header",
+            // torch
+            TelemetryEventProps::SendModel { .. } => "send_model",
+            TelemetryEventProps::SendDataset { .. } => "send_dataset",
+            TelemetryEventProps::TrainerLog { .. } => "trainer_log",
         }
     }
 }
@@ -91,7 +109,7 @@ struct RequestUserProperties<'a> {
     client_user_agent_version: Option<&'a str>,
 }
 
-pub fn setup(platform: String, uid: String, tee: String) -> Result<(), Box<dyn Error>> {
+pub fn setup(platform: String, uid: String, tee: String) -> Result<()> {
     let (sender, mut receiver) = mpsc::unbounded_channel::<TelemetryEvent>();
 
     TELEMETRY_CHANNEL.set(sender).unwrap();

@@ -1,25 +1,13 @@
-use std::{
-    collections::HashMap,
-    fs::{self, read},
-    net::SocketAddr,
-    path::{Path, PathBuf},
-};
-
-use bytes::Bytes;
-use prost::Message;
+use crate::prelude::*;
 use ring::{
     digest::{digest, SHA256},
     signature,
 };
-use tonic::{metadata::MetadataMap, Request, Status};
+use std::{fs, path::Path};
+use tonic::{metadata::MetadataMap, Status};
 use x509_parser::prelude::Pem;
 
-/// Type alias for [`Vec<u8>`].
 pub type PubKey = Vec<u8>;
-
-/// This struct holds a hashmap of hashes of the PEM formatted public keys as keys and
-/// the loaded PEM formatted public key as value  loaded from the directory
-/// passed to the [`KeyManagement::load_from_file`] struct at start-up.
 
 #[derive(Debug, Default, Clone)]
 pub struct KeyManagement {
@@ -27,29 +15,30 @@ pub struct KeyManagement {
 }
 
 impl KeyManagement {
-    fn read_from_file(path: PathBuf) -> Result<(String, PubKey), Status> {
-        let file = &read(path)?;
+    fn read_from_file(path: &Path) -> Result<(String, PubKey)> {
+        let file = &fs::read(path).with_context(|| anyhow!("Reading file: {path:?}"))?;
         let (_, Pem { contents, .. }) = x509_parser::pem::parse_x509_pem(&file[..])
-            .map_err(|e| Status::aborted(e.to_string()))?;
+            .map_err(|e| Status::aborted(e.to_string()))
+            .with_context(|| anyhow!("Parsing PEM file: {path:?}"))?;
 
         let hash = hex::encode(digest(&SHA256, &contents[..]));
         Ok((hash, contents))
     }
 
-    pub fn load_from_dir(path: String) -> Result<Self, Status> {
+    pub fn load_from_dir(path: &Path) -> Result<Self> {
         let mut pub_keys: HashMap<String, PubKey> = HashMap::new();
 
-        if !Path::new(&path).is_dir() {
-            Err(Status::aborted("Please provide a directory!"))?
-        }
+        ensure!(path.is_dir(), "keys path is not a folder");
 
-        let paths = fs::read_dir(path.clone())?;
+        let paths =
+            fs::read_dir(path).with_context(|| anyhow!("Listing files in directory: {path:?}"))?;
 
-        for path in paths {
-            let path = path?;
-            let file = path.path();
+        for entry in paths {
+            let entry = entry.with_context(|| anyhow!("Listing files in directory: {path:?}"))?;
+            let file = entry.path();
 
-            let (hash, raw) = KeyManagement::read_from_file(file)?;
+            let (hash, raw) = KeyManagement::read_from_file(&file)
+                .with_context(|| anyhow!("Reading file: {:?}", &file))?;
             pub_keys.insert(hash, raw);
         }
 
@@ -112,37 +101,4 @@ impl KeyManagement {
             ))),
         }
     }
-}
-
-pub fn get_message<T: Message>(method: &[u8], req: &Request<T>) -> Result<Vec<u8>, Status> {
-    let meta = req
-        .metadata()
-        .get_bin("challenge-bin")
-        .ok_or_else(|| Status::invalid_argument("No challenge in request metadata"))?;
-    let challenge = meta
-        .to_bytes()
-        .map_err(|_| Status::invalid_argument("Could not decode challenge"))?;
-
-    let mut res =
-        Vec::with_capacity(method.len() + challenge.as_ref().len() + req.get_ref().encoded_len());
-    res.extend_from_slice(method);
-    res.extend_from_slice(challenge.as_ref());
-    req.get_ref()
-        .encode(&mut res)
-        .map_err(|e| Status::internal(format!("error while encoding the request: {:?}", e)))?;
-    Ok(res)
-}
-
-pub fn verify_ip(stored: &SocketAddr, recv: &SocketAddr) -> bool {
-    stored.ip().eq(&recv.ip())
-}
-
-pub fn get_token<T>(req: &Request<T>) -> Result<Bytes, Status> {
-    let meta = req
-        .metadata()
-        .get_bin("accesstoken-bin")
-        .ok_or_else(|| Status::invalid_argument("No accesstoken in request metadata"))?;
-    Ok(meta
-        .to_bytes()
-        .map_err(|_| Status::invalid_argument("Could not decode accesstoken"))?)
 }

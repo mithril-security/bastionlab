@@ -1,27 +1,27 @@
+use bastionlab_common::prelude::*;
+use bastionlab_common::{
+    auth::KeyManagement,
+    session::{SessionGrpcService, SessionManager},
+    session_proto::{self, ClientInfo},
+    telemetry::{self, TelemetryEventProps},
+};
+use bastionlab_torch::torch_proto;
 use env_logger::Env;
 use log::info;
 use polars::prelude::*;
-use ring::{digest, rand};
-
+use ring::digest;
 use serde_json;
+use std::path::Path;
 use std::{
     collections::hash_map::DefaultHasher,
-    collections::HashMap,
-    error::Error,
-    fmt::Debug,
     fs::{self, File},
     future::Future,
-    hash::{Hash, Hasher},
     io::Read,
-    net::SocketAddr,
     pin::Pin,
-    sync::{Arc, Mutex, RwLock},
     time::Instant,
-    time::{Duration, SystemTime},
 };
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{
-    metadata::KeyRef,
     transport::{Identity, Server, ServerTlsConfig},
     Request, Response, Status, Streaming,
 };
@@ -33,8 +33,7 @@ pub mod grpc {
 }
 use grpc::{
     bastion_lab_server::{BastionLab, BastionLabServer},
-    ChallengeResponse, ClientInfo, Empty, FetchChunk, Query, ReferenceList, ReferenceRequest,
-    ReferenceResponse, SendChunk, SessionInfo,
+    Empty, FetchChunk, Query, ReferenceList, ReferenceRequest, ReferenceResponse, SendChunk,
 };
 
 mod serialization;
@@ -43,16 +42,10 @@ use serialization::*;
 mod composite_plan;
 use composite_plan::*;
 
-mod authentication;
-use authentication::*;
-
 mod config;
 use config::*;
 
 mod visitable;
-
-mod telemetry;
-use telemetry::TelemetryEventProps;
 
 mod access_control;
 use access_control::*;
@@ -88,28 +81,16 @@ impl DataFrameArtifact {
 }
 
 #[derive(Debug)]
-pub struct Session {
-    user_ip: SocketAddr,
-    expiry: SystemTime,
-    public_key: String,
-    client_info: ClientInfo,
-}
-
-#[derive(Debug, Default)]
 pub struct BastionLabState {
     dataframes: Arc<RwLock<HashMap<String, DataFrameArtifact>>>,
-    keys: Mutex<KeyManagement>,
-    sessions: Arc<RwLock<HashMap<[u8; 32], Session>>>,
-    session_expiry: u64,
+    sess_manager: Arc<SessionManager>,
 }
 
 impl BastionLabState {
-    fn new(keys: KeyManagement, session_expiry: u64) -> Self {
+    fn new(sess_manager: Arc<SessionManager>) -> Self {
         Self {
             dataframes: Arc::new(RwLock::new(HashMap::new())),
-            keys: Mutex::new(keys),
-            sessions: Default::default(),
-            session_expiry,
+            sess_manager,
         }
     }
 
@@ -241,29 +222,6 @@ Reason: {}",
             identifier
         )))?))
     }
-
-    fn verify_request<T>(&self, req: &Request<T>) -> Result<(), Status> {
-        let remote_addr = &req.remote_addr();
-        let token = get_token(req)?;
-        let mut tokens = self.sessions.write().unwrap();
-        if let Some(recv_ip) = remote_addr {
-            if let Some(Session {
-                user_ip, expiry, ..
-            }) = tokens.get(token.as_ref())
-            {
-                let curr_time = SystemTime::now();
-                if !verify_ip(&user_ip, &recv_ip) {
-                    return Err(Status::aborted("Unknown IP Address!"));
-                }
-                if curr_time.gt(expiry) {
-                    tokens.remove(token.as_ref());
-                    return Err(Status::aborted("Session Expired"));
-                }
-            }
-        }
-
-        Ok(())
-    }
     fn get_header(&self, identifier: &str) -> Result<String, Status> {
         Ok(get_df_header(
             &self
@@ -295,93 +253,6 @@ Reason: {}",
         dfs.insert(identifier.clone(), df);
         identifier
     }
-
-    fn new_challenge(&self) -> [u8; 32] {
-        let rng = rand::SystemRandom::new();
-        loop {
-            if let Ok(challenge) = rand::generate(&rng) {
-                return challenge.expose();
-            }
-        }
-    }
-
-    fn create_session(&self, request: Request<ClientInfo>) -> Result<SessionInfo, Status> {
-        let end = "-bin";
-        let pat = "signature-";
-        let mut public_key = String::new();
-        if let Some(user_ip) = request.remote_addr() {
-            for key in request.metadata().keys() {
-                match key {
-                    KeyRef::Binary(key) => {
-                        let key = key.to_string();
-                        if let Some(key) = key.strip_suffix(end) {
-                            if key.contains(pat) {
-                                if let Some(key) = key.split(pat).last() {
-                                    let lock = self.keys.lock().unwrap();
-                                    let message = get_message(b"create-session", &request)?;
-                                    lock.verify_signature(key, &message[..], request.metadata())?;
-                                    public_key.push_str(key);
-                                } else {
-                                    return Err(Status::aborted(
-                                        "User signing key not found in request!",
-                                    ));
-                                }
-                            }
-                        } else {
-                            return Err(Status::aborted("User signing key not found in request!"));
-                        }
-                    }
-                    _ => (),
-                }
-            }
-            let mut sessions = self.sessions.write().unwrap();
-            let token = self.new_challenge();
-            let Some(expiry) = SystemTime::now().checked_add(Duration::from_secs(self.session_expiry)) else {
-                return Err(Status::aborted("Could not create expiry for session"));
-            };
-
-            sessions.insert(
-                token.clone(),
-                Session {
-                    user_ip,
-                    expiry,
-                    public_key,
-                    client_info: request.into_inner(),
-                },
-            );
-
-            Ok(SessionInfo {
-                token: token.to_vec(),
-            })
-        } else {
-            Err(Status::aborted("Could not fetch IP Address from request"))
-        }
-    }
-
-    fn refresh_session<T>(&self, req: &Request<T>) -> Result<(), Status> {
-        let token = get_token(req)?;
-        let mut sessions = self.sessions.write().unwrap();
-        let session = sessions
-            .get_mut(&token[..])
-            .ok_or(Status::aborted("Session not found!"))?;
-
-        let e = session
-            .expiry
-            .checked_add(Duration::from_secs(self.session_expiry))
-            .ok_or(Status::aborted("Malformed session expiry time!"))?;
-
-        session.expiry = e;
-        Ok(())
-    }
-
-    fn get_client_info<T>(&self, req: &Request<T>) -> Result<ClientInfo, Status> {
-        let token = get_token(req)?;
-        let sessions = self.sessions.write().unwrap();
-        let session = sessions
-            .get(&token[..])
-            .ok_or(Status::aborted("Session not found!"))?;
-        Ok(session.client_info.clone())
-    }
 }
 
 fn get_df_header(df: &DataFrame) -> Result<String, Status> {
@@ -397,7 +268,7 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<Query>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        self.verify_request(&request)?;
+        self.sess_manager.verify_request(&request)?;
 
         let composite_plan: CompositePlan = serde_json::from_str(&request.get_ref().composite_plan)
             .map_err(|e| {
@@ -430,7 +301,7 @@ impl BastionLab for BastionLabState {
                 dataset_hash: Some(hash),
                 time_taken: elapsed.as_millis() as f64,
             },
-            Some(self.get_client_info(&request)?),
+            Some(self.sess_manager.get_client_info(&request)?),
         );
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
@@ -441,9 +312,9 @@ impl BastionLab for BastionLabState {
     ) -> Result<Response<ReferenceResponse>, Status> {
         let start_time = Instant::now();
 
-        self.verify_request(&request)?;
+        self.sess_manager.verify_request(&request)?;
 
-        let client_info = self.get_client_info(&request)?;
+        let client_info = self.sess_manager.get_client_info(&request)?;
         let df = df_artifact_from_stream(request.into_inner()).await?;
         let dataframe_bytes: Vec<u8> =
             df_to_bytes(&df.dataframe)
@@ -472,32 +343,23 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<ReferenceRequest>,
     ) -> Result<Response<Self::FetchDataFrameStream>, Status> {
-        self.verify_request(&request)?;
+        self.sess_manager.verify_request(&request)?;
 
         let fut = {
             let df = self.get_df(
                 &request.get_ref().identifier,
-                Some(self.get_client_info(&request)?),
+                Some(self.sess_manager.get_client_info(&request)?),
             )?;
             stream_data(df, 32)
         };
         Ok(fut.await)
     }
 
-    async fn get_challenge(
-        &self,
-        _request: Request<Empty>,
-    ) -> Result<Response<ChallengeResponse>, Status> {
-        let challenge = self.new_challenge();
-        Ok(Response::new(ChallengeResponse {
-            value: challenge.into(),
-        }))
-    }
     async fn list_data_frames(
         &self,
         request: Request<Empty>,
     ) -> Result<Response<ReferenceList>, Status> {
-        self.verify_request(&request)?;
+        self.sess_manager.verify_request(&request)?;
         let list = self
             .get_headers()?
             .into_iter()
@@ -505,7 +367,7 @@ impl BastionLab for BastionLabState {
             .collect();
         telemetry::add_event(
             TelemetryEventProps::ListDataFrame {},
-            Some(self.get_client_info(&request)?),
+            Some(self.sess_manager.get_client_info(&request)?),
         );
         Ok(Response::new(ReferenceList { list }))
     }
@@ -514,48 +376,48 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<ReferenceRequest>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        self.verify_request(&request)?;
+        self.sess_manager.verify_request(&request)?;
         let identifier = String::from(&request.get_ref().identifier);
         let header = self.get_header(&identifier)?;
         telemetry::add_event(
             TelemetryEventProps::GetDataFrameHeader {
                 dataset_name: Some(identifier.clone()),
             },
-            Some(self.get_client_info(&request)?),
+            Some(self.sess_manager.get_client_info(&request)?),
         );
         Ok(Response::new(ReferenceResponse { identifier, header }))
-    }
-
-    async fn create_session(
-        &self,
-        request: Request<ClientInfo>,
-    ) -> Result<Response<SessionInfo>, Status> {
-        let session = self.create_session(request)?;
-        Ok(Response::new(session))
-    }
-
-    async fn refresh_session(&self, request: Request<Empty>) -> Result<Response<Empty>, Status> {
-        self.refresh_session(&request)?;
-        Ok(Response::new(Empty {}))
     }
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    let mut file = File::open("config.toml")?;
-    let mut contents = String::new();
-    file.read_to_string(&mut contents)?;
-
-    let config: BastionLabConfig = toml::from_str(&contents)?;
-    let keys = KeyManagement::load_from_dir(config.public_keys_directory()?)?;
-    let state = BastionLabState::new(keys, config.session_expiry()?);
+async fn main() -> Result<()> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
 
-    let server_cert = fs::read("tls/host_server.pem")?;
-    let server_key = fs::read("tls/host_server.key")?;
-    let server_identity = Identity::from_pem(&server_cert, &server_key);
+    let mut file = File::open("config.toml").context("Opening config.toml file")?;
+    let mut contents = String::new();
+    file.read_to_string(&mut contents)
+        .context("Reading the config.toml file")?;
 
-    println!("BastionLab server running...");
+    let config: BastionLabConfig =
+        toml::from_str(&contents).context("Parsing the config.toml file")?;
+    let keys = KeyManagement::load_from_dir(Path::new(
+        &config
+            .public_keys_directory()
+            .context("Parsing the public_keys_directory config path")?,
+    ))
+    .context("Loading the stored user keys")?;
+    let sess_manager = Arc::new(SessionManager::new(
+        keys,
+        config
+            .session_expiry()
+            .context("Parsing the public session_expiry config")?,
+    ));
+
+    let server_cert =
+        fs::read("tls/host_server.pem").context("Reading the tls/host_server.pem file")?;
+    let server_key =
+        fs::read("tls/host_server.key").context("Reading the tls/host_server.key file")?;
+    let server_identity = Identity::from_pem(&server_cert, &server_key);
 
     //TODO: Change it when specifying the TEE will be available
     let tee_mode = String::from("None");
@@ -569,17 +431,41 @@ async fn main() -> Result<(), Box<dyn Error>> {
     };
 
     if std::env::var("BASTIONLAB_DISABLE_TELEMETRY").is_err() {
-        telemetry::setup(platform, uid, tee_mode)?;
+        telemetry::setup(platform, uid, tee_mode).context("Setting up telemetry")?;
         info!("Telemetry is enabled.")
     } else {
         info!("Telemetry is disabled.")
     }
     telemetry::add_event(TelemetryEventProps::Started {}, None);
 
-    Server::builder()
-        .tls_config(ServerTlsConfig::new().identity(server_identity))?
-        .add_service(BastionLabServer::new(state))
-        .serve(config.client_to_enclave_untrusted_socket()?)
+    let mut builder = Server::builder()
+        .tls_config(ServerTlsConfig::new().identity(server_identity))
+        .context("Setting up TLS")?;
+
+    // Session
+    let svc = SessionGrpcService::new(sess_manager.clone());
+    let builder =
+        builder.add_service(session_proto::session_service_server::SessionServiceServer::new(svc));
+
+    // Arrow
+    let svc = BastionLabState::new(sess_manager.clone());
+    let builder = builder.add_service(BastionLabServer::new(svc));
+
+    // Torch
+    let svc = bastionlab_torch::BastionLabTorch::new(sess_manager.clone());
+    let builder = builder.add_service(torch_proto::remote_torch_server::RemoteTorchServer::new(
+        svc,
+    ));
+
+    info!("BastionLab server has been started.");
+
+    // serve!
+    builder
+        .serve(
+            config
+                .client_to_enclave_untrusted_socket()
+                .context("Parsing the client_to_enclave_untrusted_socket config")?,
+        )
         .await?;
     Ok(())
 }

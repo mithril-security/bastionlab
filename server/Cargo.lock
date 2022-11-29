@@ -194,6 +194,8 @@ version = "0.3.2"
 dependencies = [
  "anyhow",
  "base64",
+ "bastionlab_common",
+ "bastionlab_torch",
  "bincode",
  "bytes",
  "env_logger",
@@ -202,6 +204,81 @@ dependencies = [
  "log",
  "once_cell",
  "polars",
+ "prost",
+ "rand",
+ "reqwest",
+ "ring",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "spki",
+ "tch",
+ "tokio",
+ "tokio-stream",
+ "toml",
+ "tonic",
+ "tonic-build",
+ "uuid",
+ "whoami",
+ "x509-parser",
+]
+
+[[package]]
+name = "bastionlab_common"
+version = "0.2.1"
+dependencies = [
+ "anyhow",
+ "base64",
+ "bincode",
+ "bytes",
+ "env_logger",
+ "hex",
+ "http",
+ "log",
+ "once_cell",
+ "prost",
+ "rand",
+ "reqwest",
+ "ring",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "spki",
+ "tokio",
+ "tokio-stream",
+ "toml",
+ "tonic",
+ "tonic-build",
+ "uuid",
+ "whoami",
+ "x509-parser",
+]
+
+[[package]]
+name = "bastionlab_learning"
+version = "0.2.1"
+dependencies = [
+ "libc",
+ "rand",
+ "tch",
+ "torch-sys",
+]
+
+[[package]]
+name = "bastionlab_torch"
+version = "0.2.1"
+dependencies = [
+ "anyhow",
+ "base64",
+ "bastionlab_common",
+ "bastionlab_learning",
+ "bincode",
+ "bytes",
+ "env_logger",
+ "hex",
+ "http",
+ "log",
+ "once_cell",
  "prost",
  "rand",
  "reqwest",

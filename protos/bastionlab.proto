@@ -31,31 +31,10 @@ message Query {
 
 message Empty {}
 
-message ChallengeResponse {
-    bytes value = 1;
-}
-
-message ClientInfo {
-    string uid = 1;
-    string platform_name = 2;
-    string platform_arch = 3;
-    string platform_version = 4;
-    string platform_release = 5;
-    string user_agent = 6;
-    string user_agent_version = 7;
-}
-
-message SessionInfo {
-    bytes token = 1;
-}
-
 service BastionLab {
     rpc SendDataFrame (stream SendChunk) returns (ReferenceResponse) {}
     rpc RunQuery (Query) returns (ReferenceResponse) {}
-    rpc GetChallenge (Empty) returns (ChallengeResponse) {}
     rpc FetchDataFrame (ReferenceRequest) returns (stream FetchChunk) {}
     rpc ListDataFrames (Empty) returns (ReferenceList) {}
     rpc GetDataFrameHeader (ReferenceRequest) returns (ReferenceResponse) {}
-    rpc CreateSession (ClientInfo) returns (SessionInfo) {}
-    rpc RefreshSession (Empty) returns (Empty) {}
 }
