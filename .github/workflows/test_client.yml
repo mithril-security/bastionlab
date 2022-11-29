@@ -14,21 +14,40 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        include:
+          - serverImage: bastionlab
+            os: ubuntu-latest
         python-version: [3.9]
 
     steps:
       - uses: actions/checkout@v2
-
+      ########## SETUP ##########
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python-version }}
-
+      ########## INSTALL CLIENT ##########
       - name: Install bastionlab
         run: |
           make dev-install
           source env/bin/activate
 
+      # ########## GET SERVER ##########
+      # - name: Download artifact
+      #   uses: actions/download-artifact@v2
+      #   with:
+      #     name: ${{ matrix.serverImage }}
+      #     path: /tmp
+      # - name: Load image
+      #   run: |
+      #     docker load --input /tmp/${{ matrix.serverImage }}.tar
+      #     docker image ls -a
+      # - name: Launch server
+      #   run: |
+      #     docker kill -f app > /dev/null 2>&1 || true
+      #     docker run --rm -d -e bastionlab_DISABLE_TELEMETRY=1 -p 50056:50056  --name app ${{ matrix.serverImage }}:latest
+
+      ########## TESTING CLIENT ##########
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -43,6 +62,8 @@ jobs:
       - name: Test with pytest
         if: always()
         run: pytest --cov --cov-report=xml
+        env:
+          bastionlab_TEST_NO_LAUNCH_SERVER: "true"
       # Need test to be written in order to work properly
 
       - name: Coverage report
@@ -50,6 +71,7 @@ jobs:
         with:
           coverageFile: client/coverage.xml
           token: ${{ secrets.GITHUB_TOKEN }}
+          retention-days: 5
 
       - name: Check types with mypy
         if: always()
