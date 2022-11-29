@@ -143,7 +143,7 @@ class AuthPlugin(grpc.AuthMetadataPlugin):
 class Connection:
     host: str
     port: Optional[int] = 50056
-    signing_key: Optional[SigningKey] = None
+    identity: Optional[SigningKey] = None
     channel: Any = None
     token: Optional[bytes] = None
     _client: Optional[Client] = None
@@ -209,12 +209,12 @@ class Connection:
 
         # Verify user by creating session
         self.token = Connection._verify_user(
-            server_target, server_creds, connection_options, self.signing_key
+            server_target, server_creds, connection_options, self.identity
         )
 
         channel_cred = (
             server_creds
-            if self.signing_key is None
+            if self.identity is None
             else server_creds
             if self.token is None
             else grpc.composite_channel_credentials(
