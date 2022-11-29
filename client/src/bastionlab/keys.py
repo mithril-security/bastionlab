@@ -121,3 +121,15 @@ class SigningKey:
         content: bytes, password: Optional[bytes] = None
     ) -> "SigningKey":
         return SigningKey(serialization.load_pem_private_key(content, password))
+
+
+class Identity:
+    @staticmethod
+    def create(
+        name: Optional[str] = "bastionlab-identity", password: Optional[bytes] = None
+    ) -> SigningKey:
+        return SigningKey.keygen(name, password)
+
+    @staticmethod
+    def load(name: str) -> SigningKey:
+        return SigningKey.keygen(name, None)
