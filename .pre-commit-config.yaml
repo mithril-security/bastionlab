@@ -3,11 +3,11 @@ repos:
     rev: 22.10.0
     hooks:
     -   id: black
-        args: [ "--check", "--force-exclude=bastionai" ]
+        args: [ "--force-exclude=bastionai" ]
         exclude: bastionai/
 -   repo: https://github.com/doublify/pre-commit-rust
     rev: v1.0
     hooks:
     -   id: fmt
-        args: [ '--manifest-path=./server/Cargo.toml', '--check', '--' ]
+        args: [ '--manifest-path=./server/Cargo.toml', '--' ]
         exclude: bastionai/
