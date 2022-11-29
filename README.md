@@ -16,7 +16,7 @@
 
 # 👋 Welcome to BastionLab!
 
-Where data owners and data scientists can securely collaborate without exposing data - opening the way to projects that were too risky to consider. 
+Where data owners and data scientists can securely collaborate without exposing data - opening the way to projects that were too risky to consider.
 
 ## What is BastionLab?
 
