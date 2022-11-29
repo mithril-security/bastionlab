@@ -109,10 +109,10 @@ impl KeyManagement {
                     })?;
                     return Ok(());
                 }
-                Err(Status::permission_denied(format!(
+                return Err(Status::permission_denied(format!(
                     "{:?} not authenticated!",
                     public_key_hash
-                )))?
+                )));
             }
             None => Err(Status::permission_denied(format!(
                 "No signature provided for public key {}",
