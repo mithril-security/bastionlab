@@ -19,9 +19,9 @@ We’ll update the documentation as new features come in, so dive in!
 
 ## Getting Started
 
-- Follow our [“Quick Tour”](https://bastionlab.readthedocs.io/en/latest/docs/quick-tour/quick-tour/) tutorial
-- [Read](https://bastionlab.readthedocs.io/en/latest/docs/concept-guides/threat_model/) about the technologies we use to ensure privacy
-- Find [our benchmarks](https://bastionlab.readthedocs.io/en/latest/docs/reference-guides/benchmarks/polars/) documenting BastionLab’s speed
+- Follow our [“Quick Tour”]('docs/quick-tour/quick-tour.ipynb') tutorial
+- [Read]('docs/concept-guides/threat_model/') about the technologies we use to ensure privacy
+- Find [our benchmarks]('docs/reference-guides/benchmarks/polars/') documenting BastionLab’s speed
 
 ## Getting Help
 
@@ -35,10 +35,10 @@ The security stakes with private data are high. BastionLab uses new technologies
 <br>
 Here’s a high-view of how we structure our documentation:
 
-- **[Tutorials](https://bastionlab.readthedocs.io/en/latest/docs/quick-tour/quick-tour/)** take you by the hand to install and run BastionLab. 
-- **[Concept guides](https://bastionlab.readthedocs.io/en/latest/docs/concept-guides/confidential_computing/)** discuss key topics and concepts at a high level. They provide useful background information and explanations.
+- **[Tutorials]('docs/quick-tour/quick-tour.ipynb')** take you by the hand to install and run BastionLab. 
+- **[Concept guides]('docs/concept-guides/confidential_computing/')** discuss key topics and concepts at a high level. They provide useful background information and explanations.
 - **| *Coming soon* | How-to guides** are recipes. They guide you through the steps involved in addressing key problems and use cases. They are more advanced than tutorials and assume some knowledge of how BastionLab works.
-- **[Advanced guides](https://bastionlab.readthedocs.io/en/latest/docs/reference-guides/deployment/on_premise/)** contain technical references for BastionLab’s machinery. They describe how it works and how to use it but assume you have a good understanding of key concepts.
+- **[Advanced guides]('docs/reference-guides/deployment/on_premise/')** contain technical references for BastionLab’s machinery. They describe how it works and how to use it but assume you have a good understanding of key concepts.
 
 ## Who made BastionLab?
-Mithril Security is a startup aiming to make privacy-friendly data science easy so data scientists and data owners can collaborate without friction. Our solutions apply Privacy Enhancing Technologies and security best practices, like [Remote Data Science](https://bastionlab.readthedocs.io/en/latest/docs/concept-guides/remote_data_science/) and [Confidential Computing](docs/docs/concept-guides/confidential_computing.md).
+Mithril Security is a startup aiming to make privacy-friendly data science easy so data scientists and data owners can collaborate without friction. Our solutions apply Privacy Enhancing Technologies and security best practices, like [Remote Data Science]('docs/concept-guides/remote_data_science/'') and [Confidential Computing]('docs/concept-guides/confidential_computing/').
