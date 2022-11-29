@@ -132,4 +132,4 @@ class Identity:
 
     @staticmethod
     def load(name: str) -> SigningKey:
-        return SigningKey.keygen(name, None)
+        return SigningKey.from_pem(name, None)
