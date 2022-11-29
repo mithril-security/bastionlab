@@ -7,10 +7,10 @@
 <h4 align="center">
   <a href="https://www.mithrilsecurity.io">Website</a> |
   <a href="https://bastionlab.readthedocs.io/en/latest/">Documentation</a> |
+  <a href="https://discord.gg/TxEHagpWd4">Discord</a> |
   <a href="https://blog.mithrilsecurity.io/">Blog</a> |
   <a href="https://www.linkedin.com/company/mithril-security-company">LinkedIn</a> | 
-  <a href="https://www.twitter.com/mithrilsecurity">Twitter</a> | 
-  <a href="https://discord.gg/TxEHagpWd4">Discord</a>
+  <a href="https://www.twitter.com/mithrilsecurity">Twitter</a>
 </h4><br>
 
 
@@ -31,7 +31,7 @@ BastionLab solves this problem by ensuring that only privacy-friendly operations
 
 **BastionLab is an open-source project.** Our solution is coded in Rust and uses Polars, a pandas-like library for data exploration.
 
->  **Disclaimer**: BastionAI, our fortified learning framework using TEEs will be incorporated in the broader offers of BastionLab, a holistic secure data science toolkit. While waiting for the merge, you can still use BastionAI under the folder bastionai.
+>  **Disclaimer**: BastionAI, our fortified learning framework relying on Trusted Execution Environement (TEE) will be incorporated in the broader offers of BastionLab. While waiting for the merge, you can still use BastionAI under the folder bastionai.
 
 ## Getting Started
 
@@ -53,7 +53,7 @@ Here’s a high-view of how we structure our documentation:
 - **[Tutorials](docs/docs/quick-tour/quick-tour.ipynb)** take you by the hand to install and run BastionLab. You can get introduced to our “Quick Tour” first! 
 - **[Concept guides](docs/docs/concept-guides/confidential_computing.md)** discuss key topics and concepts at a high level. They provide useful background information and explanations.
 - **| *Coming soon* | How-to guides** are recipes. They guide you through the steps involved in addressing key problems and use cases. They are more advanced than tutorials and assume some knowledge of how BastionLab works.
-- **[Reference guides](docs/docs/reference-guides/deployment/on_premise.md)** contain technical references for BastionLab’s machinery. They describe how it works and how to use it but assume you have a good understanding of key concepts.
+- **[Advanced guides](docs/docs/reference-guides/deployment/on_premise.md)** contain technical references for BastionLab’s machinery. They describe how it works and how to use it but assume you have a good understanding of key concepts.
 
 ## Who made BastionLab?
-Mithril Security is a startup aiming to make privacy-friendly data science easy so data scientists and data owners can collaborate without friction. Our solutions apply Privacy Enhancing Technologies and security best practices, like [Remote Data Science]() and [Confidential Computing](docs/docs/concept-guides/confidential_computing.md).
+Mithril Security is a startup aiming to make privacy-friendly data science easy so data scientists and data owners can collaborate without any issue. Our solutions apply Privacy Enhancing Technologies and security best practices, like [Remote Data Science](https://bastionlab.readthedocs.io/en/latest/docs/concept-guides/remote_data_science/) and [Confidential Computing](docs/docs/concept-guides/confidential_computing.md).
