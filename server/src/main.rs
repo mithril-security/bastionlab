@@ -80,9 +80,7 @@ impl DataFrameArtifact {
             policy,
             fetchable: VerificationResult::Unsafe {
                 action: UnsafeAction::Reject,
-                reason: String::from(
-                    "DataFrames uploaded by the Data Owner are protected.",
-                ),
+                reason: String::from("DataFrames uploaded by the Data Owner are protected."),
             },
             blacklist,
             query_details: String::from("uploaded dataframe"),
@@ -131,10 +129,16 @@ impl BastionLabState {
         if let VerificationResult::Unsafe { reason, .. } = &artifact.fetchable {
             println!(
                 "Safe zone violation: a DataFrame has been non-privately fetched.
-Reason: {}", reason);
+Reason: {}",
+                reason
+            );
         }
         Ok(match &artifact.fetchable {
-            VerificationResult::Safe | VerificationResult::Unsafe { action: UnsafeAction::Log, .. } => {
+            VerificationResult::Safe
+            | VerificationResult::Unsafe {
+                action: UnsafeAction::Log,
+                ..
+            } => {
                 let mut df = artifact.dataframe.clone();
                 sanitize_df(&mut df, &artifact.blacklist);
                 telemetry::add_event(
@@ -149,7 +153,10 @@ Reason: {}", reason);
                     needs_approval: None,
                 }
             }
-            VerificationResult::Unsafe { action: UnsafeAction::Reject, reason } => {
+            VerificationResult::Unsafe {
+                action: UnsafeAction::Reject,
+                reason,
+            } => {
                 let reason = reason.clone();
                 DelayedDataFrame {
                     future: Box::pin(async move {
@@ -162,7 +169,10 @@ Reason: {}",
                     needs_approval: None,
                 }
             }
-            VerificationResult::Unsafe { action: UnsafeAction::Review, reason } => {
+            VerificationResult::Unsafe {
+                action: UnsafeAction::Review,
+                reason,
+            } => {
                 let reason = reason.clone();
                 let identifier = String::from(identifier);
                 let query_details = artifact.query_details.clone();
@@ -194,7 +204,7 @@ Reason the request is unsafe:
                                         query_details,
                                     );
                                     continue;
-                                },
+                                }
                                 "n" => {
                                     telemetry::add_event(
                                         TelemetryEventProps::FetchDataFrame {

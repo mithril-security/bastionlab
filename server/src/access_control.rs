@@ -11,7 +11,10 @@ impl Policy {
     pub fn verify(&self, ctx: &Context) -> Result<VerificationResult, Status> {
         Ok(match self.safe_zone.verify(ctx)? {
             RuleMatch::Match => VerificationResult::Safe,
-            RuleMatch::Mismatch(reason) => VerificationResult::Unsafe { action: self.unsafe_handling, reason },
+            RuleMatch::Mismatch(reason) => VerificationResult::Unsafe {
+                action: self.unsafe_handling,
+                reason,
+            },
         })
     }
 
@@ -23,7 +26,10 @@ impl Policy {
     }
 
     pub fn allow_by_default() -> Self {
-        Policy { safe_zone: Rule::True, unsafe_handling: UnsafeAction::Log }
+        Policy {
+            safe_zone: Rule::True,
+            unsafe_handling: UnsafeAction::Log,
+        }
     }
 }
 
@@ -105,7 +111,7 @@ impl UnsafeAction {
             UnsafeAction::Log => other,
             UnsafeAction::Review if other == UnsafeAction::Log => UnsafeAction::Review,
             UnsafeAction::Review => other,
-            UnsafeAction::Reject => UnsafeAction::Reject
+            UnsafeAction::Reject => UnsafeAction::Reject,
         }
     }
 }
