@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
-from bastionlab.pb.bastionlab_torch_pb2 import TrainConfig  # type: ignore [import]
+from ..pb.bastionlab_torch_pb2 import TrainConfig  # type: ignore [import]
 
 
 @dataclass

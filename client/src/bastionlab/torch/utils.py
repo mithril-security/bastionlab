@@ -1,15 +1,12 @@
 import io
 from typing import Callable, Iterator, List, Tuple, TypeVar, Optional, Any
-
 import torch
 from torch import Tensor
 from torch.nn import Module
 from torch.nn.parameter import Parameter
 from torch.utils.data import Dataset
-
 from tqdm import tqdm  # type: ignore [import]
-
-from bastionlab.pb.bastionlab_torch_pb2 import Chunk, Reference  # type: ignore [import]
+from ..pb.bastionlab_torch_pb2 import Chunk, Reference  # type: ignore [import]
 
 T = TypeVar("T")
 U = TypeVar("U")

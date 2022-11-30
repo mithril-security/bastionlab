@@ -1,40 +1,28 @@
 syntax = "proto3";
 package bastionlab;
 
-message ReferenceRequest {
-    string identifier = 1;
-}
-
-message ReferenceResponse {
-    string identifier = 1;
-    string header = 2;
-}
-
-message ReferenceList {
-    repeated ReferenceResponse list = 1;
-}
-
-message SendChunk {
-    bytes data = 1;
-    string policy = 2;
-    string metadata = 3;
-}
-
-message FetchChunk {
-    bytes data = 1;
-    string pending = 2;
-}
-
-message Query {
-    string composite_plan = 1;
-}
-
 message Empty {}
 
-service BastionLab {
-    rpc SendDataFrame (stream SendChunk) returns (ReferenceResponse) {}
-    rpc RunQuery (Query) returns (ReferenceResponse) {}
-    rpc FetchDataFrame (ReferenceRequest) returns (stream FetchChunk) {}
-    rpc ListDataFrames (Empty) returns (ReferenceList) {}
-    rpc GetDataFrameHeader (ReferenceRequest) returns (ReferenceResponse) {}
+message ChallengeResponse {
+    bytes value = 1;
+}
+
+message SessionInfo {
+    bytes token = 1;
+}
+
+message ClientInfo {
+    string uid = 1;
+    string platform_name = 2;
+    string platform_arch = 3;
+    string platform_version = 4;
+    string platform_release = 5;
+    string user_agent = 6;
+    string user_agent_version = 7;
+}
+
+service SessionService {
+    rpc GetChallenge (Empty) returns (ChallengeResponse) {}
+    rpc CreateSession (ClientInfo) returns (SessionInfo) {}
+    rpc RefreshSession (Empty) returns (Empty) {}
 }

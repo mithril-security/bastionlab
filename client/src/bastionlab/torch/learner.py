@@ -1,21 +1,17 @@
 from typing import Optional, Union, List
-
-from bastionlab.pb.bastionlab_torch_pb2 import Metric, Reference, TestConfig, TrainConfig  # type: ignore [import]
+from time import sleep
+from tqdm import tqdm  # type: ignore [import]
+from grpc import StatusCode
 from torch.nn import Module
 from torch.utils.data import Dataset
 import torch
+from ..pb.bastionlab_torch_pb2 import Metric, Reference, TestConfig, TrainConfig  # type: ignore [import]
+from ..errors import GRPCException
 from .psg import expand_weights
 from .client import BastionLabTorch
 from .optimizer_config import *
 
-from time import sleep
-from tqdm import tqdm  # type: ignore [import]
-
-import grpc  # type: ignore [import]
-from grpc import StatusCode
-
 from .utils import bulk_deserialize
-from .errors import GRPCException
 
 
 class RemoteDataset:

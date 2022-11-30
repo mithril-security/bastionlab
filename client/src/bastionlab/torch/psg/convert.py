@@ -1,6 +1,6 @@
 import torch
-from .nn import LayerNorm, Linear, Embedding, Conv1d, Conv2d, Conv3d
 from typing import Tuple, Optional
+from .nn import LayerNorm, Linear, Embedding, Conv1d, Conv2d, Conv3d
 
 
 def _set_weight_and_bias(

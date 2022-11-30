@@ -12,7 +12,7 @@ use uuid::Uuid;
 pub mod torch_proto {
     tonic::include_proto!("bastionlab_torch");
 }
-use torch_proto::remote_torch_server::RemoteTorch;
+use torch_proto::torch_service_server::TorchService;
 use torch_proto::{
     Chunk, Devices, Empty, Metric, Optimizers, Reference, References, TestConfig, TrainConfig,
 };
@@ -53,7 +53,7 @@ impl BastionLabTorch {
 }
 
 #[tonic::async_trait]
-impl RemoteTorch for BastionLabTorch {
+impl TorchService for BastionLabTorch {
     type FetchDatasetStream = ReceiverStream<Result<Chunk, Status>>;
     type FetchModuleStream = ReceiverStream<Result<Chunk, Status>>;
 

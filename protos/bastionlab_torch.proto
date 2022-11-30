@@ -116,7 +116,7 @@ message Metric {
     int32 nb_batches = 6;
 }
 
-service RemoteTorch {
+service TorchService {
     rpc SendDataset (stream Chunk) returns (Reference) {}
     rpc SendModel (stream Chunk) returns (Reference) {}
     rpc FetchDataset (Reference) returns (stream Chunk) {}

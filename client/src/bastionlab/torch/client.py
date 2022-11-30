@@ -1,10 +1,8 @@
-from .optimizer_config import *
-
 from typing import List, TYPE_CHECKING
-
-from bastionlab.pb.bastionlab_torch_pb2 import Empty, Metric, Reference, TestConfig, TrainConfig  # type: ignore [import]
-
-from bastionlab.pb.bastionlab_torch_pb2_grpc import RemoteTorchStub  # type: ignore [import]
+from ..pb.bastionlab_torch_pb2 import Empty, Metric, Reference, TestConfig, TrainConfig  # type: ignore [import]
+from ..pb.bastionlab_torch_pb2_grpc import TorchServiceStub  # type: ignore [import]
+from ..errors import GRPCException
+from .optimizer_config import *
 from torch.nn import Module
 from torch.utils.data import Dataset
 import grpc
@@ -17,7 +15,6 @@ from .utils import (
     serialize_model,
 )
 
-from .errors import GRPCException
 
 if TYPE_CHECKING:
     from .learner import RemoteLearner, RemoteDataset
@@ -34,7 +31,7 @@ class BastionLabTorch:
         self,
         channel: grpc.Channel,
     ) -> None:
-        self.stub = RemoteTorchStub(channel)
+        self.stub = TorchServiceStub(channel)
 
     def send_model(
         self,
