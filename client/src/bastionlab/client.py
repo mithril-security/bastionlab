@@ -61,16 +61,16 @@ class Client:
         token: bytes,
     ):
         self.__channel = channel
-        self.stub = BastionLabStub(channel) # polars stub
+        self.stub = BastionLabStub(channel)  # polars stub
         self.token = token
 
     @property
     def torch(self):
         if self.__bastionlab_torch is None:
             from bastionlab.torch import BastionLabTorch
+
             self.__bastionlab_torch = BastionLabTorch(self.__channel)
         return self.__bastionlab_torch
-        
 
     def send_df(
         self,

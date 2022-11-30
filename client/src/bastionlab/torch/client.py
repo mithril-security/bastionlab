@@ -22,9 +22,10 @@ from .errors import GRPCException
 if TYPE_CHECKING:
     from .learner import RemoteLearner, RemoteDataset
 
+
 class BastionLabTorch:
     """BastionLab Torch RPC Handle
-    
+
     Args:
         stub: The underlying gRPC client for the BastionAI protocol.
     """
@@ -57,15 +58,17 @@ class BastionLabTorch:
         Returns:
             BastionAI gRPC protocol's reference object.
         """
-        return GRPCException.map_error(lambda: self.stub.SendModel(
-            serialize_model(
-                model,
-                name=name,
-                description=description,
-                chunk_size=chunk_size,
-                progress=progress,
+        return GRPCException.map_error(
+            lambda: self.stub.SendModel(
+                serialize_model(
+                    model,
+                    name=name,
+                    description=description,
+                    chunk_size=chunk_size,
+                    progress=progress,
+                )
             )
-        ))
+        )
 
     def send_dataset(
         self,
@@ -94,18 +97,20 @@ class BastionLabTorch:
         Returns:
             BastionAI gRPC protocol's reference object.
         """
-        return GRPCException.map_error(lambda: self.stub.SendDataset(
-            serialize_dataset(
-                dataset,
-                name=name,
-                description=description,
-                chunk_size=chunk_size,
-                batch_size=batch_size,
-                privacy_limit=privacy_limit,
-                train_dataset=train_dataset,
-                progress=progress,
+        return GRPCException.map_error(
+            lambda: self.stub.SendDataset(
+                serialize_dataset(
+                    dataset,
+                    name=name,
+                    description=description,
+                    chunk_size=chunk_size,
+                    batch_size=batch_size,
+                    privacy_limit=privacy_limit,
+                    train_dataset=train_dataset,
+                    progress=progress,
+                )
             )
-        ))
+        )
 
     def fetch_model_weights(self, model: Module, ref: Reference) -> None:
         """Fetches the weights of a distant trained model with a BastionAI gRPC protocol reference
@@ -127,7 +132,9 @@ class BastionLabTorch:
         Returns:
             A dataset instance built from received data.
         """
-        return dataset_from_chunks(GRPCException.map_error(lambda: self.stub.FetchDataset(ref)))
+        return dataset_from_chunks(
+            GRPCException.map_error(lambda: self.stub.FetchDataset(ref))
+        )
 
     def get_available_models(self) -> List[Reference]:
         """Returns the list of BastionAI gRPC protocol references of all available models on the server."""
@@ -135,7 +142,9 @@ class BastionLabTorch:
 
     def get_available_datasets(self) -> List[Reference]:
         """Returns the list of BastionAI gRPC protocol references of all datasets on the server."""
-        return GRPCException.map_error(lambda: self.stub.AvailableDatasets(Empty())).list
+        return GRPCException.map_error(
+            lambda: self.stub.AvailableDatasets(Empty())
+        ).list
 
     def get_available_devices(self) -> List[str]:
         """Returns the list of devices available on the server."""
@@ -143,7 +152,9 @@ class BastionLabTorch:
 
     def get_available_optimizers(self) -> List[str]:
         """Returns the list of optimizers supported by the server."""
-        return GRPCException.map_error(lambda: self.stub.AvailableOptimizers(Empty())).list
+        return GRPCException.map_error(
+            lambda: self.stub.AvailableOptimizers(Empty())
+        ).list
 
     def train(self, config: TrainConfig) -> Reference:
         """Trains a model with hyperparameters defined in `config` on the BastionAI server.
@@ -184,7 +195,7 @@ class BastionLabTorch:
             run: BastionAI gRPC protocol reference of the run whose metric is read.
         """
         return GRPCException.map_error(lambda: self.stub.GetMetric(run))
-    
+
     def list_remote_datasets(self) -> List["RemoteDataset"]:
         from .learner import RemoteDataset
 
