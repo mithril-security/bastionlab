@@ -1,3 +1,3 @@
 client_to_enclave_untrusted_url = "https://0.0.0.0:50056"
-public_keys_directory = "keys"
+public_keys_directory = ""
 session_expiry_in_secs = 1500
