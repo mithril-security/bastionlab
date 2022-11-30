@@ -7,6 +7,7 @@ use serde_json;
 use std::{
     collections::hash_map::DefaultHasher,
     collections::HashMap,
+    env,
     error::Error,
     fmt::Debug,
     fs::{self, File},
@@ -18,7 +19,6 @@ use std::{
     sync::{Arc, Mutex, RwLock},
     time::Instant,
     time::{Duration, SystemTime},
-    env,
 };
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{
@@ -580,7 +580,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let config: BastionLabConfig = toml::from_str(&contents)?;
     let public_keys_directory = match env::var("PUBLIC_KEYS_DIR") {
         Ok(val) => val,
-        Err(_) => None,
+        Err(_) => String::new(),
     };
     let keys = match KeyManagement::load_from_dir(public_keys_directory) {
         Ok(keys) => {

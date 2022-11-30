@@ -3,7 +3,6 @@ use std::{
     fs::{self, read, ReadDir},
     net::SocketAddr,
     path::{Path, PathBuf},
-    env,
 };
 
 use bytes::Bytes;
