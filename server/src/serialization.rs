@@ -11,6 +11,7 @@ pub async fn df_artifact_from_stream(
     stream: tonic::Streaming<SendChunk>,
 ) -> Result<DataFrameArtifact, Status> {
     let (df_bytes, policy, metadata) = unstream_data(stream).await?;
+    println!("{}", policy);
     let series = df_bytes
         .iter()
         .map(|v| bincode::deserialize(&v[..]).unwrap())

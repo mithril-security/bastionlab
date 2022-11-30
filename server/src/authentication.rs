@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    fs::{self, read},
+    fs::{self, read, ReadDir},
     net::SocketAddr,
     path::{Path, PathBuf},
 };
@@ -23,37 +23,44 @@ pub type PubKey = Vec<u8>;
 
 #[derive(Debug, Default, Clone)]
 pub struct KeyManagement {
-    pub_keys: HashMap<String, PubKey>,
+    owners: HashMap<String, PubKey>,
+    users: HashMap<String, PubKey>,
 }
 
 impl KeyManagement {
     fn read_from_file(path: PathBuf) -> Result<(String, PubKey), Status> {
         let file = &read(path)?;
         let (_, Pem { contents, .. }) = x509_parser::pem::parse_x509_pem(&file[..])
-            .map_err(|e| Status::aborted(e.to_string()))?;
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         let hash = hex::encode(digest(&SHA256, &contents[..]));
         Ok((hash, contents))
     }
 
-    pub fn load_from_dir(path: String) -> Result<Self, Status> {
-        let mut pub_keys: HashMap<String, PubKey> = HashMap::new();
-
-        if !Path::new(&path).is_dir() {
-            Err(Status::aborted("Please provide a directory!"))?
-        }
-
-        let paths = fs::read_dir(path.clone())?;
-
-        for path in paths {
+    pub fn get_hash_and_keys(dir: ReadDir) -> Result<HashMap<String, PubKey>, Status> {
+        let mut res = HashMap::new();
+        for path in dir {
             let path = path?;
             let file = path.path();
 
             let (hash, raw) = KeyManagement::read_from_file(file)?;
-            pub_keys.insert(hash, raw);
+            res.insert(hash, raw);
+        }
+        Ok(res)
+    }
+
+    pub fn load_from_dir(path: String) -> Result<Self, Status> {
+        if !Path::new(&path).is_dir() {
+            Err(Status::aborted("Please provide a public keys directory!"))?
         }
 
-        Ok(KeyManagement { pub_keys })
+        let owners = fs::read_dir(path.clone() + "/owners")?;
+        let users = fs::read_dir(path + "/users")?;
+
+        let owners = KeyManagement::get_hash_and_keys(owners)?;
+        let users = KeyManagement::get_hash_and_keys(users)?;
+
+        Ok(KeyManagement { owners, users })
     }
 
     pub fn verify_signature(
@@ -71,9 +78,10 @@ impl KeyManagement {
         */
         match header.get_bin(format!("signature-{}-bin", public_key_hash)) {
             Some(signature) => {
-                let keys = &self.pub_keys;
+                let keys = &mut self.owners.iter().chain(self.users.iter());
 
-                if let Some(raw_pub) = keys.get(&public_key_hash.to_string()) {
+                if let Some((_, raw_pub)) = keys.find(|&(k, _v)| public_key_hash.to_string().eq(k))
+                {
                     let public_key = spki::SubjectPublicKeyInfo::try_from(raw_pub.as_ref())
                         .map_err(|_| {
                             Status::invalid_argument(format!(
@@ -101,10 +109,10 @@ impl KeyManagement {
                     })?;
                     return Ok(());
                 }
-                Err(Status::aborted(format!(
+                return Err(Status::permission_denied(format!(
                     "{:?} not authenticated!",
                     public_key_hash
-                )))?
+                )));
             }
             None => Err(Status::permission_denied(format!(
                 "No signature provided for public key {}",
@@ -137,12 +145,15 @@ pub fn verify_ip(stored: &SocketAddr, recv: &SocketAddr) -> bool {
     stored.ip().eq(&recv.ip())
 }
 
-pub fn get_token<T>(req: &Request<T>) -> Result<Bytes, Status> {
+pub fn get_token<T>(req: &Request<T>, auth_enabled: bool) -> Result<Option<Bytes>, Status> {
+    if !auth_enabled {
+        return Ok(None);
+    }
     let meta = req
         .metadata()
         .get_bin("accesstoken-bin")
         .ok_or_else(|| Status::invalid_argument("No accesstoken in request metadata"))?;
-    Ok(meta
-        .to_bytes()
-        .map_err(|_| Status::invalid_argument("Could not decode accesstoken"))?)
+    Ok(Some(meta.to_bytes().map_err(|_| {
+        Status::invalid_argument("Could not decode accesstoken")
+    })?))
 }

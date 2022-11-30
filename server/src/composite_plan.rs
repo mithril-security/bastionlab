@@ -6,7 +6,7 @@ use tch::CModule;
 use tonic::Status;
 
 use crate::{
-    access_control::Policy,
+    access_control::{Context, Policy},
     utils::*,
     visitable::{Visitable, VisitableMut},
     BastionLabState, DataFrameArtifact,
@@ -28,13 +28,13 @@ impl CompositePlan {
         let plan_str = serde_json::to_string(&self.0).unwrap(); // FIX THIS
 
         let (policy, blacklist) = self.output_policy(state)?;
-        let fetchable = policy.verify_fetch(&self, "")?;
+        let mut min_agg_size = None;
 
         for seg in self.0 {
             match seg {
                 CompositePlanSegment::PolarsPlanSegment(mut plan) => {
                     initialize_inputs(&mut plan, &mut input_dfs)?;
-                    // aggregation_check(&plan, &mut fetchable, 10)?;
+                    aggregation_size(&plan, &mut min_agg_size)?;
                     let df = run_logical_plan(plan)?;
                     input_dfs.push(df);
                 }
@@ -88,8 +88,11 @@ impl CompositePlan {
 
         Ok(DataFrameArtifact {
             dataframe: input_dfs.pop().unwrap(),
+            fetchable: policy.verify_fetch(&Context {
+                min_agg_size,
+                user_id: String::new(),
+            })?,
             policy,
-            fetchable,
             blacklist,
             query_details: plan_str,
         })
@@ -110,49 +113,44 @@ impl CompositePlan {
 
         Ok((policy, blacklist))
     }
+}
 
-    pub fn aggregation_match(&self, min_allowed_agg_size: usize) -> Result<bool, Status> {
-        let mut state = false;
-
-        for seg in &self.0 {
-            if let CompositePlanSegment::PolarsPlanSegment(plan) = seg {
-                plan.visit(&mut state, |plan, state| {
-                    match plan {
-                        LogicalPlan::Aggregate { input, keys, .. } => {
-                            let keys = &(**keys)[..];
-                            let ldf = lazy_frame_from_logical_plan((&**input).clone());
-                            let min_agg_size: usize = ldf
-                                .cache()
-                                .with_row_count("__count", None)
-                                .groupby(keys)
-                                .agg([col("__count").count()])
-                                .select([col("__count").min()])
-                                .collect()
-                                .map_err(|e| {
-                                    Status::internal(format!(
-                                        "Could not check aggregation minimal count: {}",
-                                        e
-                                    ))
-                                })?
-                                .get(0)
-                                .unwrap()[0]
-                                .try_extract()
-                                .unwrap();
-                            *state = *state || min_agg_size >= min_allowed_agg_size;
-                        }
-                        LogicalPlan::Join { .. } => *state = false,
-                        // These are not currently supported
-                        // LogicalPlan::ExtContext { .. } => *state = false,
-                        // LogicalPlan::Union { .. } => *state = false,
-                        _ => (),
-                    }
-                    Ok(())
-                })?;
+fn aggregation_size(plan: &LogicalPlan, state: &mut Option<usize>) -> Result<(), Status> {
+    plan.visit(state, |plan, state| {
+        match plan {
+            LogicalPlan::Aggregate { input, keys, .. } => {
+                let keys = &(**keys)[..];
+                let ldf = lazy_frame_from_logical_plan((&**input).clone());
+                let agg_size: usize = ldf
+                    .cache()
+                    .with_row_count("__count", None)
+                    .groupby(keys)
+                    .agg([col("__count").count()])
+                    .select([col("__count").min()])
+                    .collect()
+                    .map_err(|e| {
+                        Status::internal(format!(
+                            "Could not check aggregation minimal count: {}",
+                            e
+                        ))
+                    })?
+                    .get(0)
+                    .unwrap()[0]
+                    .try_extract()
+                    .unwrap();
+                *state = match *state {
+                    Some(prev_agg_size) => Some(prev_agg_size.min(agg_size)),
+                    None => Some(agg_size),
+                };
             }
+            LogicalPlan::Join { .. } => *state = None,
+            // These are not currently supported
+            // LogicalPlan::ExtContext { .. } => *state = false,
+            // LogicalPlan::Union { .. } => *state = false,
+            _ => (),
         }
-
-        Ok(state)
-    }
+        Ok(())
+    })
 }
 
 fn initialize_inputs(plan: &mut LogicalPlan, input_dfs: &mut Vec<DataFrame>) -> Result<(), Status> {
