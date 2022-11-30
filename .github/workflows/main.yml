@@ -29,7 +29,7 @@ jobs:
           load: true
           tags: ${{ matrix.image }}
           context: .
-          file: ./server/Dockerfile
+          file: ./Dockerfile
           cache-from: type=gha
           cache-to: type=gha,mode=max
           outputs: type=docker,dest=/tmp/${{ matrix.image }}.tar

@@ -1,9 +1,5 @@
-use crate::composite_plan::CompositePlan;
-
 use serde::{Deserialize, Serialize};
 use tonic::Status;
-
-// use std::ops::{BitOr, BitAnd, BitOrAssign, BitAndAssign};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Policy {
@@ -11,12 +7,8 @@ pub struct Policy {
 }
 
 impl Policy {
-    pub fn verify_fetch(
-        &self,
-        plan: &CompositePlan,
-        user_id: &str,
-    ) -> Result<PolicyAction, Status> {
-        self.fetch.run_checks(plan, user_id)
+    pub fn verify_fetch(&self, ctx: &Context) -> Result<PolicyAction, Status> {
+        self.fetch.run_checks(ctx)
     }
 
     pub fn merge(&self, other: &Self) -> Self {
@@ -39,10 +31,10 @@ pub struct PolicyEntry {
 }
 
 impl PolicyEntry {
-    fn run_checks(&self, plan: &CompositePlan, user_id: &str) -> Result<PolicyAction, Status> {
-        Ok(match self.accept.verify(plan, user_id)? {
+    fn run_checks(&self, ctx: &Context) -> Result<PolicyAction, Status> {
+        Ok(match self.accept.verify(ctx)? {
             RuleMatch::Match => PolicyAction::Accept,
-            RuleMatch::Mismatch(reason) => match self.approval.verify(plan, user_id)? {
+            RuleMatch::Mismatch(reason) => match self.approval.verify(ctx)? {
                 RuleMatch::Match => PolicyAction::Approval(reason),
                 RuleMatch::Mismatch(reason) => PolicyAction::Reject(reason),
             },
@@ -73,14 +65,20 @@ pub enum Rule {
     False,
 }
 
+#[derive(Debug, Clone)]
+pub struct Context {
+    pub min_agg_size: Option<usize>,
+    pub user_id: String,
+}
+
 impl Rule {
-    fn verify(&self, plan: &CompositePlan, user_id: &str) -> Result<RuleMatch, Status> {
+    fn verify(&self, ctx: &Context) -> Result<RuleMatch, Status> {
         match self {
             Rule::AtLeastNOf(n, sub_rules) => {
                 let mut m = 0;
                 let mut failed = String::new();
                 for (i, rule) in sub_rules.iter().enumerate() {
-                    match rule.verify(plan, user_id)? {
+                    match rule.verify(ctx)? {
                         RuleMatch::Match => m += 1,
                         RuleMatch::Mismatch(reason) => {
                             failed.push_str(&format!("\nRule #{}: {}", i, reason))
@@ -95,19 +93,18 @@ impl Rule {
                     m, n, failed
                 )))
             }
-            Rule::UserId(expected_user_id) => Ok(if expected_user_id == user_id {
+            Rule::UserId(expected_user_id) => Ok(if expected_user_id == &ctx.user_id {
                 RuleMatch::Match
             } else {
                 RuleMatch::Mismatch(String::from("UserId mismatch"))
             }),
             Rule::Aggregation(min_allowed_agg_size) => {
-                Ok(if plan.aggregation_match(*min_allowed_agg_size)? {
-                    RuleMatch::Match
-                } else {
-                    RuleMatch::Mismatch(format!(
-                    "Cannot fetch a DataFrame that does not aggregate at least {} rows of the initial dataframe uploaded by the data owner.",
-                    min_allowed_agg_size
-                ))
+                Ok(match ctx.min_agg_size {
+                    Some(min_agg_size) if min_agg_size >= *min_allowed_agg_size => RuleMatch::Match,
+                    _ => RuleMatch::Mismatch(format!(
+                        "Cannot fetch a DataFrame that does not aggregate at least {} rows of the initial dataframe uploaded by the data owner.",
+                        min_allowed_agg_size
+                    )),
                 })
             }
             Rule::True => Ok(RuleMatch::Match),
