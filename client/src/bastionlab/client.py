@@ -10,12 +10,13 @@ from bastionlab.keys import SigningKey
 from grpc import StatusCode
 from bastionlab.pb.bastionlab_pb2 import (
     ReferenceRequest,
-    ClientInfo,
     Query,
     Empty,
 )
+from bastionlab.pb.bastionlab_session_pb2 import ClientInfo
 from bastionlab.version import __version__ as app_version
 from bastionlab.pb.bastionlab_pb2_grpc import BastionLabStub
+from bastionlab.pb.bastionlab_session_pb2_grpc import SessionServiceStub
 
 import platform
 import socket
@@ -33,6 +34,7 @@ from bastionlab.errors import GRPCException
 
 if TYPE_CHECKING:
     from bastionlab.remote_polars import RemoteLazyFrame, FetchableLazyFrame
+    from .torch import BastionLabTorch
 
 HEART_BEAT_TICK = 25 * 60
 UNAME = platform.uname()
@@ -50,13 +52,25 @@ CLIENT_INFO = ClientInfo(
 
 
 class Client:
+    __bastionlab_torch: Any = None
+    __channel: Any
+
     def __init__(
         self,
-        stub: BastionLabStub,
+        channel: grpc.Channel,
         token: bytes,
     ):
-        self.stub = stub
+        self.__channel = channel
+        self.stub = BastionLabStub(channel) # polars stub
         self.token = token
+
+    @property
+    def torch(self):
+        if self.__bastionlab_torch is None:
+            from bastionlab.torch import BastionLabTorch
+            self.__bastionlab_torch = BastionLabTorch(self.__channel)
+        return self.__bastionlab_torch
+        
 
     def send_df(
         self,
@@ -162,12 +176,12 @@ class Connection:
         """
         channel = grpc.secure_channel(server_target, server_creds, options)
 
-        stub = BastionLabStub(channel)
+        session_stub = SessionServiceStub(channel)
 
         metadata = ()
         data: bytes = CLIENT_INFO.SerializeToString()
 
-        challenge = stub.GetChallenge(Empty()).value
+        challenge = session_stub.GetChallenge(Empty()).value
 
         metadata += (("challenge-bin", challenge),)
         to_sign = b"create-session" + challenge + data
@@ -176,7 +190,7 @@ class Connection:
         signed = signing_key.sign(to_sign)
         metadata += ((f"signature-{(pubkey_hex)}-bin", signed),)
 
-        return stub.CreateSession(CLIENT_INFO, metadata=metadata).token
+        return session_stub.CreateSession(CLIENT_INFO, metadata=metadata).token
 
     @property
     def client(self) -> Client:
@@ -233,7 +247,7 @@ class Connection:
         daemon.start()
 
         self._client = Client(
-            stub,
+            self.channel,
             token,
         )
 

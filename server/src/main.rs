@@ -457,15 +457,13 @@ async fn main() -> Result<()> {
         svc,
     ));
 
-    info!("BastionLab server has been started.");
+    let addr = config
+        .client_to_enclave_untrusted_socket()
+        .context("Parsing the client_to_enclave_untrusted_socket config")?;
+
+    info!("BastionLab server starting on {addr:?}.");
 
     // serve!
-    builder
-        .serve(
-            config
-                .client_to_enclave_untrusted_socket()
-                .context("Parsing the client_to_enclave_untrusted_socket config")?,
-        )
-        .await?;
+    builder.serve(addr).await?;
     Ok(())
 }
