@@ -1,9 +1,11 @@
+use std::{fs, path::Path};
+
 use crate::prelude::*;
+
 use ring::{
     digest::{digest, SHA256},
     signature,
 };
-use std::{fs, path::Path};
 use tonic::{metadata::MetadataMap, Status};
 use x509_parser::prelude::Pem;
 
@@ -11,38 +13,49 @@ pub type PubKey = Vec<u8>;
 
 #[derive(Debug, Default, Clone)]
 pub struct KeyManagement {
-    pub_keys: HashMap<String, PubKey>,
+    owners: HashMap<String, PubKey>,
+    users: HashMap<String, PubKey>,
 }
 
 impl KeyManagement {
     fn read_from_file(path: &Path) -> Result<(String, PubKey)> {
         let file = &fs::read(path).with_context(|| anyhow!("Reading file: {path:?}"))?;
         let (_, Pem { contents, .. }) = x509_parser::pem::parse_x509_pem(&file[..])
-            .map_err(|e| Status::aborted(e.to_string()))
             .with_context(|| anyhow!("Parsing PEM file: {path:?}"))?;
 
         let hash = hex::encode(digest(&SHA256, &contents[..]));
         Ok((hash, contents))
     }
 
-    pub fn load_from_dir(path: &Path) -> Result<Self> {
-        let mut pub_keys: HashMap<String, PubKey> = HashMap::new();
-
-        ensure!(path.is_dir(), "keys path is not a folder");
-
-        let paths =
-            fs::read_dir(path).with_context(|| anyhow!("Listing files in directory: {path:?}"))?;
-
-        for entry in paths {
-            let entry = entry.with_context(|| anyhow!("Listing files in directory: {path:?}"))?;
+    pub fn get_hash_and_keys(dir: fs::ReadDir) -> Result<HashMap<String, PubKey>> {
+        let mut res = HashMap::new();
+        for entry in dir {
+            let entry = entry.context("Listing files in directory")?;
             let file = entry.path();
 
-            let (hash, raw) = KeyManagement::read_from_file(&file)
+            let (hash, raw) = Self::read_from_file(&file)
                 .with_context(|| anyhow!("Reading file: {:?}", &file))?;
-            pub_keys.insert(hash, raw);
+            res.insert(hash, raw);
         }
+        Ok(res)
+    }
 
-        Ok(KeyManagement { pub_keys })
+    pub fn load_from_dir(path: &Path) -> Result<Self> {
+        ensure!(path.is_dir(), "keys path is not a folder");
+
+        let owners_path = &path.join("owners");
+        let owners = fs::read_dir(owners_path)
+            .with_context(|| anyhow!("Listing files in directory {owners_path:?}"))?;
+        let users_path = &path.join("users");
+        let users = fs::read_dir(users_path)
+            .with_context(|| anyhow!("Listing files in directory {users_path:?}"))?;
+
+        let owners = Self::get_hash_and_keys(owners)
+            .with_context(|| anyhow!("Reading hash and keys for path {owners_path:?}"))?;
+        let users = Self::get_hash_and_keys(users)
+            .with_context(|| anyhow!("Reading hash and keys for path {users_path:?}"))?;
+
+        Ok(Self { owners, users })
     }
 
     pub fn verify_signature(
@@ -60,9 +73,10 @@ impl KeyManagement {
         */
         match header.get_bin(format!("signature-{}-bin", public_key_hash)) {
             Some(signature) => {
-                let keys = &self.pub_keys;
+                let keys = &mut self.owners.iter().chain(self.users.iter());
 
-                if let Some(raw_pub) = keys.get(&public_key_hash.to_string()) {
+                if let Some((_, raw_pub)) = keys.find(|&(k, _v)| public_key_hash.to_string().eq(k))
+                {
                     let public_key = spki::SubjectPublicKeyInfo::try_from(raw_pub.as_ref())
                         .map_err(|_| {
                             Status::invalid_argument(format!(
@@ -90,10 +104,10 @@ impl KeyManagement {
                     })?;
                     return Ok(());
                 }
-                Err(Status::aborted(format!(
+                return Err(Status::permission_denied(format!(
                     "{:?} not authenticated!",
                     public_key_hash
-                )))?
+                )));
             }
             None => Err(Status::permission_denied(format!(
                 "No signature provided for public key {}",

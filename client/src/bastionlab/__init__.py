@@ -8,4 +8,4 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "pb"))
 # Re-exports
 
 from .client import Connection
-from .keys import SigningKey, PublicKey
+from .keys import SigningKey, PublicKey, Identity

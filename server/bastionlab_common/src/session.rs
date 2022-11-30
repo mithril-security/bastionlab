@@ -7,7 +7,7 @@ use tonic::metadata::KeyRef;
 use tonic::{Request, Response, Status};
 
 use crate::auth::KeyManagement;
-use crate::session_proto::ClientInfo;
+use crate::session_proto::{ClientInfo, SessionInfo};
 use crate::{prelude::*, session_proto};
 
 fn get_message<T: Message>(method: &[u8], req: &Request<T>) -> Result<Vec<u8>, Status> {
@@ -33,68 +33,85 @@ fn verify_ip(stored: &SocketAddr, recv: &SocketAddr) -> bool {
     stored.ip().eq(&recv.ip())
 }
 
-fn get_token<T>(req: &Request<T>) -> Result<Bytes, Status> {
+fn get_token<T>(req: &Request<T>, auth_enabled: bool) -> Result<Option<Bytes>, Status> {
+    if !auth_enabled {
+        return Ok(None);
+    }
     let meta = req
         .metadata()
         .get_bin("accesstoken-bin")
         .ok_or_else(|| Status::invalid_argument("No accesstoken in request metadata"))?;
-    Ok(meta
-        .to_bytes()
-        .map_err(|_| Status::invalid_argument("Could not decode accesstoken"))?)
+    Ok(Some(meta.to_bytes().map_err(|_| {
+        Status::invalid_argument("Could not decode accesstoken")
+    })?))
 }
 
 #[derive(Debug)]
 pub struct Session {
     pub user_ip: SocketAddr,
     pub expiry: SystemTime,
-    pub public_key: String,
     pub client_info: ClientInfo,
 }
 
 #[derive(Debug)]
 pub struct SessionManager {
-    keys: Mutex<KeyManagement>,
+    keys: Option<Mutex<KeyManagement>>,
     sessions: Arc<RwLock<HashMap<[u8; 32], Session>>>,
     session_expiry: u64,
 }
 
 impl SessionManager {
-    pub fn new(keys: KeyManagement, session_expiry: u64) -> Self {
+    pub fn new(keys: Option<KeyManagement>, session_expiry: u64) -> Self {
         Self {
-            keys: Mutex::new(keys),
+            keys: keys.map(Mutex::new),
             sessions: Default::default(),
             session_expiry,
         }
     }
 
+    pub fn auth_enabled(&self) -> bool {
+        self.keys.is_some()
+    }
+
     pub fn verify_request<T>(&self, req: &Request<T>) -> Result<(), Status> {
-        let remote_addr = &req.remote_addr();
-        let token = get_token(req)?;
-        let mut tokens = self.sessions.write().unwrap();
-        if let Some(recv_ip) = remote_addr {
-            if let Some(Session {
-                user_ip, expiry, ..
-            }) = tokens.get(token.as_ref())
-            {
-                let curr_time = SystemTime::now();
-                if !verify_ip(&user_ip, &recv_ip) {
-                    return Err(Status::aborted("Unknown IP Address!"));
-                }
-                if curr_time.gt(expiry) {
-                    tokens.remove(token.as_ref());
-                    return Err(Status::aborted("Session Expired"));
+        let lock = self.keys.as_ref().map(|l| l.lock().expect("Poisoned lock"));
+        match lock {
+            Some(_) => {
+                let remote_addr = &req.remote_addr();
+                if let Some(token) = get_token(req, self.auth_enabled())? {
+                    let mut tokens = self.sessions.write().unwrap();
+                    if let Some(recv_ip) = remote_addr {
+                        if let Some(Session {
+                            user_ip, expiry, ..
+                        }) = tokens.get(token.as_ref())
+                        {
+                            let curr_time = SystemTime::now();
+                            if !verify_ip(&user_ip, &recv_ip) {
+                                return Err(Status::aborted("Unknown IP Address!"));
+                            }
+                            if curr_time.gt(expiry) {
+                                tokens.remove(token.as_ref());
+                                return Err(Status::aborted("Session Expired"));
+                            }
+                        }
+                    }
                 }
             }
+            None => drop(lock),
         }
 
         Ok(())
     }
 
     pub fn get_client_info<T>(&self, req: &Request<T>) -> Result<ClientInfo, Status> {
-        let token = get_token(req)?;
         let sessions = self.sessions.write().unwrap();
+        let token = get_token(req, self.auth_enabled())?;
+        let token = match &token {
+            Some(v) => &v[..],
+            None => &[0u8; 32],
+        };
         let session = sessions
-            .get(&token[..])
+            .get(token)
             .ok_or(Status::aborted("Session not found!"))?;
         Ok(session.client_info.clone())
     }
@@ -109,10 +126,9 @@ impl SessionManager {
     }
 
     // TODO: move grpc specific things to the grpc service and not the session manager
-    fn create_session(
-        &self,
-        request: Request<ClientInfo>,
-    ) -> Result<session_proto::SessionInfo, Status> {
+    fn create_session(&self, request: Request<ClientInfo>) -> Result<SessionInfo, Status> {
+        let mut sessions = self.sessions.write().unwrap();
+        let keys_lock = self.keys.as_ref().map(|l| l.lock().expect("Poisoned lock"));
         let end = "-bin";
         let pat = "signature-";
         let mut public_key = String::new();
@@ -124,10 +140,16 @@ impl SessionManager {
                         if let Some(key) = key.strip_suffix(end) {
                             if key.contains(pat) {
                                 if let Some(key) = key.split(pat).last() {
-                                    let lock = self.keys.lock().unwrap();
-                                    let message = get_message(b"create-session", &request)?;
-                                    lock.verify_signature(key, &message[..], request.metadata())?;
-                                    public_key.push_str(key);
+                                    if let Some(ref keys) = keys_lock {
+                                        let lock = keys;
+                                        let message = get_message(b"create-session", &request)?;
+                                        lock.verify_signature(
+                                            key,
+                                            &message[..],
+                                            request.metadata(),
+                                        )?;
+                                        public_key.push_str(key);
+                                    }
                                 } else {
                                     return Err(Status::aborted(
                                         "User signing key not found in request!",
@@ -141,10 +163,15 @@ impl SessionManager {
                     _ => (),
                 }
             }
-            let mut sessions = self.sessions.write().unwrap();
-            let token = self.new_challenge();
-            let Some(expiry) = SystemTime::now().checked_add(Duration::from_secs(self.session_expiry)) else {
-                return Err(Status::aborted("Could not create expiry for session"));
+            let (token, expiry) = if !self.auth_enabled() {
+                ([0u8; 32], SystemTime::now())
+            } else {
+                let expiry =
+                    match SystemTime::now().checked_add(Duration::from_secs(self.session_expiry)) {
+                        Some(v) => v,
+                        None => SystemTime::now(),
+                    };
+                (self.new_challenge(), expiry)
             };
 
             sessions.insert(
@@ -152,12 +179,10 @@ impl SessionManager {
                 Session {
                     user_ip,
                     expiry,
-                    public_key,
                     client_info: request.into_inner(),
                 },
             );
-
-            Ok(session_proto::SessionInfo {
+            Ok(SessionInfo {
                 token: token.to_vec(),
             })
         } else {
@@ -166,18 +191,19 @@ impl SessionManager {
     }
 
     fn refresh_session<T>(&self, req: &Request<T>) -> Result<(), Status> {
-        let token = get_token(req)?;
-        let mut sessions = self.sessions.write().unwrap();
-        let session = sessions
-            .get_mut(&token[..])
-            .ok_or(Status::aborted("Session not found!"))?;
+        if let Some(token) = get_token(req, self.auth_enabled())? {
+            let mut sessions = self.sessions.write().unwrap();
+            let session = sessions
+                .get_mut(&token[..])
+                .ok_or(Status::aborted("Session not found!"))?;
 
-        let e = session
-            .expiry
-            .checked_add(Duration::from_secs(self.session_expiry))
-            .ok_or(Status::aborted("Malformed session expiry time!"))?;
+            let e = session
+                .expiry
+                .checked_add(Duration::from_secs(self.session_expiry))
+                .ok_or(Status::aborted("Malformed session expiry time!"))?;
 
-        session.expiry = e;
+            session.expiry = e;
+        }
         Ok(())
     }
 }

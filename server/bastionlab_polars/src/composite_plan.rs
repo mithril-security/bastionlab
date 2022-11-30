@@ -88,7 +88,7 @@ impl CompositePlan {
 
         Ok(DataFrameArtifact {
             dataframe: input_dfs.pop().unwrap(),
-            fetchable: policy.verify_fetch(&Context {
+            fetchable: policy.verify(&Context {
                 min_agg_size,
                 user_id: String::new(),
             })?,

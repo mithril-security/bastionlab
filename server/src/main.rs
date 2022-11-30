@@ -5,33 +5,32 @@ use bastionlab_common::{
     session::SessionManager,
     telemetry::{self, TelemetryEventProps},
 };
-use env_logger::Env;
-use log::info;
+use std::collections::hash_map::DefaultHasher;
+use std::fs;
 use std::path::Path;
-use std::{
-    collections::hash_map::DefaultHasher,
-    fs::{self, File},
-    io::Read,
-};
 use tonic::transport::{Identity, Server, ServerTlsConfig};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
-
-    let mut file = File::open("config.toml").context("Opening config.toml file")?;
-    let mut contents = String::new();
-    file.read_to_string(&mut contents)
-        .context("Reading the config.toml file")?;
-
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let config: BastionLabConfig =
-        toml::from_str(&contents).context("Parsing the config.toml file")?;
-    let keys = KeyManagement::load_from_dir(Path::new(
+        toml::from_str(&fs::read_to_string("config.toml").context("Reading the config.toml file")?)
+            .context("Parsing the config.toml file")?;
+
+    let keys = match KeyManagement::load_from_dir(Path::new(
         &config
             .public_keys_directory()
             .context("Parsing the public_keys_directory config path")?,
-    ))
-    .context("Loading the stored user keys")?;
+    )) {
+        Ok(keys) => {
+            info!("Authentication is enabled.");
+            Some(keys)
+        }
+        Err(err) => {
+            info!("Authentication is disabled (error: {:?})", err);
+            None
+        }
+    };
     let sess_manager = Arc::new(SessionManager::new(
         keys,
         config

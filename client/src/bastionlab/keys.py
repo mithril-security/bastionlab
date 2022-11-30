@@ -88,13 +88,15 @@ class SigningKey:
         return SigningKey(ec.generate_private_key(ec.SECP256R1()))
 
     @staticmethod
-    def from_pem_or_generate(
-        path: str, password: Optional[bytes] = None
-    ) -> "SigningKey":
-        if os.path.exists(path):
-            return SigningKey.from_pem(path, password)
+    def keygen(path: str, password: Optional[bytes] = None) -> "SigningKey":
+        signing_key_path = path
+        pub_key_path = path + ".pub"
+        if os.path.exists(signing_key_path):
+            return SigningKey.from_pem(signing_key_path, password)
         else:
-            return SigningKey.generate().save_pem(path, password)
+            priv_key = SigningKey.generate().save_pem(signing_key_path, password)
+            priv_key.pubkey.save_pem(pub_key_path)
+            return priv_key
 
     @staticmethod
     def from_pem(path: str, password: Optional[bytes] = None) -> "SigningKey":
@@ -119,3 +121,15 @@ class SigningKey:
         content: bytes, password: Optional[bytes] = None
     ) -> "SigningKey":
         return SigningKey(serialization.load_pem_private_key(content, password))
+
+
+class Identity:
+    @staticmethod
+    def create(
+        name: Optional[str] = "bastionlab-identity", password: Optional[bytes] = None
+    ) -> SigningKey:
+        return SigningKey.keygen(name, password)
+
+    @staticmethod
+    def load(name: str) -> SigningKey:
+        return SigningKey.from_pem(name, None)
