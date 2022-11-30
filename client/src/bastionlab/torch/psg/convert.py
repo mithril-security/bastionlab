@@ -14,9 +14,9 @@ def _set_weight_and_bias(
         and destination_layer.weight is not None
     ):
         # Set weight to pretrained value
-        torch.nn.init.zeros_(destination_layer.weight) # type: ignore [arg-type]
+        torch.nn.init.zeros_(destination_layer.weight)  # type: ignore [arg-type]
         with torch.no_grad():
-            destination_layer.weight.add_(source_layer.weight) # type: ignore [operator, arg-type]
+            destination_layer.weight.add_(source_layer.weight)  # type: ignore [operator, arg-type]
 
     if (
         hasattr(source_layer, "bias")
@@ -25,30 +25,32 @@ def _set_weight_and_bias(
         and destination_layer.bias is not None
     ):
         # Set bias to pretrained value
-        torch.nn.init.zeros_(destination_layer.bias) # type: ignore [arg-type]
+        torch.nn.init.zeros_(destination_layer.bias)  # type: ignore [arg-type]
         with torch.no_grad():
-            destination_layer.bias.add_(source_layer.bias) # type: ignore [operator, arg-type]
+            destination_layer.bias.add_(source_layer.bias)  # type: ignore [operator, arg-type]
 
 
 def parent_layer(module, name: str) -> Tuple[torch.nn.Module, str]:
     """Returns the parent module of the layer corresponding to the given name (path)
     in the given module and the attribute name of the layer wrt its parent.
     """
-    segments = name.strip().split('.')
+    segments = name.strip().split(".")
     child_name = segments[-1]
-    
+
     layer = module
     for segment in segments[:-1]:
         if not segment.isnumeric():
             layer = getattr(layer, segment)
         else:
             layer = layer[int(segment)]
-    
+
     return (layer, child_name)
 
-def expand_layer(layer: torch.nn.Module, max_batch_size: int) -> Optional[torch.nn.Module]:
-    """Returns an expanded version of given layer if supported, else None.
-    """
+
+def expand_layer(
+    layer: torch.nn.Module, max_batch_size: int
+) -> Optional[torch.nn.Module]:
+    """Returns an expanded version of given layer if supported, else None."""
     if isinstance(layer, torch.nn.Linear):
         return Linear(
             in_features=layer.in_features,
@@ -113,14 +115,20 @@ def expand_layer(layer: torch.nn.Module, max_batch_size: int) -> Optional[torch.
             eps=layer.eps,
             elementwise_affine=layer.elementwise_affine,
         )
-    elif any([isinstance(layer, t) for t in [
-        torch.nn.BatchNorm1d,
-        torch.nn.BatchNorm2d,
-        torch.nn.BatchNorm3d,
-    ]]):
+    elif any(
+        [
+            isinstance(layer, t)
+            for t in [
+                torch.nn.BatchNorm1d,
+                torch.nn.BatchNorm2d,
+                torch.nn.BatchNorm3d,
+            ]
+        ]
+    ):
         return torch.nn.Identity()
     else:
         return None
+
 
 def expand_weights(module: torch.nn.Module, max_batch_size: int) -> None:
     """Recursively converts the layers of a model to their expanded counterpart in `bastionlab.torch.psg.nn`.
