@@ -45,4 +45,4 @@ BastionLab solves this problem by ensuring that only privacy-friendly operations
 - [Book a meeting](https://calendly.com/contact-mithril-security/15mins?month=2022-11) with us
 
 ## Who made BastionLab?
-Mithril Security is a startup aiming to make privacy-friendly data science easy so data scientists and data owners can collaborate without friction. Our solutions apply Privacy Enhancing Technologies and security best practices, like [Remote Data Science]() and [Confidential Computing]().
+Mithril Security is a startup aiming to make privacy-friendly data science easy so data scientists and data owners can collaborate without friction. Our solutions apply Privacy Enhancing Technologies and security best practices, like [Remote Data Science](https://github.com/mithril-security/bastionlab/blob/master/docs/docs/concept-guides/remote_data_science.md) and [Confidential Computing](https://github.com/mithril-security/bastionlab/blob/master/docs/docs/concept-guides/confidential_computing.md).
