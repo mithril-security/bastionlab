@@ -18,6 +18,7 @@ use std::{
     sync::{Arc, Mutex, RwLock},
     time::Instant,
     time::{Duration, SystemTime},
+    env,
 };
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{
@@ -577,7 +578,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     println!("BastionLab server running...");
 
     let config: BastionLabConfig = toml::from_str(&contents)?;
-    let keys = match KeyManagement::load_from_dir(config.public_keys_directory()?) {
+    let public_keys_directory = match env::var("PUBLIC_KEYS_DIR") {
+        Ok(val) => val,
+        Err(_) => None,
+    };
+    let keys = match KeyManagement::load_from_dir(public_keys_directory) {
         Ok(keys) => {
             info!("Authentication is enabled.");
             Some(keys)
