@@ -53,10 +53,8 @@ class Client:
     def __init__(
         self,
         stub: BastionLabStub,
-        token: bytes,
     ):
         self.stub = stub
-        self.token = token
 
     def send_df(
         self,
@@ -144,14 +142,17 @@ class AuthPlugin(grpc.AuthMetadataPlugin):
 @dataclass
 class Connection:
     host: str
-    port: int
-    signing_key: SigningKey
+    port: Optional[int] = 50056
+    identity: Optional[SigningKey] = None
     channel: Any = None
+    token: Optional[bytes] = None
     _client: Optional[Client] = None
     server_name: Optional[str] = "bastionlab-server"
 
     @staticmethod
-    def _verify_user(server_target, server_creds, options, signing_key: SigningKey):
+    def _verify_user(
+        server_target, server_creds, options, signing_key: Optional[SigningKey] = None
+    ):
         """
         Set up initial connection to BastionLab for verification
         if pubkey not known:
@@ -167,16 +168,20 @@ class Connection:
         metadata = ()
         data: bytes = CLIENT_INFO.SerializeToString()
 
-        challenge = stub.GetChallenge(Empty()).value
+        if signing_key is not None:
+            challenge = stub.GetChallenge(Empty()).value
 
-        metadata += (("challenge-bin", challenge),)
-        to_sign = b"create-session" + challenge + data
+            metadata += (("challenge-bin", challenge),)
+            to_sign = b"create-session" + challenge + data
 
-        pubkey_hex = signing_key.pubkey.hash.hex()
-        signed = signing_key.sign(to_sign)
-        metadata += ((f"signature-{(pubkey_hex)}-bin", signed),)
+            pubkey_hex = signing_key.pubkey.hash.hex()
+            signed = signing_key.sign(to_sign)
+            metadata += ((f"signature-{(pubkey_hex)}-bin", signed),)
 
-        return stub.CreateSession(CLIENT_INFO, metadata=metadata).token
+            return stub.CreateSession(CLIENT_INFO, metadata=metadata).token
+        else:
+            stub.CreateSession(CLIENT_INFO)
+            return None
 
     @property
     def client(self) -> Client:
@@ -189,10 +194,9 @@ class Connection:
         if self._client is not None:
             self.__exit__(None, None, None)
 
-    def _heart_beat(self, stub, token):
-
+    def _heart_beat(self, stub):
         while True:
-            stub.RefreshSession(Empty(), metadata=(("accesstoken-bin", token),))
+            stub.RefreshSession(Empty(), metadata=(("accesstoken-bin", self.token),))
             sleep(HEART_BEAT_TICK)
 
     def __enter__(self) -> Client:
@@ -204,15 +208,17 @@ class Connection:
         connection_options = (("grpc.ssl_target_name_override", self.server_name),)
 
         # Verify user by creating session
-        token = Connection._verify_user(
-            server_target, server_creds, connection_options, self.signing_key
+        self.token = Connection._verify_user(
+            server_target, server_creds, connection_options, self.identity
         )
 
         channel_cred = (
             server_creds
-            if token is None
+            if self.identity is None
+            else server_creds
+            if self.token is None
             else grpc.composite_channel_credentials(
-                server_creds, grpc.metadata_call_credentials(AuthPlugin(token))
+                server_creds, grpc.metadata_call_credentials(AuthPlugin(self.token))
             )
         )
 
@@ -221,20 +227,17 @@ class Connection:
         )
         stub = BastionLabStub(self.channel)
 
-        daemon = Thread(
-            target=self._heart_beat,
-            args=(
-                stub,
-                token,
-            ),
-            daemon=True,
-            name="HeartBeat",
-        )
-        daemon.start()
+        if self.token is not None:
+            daemon = Thread(
+                target=self._heart_beat,
+                args=(stub,),
+                daemon=True,
+                name="HeartBeat",
+            )
+            daemon.start()
 
         self._client = Client(
             stub,
-            token,
         )
 
         return self._client

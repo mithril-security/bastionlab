@@ -94,25 +94,27 @@ impl DataFrameArtifact {
 pub struct Session {
     user_ip: SocketAddr,
     expiry: SystemTime,
-    public_key: String,
     client_info: ClientInfo,
 }
 
 #[derive(Debug, Default)]
 pub struct BastionLabState {
     dataframes: Arc<RwLock<HashMap<String, DataFrameArtifact>>>,
-    keys: Mutex<KeyManagement>,
+    keys: Mutex<Option<KeyManagement>>,
     sessions: Arc<RwLock<HashMap<[u8; 32], Session>>>,
     session_expiry: u64,
+    auth_enabled: bool,
 }
 
 impl BastionLabState {
-    fn new(keys: KeyManagement, session_expiry: u64) -> Self {
+    fn new(keys: Option<KeyManagement>, session_expiry: u64) -> Self {
+        let auth_enabled = keys.is_some();
         Self {
             dataframes: Arc::new(RwLock::new(HashMap::new())),
             keys: Mutex::new(keys),
             sessions: Default::default(),
             session_expiry,
+            auth_enabled,
         }
     }
 
@@ -259,23 +261,30 @@ Reason: {}",
     }
 
     fn verify_request<T>(&self, req: &Request<T>) -> Result<(), Status> {
-        let remote_addr = &req.remote_addr();
-        let token = get_token(req)?;
-        let mut tokens = self.sessions.write().unwrap();
-        if let Some(recv_ip) = remote_addr {
-            if let Some(Session {
-                user_ip, expiry, ..
-            }) = tokens.get(token.as_ref())
-            {
-                let curr_time = SystemTime::now();
-                if !verify_ip(&user_ip, &recv_ip) {
-                    return Err(Status::aborted("Unknown IP Address!"));
-                }
-                if curr_time.gt(expiry) {
-                    tokens.remove(token.as_ref());
-                    return Err(Status::aborted("Session Expired"));
+        let lock = self.keys.lock().unwrap();
+        match *lock {
+            Some(_) => {
+                let remote_addr = &req.remote_addr();
+                if let Some(token) = get_token(req, self.auth_enabled)? {
+                    let mut tokens = self.sessions.write().unwrap();
+                    if let Some(recv_ip) = remote_addr {
+                        if let Some(Session {
+                            user_ip, expiry, ..
+                        }) = tokens.get(token.as_ref())
+                        {
+                            let curr_time = SystemTime::now();
+                            if !verify_ip(&user_ip, &recv_ip) {
+                                return Err(Status::aborted("Unknown IP Address!"));
+                            }
+                            if curr_time.gt(expiry) {
+                                tokens.remove(token.as_ref());
+                                return Err(Status::aborted("Session Expired"));
+                            }
+                        }
+                    }
                 }
             }
+            None => drop(lock),
         }
 
         Ok(())
@@ -322,6 +331,8 @@ Reason: {}",
     }
 
     fn create_session(&self, request: Request<ClientInfo>) -> Result<SessionInfo, Status> {
+        let mut sessions = self.sessions.write().unwrap();
+        let keys_lock = self.keys.lock().unwrap();
         let end = "-bin";
         let pat = "signature-";
         let mut public_key = String::new();
@@ -333,10 +344,16 @@ Reason: {}",
                         if let Some(key) = key.strip_suffix(end) {
                             if key.contains(pat) {
                                 if let Some(key) = key.split(pat).last() {
-                                    let lock = self.keys.lock().unwrap();
-                                    let message = get_message(b"create-session", &request)?;
-                                    lock.verify_signature(key, &message[..], request.metadata())?;
-                                    public_key.push_str(key);
+                                    if let Some(keys) = &*keys_lock {
+                                        let lock = keys;
+                                        let message = get_message(b"create-session", &request)?;
+                                        lock.verify_signature(
+                                            key,
+                                            &message[..],
+                                            request.metadata(),
+                                        )?;
+                                        public_key.push_str(key);
+                                    }
                                 } else {
                                     return Err(Status::aborted(
                                         "User signing key not found in request!",
@@ -350,10 +367,15 @@ Reason: {}",
                     _ => (),
                 }
             }
-            let mut sessions = self.sessions.write().unwrap();
-            let token = self.new_challenge();
-            let Some(expiry) = SystemTime::now().checked_add(Duration::from_secs(self.session_expiry)) else {
-                return Err(Status::aborted("Could not create expiry for session"));
+            let (token, expiry) = if !self.auth_enabled {
+                ([0u8; 32], SystemTime::now())
+            } else {
+                let expiry =
+                    match SystemTime::now().checked_add(Duration::from_secs(self.session_expiry)) {
+                        Some(v) => v,
+                        None => SystemTime::now(),
+                    };
+                (self.new_challenge(), expiry)
             };
 
             sessions.insert(
@@ -361,7 +383,6 @@ Reason: {}",
                 Session {
                     user_ip,
                     expiry,
-                    public_key,
                     client_info: request.into_inner(),
                 },
             );
@@ -375,26 +396,31 @@ Reason: {}",
     }
 
     fn refresh_session<T>(&self, req: &Request<T>) -> Result<(), Status> {
-        let token = get_token(req)?;
-        let mut sessions = self.sessions.write().unwrap();
-        let session = sessions
-            .get_mut(&token[..])
-            .ok_or(Status::aborted("Session not found!"))?;
+        if let Some(token) = get_token(req, self.auth_enabled)? {
+            let mut sessions = self.sessions.write().unwrap();
+            let session = sessions
+                .get_mut(&token[..])
+                .ok_or(Status::aborted("Session not found!"))?;
 
-        let e = session
-            .expiry
-            .checked_add(Duration::from_secs(self.session_expiry))
-            .ok_or(Status::aborted("Malformed session expiry time!"))?;
+            let e = session
+                .expiry
+                .checked_add(Duration::from_secs(self.session_expiry))
+                .ok_or(Status::aborted("Malformed session expiry time!"))?;
 
-        session.expiry = e;
+            session.expiry = e;
+        }
         Ok(())
     }
 
     fn get_client_info<T>(&self, req: &Request<T>) -> Result<ClientInfo, Status> {
-        let token = get_token(req)?;
         let sessions = self.sessions.write().unwrap();
+        let token = get_token(req, self.auth_enabled)?;
+        let token = match &token {
+            Some(v) => &v[..],
+            None => &[0u8; 32],
+        };
         let session = sessions
-            .get(&token[..])
+            .get(token)
             .ok_or(Status::aborted("Session not found!"))?;
         Ok(session.client_info.clone())
     }
@@ -558,20 +584,27 @@ impl BastionLab for BastionLabState {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
+
     let mut file = File::open("config.toml")?;
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
 
+    println!("BastionLab server running...");
+
     let config: BastionLabConfig = toml::from_str(&contents)?;
-    let keys = KeyManagement::load_from_dir(config.public_keys_directory()?)?;
+    let keys = match KeyManagement::load_from_dir(config.public_keys_directory()?) {
+        Ok(keys) => {
+            info!("Authentication is enabled.");
+            Some(keys)
+        }
+        Err(_) => None,
+    };
     let state = BastionLabState::new(keys, config.session_expiry()?);
-    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
 
     let server_cert = fs::read("tls/host_server.pem")?;
     let server_key = fs::read("tls/host_server.key")?;
     let server_identity = Identity::from_pem(&server_cert, &server_key);
-
-    println!("BastionLab server running...");
 
     //TODO: Change it when specifying the TEE will be available
     let tee_mode = String::from("None");
