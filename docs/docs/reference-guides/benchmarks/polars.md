@@ -1,31 +1,37 @@
 ## Benchmarks:
 
-Benchmarking a 10Mx7 JOIN 100x5
+### Benchmarking a 10Mx7 JOIN 100x5
 
-|                        |         |                |                          | Timing             |                    |                                  |            |                              |
-| ---------------------- | ------- | -------------- | ------------------------ | ------------------ | ------------------ | -------------------------------- | ---------- | ---------------------------- |
-|                        | Privacy | Processor      | Memory Usage (MB)        | Standard deviation | Mean               | Dataset size                     | Operation  | Total Runs (Same Parameters) |
-| BastionLab + TEE       | SEV     | AMD EPYC 7763v |                          | 0.1595178631       | 2.29914955550002 s | 10M x 7 (LHS) JOIN 100 x 5 (RHS) | INNER JOIN | 10                           |
-| BastionLab             |         | AMD EPYC 7763v | (server) 12068.934364319 | 0.06813258905      | 1.64691811350021 s | 10M x 7 (LHS) JOIN 100 x 5 (RHS) | INNER JOIN | 10                           |
-| Polars Lazy API Python |         | AMD EPYC 7763v | 16514.42188              | 0.05930174062      | 1.97007920599935 s | 10M x 7 (LHS) JOIN 100 x 5 (RHS) | INNER JOIN | 10                           |
-| Pandas                 |         | AMD EPYC 7763v | 18422.98438              | 0.5469370083       | 11.7801000856994 s | 10M x 7 (LHS) JOIN 100 x 5 (RHS) | INNER JOIN | 10                           |
-| Polars Lazy API Rust   |         | AMD EPYC 7763v | 11267.53197              | 0.05090933117      | 1.884 s            | 10M x 7 (LHS) JOIN 100 x 5 (RHS) | INNER JOIN | 10                           |
+The data below demonstrates that BastionLab can complete operations faster than existing solutions. It is comparable to Polars as Polars is what BastionLab uses under the hood. 
+
+On the following Join operation, BastionLab is 7.15x faster than Pandas without a TEE and 5.12x faster than Pandas when run within a TEE.
+
+|                        | Privacy                           | Processor      | Memory Usage (MB) | Standard deviation of Time | Mean Execution Time | Operation  | Total Runs (Same Parameters) | Cores | Memory |
+| ---------------------- | --------------------------------- | -------------- | ----------------- | -------------------------- | ------------------- | ---------- | ---------------------------- | ----- | ------ |
+| BastionLab + TEE       | SEV (Encryption) + Access Control | AMD EPYC 7763v |                   | 0.15951                    | 2.29914 s           | INNER JOIN | 10                           | 16    | 64 GB  |
+| BastionLab             | Access Control                    | AMD EPYC 7763v | 12068.93436       | 0.06813                    | 1.64691 s           | INNER JOIN | 10                           | 16    | 64 GB  |
+| Polars Lazy API Python |                                   | AMD EPYC 7763v | 16514.42188       | 0.05930                    | 1.97007 s           | INNER JOIN | 10                           | 16    | 64 GB  |
+| Pandas                 |                                   | AMD EPYC 7763v | 18422.98438       | 0.54693                    | 11.78010 s          | INNER JOIN | 10                           | 16    | 64 GB  |
+| Polars Lazy API Rust   |                                   | AMD EPYC 7763v | 11267.53197       | 0.05090                    | 1.884 s             | INNER JOIN | 10                           | 16    | 64 GB  |
 
 
 ![](../../../assets/benchmark_amd_epyc_7763.png)
 
-Benchmarking a 100Mx7 JOIN 100x5
+### Benchmarking a 100Mx7 JOIN 100x5
 
-|                        |         |                |                          | Timing             |                          |                                   |            |                              |       |        |
-| ---------------------- | ------- | -------------- | ------------------------ | ------------------ | ------------------------ | --------------------------------- | ---------- | ---------------------------- | ----- | ------ |
-|                        | Privacy | Processor      | Memory Usage (MB)        | Standard deviation | Mean                     | Dataset size                      | Operation  | Total Runs (Same Parameters) | Cores | Memory |
-| BastionLab + TEE       | SEV     | AMD EPYC 7763v |                          | 0.07252514429      | 2.49139318740003 s       | 100M x 7 (LHS) JOIN 100 x 5 (RHS) | INNER JOIN | 10                           | 16    | 64 GB  |
-| BastionLab             |         | AMD EPYC 7763v | (server) 22275.938194275 | 0.05010159207      | 1.99522447080016719000 s | 100M x 7 (LHS) JOIN 100 x 5 (RHS) | INNER JOIN | 10                           | 16    | 64 GB  |
-| Polars Lazy API Python |         | AMD EPYC 7763v | 18120.21875              | 0.1378750987       | 2.433741233200635 s      | 100M x 7 (LHS) JOIN 100 x 5 (RHS) | INNER JOIN | 10                           | 16    | 64 GB  |
-| Pandas                 |         | AMD EPYC 7763v | 18791.93359              | 0.6559093888       | 24.9457095852005 s       | 100M x 7 (LHS) JOIN 100 x 5 (RHS) | INNER JOIN | 10                           | 16    | 64 GB  |
-| Polars Lazy API Rust   |         | AMD EPYC 7763v | 14339.72344              | 0.0521602339       | 4.507 s                  | 100M x 7 (LHS) JOIN 100 x 5 (RHS) | INNER JOIN | 10                           | 16    | 64 GB  |
+With a larger Join operation, BastionLab is 12.5x faster than Pandas without a TEE and 10x faster than Pandas when run within a TEE. It is still comparable to Polars in this operation as well.
+
+|                        | Privacy                           | Processor      | Memory Usage (MB) | Standard deviation of Time | Mean Execution Time | Operation  | Total Runs (Same Parameters) | Cores | Memory |
+| ---------------------- | --------------------------------- | -------------- | ----------------- | -------------------------- | ------------------- | ---------- | ---------------------------- | ----- | ------ |
+| BastionLab + TEE       | SEV (Encryption) + Access Control | AMD EPYC 7763v |                   | 0.07252                    | 2.49139 s           | INNER JOIN | 10                           | 16    | 64 GB  |
+| BastionLab             | Access Control                    | AMD EPYC 7763v | 22275.93819       | 0.05010                    | 1.99522 s           | INNER JOIN | 10                           | 16    | 64 GB  |
+| Polars Lazy API Python |                                   | AMD EPYC 7763v | 18120.21875       | 0.13787                    | 2.43374 s           | INNER JOIN | 10                           | 16    | 64 GB  |
+| Pandas                 |                                   | AMD EPYC 7763v | 18791.93359       | 0.65590                    | 24.94570 s          | INNER JOIN | 10                           | 16    | 64 GB  |
+| Polars Lazy API Rust   |                                   | AMD EPYC 7763v | 14339.72344       | 0.05216                    | 4.507 s             | INNER JOIN | 10                           | 16    | 64 GB  |
 
 
 ![](../../../assets/benchmark_amd_epyc_7763_2.png)
 
-Based on the above benchmarks we see that BastionLab performs operations faster than available solutions. There is a slight overhead when using BastionLab within a TEE but it is still as fast as Polars and much faster than Pandas. The overhead is due to the fact that the data is encrypted before it is sent to the TEE using AES-128. This is a one-time overhead and does not affect the performance of the operation itself. The memory usage is also quite low as shown by the previous tables. 
+The memory benchmarks were tracked differently accross rust applications and python application. To be fair we recommend comparing (python) Polars Python against Pandas and (rust) BastionLab against Polars Rust.
+
+Based on the above benchmarks we see that BastionLab performs operations faster than available solutions. There is a slight overhead when using BastionLab within a TEE but it is still as fast as Polars and much faster than Pandas.
