@@ -19,14 +19,16 @@ from .policy import Policy, DEFAULT_POLICY
 
 if TYPE_CHECKING:
     from .remote_polars import RemoteLazyFrame, FetchableLazyFrame
+    from ..client import Client
 
 
 class BastionLabPolars:
     def __init__(
         self,
-        channel: grpc.Channel,
+        client: "Client",
     ):
-        self.stub = PolarsServiceStub(channel)
+        self.client = client
+        self.stub = PolarsServiceStub(client.channel)
 
     def send_df(
         self,
@@ -35,6 +37,8 @@ class BastionLabPolars:
         blacklist: List[str] = [],
     ) -> "FetchableLazyFrame":
         from .remote_polars import FetchableLazyFrame
+
+        self.client.refresh_session_if_needed()
 
         res = GRPCException.map_error(
             lambda: self.stub.SendDataFrame(serialize_dataframe(df, policy, blacklist))
@@ -63,6 +67,8 @@ A notification has been sent to the data owner. The request will be pending unti
                 joined_bytes += b.data
             return joined_bytes
 
+        self.client.refresh_session_if_needed()
+
         try:
             joined_bytes = GRPCException.map_error(inner)
             return deserialize_dataframe(joined_bytes)
@@ -81,6 +87,8 @@ A notification has been sent to the data owner. The request will be pending unti
     ) -> "FetchableLazyFrame":
         from .remote_polars import FetchableLazyFrame
 
+        self.client.refresh_session_if_needed()
+
         res = GRPCException.map_error(
             lambda: self.stub.RunQuery(Query(composite_plan=composite_plan))
         )
@@ -89,11 +97,15 @@ A notification has been sent to the data owner. The request will be pending unti
     def list_dfs(self) -> List["FetchableLazyFrame"]:
         from .remote_polars import FetchableLazyFrame
 
+        self.client.refresh_session_if_needed()
+
         res = GRPCException.map_error(lambda: self.stub.ListDataFrames(Empty()).list)
         return [FetchableLazyFrame._from_reference(self, ref) for ref in res]
 
     def get_df(self, identifier: str) -> "FetchableLazyFrame":
         from .remote_polars import FetchableLazyFrame
+
+        self.client.refresh_session_if_needed()
 
         res = GRPCException.map_error(
             lambda: self.stub.GetDataFrameHeader(

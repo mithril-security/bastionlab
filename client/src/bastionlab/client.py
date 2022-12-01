@@ -13,13 +13,25 @@ from .pb.bastionlab_pb2_grpc import SessionServiceStub
 import platform
 import socket
 import getpass
+import time
+import logging
 
 
 if TYPE_CHECKING:
     from .torch import BastionLabTorch
     from .polars import BastionLabPolars
 
-HEART_BEAT_TICK = 25 * 60
+
+class AuthPlugin(grpc.AuthMetadataPlugin):
+    client: Optional["Client"] = None
+
+    def __call__(self, _, callback):
+        if self.client is not None and self.client._token is not None:
+            callback((("accesstoken-bin", self.client._token),), None)
+        else:
+            callback((), None)
+
+
 UNAME = platform.uname()
 CLIENT_INFO = ClientInfo(
     uid=sha256((socket.gethostname() + "-" + getpass.getuser()).encode("utf-8"))
@@ -35,23 +47,64 @@ CLIENT_INFO = ClientInfo(
 
 
 class Client:
-    __bastionlab_torch: "BastionLabTorch" = None
-    __bastionlab_polars: "BastionLabPolars" = None
-    __channel: grpc.Channel
-    __token: bytes
+    channel: grpc.Channel
+
+    __session_stub: SessionServiceStub
+    __session_expiry_time: float = 0.0  # time in seconds
+    _token: Optional[bytes] = None
+
+    __bastionlab_torch: Optional["BastionLabTorch"] = None
+    __bastionlab_polars: Optional["BastionLabPolars"] = None
+
+    signing_key: Optional[SigningKey]
 
     def __init__(
         self,
         channel: grpc.Channel,
+        signing_key: SigningKey,
     ):
-        self.__channel = channel
+        self.channel = channel
+        self.__session_stub = SessionServiceStub(channel)
+        self.signing_key = signing_key
+
+    def refresh_session_if_needed(self):
+        current_time = time.time()
+
+        if current_time > self.__session_expiry_time:
+            self._token = None
+            self.__create_session()
+
+    def __create_session(self):
+        logging.debug("Refreshing session.")
+
+        metadata = ()
+        if self.signing_key is not None:
+            data: bytes = CLIENT_INFO.SerializeToString()
+            challenge = self.__session_stub.GetChallenge(Empty()).value
+
+            metadata += (("challenge-bin", challenge),)
+            to_sign = b"create-session" + challenge + data
+
+            pubkey_hex = self.signing_key.pubkey.hash.hex()
+            signed = self.signing_key.sign(to_sign)
+            metadata += ((f"signature-{pubkey_hex}-bin", signed),)
+
+        res = self.__session_stub.CreateSession(CLIENT_INFO, metadata=metadata)
+
+        # So, just to be sure, we refresh our token early (30s).
+        adjusted_expiry_delay = max(res.expiry_time - 30_000, 0)
+
+        self.__session_expiry_time = (
+            time.time() + adjusted_expiry_delay / 1000  # convert to seconds
+        )
+        self._token = res.token
 
     @property
     def torch(self):
         if self.__bastionlab_torch is None:
             from bastionlab.torch import BastionLabTorch
 
-            self.__bastionlab_torch = BastionLabTorch(self.__channel)
+            self.__bastionlab_torch = BastionLabTorch(self)
         return self.__bastionlab_torch
 
     @property
@@ -59,16 +112,8 @@ class Client:
         if self.__bastionlab_polars is None:
             from bastionlab.polars import BastionLabPolars
 
-            self.__bastionlab_polars = BastionLabPolars(self.__channel)
+            self.__bastionlab_polars = BastionLabPolars(self)
         return self.__bastionlab_polars
-
-
-class AuthPlugin(grpc.AuthMetadataPlugin):
-    def __init__(self, token):
-        self._token = token
-
-    def __call__(self, _, callback):
-        callback((("accesstoken-bin", self._token),), None)
 
 
 @dataclass
@@ -81,42 +126,6 @@ class Connection:
     _client: Optional[Client] = None
     server_name: Optional[str] = "bastionlab-server"
 
-    @staticmethod
-    def _verify_user(
-        server_target, server_creds, options, signing_key: Optional[SigningKey] = None
-    ):
-        """
-        Set up initial connection to BastionLab for verification
-        if pubkey not known:
-            Drop connection and fail fast authentication
-
-        elif known:
-            return token and add token to channel metadata
-        """
-        channel = grpc.secure_channel(server_target, server_creds, options)
-
-        session_stub = SessionServiceStub(channel)
-
-        metadata = ()
-        data: bytes = CLIENT_INFO.SerializeToString()
-
-        if signing_key is not None:
-            challenge = session_stub.GetChallenge(Empty()).value
-
-            metadata += (("challenge-bin", challenge),)
-            to_sign = b"create-session" + challenge + data
-
-            pubkey_hex = signing_key.pubkey.hash.hex()
-            signed = signing_key.sign(to_sign)
-            metadata += ((f"signature-{(pubkey_hex)}-bin", signed),)
-
-            token = session_stub.CreateSession(CLIENT_INFO, metadata=metadata).token
-
-            return token
-        else:
-            session_stub.CreateSession(CLIENT_INFO)
-            return None
-
     @property
     def client(self) -> Client:
         if self._client is not None:
@@ -128,11 +137,6 @@ class Connection:
         if self._client is not None:
             self.__exit__(None, None, None)
 
-    def _heart_beat(self, stub):
-        while self._client is not None:
-            stub.RefreshSession(Empty(), metadata=(("accesstoken-bin", self.token),))
-            sleep(HEART_BEAT_TICK)
-
     def __enter__(self) -> Client:
         server_target = f"{self.host}:{self.port}"
         server_cert = ssl.get_server_certificate((self.host, self.port))
@@ -141,38 +145,21 @@ class Connection:
         )
         connection_options = (("grpc.ssl_target_name_override", self.server_name),)
 
-        # Verify user by creating session
-        self.token = Connection._verify_user(
-            server_target, server_creds, connection_options, self.identity
-        )
-
-        channel_cred = (
-            server_creds
-            if self.identity is None
-            else server_creds
-            if self.token is None
-            else grpc.composite_channel_credentials(
-                server_creds, grpc.metadata_call_credentials(AuthPlugin(self.token))
-            )
+        auth_plugin = AuthPlugin()
+        channel_cred = grpc.composite_channel_credentials(
+            server_creds, grpc.metadata_call_credentials(auth_plugin)
         )
 
         self.channel = grpc.secure_channel(
             server_target, channel_cred, connection_options
         )
-        stub = SessionServiceStub(self.channel)
 
         self._client = Client(
             self.channel,
+            signing_key=self.identity,
         )
 
-        if self.token is not None:
-            daemon = Thread(
-                target=self._heart_beat,
-                args=(stub,),
-                daemon=True,
-                name="HeartBeat",
-            )
-            daemon.start()
+        auth_plugin.client = self.client
 
         return self._client
 
