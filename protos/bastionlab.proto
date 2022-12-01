@@ -9,8 +9,13 @@ message ChallengeResponse {
 
 message SessionInfo {
     bytes token = 1;
+<<<<<<< HEAD
     uint64 expiry_time = 2;
 
+=======
+    // This is the time in miliseconds before the token will expire.
+    uint64 expiry_time = 2;
+>>>>>>> 0b64948 (Refresh session before request)
 }
 
 message ClientInfo {

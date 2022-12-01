@@ -16,6 +16,8 @@ import getpass
 import time
 import logging
 import sys
+import time
+import logging
 
 
 if TYPE_CHECKING:
@@ -242,15 +244,6 @@ class Connection:
         """
         if self._client is not None:
             self.__exit__(None, None, None)
-
-    def _heart_beat(self, stub):
-        """Sends periodic "heartbeat" messages to the server to keep the connection alive.
-        Args:
-           stub: The `SessionServiceStub` object to use to send the heartbeat messages.
-        """
-        while self._client is not None:
-            stub.RefreshSession(Empty(), metadata=(("accesstoken-bin", self.token),))
-            sleep(HEART_BEAT_TICK)
 
     def __enter__(self) -> Client:
         """Establishes a secure channel to the server and returns a `Client` object that can be used to interact with the server.
