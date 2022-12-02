@@ -4,11 +4,9 @@ use std::{
     io::Read,
 };
 
-use bastionlab_common::config::*;
 use bastionlab_common::authentication::*;
-use tonic::{
-    transport::Identity,
-};
+use bastionlab_common::config::*;
+use tonic::transport::Identity;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let mut file = File::open("config.toml")?;

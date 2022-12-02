@@ -538,7 +538,11 @@ impl BastionLab for BastionLabState {
     }
 }
 
-pub async fn start(config: BastionLabConfig, keys: KeyManagement, server_identity: Identity) -> Result<(), Box<dyn Error>> {
+pub async fn start(
+    config: BastionLabConfig,
+    keys: KeyManagement,
+    server_identity: Identity,
+) -> Result<(), Box<dyn Error>> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
     let state = BastionLabState::new(keys, config.session_expiry()?);
 
