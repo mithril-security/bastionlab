@@ -1,12 +1,13 @@
 use env_logger::Env;
 use log::info;
 use polars::prelude::*;
+use prost::Message;
 use ring::{digest, rand};
 
 use serde_json;
 use std::{
-    collections::hash_map::DefaultHasher,
     collections::HashMap,
+    collections::{hash_map::DefaultHasher, HashSet},
     error::Error,
     fmt::Debug,
     fs::{self, File},
@@ -101,6 +102,7 @@ pub struct BastionLabState {
     sessions: Arc<RwLock<HashMap<[u8; 32], Session>>>,
     session_expiry: u64,
     auth_enabled: bool,
+    challenges: Mutex<HashSet<[u8; 32]>>,
 }
 
 impl BastionLabState {
@@ -112,6 +114,7 @@ impl BastionLabState {
             sessions: Default::default(),
             session_expiry,
             auth_enabled,
+            challenges: Default::default(),
         }
     }
 
@@ -309,12 +312,30 @@ Reason: {}",
         let rng = rand::SystemRandom::new();
         loop {
             if let Ok(challenge) = rand::generate(&rng) {
-                return challenge.expose();
+                let challenge: [u8; 32] = challenge.expose();
+                let mut lock = self.challenges.lock().unwrap();
+                lock.insert(challenge);
+                return challenge;
             }
         }
     }
+    fn check_challenge<T: Message>(&self, request: &Request<T>) -> Result<(), Status> {
+        let mut lock = self.challenges.lock().unwrap();
+        if let Some(challenge) = request.metadata().get_bin("challenge-bin") {
+            let challenge = challenge.to_bytes().map_err(|_| {
+                Status::invalid_argument(format!("Could not decode challenge {:?}", challenge))
+            })?;
+            let challenge = challenge.as_ref();
+
+            if !lock.remove(challenge) {
+                return Err(Status::permission_denied("Challenge not found!"));
+            }
+        }
+        Ok(())
+    }
 
     fn create_session(&self, request: Request<ClientInfo>) -> Result<SessionInfo, Status> {
+        self.check_challenge(&request)?;
         let mut sessions = self.sessions.write().unwrap();
         let keys_lock = self.keys.lock().unwrap();
         let end = "-bin";
