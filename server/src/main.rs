@@ -225,7 +225,7 @@ Reason: {}",
     }
 
     fn get_df_unchecked(&self, identifier: &str) -> Result<DataFrame, Status> {
-        let dfs = self.dataframes.read().unwrap();
+        let dfs = self.dataframes.read().unwrap(); 
         Ok(dfs
             .get(identifier)
             .ok_or(Status::not_found(format!(

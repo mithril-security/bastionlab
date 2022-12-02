@@ -67,7 +67,7 @@ impl KeyManagement {
         })?;
 
         let users = KeyManagement::get_hash_and_keys(users).map_err(|_| {
-            Status::aborted("There is an issue with the user's key!")
+            Status::aborted("There is an issue with the user's key!") 
         })?;
 
         Ok(KeyManagement { owners, users })
