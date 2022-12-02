@@ -76,7 +76,7 @@ pub struct DelayedDataFrame {
 pub struct DataFrameArtifact {
     dataframe: DataFrame,
     policy: Policy,
-    fetchable: PolicyAction,
+    fetchable: VerificationResult,
     blacklist: Vec<String>,
     query_details: String,
 }
@@ -86,9 +86,10 @@ impl DataFrameArtifact {
         DataFrameArtifact {
             dataframe: df,
             policy,
-            fetchable: PolicyAction::Reject(String::from(
-                "DataFrames uploaded by the Data Owner are protected.",
-            )),
+            fetchable: VerificationResult::Unsafe {
+                action: UnsafeAction::Reject,
+                reason: String::from("DataFrames uploaded by the Data Owner are protected."),
+            },
             blacklist,
             query_details: String::from("uploaded dataframe"),
         }
@@ -135,8 +136,19 @@ impl BastionLabState {
             "Could not find dataframe: identifier={}",
             identifier
         )))?;
+        if let VerificationResult::Unsafe { reason, .. } = &artifact.fetchable {
+            println!(
+                "Safe zone violation: a DataFrame has been non-privately fetched.
+Reason: {}",
+                reason
+            );
+        }
         Ok(match &artifact.fetchable {
-            PolicyAction::Accept => {
+            VerificationResult::Safe
+            | VerificationResult::Unsafe {
+                action: UnsafeAction::Log,
+                ..
+            } => {
                 let mut df = artifact.dataframe.clone();
                 sanitize_df(&mut df, &artifact.blacklist);
                 telemetry::add_event(
@@ -151,7 +163,10 @@ impl BastionLabState {
                     needs_approval: None,
                 }
             }
-            PolicyAction::Reject(reason) => {
+            VerificationResult::Unsafe {
+                action: UnsafeAction::Reject,
+                reason,
+            } => {
                 let reason = reason.clone();
                 DelayedDataFrame {
                     future: Box::pin(async move {
@@ -164,7 +179,10 @@ Reason: {}",
                     needs_approval: None,
                 }
             }
-            PolicyAction::Approval(reason) => {
+            VerificationResult::Unsafe {
+                action: UnsafeAction::Review,
+                reason,
+            } => {
                 let reason = reason.clone();
                 let identifier = String::from(identifier);
                 let query_details = artifact.query_details.clone();
@@ -173,22 +191,30 @@ Reason: {}",
                     needs_approval: Some(reason.clone()),
                     future: Box::pin(async move {
                         println!(
-                            "=== A user request has been rejected ===
-Reason: {}
-Logical plan:
+                            "A user requests unsafe access to one of your DataFrames
+DataFrame identifier: {}
+Reason the request is unsafe:
 {}",
-                            reason, query_details,
+                            identifier, reason,
                         );
 
                         loop {
                             let mut ans = String::new();
-                            println!("Accept [y] or Reject [n]?");
+                            println!("Accept [y], Reject [n], Show query details [s]?");
                             std::io::stdin()
                                 .read_line(&mut ans)
                                 .expect("Failed to read line");
 
                             match ans.trim() {
                                 "y" => break,
+                                "s" => {
+                                    println!(
+                                        "Query's Logical Plan:
+{}",
+                                        query_details,
+                                    );
+                                    continue;
+                                }
                                 "n" => {
                                     telemetry::add_event(
                                         TelemetryEventProps::FetchDataFrame {
