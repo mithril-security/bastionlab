@@ -9,10 +9,8 @@ use std::{
     collections::HashMap,
     error::Error,
     fmt::Debug,
-    fs::{self, File},
     future::Future,
     hash::{Hash, Hasher},
-    io::Read,
     net::SocketAddr,
     pin::Pin,
     sync::{Arc, Mutex, RwLock},
@@ -43,10 +41,10 @@ use serialization::*;
 mod composite_plan;
 use composite_plan::*;
 
-mod authentication;
+pub mod authentication;
 use authentication::*;
 
-mod config;
+pub mod config;
 use config::*;
 
 mod visitable;
@@ -540,22 +538,11 @@ impl BastionLab for BastionLabState {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    let mut file = File::open("config.toml")?;
-    let mut contents = String::new();
-    file.read_to_string(&mut contents)?;
-
-    let config: BastionLabConfig = toml::from_str(&contents)?;
-    let keys = KeyManagement::load_from_dir(config.public_keys_directory()?)?;
-    let state = BastionLabState::new(keys, config.session_expiry()?);
+pub async fn start(config: BastionLabConfig, keys: KeyManagement, server_identity: Identity) -> Result<(), Box<dyn Error>> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
+    let state = BastionLabState::new(keys, config.session_expiry()?);
 
-    let server_cert = fs::read("tls/host_server.pem")?;
-    let server_key = fs::read("tls/host_server.key")?;
-    let server_identity = Identity::from_pem(&server_cert, &server_key);
-
-    println!("BastionLab server running...");
+    info!("BastionLab server running...");
 
     //TODO: Change it when specifying the TEE will be available
     let tee_mode = String::from("None");

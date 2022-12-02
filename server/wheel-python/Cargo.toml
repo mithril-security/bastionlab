@@ -1,0 +1,18 @@
+[package]
+name = "bastionlab-server"
+version = "0.3.3"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "bastionlab_server"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.17.3", features = ["extension-module"] }
+pyo3-asyncio = { version = "0.17.0", features = ["attributes", "tokio-runtime"] }
+tokio = { version = "1.19.2", features = ["macros", "rt-multi-thread", "net", "signal"] }
+bastionlab-common = { path = "../common/" }
+http = "0.2.8"
+rcgen = "*"
+tonic = { version = "0.5.2", features = ["tls", "transport"] }
