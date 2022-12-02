@@ -1,3 +1,8 @@
+use bastionlab_linfa::{
+    operations::{get_prediction, predict, send_to_trainer},
+    to_status_error,
+    trainer::{process_trainer_req, select_trainer, SupportedModels},
+};
 use env_logger::Env;
 use log::info;
 use polars::prelude::*;
@@ -33,8 +38,9 @@ pub mod grpc {
 }
 use grpc::{
     bastion_lab_server::{BastionLab, BastionLabServer},
-    ChallengeResponse, ClientInfo, Empty, FetchChunk, Query, ReferenceList, ReferenceRequest,
-    ReferenceResponse, SendChunk, SessionInfo,
+    training_request::Trainer,
+    ChallengeResponse, ClientInfo, Empty, FetchChunk, PredictionRequest, Query, ReferenceList,
+    ReferenceRequest, ReferenceResponse, SendChunk, SessionInfo, TrainingRequest,
 };
 
 mod serialization;
@@ -58,6 +64,8 @@ mod access_control;
 use access_control::*;
 
 mod utils;
+
+mod bastionlab_linfa;
 
 pub struct DelayedDataFrame {
     future: Pin<Box<dyn Future<Output = Result<DataFrame, Status>> + Send>>,
@@ -101,6 +109,7 @@ pub struct BastionLabState {
     sessions: Arc<RwLock<HashMap<[u8; 32], Session>>>,
     session_expiry: u64,
     auth_enabled: bool,
+    models: Arc<RwLock<HashMap<String, SupportedModels>>>,
 }
 
 impl BastionLabState {
@@ -112,6 +121,7 @@ impl BastionLabState {
             sessions: Default::default(),
             session_expiry,
             auth_enabled,
+            models: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -408,6 +418,18 @@ Reason: {}",
             .ok_or(Status::aborted("Session not found!"))?;
         Ok(session.client_info.clone())
     }
+
+    fn insert_model(&self, model: SupportedModels) -> String {
+        let mut models = self.models.write().unwrap();
+        let identifier = format!("{}", Uuid::new_v4());
+        models.insert(identifier.clone(), model);
+        identifier
+    }
+    fn get_model(&self, identifier: &str) -> Result<SupportedModels, Status> {
+        let models = self.models.read().unwrap();
+        let model = models.get(identifier).unwrap();
+        Ok(model.clone())
+    }
 }
 
 fn get_df_header(df: &DataFrame) -> Result<String, Status> {
@@ -563,6 +585,64 @@ impl BastionLab for BastionLabState {
     async fn refresh_session(&self, request: Request<Empty>) -> Result<Response<Empty>, Status> {
         self.refresh_session(&request)?;
         Ok(Response::new(Empty {}))
+    }
+
+    async fn train(
+        &self,
+        request: Request<TrainingRequest>,
+    ) -> Result<Response<ReferenceResponse>, Status> {
+        let (records, target, ratio, trainer): (String, String, f32, Option<Trainer>) =
+            process_trainer_req(request)?;
+
+        let (records, target) = {
+            let records =
+                self.with_df_artifact_ref(&records, |artifact| artifact.dataframe.clone())?;
+            let target =
+                self.with_df_artifact_ref(&target, |artifact| artifact.dataframe.clone())?;
+            (records, target)
+        };
+
+        let trainer = trainer.ok_or(Status::aborted("Invalid Trainer!"))?;
+        let trainer = select_trainer(trainer)?;
+        let model = to_status_error(send_to_trainer(
+            records.clone(),
+            target.clone(),
+            ratio,
+            trainer,
+        ))?;
+        let identifier = self.insert_model(model);
+        Ok(Response::new(ReferenceResponse {
+            identifier,
+            header: String::default(),
+        }))
+    }
+
+    async fn predict(
+        &self,
+        request: Request<PredictionRequest>,
+    ) -> Result<Response<ReferenceResponse>, Status> {
+        let (model_id, data) = {
+            let model = &request.get_ref().model;
+            let data = &request.get_ref().data;
+            let data = to_type! {<f64>(data)};
+            (model, data)
+        };
+
+        let model = self.get_model(model_id)?;
+
+        let prediction = to_status_error(predict(model, data))?;
+
+        let prediction = get_prediction(prediction)?;
+
+        let header = get_df_header(&prediction)?;
+        println!("{:?}", prediction);
+
+        let identifier = self.insert_df(DataFrameArtifact::new(
+            prediction,
+            Policy::allow_by_default(),
+            vec![String::default()],
+        ));
+        Ok(Response::new(ReferenceResponse { identifier, header }))
     }
 }
 

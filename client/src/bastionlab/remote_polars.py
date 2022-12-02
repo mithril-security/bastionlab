@@ -379,6 +379,27 @@ class FetchableLazyFrame(RemoteLazyFrame):
         return self._meta._client._fetch_df(self._identifier)
 
 
+@dataclass
+class FetchableModel:
+    _identifier: str
+
+    @property
+    def identifier(self) -> str:
+        return self._identifier
+
+    @staticmethod
+    def _from_reference(client: Client, ref: ReferenceResponse) -> "FetchableModel":
+        return FetchableModel(
+            _identifier=ref.identifier,
+        )
+
+    def __str__(self) -> str:
+        return f"FetchableModel(identifier={self._identifier})"
+
+    def __repr__(self) -> str:
+        return str(self)
+
+
 # TODO: implement apply method
 @delegate(
     target_cls=pl.internals.lazyframe.groupby.LazyGroupBy,

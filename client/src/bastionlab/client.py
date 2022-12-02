@@ -10,6 +10,8 @@ from bastionlab.keys import SigningKey
 from grpc import StatusCode
 from bastionlab.pb.bastionlab_pb2 import (
     ReferenceRequest,
+    TrainingRequest,
+    PredictionRequest,
     ClientInfo,
     Query,
     Empty,
@@ -32,7 +34,12 @@ from bastionlab.errors import GRPCException
 
 
 if TYPE_CHECKING:
-    from bastionlab.remote_polars import RemoteLazyFrame, FetchableLazyFrame
+    from bastionlab.remote_polars import (
+        RemoteLazyFrame,
+        FetchableLazyFrame,
+        FetchableModel,
+    )
+    from bastionlab.trainers import Trainer
 
 HEART_BEAT_TICK = 25 * 60
 UNAME = platform.uname()
@@ -128,6 +135,33 @@ A notification has been sent to the data owner. The request will be pending unti
                 ReferenceRequest(identifier=identifier)
             )
         )
+        return FetchableLazyFrame._from_reference(self, res)
+
+    def train(
+        self,
+        records: "FetchableLazyFrame",
+        target: "FetchableLazyFrame",
+        ratio: float,
+        trainer: "Trainer",
+    ) -> "FetchableModel":
+        from bastionlab.remote_polars import FetchableModel
+
+        res = self.stub.Train(
+            TrainingRequest(
+                records=records.identifier,
+                target=target.identifier,
+                ratio=ratio,
+                **trainer.to_msg_dict(),
+            )
+        )
+        return FetchableModel._from_reference(self, res)
+
+    def predict(
+        self, model: "FetchableModel", data: List[float]
+    ) -> "FetchableLazyFrame":
+        from bastionlab.remote_polars import FetchableLazyFrame
+
+        res = self.stub.Predict(PredictionRequest(model=model.identifier, data=data))
         return FetchableLazyFrame._from_reference(self, res)
 
 
