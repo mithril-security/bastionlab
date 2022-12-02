@@ -11,4 +11,4 @@ jobs:
         with:
           options: "--check --force-exclude=bastionai"
           jupyter: true
-      - run: cargo fmt --manifest-path="./server/Cargo.toml" --check
+      - run: cargo fmt --manifest-path="./server/Cargo.toml" --check --all
