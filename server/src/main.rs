@@ -663,11 +663,13 @@ impl BastionLab for BastionLabState {
         let header = get_df_header(&prediction)?;
         println!("{:?}", prediction);
 
-        let identifier = self.insert_df(DataFrameArtifact::new(
-            prediction,
-            Policy::allow_by_default(),
-            vec![String::default()],
-        ));
+        let identifier = self.insert_df(DataFrameArtifact {
+            dataframe: prediction,
+            policy: Policy::allow_by_default(),
+            fetchable: VerificationResult::Safe,
+            blacklist: vec![String::default()],
+            query_details: String::from("uploaded dataframe"),
+        });
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
 }
