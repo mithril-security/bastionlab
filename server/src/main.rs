@@ -582,7 +582,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         Ok(val) => val,
         Err(_) => String::new(),
     };
-    let keys = match KeyManagement::load_from_dir(public_keys_directory) {
+    let keys = match KeyManagement::load_from_dir(public_keys_directory.clone()) {
         Ok(keys) => {
             info!("Authentication is enabled.");
             Some(keys)

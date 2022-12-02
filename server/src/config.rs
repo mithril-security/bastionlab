@@ -24,7 +24,6 @@ pub struct BastionLabConfig {
     #[serde(deserialize_with = "deserialize_uri")]
     pub client_to_enclave_untrusted_url: Uri,
 
-    pub public_keys_directory: String,
     pub session_expiry_in_secs: u64,
 }
 
@@ -40,10 +39,6 @@ fn uri_to_socket(uri: &Uri) -> Result<SocketAddr> {
 impl BastionLabConfig {
     pub fn client_to_enclave_untrusted_socket(&self) -> Result<SocketAddr> {
         uri_to_socket(&self.client_to_enclave_untrusted_url)
-    }
-
-    pub fn public_keys_directory(&self) -> Result<String> {
-        Ok(self.public_keys_directory.clone())
     }
 
     pub fn session_expiry(&self) -> Result<u64> {
