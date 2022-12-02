@@ -4,6 +4,7 @@ use polars::prelude::*;
 use prost::Message;
 use ring::{digest, rand};
 
+use bytes::Bytes;
 use serde_json;
 use std::{
     collections::HashMap,
@@ -20,7 +21,6 @@ use std::{
     time::Instant,
     time::{Duration, SystemTime},
 };
-use bytes::Bytes;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{
     metadata::KeyRef,
@@ -225,7 +225,7 @@ Reason: {}",
     }
 
     fn get_df_unchecked(&self, identifier: &str) -> Result<DataFrame, Status> {
-        let dfs = self.dataframes.read().unwrap(); 
+        let dfs = self.dataframes.read().unwrap();
         Ok(dfs
             .get(identifier)
             .ok_or(Status::not_found(format!(
@@ -248,35 +248,36 @@ Reason: {}",
         )))?))
     }
 
-    fn verify_request<T>(&self, req: &Request<T>, token:Option<Bytes>) -> Result<(), Status> {
+    fn verify_request<T>(&self, req: &Request<T>, token: Option<Bytes>) -> Result<(), Status> {
         let lock = self.keys.lock().unwrap();
         match *lock {
-            Some(_) => {
-                match token {
-                    Some(token) => {
-                        let mut tokens = self.sessions.write().unwrap();
-                        let session = tokens.get(token.as_ref()).ok_or(Status::aborted("Session not found!"))?;                        
-                        let recv_ip = &req.remote_addr().ok_or(Status::aborted("User IP unavailable"))?;
-                        let curr_time = SystemTime::now();
+            Some(_) => match token {
+                Some(token) => {
+                    let mut tokens = self.sessions.write().unwrap();
+                    let session = tokens
+                        .get(token.as_ref())
+                        .ok_or(Status::aborted("Session not found!"))?;
+                    let recv_ip = &req
+                        .remote_addr()
+                        .ok_or(Status::aborted("User IP unavailable"))?;
+                    let curr_time = SystemTime::now();
 
-                        if !verify_ip(&session.user_ip, &recv_ip) {
-                            return Err(Status::aborted("Unknown IP Address!"));
-                        }
+                    if !verify_ip(&session.user_ip, &recv_ip) {
+                        return Err(Status::aborted("Unknown IP Address!"));
+                    }
 
-                        if curr_time.gt(&session.expiry) {
-                            tokens.remove(token.as_ref());
-                            return Err(Status::aborted("Session Expired"));
-                        }
-
-                    },
-
-                    None => {},
+                    if curr_time.gt(&session.expiry) {
+                        tokens.remove(token.as_ref());
+                        return Err(Status::aborted("Session Expired"));
+                    }
                 }
+
+                None => {}
             },
 
             None => drop(lock),
         }
-    
+
         Ok(())
     }
 
@@ -447,9 +448,8 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<Query>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        
         let token = get_token(&request, self.auth_enabled)?;
-        self.verify_request(&request,token.clone())?;
+        self.verify_request(&request, token.clone())?;
 
         let composite_plan: CompositePlan = serde_json::from_str(&request.get_ref().composite_plan)
             .map_err(|e| {
@@ -494,7 +494,7 @@ impl BastionLab for BastionLabState {
         let start_time = Instant::now();
 
         let token = get_token(&request, self.auth_enabled)?;
-        self.verify_request(&request,token.clone())?;
+        self.verify_request(&request, token.clone())?;
 
         let client_info = self.get_client_info(token)?;
         let df = df_artifact_from_stream(request.into_inner()).await?;
@@ -526,7 +526,7 @@ impl BastionLab for BastionLabState {
         request: Request<ReferenceRequest>,
     ) -> Result<Response<Self::FetchDataFrameStream>, Status> {
         let token = get_token(&request, self.auth_enabled)?;
-        self.verify_request(&request,token.clone())?;
+        self.verify_request(&request, token.clone())?;
 
         let fut = {
             let df = self.get_df(
@@ -552,7 +552,7 @@ impl BastionLab for BastionLabState {
         request: Request<Empty>,
     ) -> Result<Response<ReferenceList>, Status> {
         let token = get_token(&request, self.auth_enabled)?;
-        self.verify_request(&request,token.clone())?;
+        self.verify_request(&request, token.clone())?;
 
         let list = self
             .get_headers()?
@@ -571,7 +571,7 @@ impl BastionLab for BastionLabState {
         request: Request<ReferenceRequest>,
     ) -> Result<Response<ReferenceResponse>, Status> {
         let token = get_token(&request, self.auth_enabled)?;
-        self.verify_request(&request,token.clone())?;
+        self.verify_request(&request, token.clone())?;
 
         let identifier = String::from(&request.get_ref().identifier);
         let header = self.get_header(&identifier)?;
@@ -611,22 +611,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let config: BastionLabConfig = toml::from_str(&contents)?;
 
     let disable_authentication = !std::env::var("DISABLE_AUTHENTICATION").is_err();
-    
+
     let keys = match KeyManagement::load_from_dir(config.public_keys_directory()?) {
         Ok(keys) => {
             if !disable_authentication {
                 info!("Authentication is enabled.");
                 Some(keys)
-            }
-            else {
+            } else {
                 info!("Authentication is disabled.");
                 None
             }
         }
-        Err(e) =>  {
+        Err(e) => {
             println!("Exiting due to an error reading keys. {}", e.message());
             //Temp fix to exit early, returning an error seems to break the "?" handlers above.
-            return Ok(())
+            return Ok(());
         }
     };
 
