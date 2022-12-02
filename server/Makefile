@@ -28,6 +28,10 @@ bin/tls/host_server.pem bin/tls/host_server.key &: bin
 		-x509 -days 365 -out bin/tls/host_server.pem \
 		-subj "/C=FR/CN=bastionlab-server"
 
+keys_directory:
+	mkdir keys/owners -p
+	mkdir keys/users -p
+
 build:
 	LIBTORCH=$(LIBTORCH) CUDA=$(CUDA) LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) cargo build --release
 
@@ -37,7 +41,7 @@ target/release/$(PKG_NAME):
 bin/$(PKG_NAME): target/release/$(PKG_NAME)
 	cp target/release/$(PKG_NAME) bin/
 	
-install: bin/tls/host_server.pem bin/tls/host_server.key bin/config.toml
+install: bin/tls/host_server.pem bin/tls/host_server.key bin/config.toml keys_directory
 	cp target/release/$(PKG_NAME) bin/
 
 run: bin/$(PKG_NAME) bin/tls/host_server.pem bin/tls/host_server.key bin/config.toml

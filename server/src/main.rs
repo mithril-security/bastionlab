@@ -20,6 +20,7 @@ use std::{
     time::Instant,
     time::{Duration, SystemTime},
 };
+use bytes::Bytes;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{
     metadata::KeyRef,
@@ -247,35 +248,38 @@ Reason: {}",
         )))?))
     }
 
-    fn verify_request<T>(&self, req: &Request<T>) -> Result<(), Status> {
+    fn verify_request<T>(&self, req: &Request<T>, token:Option<Bytes>) -> Result<(), Status> {
         let lock = self.keys.lock().unwrap();
         match *lock {
             Some(_) => {
-                let remote_addr = &req.remote_addr();
-                if let Some(token) = get_token(req, self.auth_enabled)? {
-                    let mut tokens = self.sessions.write().unwrap();
-                    if let Some(recv_ip) = remote_addr {
-                        if let Some(Session {
-                            user_ip, expiry, ..
-                        }) = tokens.get(token.as_ref())
-                        {
-                            let curr_time = SystemTime::now();
-                            if !verify_ip(&user_ip, &recv_ip) {
-                                return Err(Status::aborted("Unknown IP Address!"));
-                            }
-                            if curr_time.gt(expiry) {
-                                tokens.remove(token.as_ref());
-                                return Err(Status::aborted("Session Expired"));
-                            }
+                match token {
+                    Some(token) => {
+                        let mut tokens = self.sessions.write().unwrap();
+                        let session = tokens.get(token.as_ref()).ok_or(Status::aborted("Session not found!"))?;                        
+                        let recv_ip = &req.remote_addr().ok_or(Status::aborted("User IP unavailable"))?;
+                        let curr_time = SystemTime::now();
+
+                        if !verify_ip(&session.user_ip, &recv_ip) {
+                            return Err(Status::aborted("Unknown IP Address!"));
                         }
-                    }
+
+                        if curr_time.gt(&session.expiry) {
+                            tokens.remove(token.as_ref());
+                            return Err(Status::aborted("Session Expired"));
+                        }
+
+                    },
+
+                    None => {},
                 }
-            }
+            },
+
             None => drop(lock),
         }
-
+    
         Ok(())
     }
+
     fn get_header(&self, identifier: &str) -> Result<String, Status> {
         Ok(get_df_header(
             &self
@@ -417,15 +421,14 @@ Reason: {}",
         Ok(())
     }
 
-    fn get_client_info<T>(&self, req: &Request<T>) -> Result<ClientInfo, Status> {
+    fn get_client_info(&self, token: Option<Bytes>) -> Result<ClientInfo, Status> {
         let sessions = self.sessions.write().unwrap();
-        let token = get_token(req, self.auth_enabled)?;
         let token = match &token {
             Some(v) => &v[..],
             None => &[0u8; 32],
         };
         let session = sessions
-            .get(token)
+            .get(token.as_ref())
             .ok_or(Status::aborted("Session not found!"))?;
         Ok(session.client_info.clone())
     }
@@ -444,7 +447,9 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<Query>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        self.verify_request(&request)?;
+        
+        let token = get_token(&request, self.auth_enabled)?;
+        self.verify_request(&request,token.clone())?;
 
         let composite_plan: CompositePlan = serde_json::from_str(&request.get_ref().composite_plan)
             .map_err(|e| {
@@ -477,7 +482,7 @@ impl BastionLab for BastionLabState {
                 dataset_hash: Some(hash),
                 time_taken: elapsed.as_millis() as f64,
             },
-            Some(self.get_client_info(&request)?),
+            Some(self.get_client_info(token)?),
         );
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
@@ -488,9 +493,10 @@ impl BastionLab for BastionLabState {
     ) -> Result<Response<ReferenceResponse>, Status> {
         let start_time = Instant::now();
 
-        self.verify_request(&request)?;
+        let token = get_token(&request, self.auth_enabled)?;
+        self.verify_request(&request,token.clone())?;
 
-        let client_info = self.get_client_info(&request)?;
+        let client_info = self.get_client_info(token)?;
         let df = df_artifact_from_stream(request.into_inner()).await?;
         let dataframe_bytes: Vec<u8> =
             df_to_bytes(&df.dataframe)
@@ -519,12 +525,13 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<ReferenceRequest>,
     ) -> Result<Response<Self::FetchDataFrameStream>, Status> {
-        self.verify_request(&request)?;
+        let token = get_token(&request, self.auth_enabled)?;
+        self.verify_request(&request,token.clone())?;
 
         let fut = {
             let df = self.get_df(
                 &request.get_ref().identifier,
-                Some(self.get_client_info(&request)?),
+                Some(self.get_client_info(token)?),
             )?;
             stream_data(df, 32)
         };
@@ -544,7 +551,9 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<Empty>,
     ) -> Result<Response<ReferenceList>, Status> {
-        self.verify_request(&request)?;
+        let token = get_token(&request, self.auth_enabled)?;
+        self.verify_request(&request,token.clone())?;
+
         let list = self
             .get_headers()?
             .into_iter()
@@ -552,7 +561,7 @@ impl BastionLab for BastionLabState {
             .collect();
         telemetry::add_event(
             TelemetryEventProps::ListDataFrame {},
-            Some(self.get_client_info(&request)?),
+            Some(self.get_client_info(token)?),
         );
         Ok(Response::new(ReferenceList { list }))
     }
@@ -561,14 +570,16 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<ReferenceRequest>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        self.verify_request(&request)?;
+        let token = get_token(&request, self.auth_enabled)?;
+        self.verify_request(&request,token.clone())?;
+
         let identifier = String::from(&request.get_ref().identifier);
         let header = self.get_header(&identifier)?;
         telemetry::add_event(
             TelemetryEventProps::GetDataFrameHeader {
                 dataset_name: Some(identifier.clone()),
             },
-            Some(self.get_client_info(&request)?),
+            Some(self.get_client_info(token)?),
         );
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
@@ -598,13 +609,27 @@ async fn main() -> Result<(), Box<dyn Error>> {
     println!("BastionLab server running...");
 
     let config: BastionLabConfig = toml::from_str(&contents)?;
+
+    let disable_authentication = !std::env::var("DISABLE_AUTHENTICATION").is_err();
+    
     let keys = match KeyManagement::load_from_dir(config.public_keys_directory()?) {
         Ok(keys) => {
-            info!("Authentication is enabled.");
-            Some(keys)
+            if !disable_authentication {
+                info!("Authentication is enabled.");
+                Some(keys)
+            }
+            else {
+                info!("Authentication is disabled.");
+                None
+            }
         }
-        Err(_) => None,
+        Err(e) =>  {
+            println!("Exiting due to an error reading keys. {}", e.message());
+            //Temp fix to exit early, returning an error seems to break the "?" handlers above.
+            return Ok(())
+        }
     };
+
     let state = BastionLabState::new(keys, config.session_expiry()?);
 
     let server_cert = fs::read("tls/host_server.pem")?;

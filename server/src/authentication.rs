@@ -54,11 +54,21 @@ impl KeyManagement {
             Err(Status::aborted("Please provide a public keys directory!"))?
         }
 
-        let owners = fs::read_dir(path.clone() + "/owners")?;
-        let users = fs::read_dir(path + "/users")?;
+        let owners = fs::read_dir(path.clone() + "/owners").map_err(|_| {
+            Status::aborted("No owners directory found!")
+        })?;
 
-        let owners = KeyManagement::get_hash_and_keys(owners)?;
-        let users = KeyManagement::get_hash_and_keys(users)?;
+        let users = fs::read_dir(path + "/users").map_err(|_| {
+            Status::aborted("No users directory found!")
+        })?;
+
+        let owners = KeyManagement::get_hash_and_keys(owners).map_err(|_| {
+            Status::aborted("There is an issue with the owner's key!")
+        })?;
+
+        let users = KeyManagement::get_hash_and_keys(users).map_err(|_| {
+            Status::aborted("There is an issue with the user's key!")
+        })?;
 
         Ok(KeyManagement { owners, users })
     }
