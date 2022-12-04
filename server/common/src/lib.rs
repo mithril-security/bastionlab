@@ -1,4 +1,3 @@
-use env_logger::Env;
 use log::info;
 use polars::prelude::*;
 use ring::{digest, rand};
@@ -9,10 +8,8 @@ use std::{
     collections::HashMap,
     error::Error,
     fmt::Debug,
-    fs::{self, File},
     future::Future,
     hash::{Hash, Hasher},
-    io::Read,
     net::SocketAddr,
     pin::Pin,
     sync::{Arc, Mutex, RwLock},

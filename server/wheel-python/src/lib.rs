@@ -1,7 +1,6 @@
 use env_logger::Env;
 use log::error;
 use log::info;
-use pyo3::types::PyList;
 use tokio::runtime::Builder;
 use tokio::signal;
 
