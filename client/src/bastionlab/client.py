@@ -149,7 +149,9 @@ class Connection:
     server_name: Optional[str] = "bastionlab-server"
 
     @staticmethod
-    def _verify_user(server_target, server_creds, options, signing_key: Optional[SigningKey]=None):
+    def _verify_user(
+        server_target, server_creds, options, signing_key: Optional[SigningKey] = None
+    ):
         """
         Set up initial connection to BastionLab for verification
         if pubkey not known:
@@ -175,7 +177,7 @@ class Connection:
             metadata += ((f"signature-{(pubkey_hex)}-bin", signed),)
 
             return stub.CreateSession(CLIENT_INFO, metadata=metadata).token
-        
+
         stub.CreateSession(CLIENT_INFO)
         return None
 
@@ -210,7 +212,7 @@ class Connection:
 
         channel_cred = (
             server_creds
-            if self.signing_key is None 
+            if self.signing_key is None
             else server_creds
             if self.token is None
             else grpc.composite_channel_credentials(
@@ -226,9 +228,7 @@ class Connection:
         if self.token is not None:
             daemon = Thread(
                 target=self._heart_beat,
-                args=(
-                    stub,
-                ),
+                args=(stub,),
                 daemon=True,
                 name="HeartBeat",
             )
