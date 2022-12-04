@@ -14,6 +14,11 @@ use bastionlab_common::config::*;
 use rcgen::generate_simple_self_signed;
 use tonic::transport::Identity;
 
+/// Start BastionLab server.
+/// Args:
+///     port (Optional[int]): The port on which the server will listen to connections. Default to 50056.
+///     session_expiration (Optional[int]): The amount of seconds before a session expire. Default to 150.
+///     keys_path (Optional[str]): The path where the owners and users keys can be found. Leaving this to none will disable the authentification. Default to None.
 #[pyfunction]
 #[pyo3(text_signature = "(port=50056, session_expiration=150, keys_path=None, /)")]
 fn start(
