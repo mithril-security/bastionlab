@@ -1,3 +1,7 @@
+use env_logger::Env;
+use log::error;
+use log::info;
+use pyo3::types::PyList;
 use tokio::runtime::Builder;
 use tokio::signal;
 
@@ -11,7 +15,13 @@ use rcgen::generate_simple_self_signed;
 use tonic::transport::Identity;
 
 #[pyfunction]
-fn start(_py: Python, port: Option<i32>, session_expiration: Option<i32>) -> PyResult<()> {
+#[pyo3(text_signature = "(port=50056, session_expiration=150, keys_path=None, /)")]
+fn start(
+    _py: Python,
+    port: Option<i32>,
+    session_expiration: Option<i32>,
+    keys_path: Option<&str>,
+) -> PyResult<()> {
     let rt = Builder::new_multi_thread().enable_all().build().unwrap();
     let mut port_target: i32 = 50056;
     let mut session_time: u64 = 150;
@@ -32,7 +42,22 @@ fn start(_py: Python, port: Option<i32>, session_expiration: Option<i32>) -> PyR
         session_expiry_in_secs: session_time,
     };
 
-    let keys = KeyManagement::default();
+    let mut keys = None;
+
+    if let Some(keys_dir) = keys_path {
+        let keys_mgr_res = KeyManagement::load_from_dir(keys_dir.to_string());
+        match keys_mgr_res {
+            Ok(keys_mgr) => {
+                keys = Some(keys_mgr);
+                info!("Authentification enabled");
+            }
+            Err(err) => error!("Error while loading users keys. Reason: {:?}", err),
+        }
+    };
+
+    if keys.is_none() {
+        info!("Authentification disabled");
+    }
 
     //TODO: To be replaced when TEE support is implemented
     let subject_alt_names = vec!["bastionlab-server".to_string()];
@@ -42,7 +67,7 @@ fn start(_py: Python, port: Option<i32>, session_expiration: Option<i32>) -> PyR
         cert.serialize_private_key_pem(),
     );
 
-    rt.spawn(async move {
+    let _thread = rt.spawn(async move {
         bastionlab_common::start(config, keys, server_identity)
             .await
             .expect("Server error");
@@ -59,6 +84,7 @@ fn start(_py: Python, port: Option<i32>, session_expiration: Option<i32>) -> PyR
 /// A Python module implemented in Rust.
 #[pymodule]
 fn bastionlab_server(_py: Python, m: &PyModule) -> PyResult<()> {
+    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
     m.add_function(wrap_pyfunction!(start, m)?)?;
     Ok(())
 }

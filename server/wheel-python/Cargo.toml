@@ -15,4 +15,6 @@ tokio = { version = "1.19.2", features = ["macros", "rt-multi-thread", "net", "s
 bastionlab-common = { path = "../common/" }
 http = "0.2.8"
 rcgen = "*"
+log = "0.4.17"
+env_logger = "0.9.0"
 tonic = { version = "0.5.2", features = ["tls", "transport"] }

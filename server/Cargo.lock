@@ -193,6 +193,8 @@ name = "bastionlab"
 version = "0.3.3"
 dependencies = [
  "bastionlab-common",
+ "env_logger",
+ "log",
  "tokio",
  "toml",
  "tonic",
@@ -236,7 +238,9 @@ name = "bastionlab-server"
 version = "0.3.3"
 dependencies = [
  "bastionlab-common",
+ "env_logger",
  "http",
+ "log",
  "pyo3",
  "pyo3-asyncio",
  "rcgen",
