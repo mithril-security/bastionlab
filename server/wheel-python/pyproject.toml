@@ -5,7 +5,9 @@ build-backend = "maturin"
 [project]
 name = "bastionlab-server"
 requires-python = ">=3.6.9"
-authors = ["Mithril Security <contact@mithrilsecurity.io>"]
+authors = [
+    {author = "Mithril Security", email = "contact@mithrilsecurity.io"},
+]
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
