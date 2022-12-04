@@ -85,7 +85,10 @@ fn start(
     Ok(())
 }
 
-/// A Python module implemented in Rust.
+/// BastionLab server available in a Python wheel.
+/// Github: https://github.com/mithril-security/bastionlab
+/// Available methods:
+///     - start(port, session_expiration, keys_path) - Starts the server.
 #[pymodule]
 fn bastionlab_server(_py: Python, m: &PyModule) -> PyResult<()> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
