@@ -617,23 +617,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let config: BastionLabConfig = toml::from_str(&contents)?;
 
     let disable_authentication = !std::env::var("DISABLE_AUTHENTICATION").is_err();
-
-    let keys = match KeyManagement::load_from_dir(config.public_keys_directory()?) {
-        Ok(keys) => {
-            if !disable_authentication {
-                info!("Authentication is enabled.");
-                Some(keys)
-            } else {
-                info!("Authentication is disabled.");
-                None
+    
+    let keys = 
+        if !disable_authentication {
+            match KeyManagement::load_from_dir(config.public_keys_directory()?) {
+                Ok(keys) => {
+                        info!("Authentication is enabled.");
+                        Some(keys)
+                }
+                Err(e) => {
+                    println!("Exiting due to an error reading keys. {}", e.message());
+                    //Temp fix to exit early, returning an error seems to break the "?" handlers above.
+                    return Ok(());
+                }
             }
         }
-        Err(e) => {
-            println!("Exiting due to an error reading keys. {}", e.message());
-            //Temp fix to exit early, returning an error seems to break the "?" handlers above.
-            return Ok(());
-        }
-    };
+        else {
+            info!("Authentication is disabled.");
+            None
+        };
 
     let state = BastionLabState::new(keys, config.session_expiry()?);
 
