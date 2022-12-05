@@ -45,7 +45,6 @@ impl KeyManagement {
         if !Path::new(&path).is_dir() {
             Err(Status::aborted("Please provide a public keys directory!"))?
         }
-        println!("path is {:?}",path);
         let owners_path = &path.join("owners");
         let owners =
             fs::read_dir(owners_path).map_err(|_| Status::aborted("No owners directory found!"))?;
