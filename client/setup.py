@@ -1,5 +1,5 @@
 import os
-from setuptools import find_packages, setup
+from setuptools import setup
 from setuptools.command.build_py import build_py
 import pkg_resources
 import re
@@ -72,5 +72,9 @@ setup(
         "cryptography==38.0.3",
         "seaborn==0.12.0",
         "pyarrow==10.0.0",
+        "protobuf==3.20.2",
+        "six==1.16.0",
+        "numpy==1.23.5",
+        "tqdm==4.64.1",
     ],
 )
