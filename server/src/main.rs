@@ -26,6 +26,7 @@ async fn main() -> Result<()> {
                 .context("Parsing the public_keys_directory config path")?,
         )) {
             Ok(keys) => {
+                info!("{:?}",keys);
                 info!("Authentication is enabled.");
                 Some(keys)
             }

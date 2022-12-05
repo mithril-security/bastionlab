@@ -1,17 +1,12 @@
-use std::{
-    collections::HashMap,
-    fs,
-    net::SocketAddr,
-    path::{Path},
-};
+use std::{collections::HashMap, fs, net::SocketAddr, path::Path};
 
 use crate::prelude::*;
+use bytes::Bytes;
 use prost::Message;
 use ring::{
     digest::{digest, SHA256},
     signature,
 };
-use bytes::Bytes;
 use tonic::{metadata::MetadataMap, Request, Status};
 use x509_parser::prelude::Pem;
 
@@ -46,23 +41,24 @@ impl KeyManagement {
         Ok(res)
     }
 
-    pub fn load_from_dir(path: &Path) -> Result<Self> {
-        ensure!(path.is_dir(), "keys path is not a folder");
+    pub fn load_from_dir(path: &Path) -> Result<Self, Status> {
+        if !Path::new(&path).is_dir() {
+            Err(Status::aborted("Please provide a public keys directory!"))?
+        }
+        println!("path is {:?}",path);
+        let owners_path = &path.join("owners");
+        let owners =
+            fs::read_dir(owners_path).map_err(|_| Status::aborted("No owners directory found!"))?;
 
-        let owners_path = &path.join("users");
-        let owners = fs::read_dir(owners_path)
-            .map_err(|_| Status::aborted("No owners directory found!"))?;
-        
-            let users_path = &path.join("users");
-        let users = fs::read_dir(users_path)
-            .map_err(|_| Status::aborted("No users directory found!"))?;
+        let users_path = &path.join("users");
+        let users =
+            fs::read_dir(users_path).map_err(|_| Status::aborted("No users directory found!"))?;
 
         let owners = KeyManagement::get_hash_and_keys(owners)
             .map_err(|_| Status::aborted("There is an issue with the owner's key!"))?;
 
         let users = KeyManagement::get_hash_and_keys(users)
             .map_err(|_| Status::aborted("There is an issue with the user's key!"))?;
-
 
         Ok(Self { owners, users })
     }

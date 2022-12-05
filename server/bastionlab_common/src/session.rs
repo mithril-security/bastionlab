@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::time::{Duration, SystemTime};
 
@@ -10,15 +11,11 @@ use crate::auth::KeyManagement;
 use crate::session_proto::{ClientInfo, SessionInfo};
 use crate::{prelude::*, session_proto};
 
-fn get_message<T: Message>(method: &[u8], req: &Request<T>) -> Result<Vec<u8>, Status> {
-    let meta = req
-        .metadata()
-        .get_bin("challenge-bin")
-        .ok_or_else(|| Status::invalid_argument("No challenge in request metadata"))?;
-    let challenge = meta
-        .to_bytes()
-        .map_err(|_| Status::invalid_argument("Could not decode challenge"))?;
-
+fn get_message<T: Message>(
+    method: &[u8],
+    req: &Request<T>,
+    challenge: Bytes,
+) -> Result<Vec<u8>, Status> {
     let mut res =
         Vec::with_capacity(method.len() + challenge.as_ref().len() + req.get_ref().encoded_len());
     res.extend_from_slice(method);
@@ -58,6 +55,7 @@ pub struct SessionManager {
     keys: Option<Mutex<KeyManagement>>,
     sessions: Arc<RwLock<HashMap<[u8; 32], Session>>>,
     session_expiry: u64,
+    challenges: Mutex<HashSet<[u8; 32]>>,
 }
 
 impl SessionManager {
@@ -66,6 +64,7 @@ impl SessionManager {
             keys: keys.map(Mutex::new),
             sessions: Default::default(),
             session_expiry,
+            challenges: Default::default(),
         }
     }
 
@@ -73,39 +72,44 @@ impl SessionManager {
         self.keys.is_some()
     }
 
-    pub fn verify_request<T>(&self, req: &Request<T>) -> Result<(), Status> {
+    pub fn verify_request<T>(&self, req: &Request<T>) -> Result<Option<Bytes>, Status> {
+        let token = get_token(&req, self.auth_enabled())?;
         let lock = self.keys.as_ref().map(|l| l.lock().expect("Poisoned lock"));
         match lock {
-            Some(_) => {
-                let remote_addr = &req.remote_addr();
-                if let Some(token) = get_token(req, self.auth_enabled())? {
+            Some(_) => match token.clone() {
+                Some(token) => {
                     let mut tokens = self.sessions.write().unwrap();
-                    if let Some(recv_ip) = remote_addr {
-                        if let Some(Session {
-                            user_ip, expiry, ..
-                        }) = tokens.get(token.as_ref())
-                        {
-                            let curr_time = SystemTime::now();
-                            if !verify_ip(&user_ip, &recv_ip) {
-                                return Err(Status::aborted("Unknown IP Address!"));
-                            }
-                            if curr_time.gt(expiry) {
-                                tokens.remove(token.as_ref());
-                                return Err(Status::aborted("Session Expired"));
-                            }
-                        }
+                    let session = tokens
+                        .get(token.as_ref())
+                        .ok_or(Status::aborted("Session not found!"))?;
+                    let recv_ip = &req
+                        .remote_addr()
+                        .ok_or(Status::aborted("User IP unavailable"))?;
+                    let curr_time = SystemTime::now();
+
+                    if !verify_ip(&session.user_ip, &recv_ip) {
+                        return Err(Status::aborted("Unknown IP Address!"));
+                    }
+
+                    if curr_time.gt(&session.expiry) {
+                        tokens.remove(token.as_ref());
+                        return Err(Status::aborted("Session Expired"));
                     }
                 }
-            }
+
+                None => {
+                    return Err(Status::aborted("Session not found!"));
+                }
+            },
+
             None => drop(lock),
         }
 
-        Ok(())
+        Ok(token)
     }
 
-    pub fn get_client_info<T>(&self, req: &Request<T>) -> Result<ClientInfo, Status> {
+    pub fn get_client_info(&self, token: Option<Bytes>) -> Result<ClientInfo, Status> {
         let sessions = self.sessions.write().unwrap();
-        let token = get_token(req, self.auth_enabled())?;
         let token = match &token {
             Some(v) => &v[..],
             None => &[0u8; 32],
@@ -120,13 +124,35 @@ impl SessionManager {
         let rng = ring::rand::SystemRandom::new();
         loop {
             if let Ok(challenge) = ring::rand::generate(&rng) {
-                return challenge.expose();
+                let challenge: [u8; 32] = challenge.expose();
+                let mut lock = self.challenges.lock().unwrap();
+                lock.insert(challenge);
+                return challenge;
             }
+        }
+    }
+
+    fn check_challenge<T: Message>(&self, request: &Request<T>) -> Result<Bytes, Status> {
+        let mut lock = self.challenges.lock().unwrap();
+        if let Some(challenge) = request.metadata().get_bin("challenge-bin") {
+            let challenge_bytes = challenge.to_bytes().map_err(|_| {
+                Status::invalid_argument(format!("Could not decode challenge {:?}", challenge))
+            })?;
+            let challenge = challenge_bytes.as_ref();
+
+            if !lock.remove(challenge) {
+                return Err(Status::permission_denied("Challenge not found!"));
+            }
+
+            Ok(challenge_bytes)
+        } else {
+            return Err(Status::permission_denied("No challenge in request!"));
         }
     }
 
     // TODO: move grpc specific things to the grpc service and not the session manager
     fn create_session(&self, request: Request<ClientInfo>) -> Result<SessionInfo, Status> {
+        let challenge = self.check_challenge(&request)?;
         let mut sessions = self.sessions.write().unwrap();
         let keys_lock = self.keys.as_ref().map(|l| l.lock().expect("Poisoned lock"));
         let end = "-bin";
@@ -142,7 +168,11 @@ impl SessionManager {
                                 if let Some(key) = key.split(pat).last() {
                                     if let Some(ref keys) = keys_lock {
                                         let lock = keys;
-                                        let message = get_message(b"create-session", &request)?;
+                                        let message = get_message(
+                                            b"create-session",
+                                            &request,
+                                            challenge.clone(),
+                                        )?;
                                         lock.verify_signature(
                                             key,
                                             &message[..],
