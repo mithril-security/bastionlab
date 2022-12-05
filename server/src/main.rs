@@ -99,7 +99,8 @@ async fn main() -> Result<()> {
         .client_to_enclave_untrusted_socket()
         .context("Parsing the client_to_enclave_untrusted_socket config")?;
 
-    info!("BastionLab server starting on {addr:?}.");
+    info!("BastionLab server listening on {addr:?}.");
+    info!("Server ready to take requests");
 
     // serve!
     builder.serve(addr).await?;
