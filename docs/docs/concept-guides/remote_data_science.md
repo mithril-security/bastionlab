@@ -49,7 +49,7 @@ This is enabled by four principles:
 
 -   The data scientist manipulates on their machine only a local object that contains metadata to interact with a remotely hosted dataset
 
--   The data scientist interacts with the remotely hosted objects only through remote proccedure calls calls that are transparent to them
+-   The data scientist interacts with the remotely hosted objects only through remote proccedure calls that are transparent to them
 
 -   Those requests are analyzed and matched against a privacy policy defined by the data owner, so that only allowed operations are executed and sanitized results returned
 

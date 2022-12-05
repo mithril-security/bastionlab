@@ -35,9 +35,9 @@ BastionLab solves this problem by ensuring that only privacy-friendly operations
 
 ## Getting Started
 
-- Follow our [“Quick Tour”](docs/quick-tour/quick-tour/) tutorial
-- [Read](docs/concept-guides/threat_model/) about the technologies we use to ensure privacy
-- Find [our benchmarks](docs/reference-guides/benchmarks/polars/) documenting BastionLab’s speed
+- Follow our [“Quick Tour”](docs/docs/quick-tour/quick-tour.ipynb) tutorial
+- [Read](docs/docs/concept-guides/threat_model.md) about the technologies we use to ensure privacy
+- Find [our benchmarks](docs/docs/reference-guides/benchmarks/polars.md) documenting BastionLab’s speed
 
 ## Getting Help
 
@@ -45,16 +45,5 @@ BastionLab solves this problem by ensuring that only privacy-friendly operations
 - Report bugs by [opening an issue on our BastionLab Github](https://github.com/mithril-security/bastionlab/issues)
 - [Book a meeting](https://calendly.com/contact-mithril-security/15mins?month=2022-11) with us
 
-## How do we organize the documentation?
-
-The security stakes with private data are high. BastionLab uses new technologies and we want to be sure that you understand what we protect you from and what we don’t protect you from.
-<br>
-Here’s a high-view of how we structure our documentation:
-
-- **[Tutorials](docs/quick-tour/quick-tour/)** take you by the hand to install and run BastionLab. 
-- **[Concept guides](docs/concept-guides/confidential_computing/)** discuss key topics and concepts at a high level. They provide useful background information and explanations.
-- **| *Coming soon* | How-to guides** are recipes. They guide you through the steps involved in addressing key problems and use cases. They are more advanced than tutorials and assume some knowledge of how BastionLab works.
-- **[Advanced guides](docs/reference-guides/deployment/on_premise/)** contain technical references for BastionLab’s machinery. They describe how it works and how to use it but assume you have a good understanding of key concepts.
-
 ## Who made BastionLab?
-Mithril Security is a startup aiming to make privacy-friendly data science easy so data scientists and data owners can collaborate without friction. Our solutions apply Privacy Enhancing Technologies and security best practices, like [Remote Data Science](docs/concept-guides/remote_data_science/) and [Confidential Computing](docs/concept-guides/confidential_computing/).
+Mithril Security is a startup aiming to make privacy-friendly data science easy so data scientists and data owners can collaborate without friction. Our solutions apply Privacy Enhancing Technologies and security best practices, like [Remote Data Science](https://github.com/mithril-security/bastionlab/blob/master/docs/docs/concept-guides/remote_data_science.md) and [Confidential Computing](https://github.com/mithril-security/bastionlab/blob/master/docs/docs/concept-guides/confidential_computing.md).
