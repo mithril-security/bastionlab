@@ -6,11 +6,9 @@ use polars::{
     prelude::{DataFrame, NamedFrom, PolarsError, PolarsResult},
     series::Series,
 };
-use tonic::Status;
 
 use crate::bastionlab_linfa::{
     algorithms::{elastic_net, gaussian_naive_bayes, kmeans, linear_regression},
-    to_status_error,
     trainer::{get_datasets, to_polars_error, Models, PredictionTypes, SupportedModels},
 };
 
@@ -42,7 +40,10 @@ fn df_to_vec(df: DataFrame, sh: (usize, usize)) -> Vec<f64> {
     });
     out
 }
-
+/// Internal structure to hold the [`DataFrame`]s converted to raw [`Vec<f64>`].
+/// This also holds information about the features of the input dataset.
+///
+/// The shapes are stored alongside inorder to effectively use [`Array2::from_shape_vec`].
 struct Trainer {
     records: Vec<f64>,
     target: Vec<f64>,
@@ -51,6 +52,61 @@ struct Trainer {
     target_shape: Shape<Ix2>,
 }
 
+/// Transform [`DataFrame`] into [`Trainer`].
+///
+/// It does so by using the [`df_to_vec`] function which converts [`DataFrame`] into [`Vec<Series>`].
+/// Example:
+///```
+/// shape: (4, 4)
+///      ┌──────┬──────┬──────┬──────┐
+///      │ col1 ┆ col2 ┆ col3 ┆ col4 │
+///      │ ---  ┆ ---  ┆ ---  ┆ ---  │
+///      │ i64  ┆ i64  ┆ i64  ┆ i64  │
+///      ╞══════╪══════╪══════╪══════╡
+///      │ 1    ┆ 3    ┆ 6    ┆ 9    │
+///      ├╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┤
+///      │ 2    ┆ 4    ┆ 8    ┆ 16   │
+///      ├╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┤
+///      │ 3    ┆ 9    ┆ 18   ┆ 35   │
+///      ├╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┤
+///      │ 4    ┆ -1   ┆ 0    ┆ 1    │
+///      └──────┴──────┴──────┴──────┘
+///```
+/// The [`DataFrame`] above is first transformed into [Vec<Series>].
+///
+/// ```[shape: (4,) Series: 'col1' [i64]
+/// [
+/// 	1
+/// 	2
+/// 	3
+/// 	4
+/// ], shape: (4,)
+/// Series: 'col2' [i64]
+/// [
+/// 	3
+/// 	4
+/// 	9
+/// 	-1
+/// ], shape: (4,)
+/// Series: 'col3' [i64]
+/// [
+/// 	6
+/// 	8
+/// 	18
+/// 	0
+/// ], shape: (4,)
+/// Series: 'col4' [i64]
+/// [
+/// 	9
+/// 	16
+/// 	35
+/// 	1
+/// ]]
+/// ```
+/// And this [Vec<Series>] is then converted to [Vec<f64>] using an intermediary [Vec<String>].
+///
+/// **NB: We use, [f64] in order to capture every type (i{8,16,32}, u{8,16,32}, f{32,64}, usize). But, separate
+///  conversion path is used when necessary.**
 fn transform_dfs(records: DataFrame, target: DataFrame) -> Trainer {
     let cols = records
         .get_column_names()
@@ -72,18 +128,8 @@ fn transform_dfs(records: DataFrame, target: DataFrame) -> Trainer {
     }
 }
 
-pub fn predict(model: SupportedModels, data: Vec<f64>) -> PolarsResult<Option<PredictionTypes>> {
-    let sh = (1, data.len());
-    let sample = to_ndarray!(sh, data);
-    let prediction = match model {
-        SupportedModels::ElasticNet(m) => Some(PredictionTypes::Float(m.predict(sample))),
-        SupportedModels::GaussianNaiveBayes(m) => Some(PredictionTypes::Usize(m.predict(sample))),
-        SupportedModels::KMeans(m) => Some(PredictionTypes::Usize(m.predict(sample))),
-        SupportedModels::LinearRegression(m) => Some(PredictionTypes::Float(m.predict(sample))),
-    };
-    Ok(prediction)
-}
-
+/// This method sends both the training and target datasets to the specified model in [`Models`].
+/// And `ratio` is passed along to [`linfa_datasets::DatasetBase`]
 pub fn send_to_trainer(
     records: DataFrame,
     target: DataFrame,
@@ -192,15 +238,12 @@ pub fn send_to_trainer(
                 target_shape,
             } = transform_dfs(records, target);
 
-            println!("{:?}, {:?}", records_shape, target_shape);
-
             let target = to_type! {<f64>(target)};
             let target = to_ndarray!(target_shape, target);
             let target = to_polars_error(target.clone().into_shape([target.clone().len()]))?;
 
             let records = to_ndarray!(records_shape, records);
             let (dataset, _) = get_datasets(records, target, ratio, cols)?;
-            // println!("{:?}", dataset.records().);
             let model = to_polars_error(linear_regression(dataset, fit_intercept))?;
 
             Ok(SupportedModels::LinearRegression(model))
@@ -208,26 +251,40 @@ pub fn send_to_trainer(
     }
 }
 
-pub fn get_prediction(pred: Option<PredictionTypes>) -> Result<DataFrame, Status> {
-    let prediction: DataFrame = match pred {
+/// This method is used to run a prediction on an already fitted model, based on the model selection type.
+/// We use two different types for prediction
+/// [f64] and [usize] --> [PredictionTypes::Float] and [PredictionTypes::Usize] respectively.
+pub fn predict(model: SupportedModels, data: Vec<f64>) -> PolarsResult<DataFrame> {
+    let sh = (1, data.len());
+    let sample = to_ndarray!(sh, data);
+    let prediction = match model {
+        SupportedModels::ElasticNet(m) => Some(PredictionTypes::Float(m.predict(sample))),
+        SupportedModels::GaussianNaiveBayes(m) => Some(PredictionTypes::Usize(m.predict(sample))),
+        SupportedModels::KMeans(m) => Some(PredictionTypes::Usize(m.predict(sample))),
+        SupportedModels::LinearRegression(m) => Some(PredictionTypes::Float(m.predict(sample))),
+    };
+
+    let prediction: DataFrame = match prediction {
         Some(v) => match v {
             PredictionTypes::Usize(m) => {
                 let targets = m.targets.to_vec();
                 let targets = to_type! {<u64>(targets)};
                 let s = Series::new("prediction", targets);
-                let df = to_status_error(DataFrame::new(vec![s]))?;
+                let df = DataFrame::new(vec![s])?;
                 df
             }
             PredictionTypes::Float(m) => {
                 let targets = m.targets.to_vec();
                 let targets = to_type! {<f64>(targets)};
                 let s = Series::new("prediction", targets);
-                let df = to_status_error(to_polars_error(DataFrame::new(vec![s])))?;
+                let df = to_polars_error(DataFrame::new(vec![s]))?;
                 df
             }
         },
         None => {
-            return Err(Status::aborted("Failed to predict!"));
+            return PolarsResult::Err(PolarsError::ComputeError(polars::error::ErrString::Owned(
+                "Failed to predict".to_string(),
+            )))
         }
     };
 

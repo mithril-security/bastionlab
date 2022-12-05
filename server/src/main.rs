@@ -1,5 +1,5 @@
 use bastionlab_linfa::{
-    operations::{get_prediction, predict, send_to_trainer},
+    operations::{predict, send_to_trainer},
     to_status_error,
     trainer::{process_trainer_req, select_trainer, SupportedModels},
 };
@@ -657,8 +657,6 @@ impl BastionLab for BastionLabState {
         let model = self.get_model(model_id)?;
 
         let prediction = to_status_error(predict(model, data))?;
-
-        let prediction = get_prediction(prediction)?;
 
         let header = get_df_header(&prediction)?;
         println!("{:?}", prediction);
