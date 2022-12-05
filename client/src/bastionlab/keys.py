@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import Optional
 import os
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import ec, types

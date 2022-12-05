@@ -2,37 +2,22 @@ from dataclasses import dataclass
 import ssl
 from threading import Thread
 from time import sleep
-from typing import Any, List, TYPE_CHECKING, Optional
+from typing import Any, TYPE_CHECKING, Optional
 from hashlib import sha256
 import grpc
-
-from bastionlab.keys import SigningKey
-from grpc import StatusCode
-from bastionlab.pb.bastionlab_pb2 import (
-    ReferenceRequest,
-    ClientInfo,
-    Query,
-    Empty,
-)
-from bastionlab.version import __version__ as app_version
-from bastionlab.pb.bastionlab_pb2_grpc import BastionLabStub
-
+from .keys import SigningKey
+from .pb.bastionlab_pb2 import Empty
+from .pb.bastionlab_pb2 import ClientInfo
+from .version import __version__ as app_version
+from .pb.bastionlab_pb2_grpc import SessionServiceStub
 import platform
 import socket
 import getpass
-import polars as pl
-from colorama import Fore
-
-from bastionlab.utils import (
-    deserialize_dataframe,
-    serialize_dataframe,
-)
-from bastionlab.policy import Policy, DEFAULT_POLICY
-from bastionlab.errors import GRPCException
 
 
 if TYPE_CHECKING:
-    from bastionlab.remote_polars import RemoteLazyFrame, FetchableLazyFrame
+    from .torch import BastionLabTorch
+    from .polars import BastionLabPolars
 
 HEART_BEAT_TICK = 25 * 60
 UNAME = platform.uname()
@@ -50,85 +35,32 @@ CLIENT_INFO = ClientInfo(
 
 
 class Client:
+    __bastionlab_torch: "BastionLabTorch" = None
+    __bastionlab_polars: "BastionLabPolars" = None
+    __channel: grpc.Channel
+    __token: bytes
+
     def __init__(
         self,
-        stub: BastionLabStub,
+        channel: grpc.Channel,
     ):
-        self.stub = stub
+        self.__channel = channel
 
-    def send_df(
-        self,
-        df: pl.DataFrame,
-        policy: Policy = DEFAULT_POLICY,
-        blacklist: List[str] = [],
-    ) -> "FetchableLazyFrame":
-        from bastionlab.remote_polars import FetchableLazyFrame
+    @property
+    def torch(self):
+        if self.__bastionlab_torch is None:
+            from bastionlab.torch import BastionLabTorch
 
-        res = GRPCException.map_error(
-            lambda: self.stub.SendDataFrame(serialize_dataframe(df, policy, blacklist))
-        )
-        return FetchableLazyFrame._from_reference(self, res)
+            self.__bastionlab_torch = BastionLabTorch(self.__channel)
+        return self.__bastionlab_torch
 
-    def _fetch_df(self, ref: List[str]) -> Optional[pl.DataFrame]:
-        def inner() -> bytes:
-            joined_bytes = b""
-            blocked = False
+    @property
+    def polars(self):
+        if self.__bastionlab_polars is None:
+            from bastionlab.polars import BastionLabPolars
 
-            for b in self.stub.FetchDataFrame(ReferenceRequest(identifier=ref)):
-                if blocked:
-                    blocked = False
-                    print(
-                        f"{Fore.GREEN}The query has been accepted by the data owner.{Fore.WHITE}"
-                    )
-                if b.pending != "":
-                    blocked = True
-                    print(
-                        f"""{Fore.YELLOW}Warning: non privacy-preserving queries necessitate data owner's approval.
-Reason: {b.pending}
-
-A notification has been sent to the data owner. The request will be pending until the data owner accepts or denies it or until timeout seconds elapse.{Fore.WHITE}"""
-                    )
-                joined_bytes += b.data
-            return joined_bytes
-
-        try:
-            joined_bytes = GRPCException.map_error(inner)
-            return deserialize_dataframe(joined_bytes)
-        except GRPCException as e:
-            if e.code == StatusCode.PERMISSION_DENIED:
-                print(
-                    f"{Fore.RED}The query has been rejected by the data owner.{Fore.WHITE}"
-                )
-                return None
-            else:
-                raise e
-
-    def _run_query(
-        self,
-        composite_plan: str,
-    ) -> "FetchableLazyFrame":
-        from bastionlab.remote_polars import FetchableLazyFrame
-
-        res = GRPCException.map_error(
-            lambda: self.stub.RunQuery(Query(composite_plan=composite_plan))
-        )
-        return FetchableLazyFrame._from_reference(self, res)
-
-    def list_dfs(self) -> List["FetchableLazyFrame"]:
-        from bastionlab.remote_polars import FetchableLazyFrame
-
-        res = GRPCException.map_error(lambda: self.stub.ListDataFrames(Empty()).list)
-        return [FetchableLazyFrame._from_reference(self, ref) for ref in res]
-
-    def get_df(self, identifier: str) -> "FetchableLazyFrame":
-        from bastionlab.remote_polars import FetchableLazyFrame
-
-        res = GRPCException.map_error(
-            lambda: self.stub.GetDataFrameHeader(
-                ReferenceRequest(identifier=identifier)
-            )
-        )
-        return FetchableLazyFrame._from_reference(self, res)
+            self.__bastionlab_polars = BastionLabPolars(self.__channel)
+        return self.__bastionlab_polars
 
 
 class AuthPlugin(grpc.AuthMetadataPlugin):
@@ -163,13 +95,13 @@ class Connection:
         """
         channel = grpc.secure_channel(server_target, server_creds, options)
 
-        stub = BastionLabStub(channel)
+        session_stub = SessionServiceStub(channel)
 
         metadata = ()
         data: bytes = CLIENT_INFO.SerializeToString()
 
         if signing_key is not None:
-            challenge = stub.GetChallenge(Empty()).value
+            challenge = session_stub.GetChallenge(Empty()).value
 
             metadata += (("challenge-bin", challenge),)
             to_sign = b"create-session" + challenge + data
@@ -178,9 +110,11 @@ class Connection:
             signed = signing_key.sign(to_sign)
             metadata += ((f"signature-{(pubkey_hex)}-bin", signed),)
 
-            return stub.CreateSession(CLIENT_INFO, metadata=metadata).token
+            token = session_stub.CreateSession(CLIENT_INFO, metadata=metadata).token
+
+            return token
         else:
-            stub.CreateSession(CLIENT_INFO)
+            session_stub.CreateSession(CLIENT_INFO)
             return None
 
     @property
@@ -195,7 +129,7 @@ class Connection:
             self.__exit__(None, None, None)
 
     def _heart_beat(self, stub):
-        while True:
+        while self._client is not None:
             stub.RefreshSession(Empty(), metadata=(("accesstoken-bin", self.token),))
             sleep(HEART_BEAT_TICK)
 
@@ -225,7 +159,11 @@ class Connection:
         self.channel = grpc.secure_channel(
             server_target, channel_cred, connection_options
         )
-        stub = BastionLabStub(self.channel)
+        stub = SessionServiceStub(self.channel)
+
+        self._client = Client(
+            self.channel,
+        )
 
         if self.token is not None:
             daemon = Thread(
@@ -235,10 +173,6 @@ class Connection:
                 name="HeartBeat",
             )
             daemon.start()
-
-        self._client = Client(
-            stub,
-        )
 
         return self._client
 
