@@ -5,7 +5,7 @@ use tonic::{Response, Status};
 
 use crate::{access_control::Policy, DataFrameArtifact, DelayedDataFrame};
 
-use super::grpc::{FetchChunk, SendChunk};
+use super::polars_proto::{FetchChunk, SendChunk};
 
 pub async fn df_artifact_from_stream(
     stream: tonic::Streaming<SendChunk>,

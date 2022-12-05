@@ -1,7 +1,7 @@
+.PHONY: all venv build dev-install test clean
+
 VENV := env
 BASTIONLAB_VERSION := $(shell cat src/bastionlab/version.py | cut -d '"' -f 2)
-
-.PHONY = all venv build dev-install test clean
 
 all: build
 

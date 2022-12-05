@@ -1,9 +1,8 @@
 from typing import Iterator, Tuple, List
 import torch
 import polars as pl
-
-from bastionlab.pb.bastionlab_pb2 import SendChunk
-from bastionlab.policy import Policy
+from ..pb.bastionlab_polars_pb2 import SendChunk
+from .policy import Policy
 
 CHUNK_SIZE = 32 * 1024
 
