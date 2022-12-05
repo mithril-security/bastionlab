@@ -1,5 +1,5 @@
 use linfa::traits::Predict;
-use ndarray::Array2;
+use ndarray::{Array2, Dim, Ix2, Shape, ShapeBuilder, StrideShape};
 
 use polars::{
     error::ErrString,
@@ -26,6 +26,8 @@ macro_rules! to_type {
 macro_rules! to_ndarray {
     ($sh:ident, $target:ident) => {
         to_polars_error(Array2::from_shape_vec($sh, $target))?
+            .as_standard_layout()
+            .to_owned()
     };
 }
 
@@ -45,8 +47,8 @@ struct Trainer {
     records: Vec<f64>,
     target: Vec<f64>,
     cols: Vec<String>,
-    records_shape: (usize, usize),
-    target_shape: (usize, usize),
+    records_shape: StrideShape<Ix2>,
+    target_shape: Shape<Ix2>,
 }
 
 fn transform_dfs(records: DataFrame, target: DataFrame) -> Trainer {
@@ -64,8 +66,9 @@ fn transform_dfs(records: DataFrame, target: DataFrame) -> Trainer {
         records,
         target,
         cols,
-        records_shape,
-        target_shape,
+        records_shape: Shape::from(Dim([records_shape.0, records_shape.1]))
+            .strides(Dim([1, records_shape.0])),
+        target_shape: Shape::from(Dim([target_shape.0, target_shape.1])),
     }
 }
 
@@ -75,7 +78,6 @@ pub fn predict(model: SupportedModels, data: Vec<f64>) -> PolarsResult<Option<Pr
     let prediction = match model {
         SupportedModels::ElasticNet(m) => Some(PredictionTypes::Float(m.predict(sample))),
         SupportedModels::GaussianNaiveBayes(m) => Some(PredictionTypes::Usize(m.predict(sample))),
-
         SupportedModels::KMeans(m) => Some(PredictionTypes::Usize(m.predict(sample))),
         SupportedModels::LinearRegression(m) => Some(PredictionTypes::Float(m.predict(sample))),
     };
@@ -190,13 +192,15 @@ pub fn send_to_trainer(
                 target_shape,
             } = transform_dfs(records, target);
 
-            let target = to_type! {<f64>(target)};
+            println!("{:?}, {:?}", records_shape, target_shape);
 
+            let target = to_type! {<f64>(target)};
             let target = to_ndarray!(target_shape, target);
             let target = to_polars_error(target.clone().into_shape([target.clone().len()]))?;
 
             let records = to_ndarray!(records_shape, records);
             let (dataset, _) = get_datasets(records, target, ratio, cols)?;
+            // println!("{:?}", dataset.records().);
             let model = to_polars_error(linear_regression(dataset, fit_intercept))?;
 
             Ok(SupportedModels::LinearRegression(model))

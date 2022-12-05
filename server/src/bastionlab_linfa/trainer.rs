@@ -63,7 +63,7 @@ pub fn to_polars_error<T, E: Error>(input: Result<T, E>) -> PolarsResult<T> {
     input.map_err(|err| PolarsError::InvalidOperation(ErrString::Owned(err.to_string())))
 }
 
-pub fn get_datasets<D, T>(
+pub fn get_datasets<D: Clone, T>(
     records: ArrayBase<OwnedRepr<D>, Ix2>,
     target: ArrayBase<OwnedRepr<T>, Ix1>,
     ratio: f32,
