@@ -248,6 +248,7 @@ dependencies = [
  "linfa-clustering",
  "linfa-elasticnet",
  "linfa-linear",
+ "linfa-logistic",
  "linfa-nn",
  "log",
  "ndarray",
@@ -1266,11 +1267,10 @@ dependencies = [
 
 [[package]]
 name = "linfa"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20345c27f1041e3d3c6457d92530688a9134c28cabaf4cf9a6e0d90a91ac7075"
+checksum = "8d65d0d9f86f65485b3a9fc6dad8620b67394d102aa3c4088628a9a1accda008"
 dependencies = [
- "anyhow",
  "approx 0.4.0",
  "ndarray",
  "num-traits",
@@ -1281,9 +1281,9 @@ dependencies = [
 
 [[package]]
 name = "linfa-bayes"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78e7acecf0282056b300198ece8504e85ea0ffd2bd6b17dffdb5708f0956d06f"
+checksum = "a78a843df0c6098f7d018dee26bc1865e86c098e8564ea65ed64e2d596577b54"
 dependencies = [
  "linfa",
  "ndarray",
@@ -1293,9 +1293,9 @@ dependencies = [
 
 [[package]]
 name = "linfa-clustering"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b37ddee7557dd269e7e7d637d3cecdcafbad945ba4e890c6cd74582c771e357"
+checksum = "ad919153347d20184e8b53786df559ae46fab429976046084d6b8c79f3adbb30"
 dependencies = [
  "linfa",
  "linfa-linalg",
@@ -1313,9 +1313,9 @@ dependencies = [
 
 [[package]]
 name = "linfa-elasticnet"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e81639fca9b6ce88172da423020ead6b30bccee3d0cead300909d9ca762c2a6"
+checksum = "052a3f74d62dcc580aaacb276f27588233096eec3e3a7e008416496c5a0cb563"
 dependencies = [
  "approx 0.4.0",
  "linfa",
@@ -1338,9 +1338,9 @@ dependencies = [
 
 [[package]]
 name = "linfa-linear"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8bff3f1b2cd598bc65b68e2ad2adf91e537e03e11cf5d954be53e85dda0ef90"
+checksum = "4f5f756c6bcf3f80c6ee46d592cd9ec539ce6b5496ad29db90e10c6bb024dfc5"
 dependencies = [
  "argmin",
  "linfa",
@@ -1352,10 +1352,25 @@ dependencies = [
 ]
 
 [[package]]
-name = "linfa-nn"
-version = "0.6.0"
+name = "linfa-logistic"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b740479d500b99093b48e8582636c72882f948ac5af36a37783cca79a7db62f2"
+checksum = "de5924de2a8cb6415d62f1601e578746440d5fab395b18858cfc278c513651c2"
+dependencies = [
+ "argmin",
+ "linfa",
+ "ndarray",
+ "ndarray-stats",
+ "num-traits",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "linfa-nn"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b5183e7d3b291e28fd23c965c95207471cbc71399fd83b942096df463cabdd43"
 dependencies = [
  "kdtree",
  "linfa",

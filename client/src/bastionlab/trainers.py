@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from bastionlab.pb.bastionlab_pb2 import TrainingRequest
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 
 @dataclass
@@ -27,6 +27,30 @@ class LinearRegression(Trainer):
         return {
             "linear_regression": TrainingRequest.LinearRegression(
                 fit_intercept=self.fit_intercept
+            )
+        }
+
+
+@dataclass
+class LogisticRegression(Trainer):
+    decision_boundary: float
+    alpha: float = 1.0
+    gradient_tolerance: float = 1e-4
+    fit_intercept: bool = True
+    max_iterations: int = 100
+    strictly_greater: bool = False
+    initial_params: List[float] = field(default_factory=list)
+
+    def to_msg_dict(self):
+        return {
+            "logistic_regression": TrainingRequest.LogisticRegression(
+                alpha=self.alpha,
+                gradient_tolerance=self.gradient_tolerance,
+                decision_boundary=self.decision_boundary,
+                fit_intercept=self.fit_intercept,
+                max_iterations=self.max_iterations,
+                strictly_greater=self.strictly_greater,
+                initial_params=self.initial_params,
             )
         }
 

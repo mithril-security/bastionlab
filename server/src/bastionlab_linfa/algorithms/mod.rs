@@ -9,3 +9,6 @@ pub use elasticnet::*;
 
 mod linear;
 pub use linear::*;
+
+mod logistic;
+pub use logistic::*;

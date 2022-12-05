@@ -64,6 +64,7 @@ message TrainingRequest {
         ElasticNet elastic_net = 5;
         KMeans kmeans = 6;
         LinearRegression linear_regression = 7;
+        LogisticRegression logistic_regression = 8;
     }
 
     message GaussianNb {
@@ -103,6 +104,16 @@ message TrainingRequest {
 
     message LinearRegression {
         bool fit_intercept = 1;
+    }
+
+    message LogisticRegression {
+        float alpha = 1;
+        float gradient_tolerance = 2;
+        bool fit_intercept = 3;
+        uint64 max_iterations = 4;
+        float decision_boundary = 5;
+        bool strictly_greater = 6;
+        repeated float initial_params = 7;
     }
 }
 

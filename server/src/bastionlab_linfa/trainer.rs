@@ -5,6 +5,7 @@ use linfa_bayes::GaussianNb;
 use linfa_clustering::{KMeans, KMeansInit};
 use linfa_elasticnet::ElasticNet;
 use linfa_linear::FittedLinearRegression;
+use linfa_logistic::FittedLogisticRegression;
 use linfa_nn::distance::L2Dist;
 use ndarray::{Array2, ArrayBase, Ix1, Ix2, OwnedRepr};
 use polars::{
@@ -43,6 +44,16 @@ pub enum Models {
     LinearRegression {
         fit_intercept: bool,
     },
+
+    LogisticRegression {
+        alpha: f64,
+        gradient_tolerance: f64,
+        fit_intercept: bool,
+        max_iterations: u64,
+        decision_boundary: f64,
+        strictly_greater: bool,
+        initial_params: Option<Vec<f64>>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -51,6 +62,7 @@ pub enum SupportedModels {
     ElasticNet(ElasticNet<f64>),
     KMeans(KMeans<f64, L2Dist>),
     LinearRegression(FittedLinearRegression<f64>),
+    LogisticRegression(FittedLogisticRegression<f64, usize>),
 }
 
 #[derive(Debug)]
@@ -72,10 +84,9 @@ pub fn get_datasets<D: Clone, T>(
     DatasetBase<ArrayBase<OwnedRepr<D>, Ix2>, ArrayBase<OwnedRepr<T>, Ix1>>,
     DatasetBase<ArrayBase<OwnedRepr<D>, Ix2>, ArrayBase<OwnedRepr<T>, Ix1>>,
 )> {
+    // ** For now, shuffling is not implemented.
     let dataset = linfa::Dataset::new(records, target);
-
     let dataset = dataset.with_feature_names::<String>(col_names);
-
     let (train_set, test_set) = dataset.split_with_ratio(ratio);
     Ok((train_set, test_set))
 }
@@ -104,6 +115,35 @@ pub fn select_trainer(trainer: Trainer) -> Result<Models, Status> {
         }
         Trainer::LinearRegression(training_request::LinearRegression { fit_intercept }) => {
             Ok(Models::LinearRegression { fit_intercept })
+        }
+        Trainer::LogisticRegression(training_request::LogisticRegression {
+            alpha,
+            gradient_tolerance,
+            fit_intercept,
+            max_iterations,
+            decision_boundary,
+            strictly_greater,
+            initial_params,
+        }) => {
+            let initial_params = initial_params
+                .iter()
+                .map(|v| (*v).into())
+                .collect::<Vec<f64>>();
+
+            let initial_params = if initial_params.len() == 0 {
+                None
+            } else {
+                Some(initial_params)
+            };
+            Ok(Models::LogisticRegression {
+                alpha: alpha.into(),
+                gradient_tolerance: gradient_tolerance.into(),
+                fit_intercept,
+                max_iterations,
+                decision_boundary: decision_boundary.into(),
+                strictly_greater,
+                initial_params,
+            })
         }
         Trainer::ElasticNet(training_request::ElasticNet {
             penalty,

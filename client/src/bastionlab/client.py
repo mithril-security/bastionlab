@@ -141,8 +141,8 @@ A notification has been sent to the data owner. The request will be pending unti
         self,
         records: "FetchableLazyFrame",
         target: "FetchableLazyFrame",
-        ratio: float,
         trainer: "Trainer",
+        ratio: float = 1.0,
     ) -> "FetchableModel":
         from bastionlab.remote_polars import FetchableModel
 
