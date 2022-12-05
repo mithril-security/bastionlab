@@ -46,20 +46,36 @@ class FalseRule(Rule):
 
 
 @dataclass
-class PolicyEntry:
-    accept: Rule
-    approval: Rule
-
+class UnsafeAction:
     def serialize(self) -> str:
-        return f'{{"accept":{self.accept.serialize()},"approval":{self.approval.serialize()}}}'
+        raise NotImplementedError
+
+
+@dataclass
+class Log(UnsafeAction):
+    def serialize(self) -> str:
+        return '"Log"'
+
+
+@dataclass
+class Review(UnsafeAction):
+    def serialize(self) -> str:
+        return '"Review"'
+
+
+@dataclass
+class Reject(UnsafeAction):
+    def serialize(self) -> str:
+        return '"Reject"'
 
 
 @dataclass
 class Policy:
-    fetch: PolicyEntry
+    safe_zone: Rule
+    unsafe_handling: UnsafeAction
 
     def serialize(self) -> str:
-        return f'{{"fetch":{self.fetch.serialize()}}}'
+        return f'{{"safe_zone":{self.safe_zone.serialize()},"unsafe_handling":{self.unsafe_handling.serialize()}}}'
 
 
-DEFAULT_POLICY = Policy(PolicyEntry(Aggregation(10), TrueRule()))
+DEFAULT_POLICY = Policy(Aggregation(10), Review())

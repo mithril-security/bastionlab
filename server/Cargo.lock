@@ -194,6 +194,9 @@ version = "0.3.3"
 dependencies = [
  "anyhow",
  "base64",
+ "bastionlab_common",
+ "bastionlab_polars",
+ "bastionlab_torch",
  "bincode",
  "bytes",
  "env_logger",
@@ -201,7 +204,112 @@ dependencies = [
  "http",
  "log",
  "once_cell",
+ "prost",
+ "rand",
+ "ring",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "spki",
+ "tch",
+ "tokio",
+ "tokio-stream",
+ "toml",
+ "tonic",
+ "tonic-build",
+ "uuid",
+ "whoami",
+ "x509-parser",
+]
+
+[[package]]
+name = "bastionlab_common"
+version = "0.3.3"
+dependencies = [
+ "anyhow",
+ "base64",
+ "bincode",
+ "bytes",
+ "env_logger",
+ "hex",
+ "http",
+ "log",
+ "once_cell",
+ "prost",
+ "rand",
+ "reqwest",
+ "ring",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "spki",
+ "tokio",
+ "tokio-stream",
+ "toml",
+ "tonic",
+ "tonic-build",
+ "uuid",
+ "whoami",
+ "x509-parser",
+]
+
+[[package]]
+name = "bastionlab_learning"
+version = "0.3.3"
+dependencies = [
+ "libc",
+ "rand",
+ "tch",
+ "torch-sys",
+]
+
+[[package]]
+name = "bastionlab_polars"
+version = "0.3.3"
+dependencies = [
+ "anyhow",
+ "base64",
+ "bastionlab_common",
+ "bincode",
+ "bytes",
+ "hex",
+ "http",
+ "log",
+ "once_cell",
  "polars",
+ "prost",
+ "rand",
+ "ring",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "spki",
+ "tch",
+ "tokio",
+ "tokio-stream",
+ "toml",
+ "tonic",
+ "tonic-build",
+ "uuid",
+ "whoami",
+ "x509-parser",
+]
+
+[[package]]
+name = "bastionlab_torch"
+version = "0.3.3"
+dependencies = [
+ "anyhow",
+ "base64",
+ "bastionlab_common",
+ "bastionlab_learning",
+ "bincode",
+ "bytes",
+ "env_logger",
+ "hex",
+ "http",
+ "log",
+ "once_cell",
  "prost",
  "rand",
  "reqwest",
@@ -329,7 +437,7 @@ dependencies = [
  "js-sys",
  "num-integer",
  "num-traits",
- "time 0.1.44",
+ "time 0.1.45",
  "wasm-bindgen",
  "winapi",
 ]
@@ -1459,9 +1567,9 @@ dependencies = [
 
 [[package]]
 name = "parking_lot_core"
-version = "0.9.4"
+version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4dc9e0dc2adc1c69d09143aff38d3d30c5c3f0df0dad82e6d25547af174ebec0"
+checksum = "7ff9f3fef3968a3ec5945535ed654cb38ff72d7495a25619e2247fb15a2ed9ba"
 dependencies = [
  "cfg-if",
  "libc",
@@ -2298,9 +2406,9 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.1.44"
+version = "0.1.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6db9e6914ab8b1ae1c260a4ae7a49b6c5611b40328a735b21862567685e73255"
+checksum = "1b797afad3f312d1c66a56d11d0316f916356d11bd158fbc6ca6389ff6bf805a"
 dependencies = [
  "libc",
  "wasi 0.10.0+wasi-snapshot-preview1",
