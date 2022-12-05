@@ -30,7 +30,7 @@ fn verify_ip(stored: &SocketAddr, recv: &SocketAddr) -> bool {
     stored.ip().eq(&recv.ip())
 }
 
-fn get_token<T>(req: &Request<T>, auth_enabled: bool) -> Result<Option<Bytes>, Status> {
+pub fn get_token<T>(req: &Request<T>, auth_enabled: bool) -> Result<Option<Bytes>, Status> {
     if !auth_enabled {
         return Ok(None);
     }

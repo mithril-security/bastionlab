@@ -1,5 +1,5 @@
-use bastionlab_common::auth::get_token;
 use bastionlab_common::prelude::*;
+use bastionlab_common::session::get_token;
 use bastionlab_common::session::SessionManager;
 use bastionlab_common::telemetry::{self, TelemetryEventProps};
 use bastionlab_learning::nn::Module;

@@ -1,13 +1,11 @@
-use std::{collections::HashMap, fs, net::SocketAddr, path::Path};
+use std::{collections::HashMap, fs, path::Path};
 
 use crate::prelude::*;
-use bytes::Bytes;
-use prost::Message;
 use ring::{
     digest::{digest, SHA256},
     signature,
 };
-use tonic::{metadata::MetadataMap, Request, Status};
+use tonic::{metadata::MetadataMap, Status};
 use x509_parser::prelude::Pem;
 
 pub type PubKey = Vec<u8>;
@@ -119,36 +117,4 @@ impl KeyManagement {
             ))),
         }
     }
-}
-
-pub fn get_message<T: Message>(
-    method: &[u8],
-    req: &Request<T>,
-    challenge: Bytes,
-) -> Result<Vec<u8>, Status> {
-    let mut res =
-        Vec::with_capacity(method.len() + challenge.as_ref().len() + req.get_ref().encoded_len());
-    res.extend_from_slice(method);
-    res.extend_from_slice(challenge.as_ref());
-    req.get_ref()
-        .encode(&mut res)
-        .map_err(|e| Status::internal(format!("error while encoding the request: {:?}", e)))?;
-    Ok(res)
-}
-
-pub fn verify_ip(stored: &SocketAddr, recv: &SocketAddr) -> bool {
-    stored.ip().eq(&recv.ip())
-}
-
-pub fn get_token<T>(req: &Request<T>, auth_enabled: bool) -> Result<Option<Bytes>, Status> {
-    if !auth_enabled {
-        return Ok(None);
-    }
-    let meta = req
-        .metadata()
-        .get_bin("accesstoken-bin")
-        .ok_or_else(|| Status::invalid_argument("No accesstoken in request metadata"))?;
-    Ok(Some(meta.to_bytes().map_err(|_| {
-        Status::invalid_argument("Could not decode accesstoken")
-    })?))
 }
