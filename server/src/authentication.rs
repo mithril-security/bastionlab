@@ -128,15 +128,11 @@ impl KeyManagement {
     }
 }
 
-pub fn get_message<T: Message>(method: &[u8], req: &Request<T>) -> Result<Vec<u8>, Status> {
-    let meta = req
-        .metadata()
-        .get_bin("challenge-bin")
-        .ok_or_else(|| Status::invalid_argument("No challenge in request metadata"))?;
-    let challenge = meta
-        .to_bytes()
-        .map_err(|_| Status::invalid_argument("Could not decode challenge"))?;
-
+pub fn get_message<T: Message>(
+    method: &[u8],
+    req: &Request<T>,
+    challenge: Bytes,
+) -> Result<Vec<u8>, Status> {
     let mut res =
         Vec::with_capacity(method.len() + challenge.as_ref().len() + req.get_ref().encoded_len());
     res.extend_from_slice(method);

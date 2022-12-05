@@ -248,10 +248,11 @@ Reason: {}",
         )))?))
     }
 
-    fn verify_request<T>(&self, req: &Request<T>, token: Option<Bytes>) -> Result<(), Status> {
+    fn verify_request<T>(&self, req: &Request<T>) -> Result<Option<Bytes>, Status> {
+        let token = get_token(&req, self.auth_enabled)?;
         let lock = self.keys.lock().unwrap();
         match *lock {
-            Some(_) => match token {
+            Some(_) => match token.clone() {
                 Some(token) => {
                     let mut tokens = self.sessions.write().unwrap();
                     let session = tokens
@@ -272,13 +273,15 @@ Reason: {}",
                     }
                 }
 
-                None => {}
+                None => {
+                    return Err(Status::aborted("Session not found!"));
+                }
             },
 
             None => drop(lock),
         }
 
-        Ok(())
+        Ok(token)
     }
 
     fn get_header(&self, identifier: &str) -> Result<String, Status> {
@@ -324,23 +327,27 @@ Reason: {}",
             }
         }
     }
-    fn check_challenge<T: Message>(&self, request: &Request<T>) -> Result<(), Status> {
+
+    fn check_challenge<T: Message>(&self, request: &Request<T>) -> Result<Bytes, Status> {
         let mut lock = self.challenges.lock().unwrap();
         if let Some(challenge) = request.metadata().get_bin("challenge-bin") {
-            let challenge = challenge.to_bytes().map_err(|_| {
+            let challenge_bytes = challenge.to_bytes().map_err(|_| {
                 Status::invalid_argument(format!("Could not decode challenge {:?}", challenge))
             })?;
-            let challenge = challenge.as_ref();
+            let challenge = challenge_bytes.as_ref();
 
             if !lock.remove(challenge) {
                 return Err(Status::permission_denied("Challenge not found!"));
             }
+
+            Ok(challenge_bytes)
+        } else {
+            return Err(Status::permission_denied("No challenge in request!"));
         }
-        Ok(())
     }
 
     fn create_session(&self, request: Request<ClientInfo>) -> Result<SessionInfo, Status> {
-        self.check_challenge(&request)?;
+        let challenge = self.check_challenge(&request)?;
         let mut sessions = self.sessions.write().unwrap();
         let keys_lock = self.keys.lock().unwrap();
         let end = "-bin";
@@ -356,7 +363,11 @@ Reason: {}",
                                 if let Some(key) = key.split(pat).last() {
                                     if let Some(keys) = &*keys_lock {
                                         let lock = keys;
-                                        let message = get_message(b"create-session", &request)?;
+                                        let message = get_message(
+                                            b"create-session",
+                                            &request,
+                                            challenge.clone(),
+                                        )?;
                                         lock.verify_signature(
                                             key,
                                             &message[..],
@@ -448,8 +459,7 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<Query>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        let token = get_token(&request, self.auth_enabled)?;
-        self.verify_request(&request, token.clone())?;
+        let token = self.verify_request(&request)?;
 
         let composite_plan: CompositePlan = serde_json::from_str(&request.get_ref().composite_plan)
             .map_err(|e| {
@@ -493,8 +503,7 @@ impl BastionLab for BastionLabState {
     ) -> Result<Response<ReferenceResponse>, Status> {
         let start_time = Instant::now();
 
-        let token = get_token(&request, self.auth_enabled)?;
-        self.verify_request(&request, token.clone())?;
+        let token = self.verify_request(&request)?;
 
         let client_info = self.get_client_info(token)?;
         let df = df_artifact_from_stream(request.into_inner()).await?;
@@ -525,8 +534,7 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<ReferenceRequest>,
     ) -> Result<Response<Self::FetchDataFrameStream>, Status> {
-        let token = get_token(&request, self.auth_enabled)?;
-        self.verify_request(&request, token.clone())?;
+        let token = self.verify_request(&request)?;
 
         let fut = {
             let df = self.get_df(
@@ -551,8 +559,7 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<Empty>,
     ) -> Result<Response<ReferenceList>, Status> {
-        let token = get_token(&request, self.auth_enabled)?;
-        self.verify_request(&request, token.clone())?;
+        let token = self.verify_request(&request)?;
 
         let list = self
             .get_headers()?
@@ -570,8 +577,7 @@ impl BastionLab for BastionLabState {
         &self,
         request: Request<ReferenceRequest>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        let token = get_token(&request, self.auth_enabled)?;
-        self.verify_request(&request, token.clone())?;
+        let token = self.verify_request(&request)?;
 
         let identifier = String::from(&request.get_ref().identifier);
         let header = self.get_header(&identifier)?;
