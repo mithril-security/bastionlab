@@ -7,7 +7,7 @@ use polars::{
     series::Series,
 };
 
-use crate::bastionlab_linfa::{
+use crate::{
     algorithms::{elastic_net, gaussian_naive_bayes, kmeans, linear_regression},
     trainer::{get_datasets, to_polars_error, Models, PredictionTypes, SupportedModels},
 };

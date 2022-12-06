@@ -1,699 +1,47 @@
-use bastionlab_linfa::{
-    operations::{predict, send_to_trainer},
-    to_status_error,
-    trainer::{process_trainer_req, select_trainer, SupportedModels},
+use bastionlab_common::config::BastionLabConfig;
+use bastionlab_common::prelude::*;
+use bastionlab_common::{
+    auth::KeyManagement,
+    session::SessionManager,
+    telemetry::{self, TelemetryEventProps},
 };
-use env_logger::Env;
-use log::info;
-use polars::prelude::*;
-use ring::{digest, rand};
-
-use serde_json;
-use std::{
-    collections::hash_map::DefaultHasher,
-    collections::HashMap,
-    error::Error,
-    fmt::Debug,
-    fs::{self, File},
-    future::Future,
-    hash::{Hash, Hasher},
-    io::Read,
-    net::SocketAddr,
-    pin::Pin,
-    sync::{Arc, Mutex, RwLock},
-    time::Instant,
-    time::{Duration, SystemTime},
-};
-use tokio_stream::wrappers::ReceiverStream;
-use tonic::{
-    metadata::KeyRef,
-    transport::{Identity, Server, ServerTlsConfig},
-    Request, Response, Status, Streaming,
-};
-use utils::sanitize_df;
-use uuid::Uuid;
-
-pub mod grpc {
-    tonic::include_proto!("bastionlab");
-}
-use grpc::{
-    bastion_lab_server::{BastionLab, BastionLabServer},
-    training_request::Trainer,
-    ChallengeResponse, ClientInfo, Empty, FetchChunk, PredictionRequest, Query, ReferenceList,
-    ReferenceRequest, ReferenceResponse, SendChunk, SessionInfo, TrainingRequest,
-};
-
-mod serialization;
-use serialization::*;
-
-mod composite_plan;
-use composite_plan::*;
-
-mod authentication;
-use authentication::*;
-
-mod config;
-use config::*;
-
-mod visitable;
-
-mod telemetry;
-use telemetry::TelemetryEventProps;
-
-mod access_control;
-use access_control::*;
-
-mod utils;
-
-mod bastionlab_linfa;
-
-pub struct DelayedDataFrame {
-    future: Pin<Box<dyn Future<Output = Result<DataFrame, Status>> + Send>>,
-    needs_approval: Option<String>,
-}
-
-#[derive(Debug, Clone)]
-pub struct DataFrameArtifact {
-    dataframe: DataFrame,
-    policy: Policy,
-    fetchable: VerificationResult,
-    blacklist: Vec<String>,
-    query_details: String,
-}
-
-impl DataFrameArtifact {
-    pub fn new(df: DataFrame, policy: Policy, blacklist: Vec<String>) -> Self {
-        DataFrameArtifact {
-            dataframe: df,
-            policy,
-            fetchable: VerificationResult::Unsafe {
-                action: UnsafeAction::Reject,
-                reason: String::from("DataFrames uploaded by the Data Owner are protected."),
-            },
-            blacklist,
-            query_details: String::from("uploaded dataframe"),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct Session {
-    user_ip: SocketAddr,
-    expiry: SystemTime,
-    client_info: ClientInfo,
-}
-
-#[derive(Debug, Default)]
-pub struct BastionLabState {
-    dataframes: Arc<RwLock<HashMap<String, DataFrameArtifact>>>,
-    keys: Mutex<Option<KeyManagement>>,
-    sessions: Arc<RwLock<HashMap<[u8; 32], Session>>>,
-    session_expiry: u64,
-    auth_enabled: bool,
-    models: Arc<RwLock<HashMap<String, SupportedModels>>>,
-}
-
-impl BastionLabState {
-    fn new(keys: Option<KeyManagement>, session_expiry: u64) -> Self {
-        let auth_enabled = keys.is_some();
-        Self {
-            dataframes: Arc::new(RwLock::new(HashMap::new())),
-            keys: Mutex::new(keys),
-            sessions: Default::default(),
-            session_expiry,
-            auth_enabled,
-            models: Arc::new(RwLock::new(HashMap::new())),
-        }
-    }
-
-    fn get_df(
-        &self,
-        identifier: &str,
-        client_info: Option<ClientInfo>,
-    ) -> Result<DelayedDataFrame, Status> {
-        let dfs = self.dataframes.read().unwrap();
-        let artifact = dfs.get(identifier).ok_or(Status::not_found(format!(
-            "Could not find dataframe: identifier={}",
-            identifier
-        )))?;
-        if let VerificationResult::Unsafe { reason, .. } = &artifact.fetchable {
-            println!(
-                "Safe zone violation: a DataFrame has been non-privately fetched.
-Reason: {}",
-                reason
-            );
-        }
-        Ok(match &artifact.fetchable {
-            VerificationResult::Safe
-            | VerificationResult::Unsafe {
-                action: UnsafeAction::Log,
-                ..
-            } => {
-                let mut df = artifact.dataframe.clone();
-                sanitize_df(&mut df, &artifact.blacklist);
-                telemetry::add_event(
-                    TelemetryEventProps::FetchDataFrame {
-                        dataset_name: Some(identifier.to_owned()),
-                        request_accepted: true,
-                    },
-                    client_info,
-                );
-                DelayedDataFrame {
-                    future: Box::pin(async { Ok(df) }),
-                    needs_approval: None,
-                }
-            }
-            VerificationResult::Unsafe {
-                action: UnsafeAction::Reject,
-                reason,
-            } => {
-                let reason = reason.clone();
-                DelayedDataFrame {
-                    future: Box::pin(async move {
-                        Err(Status::permission_denied(format!(
-                        "Cannot fetch this DataFrame: operation denied by the data owner's policy
-Reason: {}",
-                        reason,
-                    )))
-                    }),
-                    needs_approval: None,
-                }
-            }
-            VerificationResult::Unsafe {
-                action: UnsafeAction::Review,
-                reason,
-            } => {
-                let reason = reason.clone();
-                let identifier = String::from(identifier);
-                let query_details = artifact.query_details.clone();
-                let dfs = Arc::clone(&self.dataframes);
-                DelayedDataFrame {
-                    needs_approval: Some(reason.clone()),
-                    future: Box::pin(async move {
-                        println!(
-                            "A user requests unsafe access to one of your DataFrames
-DataFrame identifier: {}
-Reason the request is unsafe:
-{}",
-                            identifier, reason,
-                        );
-
-                        loop {
-                            let mut ans = String::new();
-                            println!("Accept [y], Reject [n], Show query details [s]?");
-                            std::io::stdin()
-                                .read_line(&mut ans)
-                                .expect("Failed to read line");
-
-                            match ans.trim() {
-                                "y" => break,
-                                "s" => {
-                                    println!(
-                                        "Query's Logical Plan:
-{}",
-                                        query_details,
-                                    );
-                                    continue;
-                                }
-                                "n" => {
-                                    telemetry::add_event(
-                                        TelemetryEventProps::FetchDataFrame {
-                                            dataset_name: Some(identifier.to_owned()),
-                                            request_accepted: false,
-                                        },
-                                        client_info,
-                                    );
-                                    return Err(Status::permission_denied(format!(
-                                        "The data owner rejected the fetch operation.
-Fetching a dataframe obtained with a non privacy-preserving query requires the approval of the data owner.
-This dataframe was obtained in a non privacy-preserving fashion.
-Reason: {}",
-                                        reason
-                                    )));
-                                }
-                                _ => continue,
-                            }
-                        }
-                        telemetry::add_event(
-                            TelemetryEventProps::FetchDataFrame {
-                                dataset_name: Some(identifier.to_owned()),
-                                request_accepted: true,
-                            },
-                            client_info,
-                        );
-                        Ok({
-                            let guard = dfs.read().unwrap();
-                            let artifact = guard.get(&identifier).ok_or(Status::not_found(
-                                format!("Could not find dataframe: identifier={}", identifier),
-                            ))?;
-                            let mut df = artifact.dataframe.clone();
-                            sanitize_df(&mut df, &artifact.blacklist);
-                            df
-                        })
-                    }),
-                }
-            }
-        })
-    }
-
-    fn get_df_unchecked(&self, identifier: &str) -> Result<DataFrame, Status> {
-        let dfs = self.dataframes.read().unwrap();
-        Ok(dfs
-            .get(identifier)
-            .ok_or(Status::not_found(format!(
-                "Could not find dataframe: identifier={}",
-                identifier
-            )))?
-            .dataframe
-            .clone())
-    }
-
-    fn with_df_artifact_ref<T>(
-        &self,
-        identifier: &str,
-        mut f: impl FnMut(&DataFrameArtifact) -> T,
-    ) -> Result<T, Status> {
-        let dfs = self.dataframes.read().unwrap();
-        Ok(f(dfs.get(identifier).ok_or(Status::not_found(format!(
-            "Could not find dataframe: identifier={}",
-            identifier
-        )))?))
-    }
-
-    fn verify_request<T>(&self, req: &Request<T>) -> Result<(), Status> {
-        let lock = self.keys.lock().unwrap();
-        match *lock {
-            Some(_) => {
-                let remote_addr = &req.remote_addr();
-                if let Some(token) = get_token(req, self.auth_enabled)? {
-                    let mut tokens = self.sessions.write().unwrap();
-                    if let Some(recv_ip) = remote_addr {
-                        if let Some(Session {
-                            user_ip, expiry, ..
-                        }) = tokens.get(token.as_ref())
-                        {
-                            let curr_time = SystemTime::now();
-                            if !verify_ip(&user_ip, &recv_ip) {
-                                return Err(Status::aborted("Unknown IP Address!"));
-                            }
-                            if curr_time.gt(expiry) {
-                                tokens.remove(token.as_ref());
-                                return Err(Status::aborted("Session Expired"));
-                            }
-                        }
-                    }
-                }
-            }
-            None => drop(lock),
-        }
-
-        Ok(())
-    }
-    fn get_header(&self, identifier: &str) -> Result<String, Status> {
-        Ok(get_df_header(
-            &self
-                .dataframes
-                .read()
-                .unwrap()
-                .get(identifier)
-                .ok_or(Status::not_found(format!(
-                    "Could not find dataframe: identifier={}",
-                    identifier
-                )))?
-                .dataframe,
-        )?)
-    }
-
-    fn get_headers(&self) -> Result<Vec<(String, String)>, Status> {
-        let dataframes = self.dataframes.read().unwrap();
-        let mut res = Vec::with_capacity(dataframes.len());
-        for (k, v) in dataframes.iter() {
-            let header = get_df_header(&v.dataframe)?;
-            res.push((k.clone(), header));
-        }
-        Ok(res)
-    }
-
-    fn insert_df(&self, df: DataFrameArtifact) -> String {
-        let mut dfs = self.dataframes.write().unwrap();
-        let identifier = format!("{}", Uuid::new_v4());
-        dfs.insert(identifier.clone(), df);
-        identifier
-    }
-
-    fn new_challenge(&self) -> [u8; 32] {
-        let rng = rand::SystemRandom::new();
-        loop {
-            if let Ok(challenge) = rand::generate(&rng) {
-                return challenge.expose();
-            }
-        }
-    }
-
-    fn create_session(&self, request: Request<ClientInfo>) -> Result<SessionInfo, Status> {
-        let mut sessions = self.sessions.write().unwrap();
-        let keys_lock = self.keys.lock().unwrap();
-        let end = "-bin";
-        let pat = "signature-";
-        let mut public_key = String::new();
-        if let Some(user_ip) = request.remote_addr() {
-            for key in request.metadata().keys() {
-                match key {
-                    KeyRef::Binary(key) => {
-                        let key = key.to_string();
-                        if let Some(key) = key.strip_suffix(end) {
-                            if key.contains(pat) {
-                                if let Some(key) = key.split(pat).last() {
-                                    if let Some(keys) = &*keys_lock {
-                                        let lock = keys;
-                                        let message = get_message(b"create-session", &request)?;
-                                        lock.verify_signature(
-                                            key,
-                                            &message[..],
-                                            request.metadata(),
-                                        )?;
-                                        public_key.push_str(key);
-                                    }
-                                } else {
-                                    return Err(Status::aborted(
-                                        "User signing key not found in request!",
-                                    ));
-                                }
-                            }
-                        } else {
-                            return Err(Status::aborted("User signing key not found in request!"));
-                        }
-                    }
-                    _ => (),
-                }
-            }
-            let (token, expiry) = if !self.auth_enabled {
-                ([0u8; 32], SystemTime::now())
-            } else {
-                let expiry =
-                    match SystemTime::now().checked_add(Duration::from_secs(self.session_expiry)) {
-                        Some(v) => v,
-                        None => SystemTime::now(),
-                    };
-                (self.new_challenge(), expiry)
-            };
-
-            sessions.insert(
-                token.clone(),
-                Session {
-                    user_ip,
-                    expiry,
-                    client_info: request.into_inner(),
-                },
-            );
-
-            Ok(SessionInfo {
-                token: token.to_vec(),
-            })
-        } else {
-            Err(Status::aborted("Could not fetch IP Address from request"))
-        }
-    }
-
-    fn refresh_session<T>(&self, req: &Request<T>) -> Result<(), Status> {
-        if let Some(token) = get_token(req, self.auth_enabled)? {
-            let mut sessions = self.sessions.write().unwrap();
-            let session = sessions
-                .get_mut(&token[..])
-                .ok_or(Status::aborted("Session not found!"))?;
-
-            let e = session
-                .expiry
-                .checked_add(Duration::from_secs(self.session_expiry))
-                .ok_or(Status::aborted("Malformed session expiry time!"))?;
-
-            session.expiry = e;
-        }
-        Ok(())
-    }
-
-    fn get_client_info<T>(&self, req: &Request<T>) -> Result<ClientInfo, Status> {
-        let sessions = self.sessions.write().unwrap();
-        let token = get_token(req, self.auth_enabled)?;
-        let token = match &token {
-            Some(v) => &v[..],
-            None => &[0u8; 32],
-        };
-        let session = sessions
-            .get(token)
-            .ok_or(Status::aborted("Session not found!"))?;
-        Ok(session.client_info.clone())
-    }
-
-    fn insert_model(&self, model: SupportedModels) -> String {
-        let mut models = self.models.write().unwrap();
-        let identifier = format!("{}", Uuid::new_v4());
-        models.insert(identifier.clone(), model);
-        identifier
-    }
-    fn get_model(&self, identifier: &str) -> Result<SupportedModels, Status> {
-        let models = self.models.read().unwrap();
-        let model = models.get(identifier).unwrap();
-        Ok(model.clone())
-    }
-}
-
-fn get_df_header(df: &DataFrame) -> Result<String, Status> {
-    serde_json::to_string(&df.schema())
-        .map_err(|e| Status::internal(format!("Could not serialize data frame header: {}", e)))
-}
-
-#[tonic::async_trait]
-impl BastionLab for BastionLabState {
-    type FetchDataFrameStream = ReceiverStream<Result<FetchChunk, Status>>;
-
-    async fn run_query(
-        &self,
-        request: Request<Query>,
-    ) -> Result<Response<ReferenceResponse>, Status> {
-        self.verify_request(&request)?;
-
-        let composite_plan: CompositePlan = serde_json::from_str(&request.get_ref().composite_plan)
-            .map_err(|e| {
-                Status::invalid_argument(format!(
-                    "Could not deserialize composite plan: {}{}",
-                    e,
-                    &request.get_ref().composite_plan
-                ))
-            })?;
-
-        let start_time = Instant::now();
-
-        let res = composite_plan.run(self)?;
-        let dataframe_bytes: Vec<u8> =
-            df_to_bytes(&res.dataframe)
-                .iter_mut()
-                .fold(Vec::new(), |mut acc, x| {
-                    acc.append(x);
-                    acc
-                }); // Not efficient fix this
-
-        let header = get_df_header(&res.dataframe)?;
-        let identifier = self.insert_df(res);
-
-        let elapsed = start_time.elapsed();
-        let hash = hex::encode(digest::digest(&digest::SHA256, &dataframe_bytes).as_ref());
-        telemetry::add_event(
-            TelemetryEventProps::RunQuery {
-                dataset_name: Some(identifier.clone()),
-                dataset_hash: Some(hash),
-                time_taken: elapsed.as_millis() as f64,
-            },
-            Some(self.get_client_info(&request)?),
-        );
-        Ok(Response::new(ReferenceResponse { identifier, header }))
-    }
-
-    async fn send_data_frame(
-        &self,
-        request: Request<Streaming<SendChunk>>,
-    ) -> Result<Response<ReferenceResponse>, Status> {
-        let start_time = Instant::now();
-
-        self.verify_request(&request)?;
-
-        let client_info = self.get_client_info(&request)?;
-        let df = df_artifact_from_stream(request.into_inner()).await?;
-        let dataframe_bytes: Vec<u8> =
-            df_to_bytes(&df.dataframe)
-                .iter_mut()
-                .fold(Vec::new(), |mut acc, x| {
-                    acc.append(x);
-                    acc
-                }); // Not efficient fix this
-        let header = get_df_header(&df.dataframe)?;
-        let identifier = self.insert_df(df);
-
-        let elapsed = start_time.elapsed();
-        let hash = hex::encode(digest::digest(&digest::SHA256, &dataframe_bytes).as_ref());
-        telemetry::add_event(
-            TelemetryEventProps::SendDataFrame {
-                dataset_name: Some(identifier.clone()),
-                dataset_hash: Some(hash),
-                time_taken: elapsed.as_millis() as f64,
-            },
-            Some(client_info),
-        );
-        Ok(Response::new(ReferenceResponse { identifier, header }))
-    }
-
-    async fn fetch_data_frame(
-        &self,
-        request: Request<ReferenceRequest>,
-    ) -> Result<Response<Self::FetchDataFrameStream>, Status> {
-        self.verify_request(&request)?;
-
-        let fut = {
-            let df = self.get_df(
-                &request.get_ref().identifier,
-                Some(self.get_client_info(&request)?),
-            )?;
-            stream_data(df, 32)
-        };
-        Ok(fut.await)
-    }
-
-    async fn get_challenge(
-        &self,
-        _request: Request<Empty>,
-    ) -> Result<Response<ChallengeResponse>, Status> {
-        let challenge = self.new_challenge();
-        Ok(Response::new(ChallengeResponse {
-            value: challenge.into(),
-        }))
-    }
-    async fn list_data_frames(
-        &self,
-        request: Request<Empty>,
-    ) -> Result<Response<ReferenceList>, Status> {
-        self.verify_request(&request)?;
-        let list = self
-            .get_headers()?
-            .into_iter()
-            .map(|(identifier, header)| ReferenceResponse { identifier, header })
-            .collect();
-        telemetry::add_event(
-            TelemetryEventProps::ListDataFrame {},
-            Some(self.get_client_info(&request)?),
-        );
-        Ok(Response::new(ReferenceList { list }))
-    }
-
-    async fn get_data_frame_header(
-        &self,
-        request: Request<ReferenceRequest>,
-    ) -> Result<Response<ReferenceResponse>, Status> {
-        self.verify_request(&request)?;
-        let identifier = String::from(&request.get_ref().identifier);
-        let header = self.get_header(&identifier)?;
-        telemetry::add_event(
-            TelemetryEventProps::GetDataFrameHeader {
-                dataset_name: Some(identifier.clone()),
-            },
-            Some(self.get_client_info(&request)?),
-        );
-        Ok(Response::new(ReferenceResponse { identifier, header }))
-    }
-
-    async fn create_session(
-        &self,
-        request: Request<ClientInfo>,
-    ) -> Result<Response<SessionInfo>, Status> {
-        let session = self.create_session(request)?;
-        Ok(Response::new(session))
-    }
-
-    async fn refresh_session(&self, request: Request<Empty>) -> Result<Response<Empty>, Status> {
-        self.refresh_session(&request)?;
-        Ok(Response::new(Empty {}))
-    }
-
-    async fn train(
-        &self,
-        request: Request<TrainingRequest>,
-    ) -> Result<Response<ReferenceResponse>, Status> {
-        let (records, target, ratio, trainer): (String, String, f32, Option<Trainer>) =
-            process_trainer_req(request)?;
-
-        let (records, target) = {
-            let records =
-                self.with_df_artifact_ref(&records, |artifact| artifact.dataframe.clone())?;
-            let target =
-                self.with_df_artifact_ref(&target, |artifact| artifact.dataframe.clone())?;
-            (records, target)
-        };
-
-        let trainer = trainer.ok_or(Status::aborted("Invalid Trainer!"))?;
-        let trainer = select_trainer(trainer)?;
-        let model = to_status_error(send_to_trainer(
-            records.clone(),
-            target.clone(),
-            ratio,
-            trainer,
-        ))?;
-        let identifier = self.insert_model(model);
-        Ok(Response::new(ReferenceResponse {
-            identifier,
-            header: String::default(),
-        }))
-    }
-
-    async fn predict(
-        &self,
-        request: Request<PredictionRequest>,
-    ) -> Result<Response<ReferenceResponse>, Status> {
-        let (model_id, data) = {
-            let model = &request.get_ref().model;
-            let data = &request.get_ref().data;
-            let data = to_type! {<f64>(data)};
-            (model, data)
-        };
-
-        let model = self.get_model(model_id)?;
-
-        let prediction = to_status_error(predict(model, data))?;
-
-        let header = get_df_header(&prediction)?;
-        println!("{:?}", prediction);
-
-        let identifier = self.insert_df(DataFrameArtifact {
-            dataframe: prediction,
-            policy: Policy::allow_by_default(),
-            fetchable: VerificationResult::Safe,
-            blacklist: vec![String::default()],
-            query_details: String::from("uploaded dataframe"),
-        });
-        Ok(Response::new(ReferenceResponse { identifier, header }))
-    }
-}
+use std::collections::hash_map::DefaultHasher;
+use std::fs;
+use std::path::Path;
+use tonic::transport::{Identity, Server, ServerTlsConfig};
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
+async fn main() -> Result<()> {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    let config: BastionLabConfig =
+        toml::from_str(&fs::read_to_string("config.toml").context("Reading the config.toml file")?)
+            .context("Parsing the config.toml file")?;
 
-    let mut file = File::open("config.toml")?;
-    let mut contents = String::new();
-    file.read_to_string(&mut contents)?;
-
-    println!("BastionLab server running...");
-
-    let config: BastionLabConfig = toml::from_str(&contents)?;
-    let keys = match KeyManagement::load_from_dir(config.public_keys_directory()?) {
+    let keys = match KeyManagement::load_from_dir(Path::new(
+        &config
+            .public_keys_directory()
+            .context("Parsing the public_keys_directory config path")?,
+    )) {
         Ok(keys) => {
             info!("Authentication is enabled.");
             Some(keys)
         }
-        Err(_) => None,
+        Err(err) => {
+            info!("Authentication is disabled (error: {:?})", err);
+            None
+        }
     };
-    let state = BastionLabState::new(keys, config.session_expiry()?);
+    let sess_manager = Arc::new(SessionManager::new(
+        keys,
+        config
+            .session_expiry()
+            .context("Parsing the public session_expiry config")?,
+    ));
 
-    let server_cert = fs::read("tls/host_server.pem")?;
-    let server_key = fs::read("tls/host_server.key")?;
+    let server_cert =
+        fs::read("tls/host_server.pem").context("Reading the tls/host_server.pem file")?;
+    let server_key =
+        fs::read("tls/host_server.key").context("Reading the tls/host_server.key file")?;
     let server_identity = Identity::from_pem(&server_cert, &server_key);
 
     //TODO: Change it when specifying the TEE will be available
@@ -708,17 +56,65 @@ async fn main() -> Result<(), Box<dyn Error>> {
     };
 
     if std::env::var("BASTIONLAB_DISABLE_TELEMETRY").is_err() {
-        telemetry::setup(platform, uid, tee_mode)?;
+        telemetry::setup(platform, uid, tee_mode).context("Setting up telemetry")?;
         info!("Telemetry is enabled.")
     } else {
         info!("Telemetry is disabled.")
     }
     telemetry::add_event(TelemetryEventProps::Started {}, None);
 
-    Server::builder()
-        .tls_config(ServerTlsConfig::new().identity(server_identity))?
-        .add_service(BastionLabServer::new(state))
-        .serve(config.client_to_enclave_untrusted_socket()?)
-        .await?;
+    let mut builder = Server::builder()
+        .tls_config(ServerTlsConfig::new().identity(server_identity))
+        .context("Setting up TLS")?;
+
+    // Session
+    let builder = {
+        use bastionlab_common::{
+            session::SessionGrpcService,
+            session_proto::session_service_server::SessionServiceServer,
+        };
+        let svc = SessionGrpcService::new(sess_manager.clone());
+        builder.add_service(SessionServiceServer::new(svc))
+    };
+
+    // Polars
+    let (builder, polars_svc) = {
+        use bastionlab_polars::{
+            polars_proto::polars_service_server::PolarsServiceServer, BastionLabPolars,
+        };
+        let svc = BastionLabPolars::new(sess_manager.clone());
+        (
+            builder.add_service(PolarsServiceServer::new(svc.clone())),
+            svc,
+        )
+    };
+
+    // Torch
+    let builder = {
+        use bastionlab_torch::{
+            torch_proto::torch_service_server::TorchServiceServer, BastionLabTorch,
+        };
+        let svc = BastionLabTorch::new(sess_manager.clone());
+        builder.add_service(TorchServiceServer::new(svc))
+    };
+
+    // Linfa
+    let builder = {
+        use bastionlab_linfa::{
+            linfa_proto::linfa_service_server::LinfaServiceServer, BastionLabLinfa,
+        };
+        let svc = BastionLabLinfa::new(sess_manager.clone(), polars_svc.clone());
+        builder.add_service(LinfaServiceServer::new(svc))
+    };
+
+    let addr = config
+        .client_to_enclave_untrusted_socket()
+        .context("Parsing the client_to_enclave_untrusted_socket config")?;
+
+    info!("BastionLab server listening on {addr:?}.");
+    info!("Server ready to take requests");
+
+    // serve!
+    builder.serve(addr).await?;
     Ok(())
 }

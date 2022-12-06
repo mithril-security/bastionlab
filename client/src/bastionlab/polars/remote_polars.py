@@ -4,11 +4,11 @@ import seaborn as sns
 import polars as pl
 from torch.jit import ScriptFunction
 import base64
-from bastionlab.pb.bastionlab_pb2 import ReferenceResponse
 import json
-from bastionlab.client import Client
 import torch
-from bastionlab.utils import ApplyBins
+from ..pb.bastionlab_polars_pb2 import ReferenceResponse
+from .client import BastionLabPolars
+from .utils import ApplyBins
 
 LDF = TypeVar("LDF", bound="pl.LazyFrame")
 
@@ -96,7 +96,7 @@ class UdfPlanSegment(CompositePlanSegment):
 
 @dataclass
 class Metadata:
-    _client: Client
+    _client: BastionLabPolars
     _prev_segments: List[CompositePlanSegment] = field(default_factory=list)
 
 
@@ -358,7 +358,7 @@ class FetchableLazyFrame(RemoteLazyFrame):
         return self._identifier
 
     @staticmethod
-    def _from_reference(client: Client, ref: ReferenceResponse) -> LDF:
+    def _from_reference(client: BastionLabPolars, ref: ReferenceResponse) -> LDF:
         header = json.loads(ref.header)["inner"]
         df = pl.DataFrame(
             [pl.Series(k, dtype=getattr(pl, v)()) for k, v in header.items()]
@@ -377,27 +377,6 @@ class FetchableLazyFrame(RemoteLazyFrame):
 
     def fetch(self) -> pl.DataFrame:
         return self._meta._client._fetch_df(self._identifier)
-
-
-@dataclass
-class FetchableModel:
-    _identifier: str
-
-    @property
-    def identifier(self) -> str:
-        return self._identifier
-
-    @staticmethod
-    def _from_reference(client: Client, ref: ReferenceResponse) -> "FetchableModel":
-        return FetchableModel(
-            _identifier=ref.identifier,
-        )
-
-    def __str__(self) -> str:
-        return f"FetchableModel(identifier={self._identifier})"
-
-    def __repr__(self) -> str:
-        return str(self)
 
 
 # TODO: implement apply method

@@ -1,5 +1,5 @@
 import os
-from setuptools import find_packages, setup
+from setuptools import setup
 from setuptools.command.build_py import build_py
 import pkg_resources
 import re
@@ -10,7 +10,12 @@ def read(path):
 
 
 DIR = os.path.dirname(__file__) or os.getcwd()
-PROTO_FILES = ["bastionlab.proto"]
+PROTO_FILES = [
+    "bastionlab.proto",
+    "bastionlab_polars.proto",
+    "bastionlab_torch.proto",
+    "bastionlab_linfa.proto",
+]
 PROTO_PATH = os.path.join(os.path.dirname(DIR), "protos")
 LONG_DESCRIPTION = read("README.md")
 PKG_NAME = "bastionlab"
@@ -29,7 +34,7 @@ def generate_stub():
     proto_include = pkg_resources.resource_filename("grpc_tools", "_proto")
 
     for file in PROTO_FILES:
-        print(PROTO_PATH, PROTO_FILES)
+        print(PROTO_PATH, file)
         res = grpc_tools.protoc.main(
             [
                 "grpc_tools.protoc",
@@ -72,5 +77,9 @@ setup(
         "cryptography==38.0.3",
         "seaborn==0.12.0",
         "pyarrow==10.0.0",
+        "protobuf==3.20.2",
+        "six==1.16.0",
+        "numpy==1.23.5",
+        "tqdm==4.64.1",
     ],
 )

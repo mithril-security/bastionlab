@@ -1,0 +1,36 @@
+[package]
+name = "bastionlab_linfa"
+version = "0.3.3"
+edition = "2021"
+
+[dependencies]
+tonic = { version = "0.5.2", features = ["tls", "transport"] }
+prost = { version = "0.8", default-features = false, features = [
+  "prost-derive",
+] }
+tokio = { version = "1.19.2", features = ["macros", "rt-multi-thread", "net"] }
+tokio-stream = "0.1"
+linfa = "0.6.1"
+linfa-elasticnet = "0.6.1"
+linfa-bayes = "0.6.1"
+linfa-clustering = "0.6.1"
+linfa-nn = "0.6.1"
+linfa-linear = "0.6.1"
+linfa-logistic = "0.6.1"
+ndarray = "0.15.6"
+bastionlab_common = { path = "../bastionlab_common" }
+bastionlab_polars = { path = "../bastionlab_polars" }
+polars = "0.25.1"
+
+[dependencies.uuid]
+version = "1.1.2"
+features = [
+  "v4", # Lets you generate random UUIDs
+  "fast-rng", # Use a faster (but still sufficiently random) RNG
+  "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs,
+  "serde",
+]
+
+
+[build-dependencies]
+tonic-build = "0.5"

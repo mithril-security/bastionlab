@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from bastionlab.pb.bastionlab_pb2 import TrainingRequest
+from ..pb.bastionlab_linfa_pb2 import TrainingRequest
 from typing import Dict, Optional, List
 
 

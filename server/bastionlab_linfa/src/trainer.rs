@@ -15,12 +15,11 @@ use polars::{
 use tonic::{Request, Status};
 
 use crate::{
-    bastionlab_linfa::to_status_error,
-    grpc::{
+    linfa_proto::{
         training_request::{self, Trainer},
         TrainingRequest,
     },
-    to_type,
+    to_status_error, to_type,
 };
 
 pub enum Models {

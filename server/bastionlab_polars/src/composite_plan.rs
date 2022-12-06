@@ -9,7 +9,7 @@ use crate::{
     access_control::{Context, Policy},
     utils::*,
     visitable::{Visitable, VisitableMut},
-    BastionLabState, DataFrameArtifact,
+    BastionLabPolars, DataFrameArtifact,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -23,7 +23,7 @@ pub enum CompositePlanSegment {
 }
 
 impl CompositePlan {
-    pub fn run(self, state: &BastionLabState) -> Result<DataFrameArtifact, Status> {
+    pub fn run(self, state: &BastionLabPolars) -> Result<DataFrameArtifact, Status> {
         let mut input_dfs = Vec::new();
         let plan_str = serde_json::to_string(&self.0).unwrap(); // FIX THIS
 
@@ -98,7 +98,7 @@ impl CompositePlan {
         })
     }
 
-    fn output_policy(&self, state: &BastionLabState) -> Result<(Policy, Vec<String>), Status> {
+    fn output_policy(&self, state: &BastionLabPolars) -> Result<(Policy, Vec<String>), Status> {
         let mut policy = Policy::allow_by_default();
         let mut blacklist = Vec::new();
 

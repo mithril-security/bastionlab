@@ -1,9 +1,8 @@
 from typing import Iterator, Tuple, List
 import torch
 import polars as pl
-
-from bastionlab.pb.bastionlab_pb2 import SendChunk
-from bastionlab.policy import Policy
+from ..pb.bastionlab_polars_pb2 import SendChunk
+from .policy import Policy
 
 CHUNK_SIZE = 32 * 1024
 
@@ -22,7 +21,7 @@ def create_byte_chunk(data: bytes) -> Tuple[int, Iterator[bytes]]:
 
 
 def serialize_dataframe(
-    df: pl.DataFrame, policy: Policy, blacklist: List[str]
+    df: pl.DataFrame, policy: Policy, sanitized_columns: List[str]
 ) -> Iterator[SendChunk]:
     END_PATTERN = b"[end]"
     df_bytes = bytearray()
@@ -31,7 +30,7 @@ def serialize_dataframe(
 
     first = True
     for data in create_byte_chunk(df_bytes):
-        cols = ",".join([f'"{col}"' for col in blacklist])
+        cols = ",".join([f'"{col}"' for col in sanitized_columns])
         if first:
             first = False
             yield SendChunk(data=data, policy=policy.serialize(), metadata=f"[{cols}]")

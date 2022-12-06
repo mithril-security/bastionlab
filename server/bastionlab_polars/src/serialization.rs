@@ -3,9 +3,9 @@ use tokio::sync::mpsc;
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use tonic::{Response, Status};
 
-use crate::{access_control::Policy, DataFrameArtifact, DelayedDataFrame};
+use crate::{access_control::Policy, DataFrameArtifact, DelayedDataFrame, FetchStatus};
 
-use super::grpc::{FetchChunk, SendChunk};
+use super::polars_proto::{fetch_chunk, FetchChunk, SendChunk};
 
 pub async fn df_artifact_from_stream(
     stream: tonic::Streaming<SendChunk>,
@@ -91,13 +91,20 @@ pub async fn stream_data(
     let (tx, rx) = mpsc::channel(4);
     let pattern = b"[end]";
 
-    if let Some(reason) = df.needs_approval {
-        tx.send(Ok(FetchChunk {
-            data: Vec::new(),
-            pending: reason,
-        }))
-        .await
-        .unwrap(); // fix this
+    match df.fetch_status {
+        FetchStatus::Pending(reason) => tx
+            .send(Ok(FetchChunk {
+                body: Some(fetch_chunk::Body::Pending(reason)),
+            }))
+            .await
+            .unwrap(),
+        FetchStatus::Warning(reason) => tx
+            .send(Ok(FetchChunk {
+                body: Some(fetch_chunk::Body::Warning(reason)),
+            }))
+            .await
+            .unwrap(),
+        _ => (),
     }
 
     tokio::spawn(async move {
@@ -122,8 +129,7 @@ pub async fn stream_data(
 
         for (_, bytes) in raw_bytes.chunks(chunk_size).enumerate() {
             tx.send(Ok(FetchChunk {
-                data: bytes.to_vec(),
-                pending: String::new(),
+                body: Some(fetch_chunk::Body::Data(bytes.to_vec())),
             }))
             .await
             .unwrap(); // Fix this

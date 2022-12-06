@@ -1,19 +1,9 @@
 [package]
-name = "bastionlab"
+name = "bastionlab_polars"
 version = "0.3.3"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-[workspace]
-members = [
-  "bastionlab_common",
-  "bastionlab_torch",
-  "bastionlab_learning",
-  "bastionlab_polars",
-  "bastionlab_linfa",
-]
-resolver = "2"
-
 [dependencies]
 bytes = "1.3.0"
 tonic = { version = "0.5.2", features = ["tls", "transport"] }
@@ -34,16 +24,66 @@ hex = "0.4.3"
 x509-parser = "0.14.0"
 spki = "0.6.0"
 http = "0.2.8"
-anyhow = "1.0"
+anyhow = "1.0.66"
 toml = "0.5.9"
 whoami = "1.2.1"
 once_cell = "1.13.1"
 log = "0.4.17"
-env_logger = "0.9.0"
-bastionlab_common = { path = "./bastionlab_common" }
-bastionlab_polars = { path = "./bastionlab_polars" }
-bastionlab_torch = { path = "./bastionlab_torch" }
-bastionlab_linfa = {path = "./bastionlab_linfa" }
+bastionlab_common = { path = "../bastionlab_common" }
+
+[dependencies.polars]
+version = "0.25.1"
+default-features = false
+features = [
+  "dynamic_groupby",
+  "zip_with",
+  "lazy",
+  "strings",
+  "temporal",
+  "random",
+  "fmt",
+  "performant",
+  "dtype-full",
+  "rows",
+  "private",
+  "round_series",
+  "is_first",
+  "dot_product",
+  "concat_str",
+  "row_hash",
+  "reinterpret",
+  "mode",
+  "cum_agg",
+  "rolling_window",
+  "interpolate",
+  "rank",
+  "diff",
+  "moment",
+  "arange",
+  "true_div",
+  "dtype-categorical",
+  "diagonal_concat",
+  "horizontal_concat",
+  "abs",
+  "ewma",
+  "dot_diagram",
+  "dataframe_arithmetic",
+  "string_encoding",
+  "product",
+  "ndarray",
+  "unique_counts",
+  "log",
+  "serde-lazy",
+  "partition_by",
+  "semi_anti_join",
+  "list_eval",
+  "cumulative_eval",
+  "list_to_struct",
+  "to_dummies",
+  "string_justify",
+  "arg_where",
+  "date_offset",
+]
 
 [dependencies.uuid]
 version = "1.1.2"
