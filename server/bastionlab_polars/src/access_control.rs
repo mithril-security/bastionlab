@@ -3,55 +3,32 @@ use tonic::Status;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Policy {
-    fetch: PolicyEntry,
+    safe_zone: Rule,
+    unsafe_handling: UnsafeAction,
 }
 
 impl Policy {
-    pub fn verify_fetch(&self, ctx: &Context) -> Result<PolicyAction, Status> {
-        self.fetch.run_checks(ctx)
-    }
-
-    pub fn merge(&self, other: &Self) -> Self {
-        Policy {
-            fetch: self.fetch.merge(&other.fetch),
-        }
-    }
-
-    pub fn allow_by_default() -> Self {
-        Policy {
-            fetch: PolicyEntry::allow_by_default(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct PolicyEntry {
-    accept: Rule,
-    approval: Rule,
-}
-
-impl PolicyEntry {
-    fn run_checks(&self, ctx: &Context) -> Result<PolicyAction, Status> {
-        Ok(match self.accept.verify(ctx)? {
-            RuleMatch::Match => PolicyAction::Accept,
-            RuleMatch::Mismatch(reason) => match self.approval.verify(ctx)? {
-                RuleMatch::Match => PolicyAction::Approval(reason),
-                RuleMatch::Mismatch(reason) => PolicyAction::Reject(reason),
+    pub fn verify(&self, ctx: &Context) -> Result<VerificationResult, Status> {
+        Ok(match self.safe_zone.verify(ctx)? {
+            RuleMatch::Match => VerificationResult::Safe,
+            RuleMatch::Mismatch(reason) => VerificationResult::Unsafe {
+                action: self.unsafe_handling,
+                reason,
             },
         })
     }
 
     pub fn merge(&self, other: &Self) -> Self {
-        PolicyEntry {
-            accept: Rule::AtLeastNOf(2, vec![self.accept.clone(), other.accept.clone()]),
-            approval: Rule::AtLeastNOf(2, vec![self.approval.clone(), other.approval.clone()]),
+        Policy {
+            safe_zone: Rule::AtLeastNOf(2, vec![self.safe_zone.clone(), other.safe_zone.clone()]),
+            unsafe_handling: self.unsafe_handling.merge(other.unsafe_handling),
         }
     }
 
     pub fn allow_by_default() -> Self {
-        PolicyEntry {
-            accept: Rule::True,
-            approval: Rule::True,
+        Policy {
+            safe_zone: Rule::True,
+            unsafe_handling: UnsafeAction::Log,
         }
     }
 }
@@ -121,9 +98,29 @@ pub enum RuleMatch {
     Mismatch(String),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum UnsafeAction {
+    Log,
+    Review,
+    Reject,
+}
+
+impl UnsafeAction {
+    fn merge(self, other: Self) -> Self {
+        match self {
+            UnsafeAction::Log => other,
+            UnsafeAction::Review if other == UnsafeAction::Log => UnsafeAction::Review,
+            UnsafeAction::Review => other,
+            UnsafeAction::Reject => UnsafeAction::Reject,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
-pub enum PolicyAction {
-    Accept,
-    Reject(String),
-    Approval(String),
+pub enum VerificationResult {
+    Safe,
+    Unsafe {
+        action: UnsafeAction,
+        reason: String,
+    },
 }
