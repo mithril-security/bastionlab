@@ -21,8 +21,11 @@ message SendChunk {
 }
 
 message FetchChunk {
-    bytes data = 1;
-    string pending = 2;
+    oneof body {
+        bytes data = 1;
+        string pending = 2;
+        string warning = 3;
+    }
 }
 
 message Query {

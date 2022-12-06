@@ -97,6 +97,12 @@ class UdfPlanSegment(CompositePlanSegment):
 
 
 @dataclass
+class StackPlanSegment(CompositePlanSegment):
+    def serialize(self) -> str:
+        return '"StackPlanSegment"'
+
+
+@dataclass
 class Metadata:
     _client: BastionLabPolars
     _prev_segments: List[CompositePlanSegment] = field(default_factory=list)
@@ -217,6 +223,24 @@ class RemoteLazyFrame:
                     *self._meta._prev_segments,
                     PolarsPlanSegment(self._inner),
                     UdfPlanSegment(ts_udf, columns),
+                ],
+            ),
+        )
+
+    def vstack(self: LDF, df2: LDF) -> LDF:
+        df = pl.DataFrame(
+            [pl.Series(k, dtype=v) for k, v in self._inner.schema.items()]
+        )
+        return RemoteLazyFrame(
+            df.lazy(),
+            Metadata(
+                self._meta._client,
+                [
+                    *df2._meta._prev_segments,
+                    PolarsPlanSegment(df2._inner),
+                    *self._meta._prev_segments,
+                    PolarsPlanSegment(self._inner),
+                    StackPlanSegment(),
                 ],
             ),
         )
