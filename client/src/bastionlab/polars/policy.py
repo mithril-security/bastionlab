@@ -45,7 +45,6 @@ class FalseRule(Rule):
         return '"False"'
 
 
-@dataclass
 class UnsafeAction:
     def serialize(self) -> str:
         raise NotImplementedError
