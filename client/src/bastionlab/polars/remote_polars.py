@@ -315,26 +315,32 @@ class RemoteLazyFrame:
             ),
         )
 
-    def histplot(self: LDF, **kwargs):
-        # if x or y is empty, replace with "count" but if no x or y, return
-        col_x = "count" if not "x" in kwargs else kwargs["x"]
-        col_y = "count" if not "y" in kwargs else kwargs["y"]
+    def histplot(
+        self: LDF,
+        x: str = "count",
+        y: str = "count",
+        bins: int = 10,
+        **kwargs
+        ):
+
+        col_x = x if x != None else "count"
+        col_y = y if y != None else "count"
+
         if col_x == "count" and col_y == "count":
             print("Please provide an 'x' or 'y' value")
             return
 
-        # avoid duplicated in Seaborn calls
-        for x in ["x", "data", "y"]:
-            if x in kwargs:
-                del kwargs[x]
-
-        model = ApplyBins(kwargs["bins"])
-        # we are done with bins now and don't want to foward this to the barplot() function
-        del kwargs["bins"]
+        model = ApplyBins(bins)
+        
         # if we have only X or Y
         if col_x == "count" or col_y == "count":
             q_x = pl.col(col_x) if col_x != "count" else pl.col(col_y)
             q_y = pl.count()
+
+            
+            if not col_x in self.columns and not col_y in self.columns:
+                print("Error: column not found in dataframe")
+                return
 
             df = (
                 self.filter(q_x != None)
@@ -369,6 +375,10 @@ class RemoteLazyFrame:
 
         # If we have X and Y
         else:
+            for col in [col_x, col_y]:
+                if not col in self.columns:
+                    print("Error: ", col, " does not exist in dataframe")
+                    return
             df = (
                 self.filter(pl.col(col_x) != None)
                 .filter(pl.col(col_y) != None)
@@ -397,6 +407,11 @@ class RemoteLazyFrame:
         scatter: bool = False,
         **kwargs,
     ):
+        for col in [x, y]:
+            if not col in self.columns:
+                print("Error: ", col, " does not exist in dataframe")
+                return
+
         # get df with necessary columns
         df = self.select([pl.col(x), pl.col(y)]).collect().fetch().to_pandas()
         sns.regplot(data=df, x=x, y=y, order=order, ci=ci, scatter=scatter, **kwargs)
@@ -410,6 +425,12 @@ class RemoteLazyFrame:
         if "style" in kwargs:
             if not kwargs["style"] in cols:
                 cols.append(kwargs["style"])
+
+        for col in cols:
+            if not col in self.columns:
+                print("Error: ", col, " does not exist in dataframe")
+                return
+            
         # get df with necessary columns
         df = self.select([pl.col(x) for x in cols]).collect().fetch().to_pandas()
         # run query
@@ -480,11 +501,80 @@ class Facet:
 
     def histplot(
         self: LDF,
+        x: str = None,
+        y: str = None,
         bins: int = 10,
         *args: list[str],
         **kwargs,
     ) -> None:
-        self.__map(self.inner_rdf.histplot, bins=bins, *args, **kwargs)
+        # create list of all columns needed for query
+        selects = []
+        for to_add in [x, y, self.col, self.row]:
+            if to_add != None:
+                selects.append(to_add)
+        
+        for col in selects:
+            if col not in self.inner_rdf.columns:
+                print("Error: ", col, "not found in dataframe")
+                return
+
+        # get unique row and col values
+        cols = []
+        rows = []
+        if self.col != None:
+            cols = (
+                self.inner_rdf.select(pl.col(self.col))
+                .unique()
+                .sort(pl.col(self.col))
+                .collect()
+                .fetch()
+                .to_pandas()[self.col]
+                .tolist()
+            )
+        if self.row != None:
+            rows = (
+                self.inner_rdf.select(pl.col(self.row))
+                .unique()
+                .sort(pl.col(self.row))
+                .collect()
+                .fetch()
+                .to_pandas()[self.row]
+                .tolist()
+            )
+        
+        # mapping
+        r_len = len(rows) if len(rows) != 0 else 1
+        c_len = len(cols) if len(cols) != 0 else 1
+        figsize = ((5 * c_len), (5 * r_len))
+        if "figsize" in kwargs:
+            figsize = kwargs["figsize"]
+        fig, axes = plt.subplots(r_len, c_len, figsize=figsize)
+        cols_len = len(cols)
+        rows_len = len(rows)
+        if ((cols_len != 0) and (rows_len != 0)):
+            for col_count in range(cols_len):
+                for row_count in range(rows_len):
+                    df = self.inner_rdf.clone().filter(
+                        (pl.col(self.col) == cols[col_count]) & (pl.col(self.row) == rows[row_count])
+                    )
+                    t1 = self.row + ": " + str(rows[row_count]) + " | " + self.col + ": " + str(cols[col_count])
+                    df.select([pl.col(x) for x in selects]).histplot(x, y, bins, ax=axes[row_count, col_count], **kwargs
+                    )
+                    axes[row_count, col_count].set_title(t1)
+        
+        else:
+            col_check = True if cols_len != 0 else False
+            max_len = cols_len if col_check else rows_len
+            my_list = cols if col_check else rows
+            t = self.col if col_check else self.row
+            for count in range(max_len):
+                    df = self.inner_rdf.clone().filter(
+                        (pl.col(t) == my_list[count])
+                    )
+                    t1 = t + ": " + str(my_list[count])
+                    df.select([pl.col(x) for x in selects]).histplot(x, y, bins, ax=axes[count], **kwargs
+                    )
+                    axes[count].set_title(t1)
 
     def __map(self: LDF, func, **kwargs) -> None:
         # create list of all columns needed for query
@@ -493,41 +583,53 @@ class Facet:
             selects.append(kwargs["x"])
         if "y" in kwargs and not kwargs["y"] in selects:
             selects.append(kwargs["y"])
+        
+        for col in selects:
+            if col not in self.inner_rdf.columns:
+                print("Error: ", col, "not found in dataframe")
+                return
 
         # get unique row and col values
-        cols = (
-            self.inner_rdf.select(pl.col(self.col))
-            .unique()
-            .sort(pl.col(self.col))
-            .collect()
-            .fetch()
-            .to_pandas()[self.col]
-            .tolist()
-        )
-        rows = (
-            self.inner_rdf.select(pl.col(self.row))
-            .unique()
-            .sort(pl.col(self.row))
-            .collect()
-            .fetch()
-            .to_pandas()[self.row]
-            .tolist()
-        )
+        cols = []
+        rows = []
+        if self.col != None:
+            cols = (
+                self.inner_rdf.select(pl.col(self.col))
+                .unique()
+                .sort(pl.col(self.col))
+                .collect()
+                .fetch()
+                .to_pandas()[self.col]
+                .tolist()
+            )
+
+        if self.row != None:
+            rows = (
+                self.inner_rdf.select(pl.col(self.row))
+                .unique()
+                .sort(pl.col(self.row))
+                .collect()
+                .fetch()
+                .to_pandas()[self.row]
+                .tolist()
+            )
 
         # mapping
-        fig, axes = plt.subplots(len(rows), len(cols), figsize=(15, 20))
-        col_count = 0
-        for col in cols:
-            row_count = 0
-            for row in rows:
-                df = self.inner_rdf.clone().filter(
-                    (pl.col(self.col) == col) & (pl.col(self.row) == row)
-                )
-                t1 = self.row + ": " + str(row) + " | " + self.col + ": " + str(col)
-
-                # decipher if function is a Seaborn or BastionLab function to forward pandas or RDF as data
-                func_module = str(getattr(func, "__module__", ""))
-                if func_module.startswith("seaborn"):
+        r_len = len(rows) if len(rows) > 0 else 1
+        c_len = len(cols) if len(cols) > 0 else 1
+        figsize = ((5 * c_len), (5 * r_len))
+        if "figsize" in kwargs:
+            figsize = kwargs["figsize"]
+        fig, axes = plt.subplots(r_len, c_len, figsize=figsize)
+        cols_len = len(cols)
+        rows_len = len(rows)
+        if (cols_len != 0) & (rows_len != 0):
+            for col_count in range(cols_len):
+                for row_count in range(rows_len):
+                    df = self.inner_rdf.clone().filter(
+                        (pl.col(self.col) == cols[col_count]) & (pl.col(self.row) == rows[row_count])
+                    )
+                    t1 = self.row + ": " + str(rows[row_count]) + " | " + self.col + ": " + str(cols[col_count])
                     sea_df = (
                         df.select([pl.col(x) for x in selects])
                         .collect()
@@ -535,13 +637,25 @@ class Facet:
                         .to_pandas()
                     )
                     func(data=sea_df, ax=axes[row_count, col_count], **kwargs)
-                else:
-                    df.select([pl.col(x) for x in selects]).histplot(
-                        ax=axes[row_count, col_count], **kwargs
+                    axes[row_count, col_count].set_title(t1)
+        else:
+            col_check = True if cols_len != 0 else False
+            max_len = cols_len if col_check else rows_len
+            my_list = cols if col_check else rows
+            t = self.col if col_check else self.row
+            for count in range(max_len):
+                    df = self.inner_rdf.clone().filter(
+                        (pl.col(t) == my_list[count])
                     )
-                axes[row_count, col_count].set_title(t1)
-                row_count = row_count + 1
-            col_count = col_count + 1
+                    t1 = t + ": " + str(my_list[count])
+                    sea_df = (
+                        df.select([pl.col(x) for x in selects])
+                        .collect()
+                        .fetch()
+                        .to_pandas()
+                    )
+                    func(data=sea_df, ax=axes[row_count, col_count], **kwargs)
+                    axes[count].set_title(t1)
 
 
 # TODO: implement apply method
