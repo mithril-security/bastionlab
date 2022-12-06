@@ -104,9 +104,9 @@ print(f"PSGs method #2, expanded weights: {time() - start2}")
 print(f"Output mean delta: {(y - y2).abs().sum() / y.numel()}")
 print(f"Output max delta: {(y - y2).abs().max()}")
 psg = [g for _, g in model.grad_sample_parameters()][0]
-print(F"PSGs #1 size: {psg.size()}")
+print(f"PSGs #1 size: {psg.size()}")
 psg2 = model2.expanded_weight.grad
 psg2 = psg2.view(64, 16, 3, 3, 3)
-print(F"PSGs #2 size: {psg2.size()}")
+print(f"PSGs #2 size: {psg2.size()}")
 print(f"PSGs mean delta: {(psg - psg2).abs().sum() / psg.numel() / N}")
 print(f"PSGs max delta: {(psg - psg2).abs().max() / N}")

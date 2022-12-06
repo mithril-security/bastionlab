@@ -54,18 +54,19 @@ def test_api(simple_dataset):
     remote_dataloader = client.RemoteDataset(simple_dataset, privacy_limit=344.0)
 
     remote_learner = client.RemoteLearner(
-        model, remote_dataloader, loss="l2", expand=False, progress=False, max_batch_size=2,
+        model,
+        remote_dataloader,
+        loss="l2",
+        expand=False,
+        progress=False,
+        max_batch_size=2,
     )
 
     remote_learner.fit(nb_epochs=100, eps=142.0)
     remote_learner.test()
     assert (
         remote_learner.log
-        == [
-            Metric(
-                value=0.0, batch=0, epoch=0, nb_epochs=1, nb_batches=1
-            )
-        ] * 4
+        == [Metric(value=0.0, batch=0, epoch=0, nb_epochs=1, nb_batches=1)] * 4
     )
 
     remote_learner.model = DummyModule()

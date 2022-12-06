@@ -12,8 +12,10 @@ PROTO_PATH = os.path.join(os.path.dirname(__file__), "protos")
 this_directory = Path(__file__).parent
 long_description = (this_directory / "README.md").read_text()
 
+
 def read(filename):
     return open(os.path.join(os.path.dirname(__file__), filename)).read()
+
 
 def find_version():
     version_file = read("bastionai/version.py")
@@ -70,5 +72,5 @@ setup(
         "typing-extensions==4.3.0",
         "tqdm==4.64.0",
     ],
-    package_data={'': ['protos']}
+    package_data={"": ["protos"]},
 )

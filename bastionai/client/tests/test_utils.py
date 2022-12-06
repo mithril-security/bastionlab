@@ -184,7 +184,11 @@ def test_simple_model_deserialization():
     model2 = DummyModule()
 
     chunks = serialize_model(
-        Params(model1), name="", description="", secret=b"", client_info=empty_client_info
+        Params(model1),
+        name="",
+        description="",
+        secret=b"",
+        client_info=empty_client_info,
     )
     deserialize_weights_to_model(model2, chunks)
 
