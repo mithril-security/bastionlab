@@ -56,6 +56,7 @@ nav:
 - Home: 'index.md'
 - Quick Tour: 'docs/quick-tour/quick-tour.ipynb'
 - Tutorials:
+  - Installation: 'docs/tutorials/installation.md'
   - Data Visualization: 'docs/tutorials/visualization.ipynb'
   - Data Cleaning with BastionLab: 'docs/tutorials/data_cleaning.ipynb'
 - Concepts:
