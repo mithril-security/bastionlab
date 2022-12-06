@@ -50,8 +50,6 @@ pub enum Models {
         gradient_tolerance: f64,
         fit_intercept: bool,
         max_iterations: u64,
-        decision_boundary: f64,
-        strictly_greater: bool,
         initial_params: Option<Vec<f64>>,
     },
 }
@@ -121,8 +119,6 @@ pub fn select_trainer(trainer: Trainer) -> Result<Models, Status> {
             gradient_tolerance,
             fit_intercept,
             max_iterations,
-            decision_boundary,
-            strictly_greater,
             initial_params,
         }) => {
             let initial_params = initial_params
@@ -140,8 +136,6 @@ pub fn select_trainer(trainer: Trainer) -> Result<Models, Status> {
                 gradient_tolerance: gradient_tolerance.into(),
                 fit_intercept,
                 max_iterations,
-                decision_boundary: decision_boundary.into(),
-                strictly_greater,
                 initial_params,
             })
         }

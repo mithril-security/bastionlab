@@ -256,8 +256,6 @@ pub fn send_to_trainer(
             gradient_tolerance,
             fit_intercept,
             max_iterations,
-            decision_boundary,
-            strictly_greater,
             initial_params,
         } => {
             let Trainer {
@@ -268,29 +266,12 @@ pub fn send_to_trainer(
                 target_shape,
             } = transform_dfs(records, target);
 
-            let target = to_type! {<f64>(target)};
+            let target = to_type! {<usize>(target)};
             let target = to_ndarray!(target_shape, target);
             let target = to_polars_error(target.clone().into_shape([target.clone().len()]))?;
 
             let records = to_ndarray!(records_shape, records);
             let (dataset, _) = get_datasets(records, target, ratio, cols)?;
-
-            // Set decision boundary for targets.
-            let dataset = dataset.map_targets(|x| {
-                if strictly_greater {
-                    if *x > decision_boundary {
-                        1
-                    } else {
-                        0
-                    }
-                } else {
-                    if *x >= decision_boundary {
-                        1
-                    } else {
-                        0
-                    }
-                }
-            });
 
             let model = to_polars_error(logistic_regression(
                 dataset,

@@ -111,8 +111,6 @@ message TrainingRequest {
         float gradient_tolerance = 2;
         bool fit_intercept = 3;
         uint64 max_iterations = 4;
-        float decision_boundary = 5;
-        bool strictly_greater = 6;
         repeated float initial_params = 7;
     }
 }
