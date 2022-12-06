@@ -37,7 +37,9 @@ class BastionLabPolars:
         from .remote_polars import FetchableLazyFrame
 
         res = GRPCException.map_error(
-            lambda: self.stub.SendDataFrame(serialize_dataframe(df, policy, sanitized_columns))
+            lambda: self.stub.SendDataFrame(
+                serialize_dataframe(df, policy, sanitized_columns)
+            )
         )
         return FetchableLazyFrame._from_reference(self, res)
 
@@ -52,7 +54,7 @@ class BastionLabPolars:
                     print(
                         f"{Fore.GREEN}The query has been accepted by the data owner.{Fore.WHITE}"
                     )
-                
+
                 if b.pending != "":
                     blocked = True
                     print(
@@ -61,7 +63,7 @@ Reason: {b.pending}
 
 A notification has been sent to the data owner. The request will be pending until the data owner accepts or denies it or until timeout seconds elapse.{Fore.WHITE}"""
                     )
-                
+
                 if b.warning != "":
                     print(
                         f"""{Fore.YELLOW}Warning: non privacy-preserving query.
