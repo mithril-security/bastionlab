@@ -20,6 +20,10 @@ all: build install
 bin:
 	mkdir bin
 
+bin/keys/owners bin/keys/users &:
+	mkdir bin/keys/owners -p
+	mkdir bin/keys/users -p
+
 bin/config.toml: bin
 	cp tools/config.toml bin/
 
@@ -27,10 +31,6 @@ bin/tls/host_server.pem bin/tls/host_server.key &: bin
 	mkdir -p bin/tls && openssl req -newkey rsa:2048 -nodes -keyout bin/tls/host_server.key  \
 		-x509 -days 365 -out bin/tls/host_server.pem \
 		-subj "/C=FR/CN=bastionlab-server"
-
-keys_directory:
-	mkdir keys/owners -p
-	mkdir keys/users -p
 
 build:
 	LIBTORCH=$(LIBTORCH) CUDA=$(CUDA) LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) cargo build --release 
@@ -41,7 +41,7 @@ target/release/$(PKG_NAME):
 bin/$(PKG_NAME): target/release/$(PKG_NAME)
 	cp target/release/$(PKG_NAME) bin/
 	
-install: bin/tls/host_server.pem bin/tls/host_server.key bin/config.toml keys_directory
+install: bin/tls/host_server.pem bin/tls/host_server.key bin/config.toml bin/keys/owners bin/keys/users
 	cp target/release/$(PKG_NAME) bin/
 
 run: bin/$(PKG_NAME) bin/tls/host_server.pem bin/tls/host_server.key bin/config.toml
