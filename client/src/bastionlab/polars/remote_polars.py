@@ -318,6 +318,17 @@ class RemoteLazyFrame:
     def histplot(
         self: LDF, x: str = "count", y: str = "count", bins: int = 10, **kwargs
     ):
+        """Histplot plots a univariate histogram, where one x or y axes is provided or a bivariate histogram, where both x and y axes values are supplied.
+
+        Histplot filters down a RemoteLazyFrame to necessary columns only, groups x axes into bins
+        and performs aggregated queries before calling either Seaborn's barplot (for univaritate histograms) or heatmap function (for bivariate histograms),
+        which helps us to limit data retrieved from the server to a minimum.
+        Args:
+            x (str): The name of column to be used for x axes. Default value is "count", which trigger pl.count() to be used on this axes.
+            y (str): The name of column to be used for y axes. Default value is "count", which trigger pl.count() to be used on this axes.
+            bins (int): An integer bin value which x axes will be grouped by. Default value is 10.
+            **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function, in the case of one column being supplied, or heatmap function, where both x and y columns are supplied.
+        """
 
         col_x = x if x != None else "count"
         col_y = y if y != None else "count"
@@ -402,6 +413,16 @@ class RemoteLazyFrame:
         scatter: bool = False,
         **kwargs,
     ):
+        """Plot data and a linear regression model fit.
+        Curveplot filters data down to necessary columns only and then calls Seaborn's regplot function.
+        Args:
+            x (str): The name of column to be used for x axes.
+            y (str): The name of column to be used for y axes.
+            order (int): If order is greater than 1, Seaborn's regplot uses numpy.polyfit to estimate a polynomial regression. Default value is 3.
+            ci: Size of the confidence interval for the regression estimate. Default value is None.
+            scatter (bool): Option to display a scatterplot of data with the underlying observations. Default value is False.
+            **kwargs: Other keyword arguments that will be passed to Seaborn's regplot function.
+        """
         for col in [x, y]:
             if not col in self.columns:
                 print("Error: ", col, " does not exist in dataframe")
@@ -412,6 +433,13 @@ class RemoteLazyFrame:
         sns.regplot(data=df, x=x, y=y, order=order, ci=ci, scatter=scatter, **kwargs)
 
     def scatterplot(self: LDF, x: str, y: str, **kwargs):
+        """Draws a scatter plot
+        Scatterplot filters data down to necessary columns only and then calls Seaborn's scatterplot function.
+        Args:
+            x (str): The name of column to be used for x axes.
+            y (str): The name of column to be used for y axes.
+            **kwargs: Other keyword arguments that will be passed to Seaborn's scatterplot function.
+        """
         # if there is a hue or style argument add them to cols
         cols = [x, y]
         if "hue" in kwargs:
@@ -432,8 +460,15 @@ class RemoteLazyFrame:
         sns.scatterplot(data=df, x=x, y=y, **kwargs)
 
     def facet(
-        self: LDF, col: Optional[str] = None, row: Optional[str] = None, *args, **kwargs
+        self: LDF, col: Optional[str] = None, row: Optional[str] = None, **kwargs
     ) -> any:
+        """Creates a multi-plot grid for plotting conditional relationships.
+        Args:
+            col (Optional[str]): column value for grid
+            row (Optional[str]): row value for grid
+            figsize (Optional[List[float, float]]): figsize for grid
+            **kwargs: Any additional keywords to be sent to Facet class to be applied to matplotlib pyplot's subplot function
+        """
         return Facet(inner_rdf=self, col=col, row=row, kwargs=kwargs)
 
 
@@ -482,6 +517,16 @@ class Facet:
         *args: list[str],
         **kwargs,
     ) -> None:
+        """Draws a scatter plot for each subset in row/column facet grid.
+        Scatterplot filters data down to necessary columns only before calling Seaborn's scatterplot function on rows of dataset
+        where values match with each combination of row/grid values.
+
+        Args:
+            x (str): The name of column to be used for x axes.
+            y (str): The name of column to be used for y axes.
+            *args: (list[str]): Arguments to be passed to Seaborn's scatterplot function.
+            **kwargs: Other keyword arguments that will be passed to Seaborn's scatterplot function.
+        """
         self.__map(sns.scatterplot, *args, **kwargs)
 
     def curveplot(
@@ -492,6 +537,16 @@ class Facet:
         scatter: bool = False,
         **kwargs,
     ) -> None:
+        """Plot data and a linear regression model fit for each subset in row/column facet grid.
+        Curveplot filters data down to necessary columns only and then calls Seaborn's regplot function on rows of dataset
+        where values match with each combination of row/grid values.
+        Args:
+            *args: (list[str]): Arguments to be passed to Seaborn's regplot function.
+            order (int): If order is greater than 1, Seaborn's regplot uses numpy.polyfit to estimate a polynomial regression. Default value is 3.
+            ci: Size of the confidence interval for the regression estimate. Default value is None.
+            scatter (bool): Option to display a scatterplot of data with the underlying observations. Default value is False.
+            **kwargs: Other keyword arguments that will be passed to Seaborn's regplot function.
+        """
         self.__map(sns.regplot, *args, order=order, ci=ci, scatter=scatter, **kwargs)
 
     def histplot(
@@ -499,9 +554,19 @@ class Facet:
         x: str = None,
         y: str = None,
         bins: int = 10,
-        *args: list[str],
         **kwargs,
     ) -> None:
+        """Draws a histplot for each subset in row/column facet grid.
+
+        Facet's histplot iterates over each possible combination of row/column values in the dataset, filters the dataset to rows where the values match this
+        combination of row/column values and applies histplot to this dataset.
+
+        Args:
+            x (str): The name of column to be used for x axes. Default value is None.
+            y (str): The name of column to be used for y axes. Default value is None.
+            bins (int): An integer bin value which x axes will be grouped by. Default value is 10.
+            **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function, in the case of one column being supplied, or heatmap function, where both x and y columns are supplied.
+        """
         # create list of all columns needed for query
         selects = []
         for to_add in [x, y, self.col, self.row]:
@@ -540,10 +605,12 @@ class Facet:
         # mapping
         r_len = len(rows) if len(rows) != 0 else 1
         c_len = len(cols) if len(cols) != 0 else 1
-        figsize = ((5 * c_len), (5 * r_len))
-        if "figsize" in kwargs:
-            figsize = kwargs["figsize"]
-        fig, axes = plt.subplots(r_len, c_len, figsize=figsize)
+        if self.kwargs == None:
+            fig, axes = plt.subplots(r_len, c_len, figsize=((5 * c_len), (5 * r_len)))
+        else:
+            if "figsize" not in self.kwargs:
+                self.kwargs["figsize"] = ((5 * c_len), (5 * r_len))
+            fig, axes = plt.subplots(r_len, c_len, **self.kwargs)
         cols_len = len(cols)
         rows_len = len(rows)
         if (cols_len != 0) and (rows_len != 0):
@@ -621,10 +688,12 @@ class Facet:
         # mapping
         r_len = len(rows) if len(rows) > 0 else 1
         c_len = len(cols) if len(cols) > 0 else 1
-        figsize = ((5 * c_len), (5 * r_len))
-        if "figsize" in kwargs:
-            figsize = kwargs["figsize"]
-        fig, axes = plt.subplots(r_len, c_len, figsize=figsize)
+        if self.kwargs == None:
+            fig, axes = plt.subplots(r_len, c_len, figsize=((5 * c_len), (5 * r_len)))
+        else:
+            if "figsize" not in self.kwargs:
+                self.kwargs["figsize"] = ((5 * c_len), (5 * r_len))
+            fig, axes = plt.subplots(r_len, c_len, **self.kwargs)
         cols_len = len(cols)
         rows_len = len(rows)
         if (cols_len != 0) & (rows_len != 0):
