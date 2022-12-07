@@ -8,7 +8,7 @@ use polars::{
 };
 
 use crate::{
-    algorithms::{elastic_net, gaussian_naive_bayes, kmeans, linear_regression},
+    algorithms::{decision_trees, elastic_net, gaussian_naive_bayes, kmeans, linear_regression},
     trainer::{get_datasets, to_polars_error, Models, PredictionTypes, SupportedModels},
 };
 
@@ -42,6 +42,22 @@ fn df_to_vec(df: DataFrame, sh: (usize, usize)) -> Vec<f64> {
     });
     out
 }
+
+//TODO: Fix Trait implementation for `vec_to_df`
+
+fn vec_f64_to_df(data: Vec<f64>, name: &str) -> PolarsResult<DataFrame> {
+    let s = Series::new(name, data);
+    let df = to_polars_error(DataFrame::new(vec![s]))?;
+    Ok(df)
+}
+
+fn vec_u64_to_df(data: Vec<usize>, name: &str) -> PolarsResult<DataFrame> {
+    let data = to_type! {<u64>(data)};
+    let s = Series::new(name, data);
+    let df = to_polars_error(DataFrame::new(vec![s]))?;
+    Ok(df)
+}
+
 /// Internal structure to hold the [`DataFrame`]s converted to raw [`Vec<f64>`].
 /// This also holds information about the features of the input dataset.
 ///
@@ -284,13 +300,51 @@ pub fn send_to_trainer(
 
             Ok(SupportedModels::LogisticRegression(model))
         }
+
+        Models::DecisionTree {
+            split_quality,
+            max_depth,
+            min_weight_split,
+            min_weight_leaf,
+            min_impurity_decrease,
+        } => {
+            let Trainer {
+                records,
+                target,
+                cols,
+                records_shape,
+                target_shape,
+            } = transform_dfs(records, target);
+
+            let target = to_type! {<usize>(target)};
+            let target = to_ndarray!(target_shape, target);
+            let target = to_polars_error(target.clone().into_shape([target.clone().len()]))?;
+
+            let records = to_ndarray!(records_shape, records);
+            let (dataset, _) = get_datasets(records, target, ratio, cols)?;
+
+            let model = to_polars_error(decision_trees(
+                dataset,
+                split_quality,
+                max_depth,
+                min_weight_split,
+                min_weight_leaf,
+                min_impurity_decrease,
+            ))?;
+
+            Ok(SupportedModels::DecisionTree(model))
+        }
     }
 }
 
 /// This method is used to run a prediction on an already fitted model, based on the model selection type.
 /// We use two different types for prediction
 /// [f64] and [usize] --> [PredictionTypes::Float] and [PredictionTypes::Usize] respectively.
-pub fn predict(model: SupportedModels, data: Vec<f64>) -> PolarsResult<DataFrame> {
+pub fn predict(
+    model: SupportedModels,
+    data: Vec<f64>,
+    probability: bool,
+) -> PolarsResult<DataFrame> {
     let sh = (1, data.len());
     let sample = to_ndarray!(sh, data);
     let prediction = match model {
@@ -298,25 +352,29 @@ pub fn predict(model: SupportedModels, data: Vec<f64>) -> PolarsResult<DataFrame
         SupportedModels::GaussianNaiveBayes(m) => Some(PredictionTypes::Usize(m.predict(sample))),
         SupportedModels::KMeans(m) => Some(PredictionTypes::Usize(m.predict(sample))),
         SupportedModels::LinearRegression(m) => Some(PredictionTypes::Float(m.predict(sample))),
-        SupportedModels::LogisticRegression(m) => Some(PredictionTypes::Usize(m.predict(sample))),
+        SupportedModels::LogisticRegression(m) => {
+            if probability {
+                Some(PredictionTypes::Probability(
+                    m.predict_probabilities(&sample),
+                ))
+            } else {
+                Some(PredictionTypes::Usize(m.predict(sample)))
+            }
+        }
+        SupportedModels::DecisionTree(m) => Some(PredictionTypes::Usize(m.predict(sample))),
     };
 
     let prediction: DataFrame = match prediction {
         Some(v) => match v {
             PredictionTypes::Usize(m) => {
                 let targets = m.targets.to_vec();
-                let targets = to_type! {<u64>(targets)};
-                let s = Series::new("prediction", targets);
-                let df = DataFrame::new(vec![s])?;
-                df
+                vec_u64_to_df(targets, "prediction")?
             }
             PredictionTypes::Float(m) => {
                 let targets = m.targets.to_vec();
-                let targets = to_type! {<f64>(targets)};
-                let s = Series::new("prediction", targets);
-                let df = to_polars_error(DataFrame::new(vec![s]))?;
-                df
+                vec_f64_to_df(targets, "prediction")?
             }
+            PredictionTypes::Probability(m) => vec_f64_to_df(m.to_vec(), "prediction")?,
         },
         None => {
             return PolarsResult::Err(PolarsError::ComputeError(polars::error::ErrString::Owned(

@@ -107,16 +107,17 @@ impl LinfaService for BastionLabLinfa {
         request: Request<PredictionRequest>,
     ) -> Result<Response<ReferenceResponse>, Status> {
         self.sess_manager.verify_request(&request)?;
-        let (model_id, data) = {
+        let (model_id, data, probability) = {
             let model = &request.get_ref().model;
             let data = &request.get_ref().data;
+            let prob = *(&request.get_ref().probability);
             let data = to_type! {<f64>(data)};
-            (model, data)
+            (model, data, prob)
         };
 
         let model = self.get_model(model_id)?;
 
-        let prediction = to_status_error(predict(model, data))?;
+        let prediction = to_status_error(predict(model, data, probability))?;
 
         println!("{:?}", prediction);
 

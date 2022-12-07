@@ -321,6 +321,7 @@ dependencies = [
  "linfa-linear",
  "linfa-logistic",
  "linfa-nn",
+ "linfa-trees",
  "ndarray",
  "polars",
  "prost",
@@ -1504,6 +1505,17 @@ dependencies = [
  "num-traits",
  "order-stat",
  "thiserror",
+]
+
+[[package]]
+name = "linfa-trees"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "464029f9a6ffd8016539a9c2a73e569b1118d50eb44638549f8cd5807ea77f8c"
+dependencies = [
+ "linfa",
+ "ndarray",
+ "ndarray-rand",
 ]
 
 [[package]]

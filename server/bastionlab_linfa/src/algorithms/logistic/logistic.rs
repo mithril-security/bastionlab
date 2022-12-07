@@ -23,6 +23,5 @@ pub fn logistic_regression(
 
     let model = reg.fit(&train)?;
 
-    println!("{:?}", model);
     Ok(model)
 }

@@ -7,6 +7,7 @@ use linfa_elasticnet::ElasticNet;
 use linfa_linear::FittedLinearRegression;
 use linfa_logistic::FittedLogisticRegression;
 use linfa_nn::distance::L2Dist;
+use linfa_trees::{DecisionTree, SplitQuality};
 use ndarray::{Array2, ArrayBase, Ix1, Ix2, OwnedRepr};
 use polars::{
     error::ErrString,
@@ -51,6 +52,14 @@ pub enum Models {
         max_iterations: u64,
         initial_params: Option<Vec<f64>>,
     },
+
+    DecisionTree {
+        split_quality: SplitQuality,
+        max_depth: Option<usize>,
+        min_weight_split: f32,
+        min_weight_leaf: f32,
+        min_impurity_decrease: f64,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -60,12 +69,14 @@ pub enum SupportedModels {
     KMeans(KMeans<f64, L2Dist>),
     LinearRegression(FittedLinearRegression<f64>),
     LogisticRegression(FittedLogisticRegression<f64, usize>),
+    DecisionTree(DecisionTree<f64, usize>),
 }
 
 #[derive(Debug)]
 pub enum PredictionTypes {
     Usize(DatasetBase<ArrayBase<OwnedRepr<f64>, Ix2>, ArrayBase<OwnedRepr<usize>, Ix1>>),
     Float(DatasetBase<ArrayBase<OwnedRepr<f64>, Ix2>, ArrayBase<OwnedRepr<f64>, Ix1>>),
+    Probability(ArrayBase<OwnedRepr<f64>, Ix1>),
 }
 
 pub fn to_polars_error<T, E: Error>(input: Result<T, E>) -> PolarsResult<T> {
@@ -136,6 +147,44 @@ pub fn select_trainer(trainer: Trainer) -> Result<Models, Status> {
                 fit_intercept,
                 max_iterations,
                 initial_params,
+            })
+        }
+        Trainer::DecisionTree(training_request::DecisionTree {
+            split_quality,
+            max_depth,
+            min_weight_split,
+            min_weight_leaf,
+            min_impurity_decrease,
+        }) => {
+            let split_quality = match split_quality {
+                Some(v) => match v {
+                    training_request::decision_tree::SplitQuality::Gini(
+                        training_request::decision_tree::Gini {},
+                    ) => SplitQuality::Gini,
+                    training_request::decision_tree::SplitQuality::Entropy(
+                        training_request::decision_tree::Entropy {},
+                    ) => SplitQuality::Entropy,
+                },
+                None => {
+                    return Err(Status::failed_precondition("SplitQuality not found!"));
+                }
+            };
+
+            let max_depth: Option<usize> = match max_depth {
+                Some(v) => Some(v as usize),
+                None => {
+                    return Err(Status::failed_precondition("max_depth not provided!"));
+                }
+            };
+
+            let min_impurity_decrease = min_impurity_decrease.into();
+
+            Ok(Models::DecisionTree {
+                split_quality,
+                max_depth,
+                min_weight_split,
+                min_weight_leaf,
+                min_impurity_decrease,
             })
         }
         Trainer::ElasticNet(training_request::ElasticNet {

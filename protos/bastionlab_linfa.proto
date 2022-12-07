@@ -13,6 +13,7 @@ message ModelResponse {
 message PredictionRequest{
     string model = 1;
     repeated float data = 2;
+    bool probability = 3;
 }
 
 message TrainingRequest {
@@ -26,6 +27,7 @@ message TrainingRequest {
         KMeans kmeans = 6;
         LinearRegression linear_regression = 7;
         LogisticRegression logistic_regression = 8;
+        DecisionTree decision_tree = 9;
     }
 
     message GaussianNb {
@@ -73,6 +75,20 @@ message TrainingRequest {
         bool fit_intercept = 3;
         uint64 max_iterations = 4;
         repeated float initial_params = 7;
+    }
+
+    message DecisionTree {
+        
+        message Gini {}
+        message Entropy {}
+        oneof  split_quality{
+            Gini gini = 1;
+            Entropy entropy = 2;
+        };
+        optional uint64 max_depth = 3;
+        float min_weight_split = 4;
+        float min_weight_leaf = 5;
+        float min_impurity_decrease= 6;
     }
 }
 

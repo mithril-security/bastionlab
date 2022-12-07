@@ -41,5 +41,17 @@ class BastionLabLinfa:
     def predict(self, model: "FittedModel", data: List[float]) -> "FetchableLazyFrame":
         from ..polars import FetchableLazyFrame
 
-        res = self.stub.Predict(PredictionRequest(model=model.identifier, data=data))
+        res = self.stub.Predict(
+            PredictionRequest(model=model.identifier, data=data, probability=False)
+        )
+        return FetchableLazyFrame._from_reference(self.polars, res)
+
+    def predict_proba(
+        self, model: "FittedModel", data: List[float]
+    ) -> "FetchableLazyFrame":
+        from ..polars import FetchableLazyFrame
+
+        res = self.stub.Predict(
+            PredictionRequest(model=model.identifier, data=data, probability=True)
+        )
         return FetchableLazyFrame._from_reference(self.polars, res)

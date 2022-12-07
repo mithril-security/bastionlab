@@ -12,3 +12,6 @@ pub use linear::*;
 
 mod logistic;
 pub use logistic::*;
+
+mod trees;
+pub use trees::*;

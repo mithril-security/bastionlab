@@ -72,6 +72,38 @@ class ElasticNet(Trainer):
 
 
 @dataclass
+class DecisionTree(Trainer):
+    class SplitQuality(Trainer):
+        def to_msg_dict():
+            pass
+
+    class Gini(SplitQuality):
+        def to_msg_dict():
+            return {"gini": TrainingRequest.DecisionTree.Gini}
+
+    class Entropy(SplitQuality):
+        def to_msg_dict():
+            return {"entropy": TrainingRequest.DecisionTree.Entropy}
+
+    split_quality: Optional[SplitQuality] = Gini
+    max_depth: Optional[int] = None
+    min_weight_split: float = (2.0,)
+    min_weight_leaf: float = (1.0,)
+    min_impurity_decrease: float = 0.00001
+
+    def to_msg_dict(self):
+        return {
+            "decision_tree": TrainingRequest.DecisionTree(
+                max_depth=self.max_depth,
+                min_weight_split=self.min_weight_split,
+                min_weight_leaf=self.min_weight_leaf,
+                min_impurity_decrease=self.min_impurity_decrease,
+                split_quality=self.split_quality.to_msg_dict(),
+            )
+        }
+
+
+@dataclass
 class KMeans(Trainer):
     class InitMethod(Trainer):
         def to_msg_dict():
@@ -109,6 +141,6 @@ class KMeans(Trainer):
                 n_clusters=self.n_clusters,
                 tolerance=self.tolerance,
                 max_n_iterations=self.max_n_iterations,
-                **self.get_init_method()
+                **self.get_init_method(),
             )
         }
