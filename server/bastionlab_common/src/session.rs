@@ -37,7 +37,7 @@ pub fn get_token<T>(req: &Request<T>, auth_enabled: bool) -> Result<Option<Bytes
     let meta = req
         .metadata()
         .get_bin("accesstoken-bin")
-        .ok_or_else(|| Status::invalid_argument("No accesstoken in request metadata"))?;
+        .ok_or_else(|| Status::invalid_argument("No access token in request metadata"))?;
     Ok(Some(meta.to_bytes().map_err(|_| {
         Status::invalid_argument("Could not decode accesstoken")
     })?))
@@ -45,6 +45,7 @@ pub fn get_token<T>(req: &Request<T>, auth_enabled: bool) -> Result<Option<Bytes
 
 #[derive(Debug)]
 pub struct Session {
+    pub pubkey: String,
     pub user_ip: SocketAddr,
     pub expiry: SystemTime,
     pub client_info: ClientInfo,
@@ -152,18 +153,25 @@ impl SessionManager {
 
     // TODO: move grpc specific things to the grpc service and not the session manager
     fn create_session(&self, request: Request<ClientInfo>) -> Result<SessionInfo, Status> {
-        let challenge = self.check_challenge(&request)?;
         let mut sessions = self.sessions.write().unwrap();
         let keys_lock = self.keys.as_ref().map(|l| l.lock().expect("Poisoned lock"));
         let end = "-bin";
         let pat = "signature-";
-        let mut public_key = String::new();
-        if let Some(user_ip) = request.remote_addr() {
-            for key in request.metadata().keys() {
-                match key {
-                    KeyRef::Binary(key) => {
-                        let key = key.to_string();
-                        if let Some(key) = key.strip_suffix(end) {
+
+        let user_ip = match request.remote_addr() {
+            Some(user_ip) => user_ip,
+            _ => return Err(Status::aborted("Could not fetch IP Address from request")),
+        };
+
+        match self.auth_enabled() {
+            true => {
+                let challenge = self.check_challenge(&request)?;
+
+                for key in request.metadata().keys() {
+                    match key {
+                        KeyRef::Binary(key) => {
+                            let key_string = key.to_string();
+                            let key = key_string.strip_suffix(end).unwrap();
                             if key.contains(pat) {
                                 if let Some(key) = key.split(pat).last() {
                                     if let Some(ref keys) = keys_lock {
@@ -178,46 +186,56 @@ impl SessionManager {
                                             &message[..],
                                             request.metadata(),
                                         )?;
-                                        public_key.push_str(key);
                                     }
+                                    let (token, expiry) = {
+                                        let expiry = match SystemTime::now()
+                                            .checked_add(Duration::from_secs(self.session_expiry))
+                                        {
+                                            Some(v) => v,
+                                            None => SystemTime::now(),
+                                        };
+                                        (self.new_challenge(), expiry)
+                                    };
+                                    sessions.insert(
+                                        token.clone(),
+                                        Session {
+                                            pubkey: key.to_string(),
+                                            user_ip,
+                                            expiry,
+                                            client_info: request.into_inner(),
+                                        },
+                                    );
+                                    return Ok(SessionInfo {
+                                        token: token.to_vec(),
+                                    });
                                 } else {
                                     return Err(Status::aborted(
                                         "User signing key not found in request!",
                                     ));
                                 }
                             }
-                        } else {
-                            return Err(Status::aborted("User signing key not found in request!"));
                         }
+                        _ => {}
                     }
-                    _ => (),
                 }
+                return Err(Status::aborted("Signature header missing or malformed!"));
             }
-            let (token, expiry) = if !self.auth_enabled() {
-                ([0u8; 32], SystemTime::now())
-            } else {
-                let expiry =
-                    match SystemTime::now().checked_add(Duration::from_secs(self.session_expiry)) {
-                        Some(v) => v,
-                        None => SystemTime::now(),
-                    };
-                (self.new_challenge(), expiry)
-            };
-
-            sessions.insert(
-                token.clone(),
-                Session {
-                    user_ip,
-                    expiry,
-                    client_info: request.into_inner(),
-                },
-            );
-            Ok(SessionInfo {
-                token: token.to_vec(),
-            })
-        } else {
-            Err(Status::aborted("Could not fetch IP Address from request"))
-        }
+            false => {
+                let (token, expiry) = ([0u8; 32], SystemTime::now());
+                sessions.insert(
+                    token.clone(),
+                    Session {
+                        pubkey: "UNAUTHENTICATED".to_string(),
+                        user_ip,
+                        expiry,
+                        client_info: request.into_inner(),
+                    },
+                );
+                return Ok(SessionInfo {
+                    token: token.to_vec(),
+                });
+            }
+        };
     }
 
     fn refresh_session<T>(&self, req: &Request<T>) -> Result<(), Status> {
