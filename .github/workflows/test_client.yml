@@ -2,7 +2,10 @@ name: Test client
 
 on:
   push:
-    branches: [main]
+    branches: [master]
+    paths: ["client/**", ".github/**"]
+  pull_request:
+    branches: [master]
     paths: ["client/**", ".github/**"]
 
 jobs:
