@@ -328,6 +328,11 @@ class RemoteLazyFrame:
             y (str): The name of column to be used for y axes. Default value is "count", which trigger pl.count() to be used on this axes.
             bins (int): An integer bin value which x axes will be grouped by. Default value is 10.
             **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function, in the case of one column being supplied, or heatmap function, where both x and y columns are supplied.
+
+        Raises:
+            ValueError: Incorrect column name given
+            various exceptions: Note that exceptions may be raised from Seaborn when the barplot or heatmap function is called,
+            for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
 
         col_x = x if x != None else "count"
@@ -345,8 +350,7 @@ class RemoteLazyFrame:
             q_y = pl.count()
 
             if not col_x in self.columns and not col_y in self.columns:
-                print("Error: column not found in dataframe")
-                return
+                raise ValueError("Please supply a valid column for x or y axes")
 
             df = (
                 self.filter(q_x != None)
@@ -383,8 +387,7 @@ class RemoteLazyFrame:
         else:
             for col in [col_x, col_y]:
                 if not col in self.columns:
-                    print("Error: ", col, " does not exist in dataframe")
-                    return
+                    raise ValueError("Column name not found in dataframe")
             df = (
                 self.filter(pl.col(col_x) != None)
                 .filter(pl.col(col_y) != None)
@@ -418,15 +421,18 @@ class RemoteLazyFrame:
         Args:
             x (str): The name of column to be used for x axes.
             y (str): The name of column to be used for y axes.
-            order (int): If order is greater than 1, Seaborn's regplot uses numpy.polyfit to estimate a polynomial regression. Default value is 3.
-            ci: Size of the confidence interval for the regression estimate. Default value is None.
-            scatter (bool): Option to display a scatterplot of data with the underlying observations. Default value is False.
+            order (int) = 3: If order is greater than 1, Seaborn's regplot uses numpy.polyfit to estimate a polynomial regression.
+            ci (Union[int, None] = None): Size of the confidence interval for the regression estimate.
+            scatter (bool = False): Option to display a scatterplot of data with the underlying observations.
             **kwargs: Other keyword arguments that will be passed to Seaborn's regplot function.
+        Raises:
+            ValueError: Incorrect column name given
+            various exceptions: Note that exceptions may be raised from Seaborn when the regplot function is called,
+            for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
         for col in [x, y]:
             if not col in self.columns:
-                print("Error: ", col, " does not exist in dataframe")
-                return
+                raise ValueError("Column ", col, " not found in dataframe")
 
         # get df with necessary columns
         df = self.select([pl.col(x), pl.col(y)]).collect().fetch().to_pandas()
@@ -439,6 +445,10 @@ class RemoteLazyFrame:
             x (str): The name of column to be used for x axes.
             y (str): The name of column to be used for y axes.
             **kwargs: Other keyword arguments that will be passed to Seaborn's scatterplot function.
+        Raises:
+            ValueError: Incorrect column name given
+            various exceptions: Note that exceptions may be raised from Seaborn when the scatterplot function is called,
+            for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
         # if there is a hue or style argument add them to cols
         cols = [x, y]
@@ -451,8 +461,7 @@ class RemoteLazyFrame:
 
         for col in cols:
             if not col in self.columns:
-                print("Error: ", col, " does not exist in dataframe")
-                return
+                raise ValueError("Column ", col, " not found in dataframe")
 
         # get df with necessary columns
         df = self.select([pl.col(x) for x in cols]).collect().fetch().to_pandas()
@@ -464,11 +473,20 @@ class RemoteLazyFrame:
     ) -> any:
         """Creates a multi-plot grid for plotting conditional relationships.
         Args:
-            col (Optional[str]): column value for grid
-            row (Optional[str]): row value for grid
-            figsize (Optional[List[float, float]]): figsize for grid
+            col (Optional[str] = None): column value for grid
+            row (Optional[str] = None): row value for grid
             **kwargs: Any additional keywords to be sent to Facet class to be applied to matplotlib pyplot's subplot function
+
+        Returns:
+            Facet instance created based on arguments given
+
+        Raises:
+            ValueError: Incorrect col/row argument provided
         """
+        for x in [col, row]:
+            if x != None:
+                if not x in self.columns:
+                    raise ValueError("Column ", x, " not found in dataframe")
         return Facet(inner_rdf=self, col=col, row=row, kwargs=kwargs)
 
 
@@ -526,6 +544,11 @@ class Facet:
             y (str): The name of column to be used for y axes.
             *args: (list[str]): Arguments to be passed to Seaborn's scatterplot function.
             **kwargs: Other keyword arguments that will be passed to Seaborn's scatterplot function.
+
+        Raises:
+            ValueError: Incorrect column name given
+            various exceptions: Note that exceptions may be raised from internal Seaborn (scatterplot) or Matplotlib.pyplot functions (subplots, set_title),
+            for example, if kwargs keywords are not expected. See Seaborn/Matplotlib documentation for further details.
         """
         self.__map(sns.scatterplot, *args, **kwargs)
 
@@ -546,6 +569,10 @@ class Facet:
             ci: Size of the confidence interval for the regression estimate. Default value is None.
             scatter (bool): Option to display a scatterplot of data with the underlying observations. Default value is False.
             **kwargs: Other keyword arguments that will be passed to Seaborn's regplot function.
+        Raises:
+            ValueError: Incorrect column name given
+            various exceptions: Note that exceptions may be raised from internal Seaborn (scatterplot) or Matplotlib.pyplot functions (subplots, set_title),
+            for example, if kwargs keywords are not expected. See Seaborn/Matplotlib documentation for further details.
         """
         self.__map(sns.regplot, *args, order=order, ci=ci, scatter=scatter, **kwargs)
 
@@ -562,10 +589,14 @@ class Facet:
         combination of row/column values and applies histplot to this dataset.
 
         Args:
-            x (str): The name of column to be used for x axes. Default value is None.
-            y (str): The name of column to be used for y axes. Default value is None.
-            bins (int): An integer bin value which x axes will be grouped by. Default value is 10.
+            x (str) = None: The name of column to be used for x axes.
+            y (str) = None: The name of column to be used for y axes.
+            bins (int) = 10: An integer bin value which x axes will be grouped by.
             **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function, in the case of one column being supplied, or heatmap function, where both x and y columns are supplied.
+        Raises:
+            ValueError: Incorrect column name given
+            various exceptions: Note that exceptions may be raised from internal Seaborn (scatterplot) or Matplotlib.pyplot functions (subplots, set_title),
+            for example, if kwargs keywords are not expected. See Seaborn/Matplotlib documentation for further details.
         """
         # create list of all columns needed for query
         selects = []
@@ -575,8 +606,7 @@ class Facet:
 
         for col in selects:
             if col not in self.inner_rdf.columns:
-                print("Error: ", col, "not found in dataframe")
-                return
+                raise ValueError("Column ", col, " not found in dataframe")
 
         # get unique row and col values
         cols = []
@@ -657,8 +687,7 @@ class Facet:
 
         for col in selects:
             if col not in self.inner_rdf.columns:
-                print("Error: ", col, "not found in dataframe")
-                return
+                raise ValueError("Column ", col, " not found in dataframe")
 
         # get unique row and col values
         cols = []
