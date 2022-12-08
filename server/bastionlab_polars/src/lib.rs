@@ -276,6 +276,10 @@ Reason: {}",
         dfs.insert(identifier.clone(), df);
         identifier
     }
+
+    fn persist_df(&self, identifier: &str) -> () {
+        let df = 
+    }
 }
 
 fn get_df_header(df: &DataFrame) -> Result<String, Status> {
@@ -419,4 +423,14 @@ impl PolarsService for BastionLabPolars {
         );
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
+
+    async fn persist_data_frame(
+        &self,
+        request: Request<ReferenceRequest>,
+    ) -> Result<Response<Empty>> {
+        self.sess_manager.verify_request(&request)?;
+        let identifier = request.get_ref().identifier;
+        self.persist_df(&identifier);
+    }
+
 }
