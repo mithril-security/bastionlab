@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/mithril-security/bastionlab/blob/python-wheel-server/docs/assets/logo.png?raw=true" alt="BastionLab" width="200" height="200" />
+  <img src="https://github.com/mithril-security/bastionlab/raw/master/docs/assets/logo.png" alt="BastionLab" width="200" height="200" />
 </p>
 
 <h1 align="center">Mithril Security – BastionLab</h1>
