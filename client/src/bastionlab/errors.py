@@ -9,7 +9,14 @@ T = TypeVar("T")
 
 @dataclass
 class GRPCException(Exception):
-    """A NewType arround gRPC errors to get nicer display."""
+    """
+    A custom exception class for wrapping gRPC errors. This allows for better error
+    handling and display.
+
+    Attributes:
+        err (Union[grpc._channel._InactiveRpcError, grpc._channel._MultiThreadedRendezvous]):
+            The gRPC error that was caught and wrapped by this exception.
+    """
 
     err: Union[grpc._channel._InactiveRpcError, grpc._channel._MultiThreadedRendezvous]
 
