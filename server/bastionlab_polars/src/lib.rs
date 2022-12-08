@@ -6,7 +6,10 @@ use bastionlab_common::{
 };
 use polars::prelude::*;
 use ring::digest;
+use serde::{Deserialize, Serialize};
 use serde_json;
+use std::fs::{create_dir, read_dir, OpenOptions};
+use std::io::{Error, ErrorKind};
 use std::{future::Future, pin::Pin, time::Instant};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status, Streaming};
@@ -45,7 +48,7 @@ pub struct DelayedDataFrame {
     fetch_status: FetchStatus,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataFrameArtifact {
     dataframe: DataFrame,
     policy: Policy,
@@ -277,8 +280,57 @@ Reason: {}",
         identifier
     }
 
-    fn persist_df(&self, identifier: &str) -> () {
-        let df = 
+    fn persist_df(&self, identifier: &str) -> Result<(), Status> {
+        let error = create_dir("data_frames");
+        match error {
+            Ok(_) => {}
+            Err(err) => {
+                if err.kind() != ErrorKind::AlreadyExists {
+                    return Err(Status::failed_precondition(err.kind().to_string()));
+                }
+            }
+        }
+
+        let path = format!("data_frames/{}.json", identifier);
+        let df_store = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(path)
+            .map_err(|_| Status::not_found("Unable to find or create storage file!"))?;
+
+        let dataframes = self
+            .dataframes
+            .read()
+            .map_err(|_| Status::not_found("Unable to read dataframes!"))?;
+
+        let df_artifact = dataframes
+            .get(identifier)
+            .ok_or("")
+            .map_err(|_| Status::not_found("Unable to find dataframe!"))?;
+
+        serde_json::to_writer(df_store, df_artifact)
+            .map_err(|_| Status::unknown("Could not serialize dataframe artifact!"))?;
+
+        Ok(())
+    }
+
+    pub fn load_dfs(&self) -> Result<(), Error> {
+        let files = read_dir("data_frames")?;
+
+        for file in files {
+            let file = file?;
+            let identifier = file.file_name().to_str().unwrap().replace(".json", "");
+
+            let file = std::fs::OpenOptions::new()
+                .read(true)
+                .open(file.path().to_str().unwrap())?;
+            let reader = std::io::BufReader::new(file);
+            let df: DataFrameArtifact = serde_json::from_reader(reader)?;
+
+            let mut dfs = self.dataframes.write().unwrap();
+            dfs.insert(identifier, df);
+        }
+        Ok(())
     }
 }
 
@@ -427,10 +479,16 @@ impl PolarsService for BastionLabPolars {
     async fn persist_data_frame(
         &self,
         request: Request<ReferenceRequest>,
-    ) -> Result<Response<Empty>> {
+    ) -> Result<Response<Empty>, Status> {
         self.sess_manager.verify_request(&request)?;
-        let identifier = request.get_ref().identifier;
-        self.persist_df(&identifier);
+        let identifier = &request.get_ref().identifier;
+        self.persist_df(identifier)?;
+        telemetry::add_event(
+            TelemetryEventProps::SaveDataframe {
+                dataset_name: Some(identifier.clone()),
+            },
+            Some(self.sess_manager.get_client_info(&request)?),
+        );
+        Ok(Response::new(Empty {}))
     }
-
 }

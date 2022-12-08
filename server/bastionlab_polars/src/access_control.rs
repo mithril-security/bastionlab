@@ -116,7 +116,7 @@ impl UnsafeAction {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum VerificationResult {
     Safe,
     Unsafe {

@@ -402,6 +402,9 @@ class FetchableLazyFrame(RemoteLazyFrame):
     def fetch(self) -> pl.DataFrame:
         return self._meta._client._fetch_df(self._identifier)
 
+    def save(self):
+        return self._meta._client.persist_df(self._identifier)
+
 
 # TODO: implement apply method
 @delegate(

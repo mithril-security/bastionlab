@@ -28,6 +28,9 @@ pub enum TelemetryEventProps {
     GetDataFrameHeader {
         dataset_name: Option<String>,
     },
+    SaveDataframe {
+        dataset_name: Option<String>,
+    },
     // Torch
     SendModel {
         model_name: Option<String>,
@@ -66,6 +69,7 @@ impl TelemetryEventProps {
             TelemetryEventProps::SendDataFrame { .. } => "send_data_frame",
             TelemetryEventProps::ListDataFrame { .. } => "list_data_frame",
             TelemetryEventProps::GetDataFrameHeader { .. } => "get_data_frame_header",
+            TelemetryEventProps::SaveDataframe { .. } => "save_data_frame",
             // torch
             TelemetryEventProps::SendModel { .. } => "send_model",
             TelemetryEventProps::SendDataset { .. } => "send_dataset",

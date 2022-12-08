@@ -113,3 +113,8 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
             )
         )
         return FetchableLazyFrame._from_reference(self, res)
+
+    def persist_df(self, identifier: str):
+        res = GRPCException.map_error(
+            lambda: self.stub.PersistDataFrame(ReferenceRequest(identifier=identifier))
+        )
