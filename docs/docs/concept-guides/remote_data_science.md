@@ -1,8 +1,10 @@
 # Remote Data Science
+___________________________________________________________________________
 
 In this concept guide, we'll explain why current solutions to share data with remote data scientists are not sufficient, how a remote data science framework can answer it, and how BastionLab has implemented it.
 
 ## Why we need it
+___________________________________________________________________________
 
 Data owners often need or wish that remote data scientists would access their datasets - like a hospital might want to valorize their data to external parties, startups, labs, or receive help from external experts, for instance. 
 
@@ -37,6 +39,7 @@ When remotely connecting to a Jupyter notebook
 A remote data science framework comes to solve that problem by ensuring the data scientist can *only* access the dataset and the database through a sanitized interface that allows the data owner to have full control.
 
 ## How it works
+___________________________________________________________________________
 
 A remote data science framework acts as a filter barrier. In the case of BastionLab, only pre-coded operations approved by the data owner can be run on the data. The results shared with the data scientist are also finely controlled. 
 
@@ -61,6 +64,7 @@ Since remote data science faces terrible consequences in case of leaks, it's cri
 -   That the operations executed during a session are always matched against the privacy policy - to make sure that only allowed operations can be used on the data
 
 ## How we do it
+___________________________________________________________________________
 
 In this part, we'll go over the details of how remote data science is implemented in BastionLab. 
 
@@ -88,7 +92,8 @@ To sanitize outputs, we allow a  limited number of operators to be executed by 
 
 For example, we could only allow differentially private outputs to be shared, or not allow raw information to be printed on the data scientist interface.
 
-### Example: RemoteLazyFrame
+### Our Solution: the **RemoteLazyFrame**
+_________________________________________________________________________
 
 The RemoteLazyFrame, a remote privacy-friendly version of a DataFrame, implements all these features:
 

@@ -34,9 +34,15 @@ use access_control::*;
 
 mod utils;
 
+pub enum FetchStatus {
+    Ok,
+    Pending(String),
+    Warning(String),
+}
+
 pub struct DelayedDataFrame {
     future: Pin<Box<dyn Future<Output = Result<DataFrame, Status>> + Send>>,
-    needs_approval: Option<String>,
+    fetch_status: FetchStatus,
 }
 
 #[derive(Debug, Clone)]
@@ -111,7 +117,15 @@ Reason: {}",
                 );
                 DelayedDataFrame {
                     future: Box::pin(async { Ok(df) }),
-                    needs_approval: None,
+                    fetch_status: if let VerificationResult::Unsafe {
+                        action: UnsafeAction::Log,
+                        reason,
+                    } = &artifact.fetchable
+                    {
+                        FetchStatus::Warning(String::from(reason))
+                    } else {
+                        FetchStatus::Ok
+                    },
                 }
             }
             VerificationResult::Unsafe {
@@ -127,7 +141,7 @@ Reason: {}",
                         reason,
                     )))
                     }),
-                    needs_approval: None,
+                    fetch_status: FetchStatus::Ok,
                 }
             }
             VerificationResult::Unsafe {
@@ -139,7 +153,7 @@ Reason: {}",
                 let query_details = artifact.query_details.clone();
                 let dfs = Arc::clone(&self.dataframes);
                 DelayedDataFrame {
-                    needs_approval: Some(reason.clone()),
+                    fetch_status: FetchStatus::Pending(reason.clone()),
                     future: Box::pin(async move {
                         println!(
                             "A user requests unsafe access to one of your DataFrames
@@ -312,6 +326,9 @@ impl PolarsService for BastionLabPolars {
             },
             Some(self.sess_manager.get_client_info(token)?),
         );
+
+        info!("Succesfully ran query on {}", identifier.clone());
+
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
 
@@ -345,6 +362,12 @@ impl PolarsService for BastionLabPolars {
             },
             Some(client_info),
         );
+
+        info!(
+            "Succesfully sent dataframe {} to server",
+            identifier.clone()
+        );
+
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
 

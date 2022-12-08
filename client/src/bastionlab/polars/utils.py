@@ -21,7 +21,7 @@ def create_byte_chunk(data: bytes) -> Tuple[int, Iterator[bytes]]:
 
 
 def serialize_dataframe(
-    df: pl.DataFrame, policy: Policy, blacklist: List[str]
+    df: pl.DataFrame, policy: Policy, sanitized_columns: List[str]
 ) -> Iterator[SendChunk]:
     END_PATTERN = b"[end]"
     df_bytes = bytearray()
@@ -30,7 +30,7 @@ def serialize_dataframe(
 
     first = True
     for data in create_byte_chunk(df_bytes):
-        cols = ",".join([f'"{col}"' for col in blacklist])
+        cols = ",".join([f'"{col}"' for col in sanitized_columns])
         if first:
             first = False
             yield SendChunk(data=data, policy=policy.serialize(), metadata=f"[{cols}]")
