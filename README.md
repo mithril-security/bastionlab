@@ -21,7 +21,7 @@ Where data owners and data scientists can securely collaborate without exposing 
 
 **BastionLab is a simple privacy framework for data science collaboration.** 
 
-It acts like an **access control** solution, for data owners to protect the privacy of their datasets, **and stands as a guard** during data exploration, to enforce that only privacy-friendly operations are allowed on the data and anonymized outputs are shown to the data scientist. 
+It acts like an **access control** solution, for data owners to protect the privacy of their datasets, **and stands as a guard**, to enforce that only privacy-friendly operations are allowed on the data and anonymized outputs are shown to the data scientist. 
 
 - Data owners can let **external or internal data scientists explore and extract values from their datasets, according to a strict privacy policy they'll define in BastionLab**.
 - Data scientists can **remotely run queries on data frames without seeing the original data or intermediary results**.
@@ -76,7 +76,7 @@ with Connection("bastionlab.example.com") as client:
 
 ## 🚨 Disclaimer
 
-BastionLab is still in development. **Do not use it in a production workload.** We are planning to audit it in the future to make sure it enforces security standards in the market. 
+BastionLab is still in development. **Do not use it yet in a production workload.** We will audit our solution in the future to attest that it enforces the security standards of the market. 
 
 ## 📝 License
 
