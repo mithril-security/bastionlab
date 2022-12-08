@@ -1,9 +1,9 @@
 # Benchmarks:
 _________________________________
 
-We don't want to improve data science privacy at the cost of your performance. This is why we have built BastionLab with speed as one of its main goals. For example, we use the Polars, a popular data science library coded in Rust, because it is far more efficient than Pandas, an even more popular one coded in Python. 
+We don't want to improve data science privacy at the cost of your performance. This is why we have built BastionLab with speed as one of its main goals. For example, BastionLab uses Polars, a popular data science library coded in Rust, because it is far more efficient than Pandas, an even more popular one coded in Python. 
 
-To produce the following benchmarks, we compared BastionLab with Polars and Pandas through various scenarios: 
+To produce the following benchmarks, we compared BastionLab with Polars' and Pandas' performance through various scenarios: 
 
 - BastionLab (the standard version)
 - BastionLab run within a Trusted Execution Environement (TEE) (You can [read this guide](docs/docs/concept-guides/confidential_computing.md) to see what TEEs are and why you could need to use BastionLab with one.)
@@ -16,7 +16,13 @@ We used a `join()` operation as our baseline operation.
 
 All of the benchmarks use the same processor: **AMD EPYC 7763v** (with SEV-SNP disabled, except for BastionLab within a TEE which has SEV-SNP enabled).
 
+>The memory benchmarks (memory usage) were tracked differently across Rust applications and Python applications. In Rust we used jemalloc to track memory usage and memory_profiler in Python. 
+>
+>When comparing memory usage benchmarks, we recommend comparing (Python) Polars Python against Pandas and (Rust) BastionLab against Polars Rust.
+
 These benchmarks were performed on Azure virtual machines, the specifications of the machines (cores and memory) can be found in each benchmark table.
+
+
 
 _________________________________________________
 
@@ -24,7 +30,7 @@ _________________________________________________
 
 This benchmark shows that BastionLab can perform a join operation faster than the other compared solutions - Pandas and Polars. 
 
-The mean execution times show that using BastionLab is comparable to using Polars. BastionLab is still a little bit more performant, being 1.14 times faster than Polars Rust and 1.19 times faster than Polars Python. BastionLab is however 7.15 times faster than Pandas!
+The mean execution times indicate that using BastionLab is comparable to using Polars. BastionLab is still a little bit more performant, being 1.14 times faster than Polars Rust and 1.19 times faster than Polars Python. BastionLab is however 7.15 times faster than Pandas!
 
 Using BastionLab within a TEE adds a slight overhead. BastionLab (without a TEE) is 1.39 times faster than BastionLab within a TEE.
 
@@ -58,8 +64,5 @@ Running BastionLab within a TEE still presents a slight overhead, with BastionLa
 
 ![](../../../assets/benchmark_amd_epyc_7763_2.png)
 
-The memory benchmarks (memory usage) were tracked differently across Rust applications and Python applications. In Rust we used jemalloc to track memory usage and memory_profiler in Python. 
-
-When comparing memory usage benchmarks, we recommend comparing (Python) Polars Python against Pandas and (Rust) BastionLab against Polars Rust.
 
 To conclude, the benchmarks above show that BastionLab performs operations faster than available solutions. There is a slight overhead when using BastionLab within a TEE, but even then, it is still as fast as Polars and significantly faster than Pandas.
