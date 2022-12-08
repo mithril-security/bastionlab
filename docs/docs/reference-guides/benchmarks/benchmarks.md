@@ -1,15 +1,8 @@
 # Benchmarks:
 _________________________________
 
-## Introduction:
-_________________________________________________
+We don't want to improve data science privacy at a cost to your performance. This is why BastionLab uses Polars because it's built with Rust and is far more efficient than Pandas. 
 
-A couple of the most popular data science libraries used today are: Pandas and Polars.
-
-BastionLab uses Polars as it’s built with Rust and is far more efficient than Pandas.
-
-BastionLab provides a means to do data-science with privacy and security features.
-It allows a data-owner to share their data with data-scientists without ever exposing the data.
 
 BastionLab has several features that protect the data while still permitting operations to be performed on them.
 Some of these include: authentication of users, access-control, logging, blocking or cancellation of operations if they do not respect the policy set by the data-owner.
@@ -18,7 +11,7 @@ BastionLab also supports execution within trusted execution environments (AMD SE
 
 Even with these privacy and security features, BastionLab is very fast as you’ll see in the benchmarks below.
 
-The benchmarks compare the following products:
+They compare the following products:
 BastionLab, BastionLab within a TEE, Polars Rust (using the Lazy API), Polars Python (which is the same as Polars Rust but has python bindings; also using the Lazy API), and Pandas.
 
 All of the benchmarks use the same processor: AMD EPYC 7763v (with SEV-SNP disabled, except for BastionLab within a TEE which has SEV-SNP enabled).
@@ -27,7 +20,8 @@ _________________________________________________
 
 ### Benchmarking a 10Mx7 JOIN 100x5
 
-As you can see in this benchmark, BastionLab can perform operations faster than the other compared solutions. The mean execution times show that BastionLab is comparable to Polars with BastionLab being 1.14 times faster than Polars Rust, and 1.19 times faster than Polars Python.
+This benchmark shows that BastionLab can perform operations faster than the other compared solutions - Pandas and Polars, two of the most popular data science libraries used today. 
+The mean execution times show that BastionLab is comparable to Polars with BastionLab being 1.14 times faster than Polars Rust, and 1.19 times faster than Polars Python.
 
 BastionLab is 7.15 times faster than Pandas.
 
