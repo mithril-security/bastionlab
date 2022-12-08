@@ -8,17 +8,20 @@ from urllib.error import HTTPError
 from os import path
 from subprocess import Popen
 
+
 class BastionLabServer:
     """Popen object wrapper
     Args:
         Args:
         process (Popen): Process object returned by subprocess.popen
     """
+
     def __init__(self, process):
         self.process = process
 
     def getProcess(self):
         return self.process
+
 
 class NotFoundError(Exception):
     """This exception is raised when there was an error opening an URL.
@@ -77,7 +80,7 @@ def start_server(bastionlab_path: str, libtorch_path: str) -> BastionLabServer:
 
 
 def stop(srv: BastionLabServer) -> bool:
-    """ Stop BastionLab server. 
+    """Stop BastionLab server.
     This method will kill the running server, if the provided BastionLabServer object is valid.
 
     Args:
@@ -85,12 +88,16 @@ def stop(srv: BastionLabServer) -> bool:
 
     Return:
         bool, determines if the process was successful or not.
-    
+
     Raises:
         None
     """
 
-    if srv is not None and srv.getProcess() is not None and srv.getProcess().poll() is None:
+    if (
+        srv is not None
+        and srv.getProcess() is not None
+        and srv.getProcess().poll() is None
+    ):
         print("Stopping BastionLab's server...")
         srv.getProcess().kill()
         return True
@@ -100,7 +107,7 @@ def stop(srv: BastionLabServer) -> bool:
 
 
 def start() -> BastionLabServer:
-    """ Start BastionLab server. 
+    """Start BastionLab server.
     The method will download BastionLab's server binary, then download a specific version of libtorch.
     The server will then run, as a subprocess, allowing to run the rest of your Google Colab/Jupyter Notebook environment.
 
@@ -109,7 +116,7 @@ def start() -> BastionLabServer:
 
     Return:
         BastionLabServer object, the process of the running server.
-    
+
     Raises:
         NotFoundError: Will be raised if one of the URL the wheel will try to access is invalid. This might mean that either there is no available binary of BastionLab's server, or the currently used libtorch version was removed on torch's servers.
         Other exceptions might be raised by zipfile or urllib.request.
