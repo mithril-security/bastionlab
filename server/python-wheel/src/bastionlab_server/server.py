@@ -12,7 +12,6 @@ from subprocess import Popen
 class BastionLabServer:
     """Popen object wrapper
     Args:
-        Args:
         process (Popen): Process object returned by subprocess.popen
     """
 
