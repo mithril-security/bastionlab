@@ -16,6 +16,14 @@ message PredictionRequest{
     bool probability = 3;
 }
 
+message ValidationRequest {
+    string model = 1;
+}
+
+message ValidationResponse {
+    repeated float response = 1;
+}
+
 message TrainingRequest {
     string records = 1;
     string target = 2;
@@ -95,4 +103,5 @@ message TrainingRequest {
 service LinfaService {
     rpc Train(TrainingRequest) returns (ModelResponse) {}
     rpc Predict(PredictionRequest) returns (ReferenceResponse) {}
+    rpc CrossValidate(ValidationRequest) returns (ReferenceResponse) {}
 }

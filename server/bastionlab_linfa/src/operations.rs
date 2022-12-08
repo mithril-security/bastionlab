@@ -2,13 +2,16 @@ use linfa::traits::Predict;
 use ndarray::{Array2, Dim, Ix2, Shape, ShapeBuilder, StrideShape};
 
 use polars::{
+    df,
     error::ErrString,
     prelude::{DataFrame, NamedFrom, PolarsError, PolarsResult},
     series::Series,
 };
+use tonic::Status;
 
 use crate::{
     algorithms::{decision_trees, elastic_net, gaussian_naive_bayes, kmeans, linear_regression},
+    to_status_error,
     trainer::{get_datasets, to_polars_error, Models, PredictionTypes, SupportedModels},
 };
 
@@ -153,7 +156,7 @@ pub fn send_to_trainer(
     target: DataFrame,
     ratio: f32,
     model_type: Models,
-) -> PolarsResult<SupportedModels> {
+) -> PolarsResult<(SupportedModels, (DataFrame, DataFrame))> {
     // We are assuming [`f64`] for all computation since it can represent all other types.
     match model_type {
         Models::GaussianNaiveBayes { var_smoothing } => {
@@ -176,10 +179,16 @@ pub fn send_to_trainer(
 
             let records = to_ndarray!(records_shape, records);
 
-            let (train, valid) = get_datasets(records, target, ratio, cols)?;
-            let (model, _) =
-                to_polars_error(gaussian_naive_bayes(train, valid, var_smoothing.into()))?;
-            Ok(SupportedModels::GaussianNaiveBayes(model))
+            let (train, test) = get_datasets(records, target, ratio, cols)?;
+            let (model, _) = to_polars_error(gaussian_naive_bayes(
+                train,
+                test.clone(),
+                var_smoothing.into(),
+            ))?;
+
+            let rec = vec_f64_to_df(test.records.into_raw_vec(), "test_recs")?;
+            let tar = vec_u64_to_df(test.targets.into_raw_vec(), "test_target")?;
+            Ok((SupportedModels::GaussianNaiveBayes(model), (rec, tar)))
         }
         Models::ElasticNet {
             penalty,
@@ -202,17 +211,19 @@ pub fn send_to_trainer(
             let target = to_polars_error(target.clone().into_shape([target.clone().len()]))?;
 
             let records = to_ndarray!(records_shape, records);
-            let (train, valid) = get_datasets(records, target, ratio, cols)?;
+            let (train, test) = get_datasets(records, target, ratio, cols)?;
             let model = to_polars_error(elastic_net(
                 train,
-                valid,
+                test.clone(),
                 penalty.into(),
                 l1_ratio.into(),
                 with_intercept,
                 max_iterations,
                 tolerance.into(),
             ))?;
-            Ok(SupportedModels::ElasticNet(model))
+            let rec = vec_f64_to_df(test.records.clone().into_raw_vec(), "test_recs")?;
+            let tar = vec_f64_to_df(test.targets.clone().into_raw_vec(), "test_target")?;
+            Ok((SupportedModels::ElasticNet(model), (rec, tar)))
         }
         Models::KMeans {
             n_runs,
@@ -235,17 +246,20 @@ pub fn send_to_trainer(
             let target = to_polars_error(target.clone().into_shape([target.clone().len()]))?;
 
             let records = to_ndarray!(records_shape, records);
-            let (train, valid) = get_datasets(records, target, ratio, cols)?;
+            let (train, test) = get_datasets(records, target, ratio, cols)?;
             let model = to_polars_error(kmeans(
                 train,
-                valid,
+                test.clone(),
                 n_runs.into(),
                 n_clusters.into(),
                 tolerance,
                 max_n_iterations,
                 init_method,
             ))?;
-            Ok(SupportedModels::KMeans(model))
+
+            let rec = vec_f64_to_df(test.records.into_raw_vec(), "test_recs")?;
+            let tar = vec_f64_to_df(test.targets.into_raw_vec(), "test_target")?;
+            Ok((SupportedModels::KMeans(model), (rec, tar)))
         }
         Models::LinearRegression { fit_intercept } => {
             let Trainer {
@@ -261,10 +275,12 @@ pub fn send_to_trainer(
             let target = to_polars_error(target.clone().into_shape([target.clone().len()]))?;
 
             let records = to_ndarray!(records_shape, records);
-            let (dataset, _) = get_datasets(records, target, ratio, cols)?;
+            let (dataset, test) = get_datasets(records, target, ratio, cols)?;
             let model = to_polars_error(linear_regression(dataset, fit_intercept))?;
 
-            Ok(SupportedModels::LinearRegression(model))
+            let rec = vec_f64_to_df(test.records.into_raw_vec(), "test_recs")?;
+            let tar = vec_f64_to_df(test.targets.into_raw_vec(), "test_target")?;
+            Ok((SupportedModels::LinearRegression(model), (rec, tar)))
         }
 
         Models::LogisticRegression {
@@ -287,7 +303,7 @@ pub fn send_to_trainer(
             let target = to_polars_error(target.clone().into_shape([target.clone().len()]))?;
 
             let records = to_ndarray!(records_shape, records);
-            let (dataset, _) = get_datasets(records, target, ratio, cols)?;
+            let (dataset, test) = get_datasets(records, target, ratio, cols)?;
 
             let model = to_polars_error(logistic_regression(
                 dataset,
@@ -298,7 +314,9 @@ pub fn send_to_trainer(
                 initial_params,
             ))?;
 
-            Ok(SupportedModels::LogisticRegression(model))
+            let rec = vec_f64_to_df(test.records.into_raw_vec(), "test_recs")?;
+            let tar = vec_u64_to_df(test.targets.into_raw_vec(), "test_target")?;
+            Ok((SupportedModels::LogisticRegression(model), (rec, tar)))
         }
 
         Models::DecisionTree {
@@ -321,10 +339,12 @@ pub fn send_to_trainer(
             let target = to_polars_error(target.clone().into_shape([target.clone().len()]))?;
 
             let records = to_ndarray!(records_shape, records);
-            let (dataset, _) = get_datasets(records, target, ratio, cols)?;
+            let (train, test) = get_datasets(records, target, ratio, cols)?;
+
+            // TODO: Save Test set with the model id.
 
             let model = to_polars_error(decision_trees(
-                dataset,
+                train,
                 split_quality,
                 max_depth,
                 min_weight_split,
@@ -332,7 +352,9 @@ pub fn send_to_trainer(
                 min_impurity_decrease,
             ))?;
 
-            Ok(SupportedModels::DecisionTree(model))
+            let rec = vec_f64_to_df(test.records.into_raw_vec(), "test_recs")?;
+            let tar = vec_u64_to_df(test.targets.into_raw_vec(), "test_target")?;
+            Ok((SupportedModels::DecisionTree(model), (rec, tar)))
         }
     }
 }
@@ -384,4 +406,21 @@ pub fn predict(
     };
 
     Ok(prediction)
+}
+
+pub fn inner_cross_validate(
+    model: &SupportedModels,
+    test_set: (DataFrame, DataFrame),
+) -> Result<DataFrame, Status> {
+    let result = match model {
+        SupportedModels::LinearRegression(m) => (),
+        SupportedModels::LogisticRegression(m) => (),
+        SupportedModels::ElasticNet(m) => (),
+        SupportedModels::DecisionTree(m) => (),
+        SupportedModels::KMeans(m) => (),
+        SupportedModels::GaussianNaiveBayes(m) => (),
+    };
+
+    let df = to_status_error(df!("scores" => &[0]));
+    df
 }

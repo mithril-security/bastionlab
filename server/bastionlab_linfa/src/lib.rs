@@ -5,7 +5,7 @@ use std::{
 
 use linfa_proto::{
     linfa_service_server::LinfaService, training_request::Trainer, ModelResponse,
-    PredictionRequest, ReferenceResponse, TrainingRequest,
+    PredictionRequest, ReferenceResponse, TrainingRequest, ValidationRequest,
 };
 pub mod linfa_proto {
     tonic::include_proto!("bastionlab_linfa");
@@ -39,6 +39,7 @@ pub fn to_status_error<T, E: Error>(input: Result<T, E>) -> Result<T, Status> {
 pub struct BastionLabLinfa {
     bastionlab_polars: Arc<BastionLabPolars>, // Fix by replacing with RdLock
     models: Arc<RwLock<HashMap<String, SupportedModels>>>,
+    test_sets: Arc<RwLock<HashMap<String, (DataFrame, DataFrame)>>>,
     sess_manager: Arc<SessionManager>,
 }
 
@@ -48,6 +49,7 @@ impl BastionLabLinfa {
             models: Arc::new(RwLock::new(HashMap::new())),
             sess_manager,
             bastionlab_polars: Arc::new(bl_polars),
+            test_sets: Arc::new(RwLock::new(HashMap::new())),
         }
     }
     fn get_df(&self, identifier: &str) -> Result<DataFrame, Status> {
@@ -67,10 +69,29 @@ impl BastionLabLinfa {
         models.insert(identifier.clone(), model);
         identifier
     }
+
     fn get_model(&self, identifier: &str) -> Result<SupportedModels, Status> {
         let models = self.models.read().unwrap();
-        let model = models.get(identifier).unwrap();
+        let model = models
+            .get(identifier)
+            .ok_or(Status::not_found("Model not found!"))?;
         Ok(model.clone())
+    }
+
+    fn insert_test_set(&self, model_id: &str, test_set: (DataFrame, DataFrame)) -> String {
+        let mut test_sets = self.test_sets.write().unwrap();
+        let id = model_id.to_string();
+        test_sets.insert(id.clone(), test_set);
+        id
+    }
+
+    fn get_test_set(&self, model_id: &str) -> Result<(DataFrame, DataFrame), Status> {
+        let test_sets = self.test_sets.read().unwrap();
+
+        let test_set = test_sets
+            .get(model_id)
+            .ok_or(Status::not_found("Test set not found!"))?;
+        Ok(test_set.clone())
     }
 }
 
@@ -92,13 +113,14 @@ impl LinfaService for BastionLabLinfa {
 
         let trainer = trainer.ok_or(Status::aborted("Invalid Trainer!"))?;
         let trainer = select_trainer(trainer)?;
-        let model = to_status_error(send_to_trainer(
+        let (model, (records, target)) = to_status_error(send_to_trainer(
             records.clone(),
             target.clone(),
             ratio,
             trainer,
         ))?;
         let identifier = self.insert_model(model);
+        self.insert_test_set(&identifier, (records.clone(), target.clone()));
         Ok(Response::new(ModelResponse { identifier }))
     }
 
@@ -128,6 +150,25 @@ impl LinfaService for BastionLabLinfa {
                 vec![String::default()],
             )
             .with_fetchable(VerificationResult::Safe),
+        );
+        let header = self.get_header(&identifier)?;
+        Ok(Response::new(ReferenceResponse { identifier, header }))
+    }
+
+    async fn cross_validate(
+        &self,
+        request: Request<ValidationRequest>,
+    ) -> Result<Response<ReferenceResponse>, Status> {
+        let model = request.into_inner().model;
+
+        let test_set = self.get_test_set(&model)?;
+        let model = self.get_model(&model)?;
+
+        let df = inner_cross_validate(&model, test_set)?;
+
+        let identifier = self.insert_df(
+            DataFrameArtifact::new(df, Policy::allow_by_default(), vec![String::default()])
+                .with_fetchable(VerificationResult::Safe),
         );
         let header = self.get_header(&identifier)?;
         Ok(Response::new(ReferenceResponse { identifier, header }))

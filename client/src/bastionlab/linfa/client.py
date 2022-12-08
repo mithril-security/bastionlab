@@ -1,6 +1,11 @@
 import grpc
+import polars as pl
 from ..pb.bastionlab_linfa_pb2_grpc import LinfaServiceStub
-from ..pb.bastionlab_linfa_pb2 import TrainingRequest, PredictionRequest
+from ..pb.bastionlab_linfa_pb2 import (
+    TrainingRequest,
+    PredictionRequest,
+    ValidationRequest,
+)
 from typing import TYPE_CHECKING, List
 
 
@@ -38,13 +43,13 @@ class BastionLabLinfa:
         )
         return FittedModel._from_reference(res, trainer)
 
-    def predict(self, model: "FittedModel", data: List[float]) -> "FetchableLazyFrame":
+    def predict(self, model: "FittedModel", data: List[float]) -> pl.DataFrame:
         from ..polars import FetchableLazyFrame
 
         res = self.stub.Predict(
             PredictionRequest(model=model.identifier, data=data, probability=False)
         )
-        return FetchableLazyFrame._from_reference(self.polars, res)
+        return FetchableLazyFrame._from_reference(self.polars, res).fetch()
 
     def predict_proba(
         self, model: "FittedModel", data: List[float]
@@ -54,4 +59,13 @@ class BastionLabLinfa:
         res = self.stub.Predict(
             PredictionRequest(model=model.identifier, data=data, probability=True)
         )
-        return FetchableLazyFrame._from_reference(self.polars, res)
+        return FetchableLazyFrame._from_reference(self.polars, res).fetch()
+
+    def cross_validate(
+        self,
+        model: "FittedModel",
+    ) -> pl.DataFrame:
+        from ..polars import FetchableLazyFrame
+
+        res = self.stub.CrossValidate(ValidationRequest(model=model.identifier))
+        return FetchableLazyFrame._from_reference(self.polars, res).fetch()
