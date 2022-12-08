@@ -13,7 +13,7 @@ All of the benchmarks use the same processor: **AMD EPYC 7763v** (with SEV-SNP d
 
 ***#WHY the join operation as a baseline? and also why 10Mx7 Join 100x5 and 100Mx7 Join 100x5?*** We used a `join()` operation as our baseline operation. 
 
-The memory benchmarks (memory usage) were tracked differently across Rust applications and Python applications. In Rust we used jemalloc to track memory usage and memory_profiler in Python.  When comparing memory usage benchmarks, we recommend comparing (Python) Polars Python against Pandas and (Rust) BastionLab against Polars Rust.
+The memory benchmarks (memory usage) were tracked differently across Rust applications and Python applications. In Rust we used **jemalloc** to track memory usage and **memory_profiler** in Python.  When comparing memory usage benchmarks, we recommend comparing Python (Polars Python against Pandas) and Rust (BastionLab against Polars Rust).
 
 These benchmarks were performed on Azure virtual machines, the specifications of the machines (cores and memory) can be found in each benchmark table.
 
