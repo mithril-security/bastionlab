@@ -337,7 +337,7 @@ class RemoteLazyFrame:
             by (Union[str, Sequence[str], None] = None): Join on these columns before doing asof join
             strategy (pl.internals.type_aliases.AsofJoinStrategy = "backward"): Join strategy: {'backward', 'forward'}.
             suffix (str  = "_right"): Suffix to append to columns with a duplicate name.
-            tolerance (Union[str, int, float, None] = None): Numeric tolerance. By setting this the join will only be done if the near keys are within this distance. 
+            tolerance (Union[str, int, float, None] = None): Numeric tolerance. By setting this the join will only be done if the near keys are within this distance.
             suffix (str): Suffix to append to columns with a duplicate name.
             allow_parallel (bool = True): Boolean value for allowing the physical plan to evaluate the computation of both RemoteLazyFrames up to the join in parallel.
             force_parallel (bool = False): Boolean value for forcing parallel the physical plan to evaluate the computation of both RemoteLazyFrames up to the join in parallel.
