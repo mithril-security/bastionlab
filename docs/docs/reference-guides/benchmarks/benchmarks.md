@@ -3,26 +3,19 @@ _________________________________
 
 We don't want to improve data science privacy at the cost of your performance. This is why we have built BastionLab with speed as one of its main goals. For example, BastionLab uses Polars, a popular data science library coded in Rust, because it is far more efficient than Pandas, an even more popular one coded in Python. 
 
-To produce the following benchmarks, we compared BastionLab with Polars' and Pandas' performance through various scenarios: 
+To produce the following benchmarks, we compared BastionLab's performance with Polars' and Pandas' in various scenarios: 
 
 - BastionLab (the standard version)
-- BastionLab run within a Trusted Execution Environement (TEE) (You can [read this guide](docs/docs/concept-guides/confidential_computing.md) to see what TEEs are and why you could need to use BastionLab with one.)
+- BastionLab run within a Trusted Execution Environement (TEE) *(You can [read this guide](docs/docs/concept-guides/confidential_computing.md) to see what TEEs are and why you could need to use BastionLab with one.)*
 - Polars Rust (using the Lazy API which consumes less ressources) 
 - Polars Python (which is the same as Polars Rust but has python bindings; also using the Lazy API)
 - Pandas (the standard version)
 
-We used a `join()` operation as our baseline operation. 
-***#WHY? and also why 10Mx7 Join 100x5 and 100Mx7 Join 100x5?***
+We used a `join()` operation as our baseline operation. ***#WHY? and also why 10Mx7 Join 100x5 and 100Mx7 Join 100x5?*** All of the benchmarks use the same processor: **AMD EPYC 7763v** (with SEV-SNP disabled, except for BastionLab within a TEE which has SEV-SNP enabled).
 
-All of the benchmarks use the same processor: **AMD EPYC 7763v** (with SEV-SNP disabled, except for BastionLab within a TEE which has SEV-SNP enabled).
-
->The memory benchmarks (memory usage) were tracked differently across Rust applications and Python applications. In Rust we used jemalloc to track memory usage and memory_profiler in Python. 
->
->When comparing memory usage benchmarks, we recommend comparing (Python) Polars Python against Pandas and (Rust) BastionLab against Polars Rust.
+The memory benchmarks (memory usage) were tracked differently across Rust applications and Python applications. In Rust we used jemalloc to track memory usage and memory_profiler in Python.  When comparing memory usage benchmarks, we recommend comparing (Python) Polars Python against Pandas and (Rust) BastionLab against Polars Rust.
 
 These benchmarks were performed on Azure virtual machines, the specifications of the machines (cores and memory) can be found in each benchmark table.
-
-
 
 _________________________________________________
 
