@@ -37,7 +37,7 @@ When they wanted to put their assets to good use, data owners had to open unrest
 That is why we built BastionLab with the aim to ensure privacy while fitting easily in the whole data science workflow of both data owners and data scientists. 
 
 ## 🚀 Quick Tour
-You can go try out our [Quick Tour](https://github.com/mithril-security/bastionlab/tree/master/docs/docs/quick-tour) to discover BastionLab with a hands-on example using the famous Titanic dataset. 
+You can go try out our [Quick Tour](https://github.com/mithril-security/bastionlab/tree/master/docs/docs/quick-tour) in the documentation to discover BastionLab with a hands-on example using the famous Titanic dataset. 
 
 But here’s a taste of what using BastionLab could look like 🍒
 
@@ -82,4 +82,6 @@ BastionLab is still in development. **Do not use it in a production workload.** 
 
 BastionLab is licensed under the Apache License, Version 2.0.
 
-*Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. [See the License](http://www.apache.org/licenses/LICENSE-2.0) for the specific language governing permissions and limitations under the License.*
+*Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.* 
+
+*[See the License](http://www.apache.org/licenses/LICENSE-2.0) for the specific language governing permissions and limitations under the License.*
