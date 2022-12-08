@@ -8,6 +8,17 @@ from urllib.error import HTTPError
 from os import path
 from subprocess import Popen
 
+class BastionLabServer:
+    """Popen object wrapper
+    Args:
+        Args:
+        process (Popen): Process object returned by subprocess.popen
+    """
+    def __init__(self, process):
+        self.process = process
+
+    def getProcess(self):
+        return self.process
 
 class NotFoundError(Exception):
     """This exception is raised when there was an error opening an URL.
@@ -48,28 +59,29 @@ def tls_certificates():
         os.system(
             "mkdir -p bin/tls && openssl req -newkey rsa:2048 -nodes -keyout bin/tls/host_server.key -x509 -days 365 -out bin/tls/host_server.pem -subj "
             "/C=FR/CN=bastionlab-server"
-            ""
+            " >/dev/null 2>&1"
         )
     else:
         print("TLS certificates already generated")
 
 
-def start_server(bastionlab_path: str, libtorch_path: str) -> Popen:
+def start_server(bastionlab_path: str, libtorch_path: str) -> BastionLabServer:
     os.chmod(bastionlab_path, 0o755)
     os.chdir(os.getcwd() + "/bin")
     os.environ["LD_LIBRARY_PATH"] = libtorch_path + "/lib"
     process = subprocess.Popen([bastionlab_path], env=os.environ)
     os.chdir("..")
     print("Bastionlab server is now running on port 50056")
-    return process
+    srv = BastionLabServer(process)
+    return srv
 
 
-def stop(process: Popen) -> bool:
+def stop(srv: BastionLabServer) -> bool:
     """ Stop BastionLab server. 
-    This method will kill the running server, if the provided Popen object is valid.
+    This method will kill the running server, if the provided BastionLabServer object is valid.
 
     Args:
-        process (Popen): The running process of the server.
+        srv (BastionLabServer): The running process of the server.
 
     Return:
         bool, determines if the process was successful or not.
@@ -77,15 +89,17 @@ def stop(process: Popen) -> bool:
     Raises:
         None
     """
-    if process is not None and process.poll() is None:
+
+    if srv is not None and srv.getProcess() is not None and srv.getProcess().poll() is None:
         print("Stopping BastionLab's server...")
-        process.kill()
+        srv.getProcess().kill()
         return True
     else:
+        print("BastionLab's server already stopped")
         return False
 
 
-def start() -> Popen:
+def start() -> BastionLabServer:
     """ Start BastionLab server. 
     The method will download BastionLab's server binary, then download a specific version of libtorch.
     The server will then run, as a subprocess, allowing to run the rest of your Google Colab/Jupyter Notebook environment.
@@ -94,7 +108,7 @@ def start() -> Popen:
         None
 
     Return:
-        Popen object, the process of the running server.
+        BastionLabServer object, the process of the running server.
     
     Raises:
         NotFoundError: Will be raised if one of the URL the wheel will try to access is invalid. This might mean that either there is no available binary of BastionLab's server, or the currently used libtorch version was removed on torch's servers.
