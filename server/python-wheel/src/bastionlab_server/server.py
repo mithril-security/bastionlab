@@ -48,7 +48,7 @@ def tls_certificates():
         os.system(
             "mkdir -p bin/tls && openssl req -newkey rsa:2048 -nodes -keyout bin/tls/host_server.key -x509 -days 365 -out bin/tls/host_server.pem -subj "
             "/C=FR/CN=bastionlab-server"
-            ">/dev/null"
+            ""
         )
     else:
         print("TLS certificates already generated")
@@ -77,8 +77,9 @@ def stop(process: Popen) -> bool:
     Raises:
         None
     """
-    if process is not None and process.poll() is not None:
-        process.terminate()
+    if process is not None and process.poll() is None:
+        print("Stopping BastionLab's server...")
+        process.kill()
         return True
     else:
         return False
