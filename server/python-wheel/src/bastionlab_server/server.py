@@ -44,11 +44,14 @@ def handle_download(path_str: str, url: str, name: str, error_msg: str):
 
 def tls_certificates():
     if path.exists("./bin/tls") is False:
+        print("Generating TLS certificates...")
         os.system(
             "mkdir -p bin/tls && openssl req -newkey rsa:2048 -nodes -keyout bin/tls/host_server.key -x509 -days 365 -out bin/tls/host_server.pem -subj "
             "/C=FR/CN=bastionlab-server"
-            ""
+            ">/dev/null"
         )
+    else:
+        print("TLS certificates already generated")
 
 
 def start_server(bastionlab_path: str, libtorch_path: str) -> Popen:
@@ -57,10 +60,23 @@ def start_server(bastionlab_path: str, libtorch_path: str) -> Popen:
     os.environ["LD_LIBRARY_PATH"] = libtorch_path + "/lib"
     process = subprocess.Popen([bastionlab_path], env=os.environ)
     os.chdir("..")
+    print("Bastionlab server is now running on port 50056")
     return process
 
 
 def stop(process: Popen) -> bool:
+    """ Stop BastionLab server. 
+    This method will kill the running server, if the provided Popen object is valid.
+
+    Args:
+        process (Popen): The running process of the server.
+
+    Return:
+        bool, determines if the process was successful or not.
+    
+    Raises:
+        None
+    """
     if process is not None and process.poll() is not None:
         process.terminate()
         return True
@@ -69,6 +85,20 @@ def stop(process: Popen) -> bool:
 
 
 def start() -> Popen:
+    """ Start BastionLab server. 
+    The method will download BastionLab's server binary, then download a specific version of libtorch.
+    The server will then run, as a subprocess, allowing to run the rest of your Google Colab/Jupyter Notebook environment.
+
+    Args:
+        None
+
+    Return:
+        Popen object, the process of the running server.
+    
+    Raises:
+        NotFoundError: Will be raised if one of the URL the wheel will try to access is invalid. This might mean that either there is no available binary of BastionLab's server, or the currently used libtorch version was removed on torch's servers.
+        Other exceptions might be raised by zipfile or urllib.request.
+    """
     libtorch_path = os.getcwd() + "/libtorch"
     bastionlab_path = os.getcwd() + "/bin/bastionlab"
     bastion_url = "https://github.com/mithril-security/bastionlab/releases/download/v{}/bastionlab-{}-linux.zip".format(
