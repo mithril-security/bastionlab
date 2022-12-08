@@ -4,12 +4,15 @@ from setuptools.command.build_py import build_py
 import pkg_resources
 import re
 
+
 def read(path):
     return open(os.path.join(os.path.dirname(__file__), path)).read()
+
 
 DIR = os.path.dirname(__file__) or os.getcwd()
 LONG_DESCRIPTION = read("README.md")
 PKG_NAME = "bastionlab_server"
+
 
 def find_version():
     version_file = read(f"src/{PKG_NAME}/version.py")
@@ -21,6 +24,7 @@ def find_version():
 class BuildPackage(build_py):
     def run(self):
         super(BuildPackage, self).run()
+
 
 setup(
     name=PKG_NAME,
