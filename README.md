@@ -30,13 +30,12 @@ It acts like an **access control** solution, for data owners to protect the priv
 
 ## 👌 Built to be easy and safe to use
 
-Collaborating remotely and safely when it came to data science wasn’t possible until now for highly regulated fields like health, finance, or advertising. 
-
-When they wanted to put their assets to good use, data owners had to open unrestricted access to their dataset, often through a Jupyter notebook. This was dangerous because too many operations were allowed and the data scientist had numerous ways to extract information from the remote infrastructure (print the whole database, save the dataset in the weights, etc). 
+Collaborating remotely and safely when it came to data science wasn’t possible until now for highly regulated fields like health, finance, or advertising. When they wanted to put their assets to good use, data owners had to open unrestricted access to their dataset, often through a Jupyter notebook. This was dangerous because too many operations were allowed and the data scientist had numerous ways to extract information from the remote infrastructure (print the whole database, save the dataset in the weights, etc). 
 
 That is why we built BastionLab with the aim to ensure privacy while fitting easily in the whole data science workflow of both data owners and data scientists.
 
 ## 🚀 Quick Tour
+
 You can go try out our [Quick Tour](https://github.com/mithril-security/bastionlab/tree/master/docs/docs/quick-tour) in the documentation to discover BastionLab with a hands-on example using the famous Titanic dataset. 
 
 But here’s a taste of what using BastionLab could look like 🍒
