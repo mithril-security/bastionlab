@@ -37,6 +37,12 @@ CLIENT_INFO = ClientInfo(
 class Client:
     """
     A BastionLab client class that provides access to the BastionLab machine learning platform.
+
+    Attributes:
+        __bastionlab_torch (BastionLabTorch): The BastionLabTorch object for accessing the torch functionality.
+        __bastionlab_polars (BastionLabPolars): The BastionLabPolars object for accessing the polars functionality.
+        __channel (grpc.Channel): The underlying gRPC channel used to communicate with the server.
+        __token (bytes): The authentication token used to connect to the server.
     """
 
     __bastionlab_torch: "BastionLabTorch" = None
@@ -99,6 +105,23 @@ class AuthPlugin(grpc.AuthMetadataPlugin):
 
 @dataclass
 class Connection:
+    """
+    This class represents a connection to a remote server. It holds the necessary
+    information to establish and manage the connection, such as the hostname, port,
+    identity (signing key), and token (if applicable).
+
+    Attributes:
+        host (str): The hostname or IP address of the remote server.
+        port (int, optional): The port to use for the connection. Defaults to 50056.
+        identity (SigningKey, optional): The signing key to use for authentication.
+            If not provided, the connection will not be authenticated.
+        channel (Any): The underlying channel object used to send and receive messages.
+        token (bytes, optional): The authentication token to use for the connection.
+            If not provided, the connection will not be authenticated.
+        _client (Client, optional): The gRPC client object used to send messages.
+        server_name (str, optional): The name of the remote server. Defaults to "bastionlab-server".
+    """
+
     host: str
     port: Optional[int] = 50056
     identity: Optional[SigningKey] = None

@@ -5,6 +5,17 @@ from cryptography.hazmat.primitives.asymmetric import ec, types
 
 
 class PublicKey:
+    """
+    A class for representing a public key. This class provides methods for
+    encrypting and verifying messages, as well as converting the key to and from
+    various formats (e.g. bytes, PEM).
+
+    Attributes:
+        __key (types.PUBLIC_KEY_TYPES): The underlying key type, represented using
+            the `types.PUBLIC_KEY_TYPES` type.
+        __hash (bytes): The hash of the key, used for identifying the key.
+    """
+
     __key: types.PUBLIC_KEY_TYPES
     __hash: bytes
 
@@ -145,6 +156,16 @@ class PublicKey:
 
 
 class SigningKey:
+    """
+    A class for representing a signing key. This class is used for creating digital
+    signatures and verifying them. It contains both the private key (used for signing)
+    and the corresponding public key (used for verification).
+
+    Attributes:
+        __key (types.PRIVATE_KEY_TYPES): The private key type, represented using the
+            `types.PRIVATE_KEY_TYPES` type.
+        __pubkey (PublicKey): The corresponding public key, used for verifying signatures."""
+
     __key: types.PRIVATE_KEY_TYPES
     __pubkey: PublicKey
 
