@@ -1,5 +1,5 @@
 <header>
-    <a class="homelink" rel="home" title="bastionai Home" href="https://mithrilsecurity.io">
-        <img style="max-width: 225px; max-height: 150px" src="/assets/logo.png" alt=""> BastionAI
+    <a class="homelink" rel="home" title="BastionLab Home" href="https://bastionlab.readthedocs.io/en/latest/">
+        <img style="max-width: 150px; max-height: 150px" src="/assets/logo.png" alt=""> BastionLab
     </a>
 </header>
