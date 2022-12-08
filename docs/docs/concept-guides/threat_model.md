@@ -1,7 +1,7 @@
-# Threat Model
+# Security
 __________________________________________________________________________
 
-In this scenario:
+We'll address in this security guide the following threat model scenario:
 
 - **The data owner owns the infrastructure**, meaning the dataset does not leave its premises and the owner provides the computing and opens access to a remote data scientist to work on it. 
 
