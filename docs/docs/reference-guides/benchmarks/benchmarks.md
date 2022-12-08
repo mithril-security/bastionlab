@@ -11,7 +11,7 @@ To produce the following benchmarks, we compared BastionLab's performance with P
 
 All of the benchmarks use the same processor: **AMD EPYC 7763v** (with SEV-SNP disabled, except for BastionLab within a TEE which has SEV-SNP enabled).
 
-***#WHY the join operation as a baseline? and also why 10Mx7 Join 100x5 and 100Mx7 Join 100x5?*** We used a `join()` operation as our baseline operation. 
+We used a `join()` operation as our baseline operation. 
 
 The memory benchmarks (memory usage) were tracked differently across Rust applications and Python applications. In Rust we used **jemalloc** to track memory usage and **memory_profiler** in Python.  When comparing memory usage benchmarks, we recommend comparing Python (Polars Python against Pandas) and Rust (BastionLab against Polars Rust).
 
