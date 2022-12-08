@@ -15,6 +15,12 @@ class GRPCException(Exception):
 
     @property
     def code(self) -> grpc.StatusCode:
+        """
+        Get the status code of the gRPC error.
+
+        Returns:
+            The status code of the gRPC error.
+        """
         return self.err._state.code
 
     def __str__(self):
@@ -41,6 +47,18 @@ class GRPCException(Exception):
 
     @staticmethod
     def map_error(f: Callable[[], T]) -> T:
+        """
+        Map gRPC errors to `GRPCException` exceptions.
+
+        Args:
+            f: The function to call and map errors from.
+
+        Returns:
+            The result of calling `f`, if no errors were raised.
+
+        Raises:
+            GRPCException: if `f` raised a gRPC error.
+        """
         try:
             return f()
         except _InactiveRpcError as e:
