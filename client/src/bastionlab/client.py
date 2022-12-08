@@ -35,6 +35,10 @@ CLIENT_INFO = ClientInfo(
 
 
 class Client:
+    """
+    A BastionLab client class that provides access to the BastionLab machine learning platform.
+    """
+
     __bastionlab_torch: "BastionLabTorch" = None
     __bastionlab_polars: "BastionLabPolars" = None
     __channel: grpc.Channel
@@ -44,10 +48,19 @@ class Client:
         self,
         channel: grpc.Channel,
     ):
+        """
+        Initializes the client with a gRPC channel to the BastionLab server.
+
+        Args:
+            channel (grpc.Channel): A gRPC channel to the BastionLab server.
+        """
         self.__channel = channel
 
     @property
     def torch(self):
+        """
+        Returns the BastionLabTorch instance used by this client.
+        """
         if self.__bastionlab_torch is None:
             from bastionlab.torch import BastionLabTorch
 
@@ -56,6 +69,9 @@ class Client:
 
     @property
     def polars(self):
+        """
+        Returns the BastionLabPolars instance used by this client.
+        """
         if self.__bastionlab_polars is None:
             from bastionlab.polars import BastionLabPolars
 
@@ -64,7 +80,17 @@ class Client:
 
 
 class AuthPlugin(grpc.AuthMetadataPlugin):
+    """
+    A gRPC authentication metadata plugin that uses an access token for authentication.
+    """
+
     def __init__(self, token):
+        """
+        Initializes the plugin with the given access token
+
+        Args:
+            token : The access token to use for authentication.
+        """
         self._token = token
 
     def __call__(self, _, callback):
@@ -119,21 +145,40 @@ class Connection:
 
     @property
     def client(self) -> Client:
+        """
+        Returns a `Client` instance that provides access to the BastionLab machine learning platform.
+        """
         if self._client is not None:
             return self._client
         else:
             return self.__enter__()
 
     def close(self):
+        """Closes the connection to the server.
+
+        This method is equivalent to calling `__exit__` directly, but provides a more intuitive and readable way to close the connection.
+        """
         if self._client is not None:
             self.__exit__(None, None, None)
 
     def _heart_beat(self, stub):
+        """Sends periodic "heartbeat" messages to the server to keep the connection alive.
+
+        Args:
+            stub: The `SessionServiceStub` object to use to send the heartbeat messages.
+        """
         while self._client is not None:
             stub.RefreshSession(Empty(), metadata=(("accesstoken-bin", self.token),))
             sleep(HEART_BEAT_TICK)
 
     def __enter__(self) -> Client:
+        """Establishes a secure channel to the server and returns a `Client` object that can be used to interact with the server.
+
+        This method is called automatically when the `Connection` object is used in a `with` statement.
+
+        Returns:
+            A `Client` object that can be used to interact with the server.
+        """
         server_target = f"{self.host}:{self.port}"
         server_cert = ssl.get_server_certificate((self.host, self.port))
         server_creds = grpc.ssl_channel_credentials(
@@ -177,5 +222,9 @@ class Connection:
         return self._client
 
     def __exit__(self, exc_type: Any, exc_value: Any, exc_traceback: Any) -> None:
+        """Closes the connection to the server and cleans up any resources being used by the `Client` object.
+
+        This method is called automatically when the `with` statement is exited.
+        """
         self._client = None
         self.channel.close()
