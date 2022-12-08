@@ -7,7 +7,7 @@ We don't want to improve data science privacy at the cost of your performance. T
 
 To produce the following benchmarks, we compared BastionLab's performance with Polars' and Pandas' in various scenarios: **BastionLab** (the standard version), **BastionLab run within a Trusted Execution Environement** (TEE), **Polars Rust** (using the Lazy API which consumes less ressources), **Polars Python** (which is the same as Polars Rust but has python bindings; also using the Lazy API), and **Pandas** (the standard version).
 
->*(You can [read this guide](docs/docs/concept-guides/confidential_computing.md) to see what TEEs are and why you could need to use BastionLab with one.)*
+>*(You can read this guide to see what TEEs are and why you could need to use BastionLab with one.)*
 
 All of the benchmarks use the same processor: **AMD EPYC 7763v** (with SEV-SNP disabled, except for BastionLab within a TEE which has SEV-SNP enabled).
 

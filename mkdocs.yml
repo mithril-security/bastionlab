@@ -64,4 +64,4 @@ nav:
 - Security: 'docs/concept-guides/threat_model.md'
 - Advanced:
   - Benchmarks:
-    - Polars : 'docs/reference-guides/benchmarks/polars.md'
+    - Polars : 'docs/reference-guides/benchmarks/benchmarks.md'
