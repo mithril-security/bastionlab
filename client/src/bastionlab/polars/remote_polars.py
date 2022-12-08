@@ -102,6 +102,14 @@ class StackPlanSegment(CompositePlanSegment):
 
 @dataclass
 class Metadata:
+    """
+    A class containing metadata related to your dataframe
+
+    Attributes:
+        _client (BastionLabPolars): a reference to the current client connection
+        _prev_segments (List[CompositePlanSegment]): all the dataframe's history of previous composite plan segments
+    """
+
     _client: BastionLabPolars
     _prev_segments: List[CompositePlanSegment] = field(default_factory=list)
 
@@ -183,6 +191,28 @@ class Metadata:
 )
 @dataclass
 class RemoteLazyFrame:
+    """
+    A class to represent a RemoteLazyFrame.
+
+    Attributes:
+        _inner (pl.LazyFrame): underlying Polars LazyFrame
+        _meta (Metadata): metadata for dataframe
+
+    Delegate attributes:
+        columns (str): Get column names.
+        dtypes: Get dtypes of columns in LazyFrame.
+        schema (dict[column name, DataType]): Get dataframe's schema
+
+    Delegate methods:
+    As well as the methods that will be later described, we also support the following Polars methods which are defined in detail
+    in Polar's documentation:
+
+    "sort", "cache", "filter", "select", "with_columns", "with_context", "with_column", "drop", "rename", "reverse",
+    "shift", "shift_and_fill", "slice", "limit", "head", "tail", "last", "first", "with_row_count", "take_every", "fill_null",
+    "fill_nan", "std", "var", "max", "min", "sum", "mean", "median", "quantile", "explode", "unique", "drop_nulls", "melt",
+    "interpolate", "unnest",
+    """
+
     _inner: pl.LazyFrame
     _meta: Metadata
 
@@ -201,6 +231,10 @@ class RemoteLazyFrame:
 
     @property
     def composite_plan(self: LDF) -> str:
+        """Gets composite_plan
+        Returns:
+            Composite_plan as str
+        """
         segments = ",".join(
             [
                 seg.serialize()
@@ -432,10 +466,23 @@ class RemoteLazyFrame:
 
 @dataclass
 class FetchableLazyFrame(RemoteLazyFrame):
+    """
+    A class to represent a FetchableLazyFrame, which can then be accessed as a Polar's dataframe via the fetch() method.
+
+    Attributes:
+        _identifier (str): identifier for dataframe
+    """
+
     _identifier: str
 
     @property
     def identifier(self) -> str:
+        """
+        Gets identifier
+
+        Return:
+            returns identifier
+        """
         return self._identifier
 
     @staticmethod
