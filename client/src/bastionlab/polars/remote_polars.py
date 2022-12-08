@@ -193,6 +193,10 @@ class RemoteLazyFrame:
         return str(self)
 
     def clone(self: LDF) -> LDF:
+        """clones RemoteLazyFrame
+        Returns:
+            RemoteLazyFrame: clone of current RemoteLazyFrame
+        """
         return RemoteLazyFrame(self._inner.clone(), self._meta)
 
     @property
@@ -206,9 +210,20 @@ class RemoteLazyFrame:
         return f"[{segments}]"
 
     def collect(self: LDF) -> LDF:
+        """runs any pending queries/actions on RemoteLazyFrame that have not yet been performed.
+        Returns:
+            FetchableLazyFrame: FetchableLazyFrame of datarame after any queries have been performed
+        """
         return self._meta._client._run_query(self.composite_plan)
 
     def apply_udf(self: LDF, columns: List[str], udf: Callable) -> LDF:
+        """Applied user-defined function to selected columns of RemoteLazyFrame and returns result
+        Args:
+            columns (List[str]): List of columns that user-defined function should be applied to
+            udf (Callable): user-defined function to be applied to columns, must be a compatible input for torch.jit.script() function.
+        Returns:
+            RemoteLazyFrame: An updated RemoteLazyFrame after udf applied
+        """
         ts_udf = torch.jit.script(udf)
         df = pl.DataFrame(
             [pl.Series(k, dtype=v) for k, v in self._inner.schema.items()]
@@ -226,6 +241,12 @@ class RemoteLazyFrame:
         )
 
     def vstack(self: LDF, df2: LDF) -> LDF:
+        """appends df2 to df1 provided columns have the same name/type
+        Args:
+            df2 (RemoteLazyFrame): The RemoteLazyFrame you wish to append to your current RemoteLazyFrame.
+        Returns:
+            RemoteLazyFrame: The combined RemoteLazyFrame as result of vstack
+        """
         df = pl.DataFrame(
             [pl.Series(k, dtype=v) for k, v in self._inner.schema.items()]
         )
@@ -254,6 +275,21 @@ class RemoteLazyFrame:
         allow_parallel: bool = True,
         force_parallel: bool = False,
     ) -> LDF:
+        """Joins columns of another DataFrame.
+        Args:
+            other (RemoteLazyFrame): The other RemoteLazyFrame you want to join your current dataframe with.
+            left_on (Union[str, pl.Expr, Sequence[Union[str, pl.Expr]], None] = None): Name(s) of the left join column(s).
+            right_on (Union[str, pl.Expr, Sequence[Union[str, pl.Expr]], None] = None): Name(s) of the right join column(s).
+            on (Union[str, pl.Expr, Sequence[Union[str, pl.Expr]], None] = None): Name(s) of the join columns in both DataFrames.
+            how (pl.internals.type_aliases.JoinStrategy = "inner"): Join strategy {'inner', 'left', 'outer', 'semi', 'anti', 'cross'}
+            suffix (str = "_right"): Suffix to append to columns with a duplicate name.
+            allow_parallel (bool = True): Boolean value for allowing the physical plan to evaluate the computation of both RemoteLazyFrames up to the join in parallel.
+            force_parallel (bool = False): Boolean value for forcing parallel the physical plan to evaluate the computation of both RemoteLazyFrames up to the join in parallel.
+        Raises:
+            Exception: Where remote dataframes are from two different servers.
+        Returns:
+            RemoteLazyFrame: An updated RemoteLazyFrame after join performed
+        """
         if self._meta._client is not other._meta._client:
             raise Exception("Cannot join remote data frames from two different servers")
         res = self._inner.join(
@@ -289,6 +325,27 @@ class RemoteLazyFrame:
         allow_parallel: bool = True,
         force_parallel: bool = False,
     ) -> LDF:
+        """Performs an asof join, which is similar to a left-join but matches on nearest key rather than equal keys.
+
+        Args:
+            other (RemoteLazyFrame): The other RemoteLazyFrame you want to join your current dataframe with.
+            left_on (Union[str, None] = None): Name(s) of the left join column(s).
+            right_on (Union[str, None] = None): Name(s) of the right join column(s).
+            on (Union[str, None] = None): Name(s) of the join columns in both DataFrames.
+            by_left (Union[str, Sequence[str], None] = None): Join on these columns before doing asof join
+            by_right (Union[str, Sequence[str], None] = None): Join on these columns before doing asof join
+            by (Union[str, Sequence[str], None] = None): Join on these columns before doing asof join
+            strategy (pl.internals.type_aliases.AsofJoinStrategy = "backward"): Join strategy: {'backward', 'forward'}.
+            suffix (str  = "_right"): Suffix to append to columns with a duplicate name.
+            tolerance (Union[str, int, float, None] = None): Numeric tolerance. By setting this the join will only be done if the near keys are within this distance. 
+            suffix (str): Suffix to append to columns with a duplicate name.
+            allow_parallel (bool = True): Boolean value for allowing the physical plan to evaluate the computation of both RemoteLazyFrames up to the join in parallel.
+            force_parallel (bool = False): Boolean value for forcing parallel the physical plan to evaluate the computation of both RemoteLazyFrames up to the join in parallel.
+        Raises:
+            Exception: Where remote dataframes are from two different servers.
+        Returns:
+            RemoteLazyFrame: An updated RemoteLazyFrame after join performed
+        """
         if self._meta._client is not other._meta._client:
             raise Exception("Cannot join remote data frames from two different servers")
         res = self._inner.join_asof(
@@ -400,6 +457,10 @@ class FetchableLazyFrame(RemoteLazyFrame):
         return str(self)
 
     def fetch(self) -> pl.DataFrame:
+        """Fetches your FetchableLazyFrame and returns it as a Polars DataFrame
+        Returns:
+            Polars.DataFrame: returns a Polars DataFrame instance of your FetchableLazyFrame
+        """
         return self._meta._client._fetch_df(self._identifier)
 
 
