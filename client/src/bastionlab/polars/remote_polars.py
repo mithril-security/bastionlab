@@ -63,32 +63,72 @@ def delegate_properties(*names: str) -> Callable[[Callable], Callable]:
 
 
 class CompositePlanSegment:
+    """
+    Composite plan segment class which handles segment plans that have not been implemented
+    """
+
     def serialize(self) -> str:
+        """
+        will raise NotImplementedError
+
+        raises:
+            NotImplementedError
+        """
         raise NotImplementedError()
 
 
 @dataclass
 class EntryPointPlanSegment(CompositePlanSegment):
+    """
+    Composite plan segment class responsible for new entry points
+    """
+
     _inner: str
 
     def serialize(self) -> str:
+        """
+        returns serialized string of this plan segment
+
+        Returns:
+            str: serialized string of this plan segment
+        """
         return f'{{"EntryPointPlanSegment":"{self._inner}"}}'
 
 
 @dataclass
 class PolarsPlanSegment(CompositePlanSegment):
+    """
+    Composite plan segment class responsible for Polars queries
+    """
+
     _inner: LDF
 
     def serialize(self) -> str:
+        """
+        returns serialized string of this plan segment
+
+        Returns:
+            str: serialized string of this plan segment
+        """
         return f'{{"PolarsPlanSegment":{self._inner.write_json()}}}'
 
 
 @dataclass
 class UdfPlanSegment(CompositePlanSegment):
+    """
+    Composite plan segment class responsible for user defined functions
+    """
+
     _inner: ScriptFunction
     _columns: List[str]
 
     def serialize(self) -> str:
+        """
+        returns serialized string of this plan segment
+
+        Returns:
+            str: serialized string of this plan segment
+        """
         columns = ",".join([f'"{c}"' for c in self._columns])
         b64str = base64.b64encode(self._inner.save_to_buffer()).decode("ascii")
         return f'{{"UdfPlanSegment":{{"columns":[{columns}],"udf":"{b64str}"}}}}'
@@ -96,6 +136,10 @@ class UdfPlanSegment(CompositePlanSegment):
 
 @dataclass
 class StackPlanSegment(CompositePlanSegment):
+    """
+    Composite plan segment class responsible for vstack function
+    """
+
     def serialize(self) -> str:
         return '"StackPlanSegment"'
 
@@ -104,10 +148,6 @@ class StackPlanSegment(CompositePlanSegment):
 class Metadata:
     """
     A class containing metadata related to your dataframe
-
-    Attributes:
-        _client (BastionLabPolars): a reference to the current client connection
-        _prev_segments (List[CompositePlanSegment]): all the dataframe's history of previous composite plan segments
     """
 
     _client: BastionLabPolars
@@ -193,10 +233,6 @@ class Metadata:
 class RemoteLazyFrame:
     """
     A class to represent a RemoteLazyFrame.
-
-    Attributes:
-        _inner (pl.LazyFrame): underlying Polars LazyFrame
-        _meta (Metadata): metadata for dataframe
 
     Delegate attributes:
         columns (str): Get column names.
@@ -468,9 +504,6 @@ class RemoteLazyFrame:
 class FetchableLazyFrame(RemoteLazyFrame):
     """
     A class to represent a FetchableLazyFrame, which can then be accessed as a Polar's dataframe via the fetch() method.
-
-    Attributes:
-        _identifier (str): identifier for dataframe
     """
 
     _identifier: str
