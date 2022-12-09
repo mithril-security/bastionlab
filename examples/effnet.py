@@ -4,11 +4,13 @@ from torchvision.transforms import ToTensor, Normalize, Compose
 from bastionlab import Connection
 from time import time
 
-transform = Compose([
-    ToTensor(),
-    Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-    lambda x: [x.squeeze(0)],
-])
+transform = Compose(
+    [
+        ToTensor(),
+        Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+        lambda x: [x.squeeze(0)],
+    ]
+)
 
 train_dataset = CIFAR100("data", train=True, transform=transform, download=True)
 test_dataset = CIFAR100("data", train=False, transform=transform, download=True)
