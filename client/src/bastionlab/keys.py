@@ -11,13 +11,13 @@ class PublicKey:
     various formats (e.g. bytes, PEM).
 
     Attributes:
-        __key (types.PUBLIC_KEY_TYPES): The underlying key type, represented using
+        _key (types.PUBLIC_KEY_TYPES): The underlying key type, represented using
             the `types.PUBLIC_KEY_TYPES` type.
-        __hash (bytes): The hash of the key, used for identifying the key.
+        _hash (bytes): The hash of the key, used for identifying the key.
     """
 
-    __key: types.PUBLIC_KEY_TYPES
-    __hash: bytes
+    _key: types.PUBLIC_KEY_TYPES
+    _hash: bytes
 
     def __init__(self, key: types.PUBLIC_KEY_TYPES):
         """
@@ -26,10 +26,10 @@ class PublicKey:
         Args:
             key: An EC public key type.
         """
-        self.__key = key
+        self._key = key
         hash = hashes.Hash(hashes.SHA256())
         hash.update(self.bytes)
-        self.__hash = hash.finalize()
+        self._hash = hash.finalize()
 
     def __eq__(self, o: object) -> bool:
         """
@@ -41,7 +41,7 @@ class PublicKey:
         Returns:
             True if the objects are equal, False otherwise.
         """
-        return self.__key.__eq__(o)
+        return self._key.__eq__(o)
 
     def verify(self, signature: bytes, data: bytes) -> None:
         """
@@ -54,7 +54,7 @@ class PublicKey:
         Raises:
             ValueError: if the signature is not valid for the given data.
         """
-        self.__key.verify(
+        self._key.verify(
             signature, data, signature_algorithm=ec.ECDSA(hashes.SHA256())
         )
 
@@ -66,7 +66,7 @@ class PublicKey:
         Returns:
             The hash of this `PublicKey` instance.
         """
-        return self.__hash
+        return self._hash
 
     @property
     def bytes(self) -> bytes:
@@ -76,7 +76,7 @@ class PublicKey:
         Returns:
             The DER encoding of this `PublicKey` instance.
         """
-        return self.__key.public_bytes(
+        return self._key.public_bytes(
             serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
         )
 
@@ -106,7 +106,7 @@ class PublicKey:
         """
         with open(path, "wb") as f:
             f.write(
-                self.__key.public_bytes(
+                self._key.public_bytes(
                     serialization.Encoding.PEM,
                     serialization.PublicFormat.SubjectPublicKeyInfo,
                 )
@@ -121,7 +121,7 @@ class PublicKey:
             The PEM encoding of this `PublicKey` instance.
         """
         return str(
-            self.__key.public_bytes(
+            self._key.public_bytes(
                 serialization.Encoding.PEM,
                 serialization.PublicFormat.SubjectPublicKeyInfo,
             ),
@@ -162,11 +162,11 @@ class SigningKey:
     and the corresponding public key (used for verification).
 
     Attributes:
-        __key (types.PRIVATE_KEY_TYPES): The private key type, represented using the
+        _key (types.PRIVATE_KEY_TYPES): The private key type, represented using the
             `types.PRIVATE_KEY_TYPES` type.
         __pubkey (PublicKey): The corresponding public key, used for verifying signatures."""
 
-    __key: types.PRIVATE_KEY_TYPES
+    _key: types.PRIVATE_KEY_TYPES
     __pubkey: PublicKey
 
     def __init__(self, privkey: types.PRIVATE_KEY_TYPES):
@@ -176,8 +176,8 @@ class SigningKey:
         Args:
             privkey: A private key type.
         """
-        self.__key = privkey
-        self.__pubkey = PublicKey(self.__key.public_key())
+        self._key = privkey
+        self.__pubkey = PublicKey(self._key.public_key())
 
     def sign(self, data: bytes) -> bytes:
         """
@@ -189,10 +189,10 @@ class SigningKey:
         Returns:
             The signature for the given data.
         """
-        return self.__key.sign(data, signature_algorithm=ec.ECDSA(hashes.SHA256()))
+        return self._key.sign(data, signature_algorithm=ec.ECDSA(hashes.SHA256()))
 
     def __eq__(self, o: object) -> bool:
-        return self.__key.__eq__(o)
+        return self._key.__eq__(o)
 
     @property
     def pubkey(self) -> PublicKey:
@@ -262,7 +262,7 @@ class SigningKey:
         """
         with open(path, "wb") as f:
             f.write(
-                self.__key.private_bytes(
+                self._key.private_bytes(
                     serialization.Encoding.PEM,
                     serialization.PrivateFormat.PKCS8,
                     serialization.BestAvailableEncryption(password)

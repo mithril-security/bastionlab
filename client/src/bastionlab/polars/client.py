@@ -98,21 +98,17 @@ class BastionLabPolars:
         return FetchableLazyFrame._from_reference(self, res)
 
     def _fetch_df(self, ref: str) -> Optional[pl.DataFrame]:
-        """
-        Fetches the specified `pl.DataFrame` from the BastionLab server
-        with the provided reference identifier.
+        # Fetches the specified `pl.DataFrame` from the BastionLab server
+        # with the provided reference identifier.
 
-        Parameters
-        ----------
-        ref : str
-            A unique identifier for the Remote DataFrame.
+        #Parameters
+        #----------
+        #ref : str
+        #    A unique identifier for the Remote DataFrame.
 
-        Returns
-        -------
-        Optional[pl.DataFrame]
-
-        """
-
+        #Returns
+        #-------
+        #Optional[pl.DataFrame]
         def inner() -> bytes:
             joined_bytes = b""
             blocked = False
@@ -160,21 +156,19 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
         self,
         composite_plan: str,
     ) -> "FetchableLazyFrame":
-        """
-        Executes a Composite Plan on the BastionLab server.
+       
+       # Executes a Composite Plan on the BastionLab server.
+       # A composite plan is BastionLab's internal instruction set.
 
-        A composite plan is BastionLab's internal instruction set. To read more about it [here]()
+       # Parameters
+       # ----------
+       # composite_plan : str
+       #     Serialized instructions to be executed on BastionLab server.
 
-        Parameters
-        ----------
-        composite_plan : str
-            Serialized instructions to be executed on BastionLab server.
-
-        Returns
-        -------
-        bastionlab.polars.remote_polars.FetchableLazyFrame
-
-        """
+       # Returns
+       # -------
+       # bastionlab.polars.remote_polars.FetchableLazyFrame
+       
         from .remote_polars import FetchableLazyFrame
 
         res = GRPCException.map_error(

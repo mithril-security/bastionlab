@@ -39,16 +39,14 @@ class Client:
     A BastionLab client class that provides access to the BastionLab machine learning platform.
 
     Attributes:
-        __bastionlab_torch (BastionLabTorch): The BastionLabTorch object for accessing the torch functionality.
-        __bastionlab_polars (BastionLabPolars): The BastionLabPolars object for accessing the polars functionality.
-        __channel (grpc.Channel): The underlying gRPC channel used to communicate with the server.
-        __token (bytes): The authentication token used to connect to the server.
+        _bastionlab_torch (BastionLabTorch): The BastionLabTorch object for accessing the torch functionality.
+        _bastionlab_polars (BastionLabPolars): The BastionLabPolars object for accessing the polars functionality.
+        _channel (grpc.Channel): The underlying gRPC channel used to communicate with the server.
     """
 
-    __bastionlab_torch: "BastionLabTorch" = None
-    __bastionlab_polars: "BastionLabPolars" = None
-    __channel: grpc.Channel
-    __token: bytes
+    _bastionlab_torch: "BastionLabTorch" = None
+    _bastionlab_polars: "BastionLabPolars" = None
+    _channel: grpc.Channel
 
     def __init__(
         self,
@@ -60,43 +58,35 @@ class Client:
         Args:
             channel (grpc.Channel): A gRPC channel to the BastionLab server.
         """
-        self.__channel = channel
+        self._channel = channel
 
     @property
     def torch(self):
         """
         Returns the BastionLabTorch instance used by this client.
         """
-        if self.__bastionlab_torch is None:
+        if self._bastionlab_torch is None:
             from bastionlab.torch import BastionLabTorch
 
-            self.__bastionlab_torch = BastionLabTorch(self.__channel)
-        return self.__bastionlab_torch
+            self._bastionlab_torch = BastionLabTorch(self._channel)
+        return self._bastionlab_torch
 
     @property
     def polars(self):
         """
         Returns the BastionLabPolars instance used by this client.
         """
-        if self.__bastionlab_polars is None:
+        if self._bastionlab_polars is None:
             from bastionlab.polars import BastionLabPolars
 
-            self.__bastionlab_polars = BastionLabPolars(self.__channel)
-        return self.__bastionlab_polars
+            self._bastionlab_polars = BastionLabPolars(self._channel)
+        return self._bastionlab_polars
 
 
 class AuthPlugin(grpc.AuthMetadataPlugin):
-    """
-    A gRPC authentication metadata plugin that uses an access token for authentication.
-    """
-
+    # A gRPC authentication metadata plugin that uses an access token for authentication.
     def __init__(self, token):
-        """
-        Initializes the plugin with the given access token
-
-        Args:
-            token : The access token to use for authentication.
-        """
+        # The access token to used for authentication.
         self._token = token
 
     def __call__(self, _, callback):
@@ -134,14 +124,14 @@ class Connection:
     def _verify_user(
         server_target, server_creds, options, signing_key: Optional[SigningKey] = None
     ):
-        """
-        Set up initial connection to BastionLab for verification
-        if pubkey not known:
-            Drop connection and fail fast authentication
+        
+        # Set up initial connection to BastionLab for verification
+        # if pubkey not known:
+        #    Drop connection and fail fast authentication
 
-        elif known:
-            return token and add token to channel metadata
-        """
+        # elif known:
+        #    return token and add token to channel metadata
+        # """
         channel = grpc.secure_channel(server_target, server_creds, options)
 
         session_stub = SessionServiceStub(channel)
@@ -185,23 +175,18 @@ class Connection:
             self.__exit__(None, None, None)
 
     def _heart_beat(self, stub):
-        """Sends periodic "heartbeat" messages to the server to keep the connection alive.
-
-        Args:
-            stub: The `SessionServiceStub` object to use to send the heartbeat messages.
-        """
+        # Sends periodic "heartbeat" messages to the server to keep the connection alive.
+        # Args:
+        #    stub: The `SessionServiceStub` object to use to send the heartbeat messages.
         while self._client is not None:
             stub.RefreshSession(Empty(), metadata=(("accesstoken-bin", self.token),))
             sleep(HEART_BEAT_TICK)
 
     def __enter__(self) -> Client:
-        """Establishes a secure channel to the server and returns a `Client` object that can be used to interact with the server.
-
-        This method is called automatically when the `Connection` object is used in a `with` statement.
-
-        Returns:
-            A `Client` object that can be used to interact with the server.
-        """
+        # """Establishes a secure channel to the server and returns a `Client` object that can be used to interact with the server.
+        # This method is called automatically when the `Connection` object is used in a `with` statement.
+        # Returns:
+        #    A `Client` object that can be used to interact with the server.
         server_target = f"{self.host}:{self.port}"
         server_cert = ssl.get_server_certificate((self.host, self.port))
         server_creds = grpc.ssl_channel_credentials(
@@ -245,9 +230,7 @@ class Connection:
         return self._client
 
     def __exit__(self, exc_type: Any, exc_value: Any, exc_traceback: Any) -> None:
-        """Closes the connection to the server and cleans up any resources being used by the `Client` object.
-
-        This method is called automatically when the `with` statement is exited.
-        """
+        # """Closes the connection to the server and cleans up any resources being used by the `Client` object.
+        # This method is called automatically when the `with` statement is exited.
         self._client = None
         self.channel.close()
