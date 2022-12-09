@@ -39,9 +39,13 @@ class Client:
     A BastionLab client class that provides access to the BastionLab machine learning platform.
     """
 
-    _bastionlab_torch: "BastionLabTorch" = None #: The BastionLabTorch object for accessing the torch functionality.
-    _bastionlab_polars: "BastionLabPolars" = None #: The BastionLabPolars object for accessing the polars functionality.
-    _channel: grpc.Channel #: The underlying gRPC channel used to communicate with the server.
+    _bastionlab_torch: "BastionLabTorch" = (
+        None  #: The BastionLabTorch object for accessing the torch functionality.
+    )
+    _bastionlab_polars: "BastionLabPolars" = (
+        None  #: The BastionLabPolars object for accessing the polars functionality.
+    )
+    _channel: grpc.Channel  #: The underlying gRPC channel used to communicate with the server.
 
     def __init__(
         self,
@@ -111,14 +115,14 @@ class Connection:
     identity: Optional[SigningKey] = None
     channel: Any = None
     token: Optional[bytes] = None
-    _client: Optional[Client] = None # The gRPC client object used to send messages.
+    _client: Optional[Client] = None  # The gRPC client object used to send messages.
     server_name: Optional[str] = "bastionlab-server"
 
     @staticmethod
     def _verify_user(
         server_target, server_creds, options, signing_key: Optional[SigningKey] = None
     ):
-        
+
         # Set up initial connection to BastionLab for verification
         # if pubkey not known:
         #    Drop connection and fail fast authentication

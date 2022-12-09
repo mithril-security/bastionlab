@@ -13,7 +13,7 @@ def create_byte_chunk(data: bytes) -> Iterator[bytes]:
     #: """This method chunks bytes into sub-bytes of len `CHUNK_SIZE = 32KB`.
     #: If `data` is less than 32KB, it returns directly the `data`.
     #: Otherwise, it iteratively yields 32KB until the last chunk of bytes.
-   
+
     #: Parameters
     #: ----------
     #:     data(bytes): bytes to be chunked.
@@ -55,7 +55,7 @@ def serialize_dataframe(
     #: Returns
     #: -------
     #: Iterator[SendChunk]
- 
+
     #: Example
     #: -------
     #: >>> import polars as pl

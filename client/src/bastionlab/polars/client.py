@@ -32,6 +32,7 @@ class BastionLabPolars:
     stub : bastionlab.pb.bastionlab_polars_pb2_grpc.PolarsServiceStub
         The gRPC service for BastionLab Polars. This define all the API calls for BastionLab Polars.
     """
+
     def __init__(
         self,
         channel: grpc.Channel,
@@ -154,18 +155,18 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
         self,
         composite_plan: str,
     ) -> "FetchableLazyFrame":
-       
-       #: Executes a Composite Plan on the BastionLab server.
-       #: A composite plan is BastionLab's internal instruction set.
 
-       #: Parameters
-       #: ----------
-       #: composite_plan : str
-       #:     Serialized instructions to be executed on BastionLab server.
+        #: Executes a Composite Plan on the BastionLab server.
+        #: A composite plan is BastionLab's internal instruction set.
 
-       #: Returns
-       #: -------
-       #: bastionlab.polars.remote_polars.FetchableLazyFrame
+        #: Parameters
+        #: ----------
+        #: composite_plan : str
+        #:     Serialized instructions to be executed on BastionLab server.
+
+        #: Returns
+        #: -------
+        #: bastionlab.polars.remote_polars.FetchableLazyFrame
 
         from .remote_polars import FetchableLazyFrame
 

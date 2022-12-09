@@ -8,7 +8,7 @@ class PublicKey:
     # A class for representing a public key. This class provides methods for
     # encrypting and verifying messages, as well as converting the key to and from
     # various formats (e.g. bytes, PEM).
-# 
+    #
     # Attributes:
     #     _key (types.PUBLIC_KEY_TYPES): The underlying key type, represented using
     #         the `types.PUBLIC_KEY_TYPES` type.
@@ -29,10 +29,10 @@ class PublicKey:
 
     def __eq__(self, o: object) -> bool:
         # Compare this `PublicKey` instance with another object for equality.
-# 
+        #
         # Args:
         #     o: The object to compare with.
-# 
+        #
         # Returns:
         #     True if the objects are equal, False otherwise.
         return self._key.__eq__(o)
@@ -46,9 +46,7 @@ class PublicKey:
 
         # Raises:
         #     ValueError: if the signature is not valid for the given data.
-        self._key.verify(
-            signature, data, signature_algorithm=ec.ECDSA(hashes.SHA256())
-        )
+        self._key.verify(signature, data, signature_algorithm=ec.ECDSA(hashes.SHA256()))
 
     @property
     def hash(self) -> bytes:
@@ -149,7 +147,7 @@ class SigningKey:
 
     def __init__(self, privkey: types.PRIVATE_KEY_TYPES):
         # Initialize a `SigningKey` instance with a given private key type.
-     
+
         # Args:
         #     privkey: A private key type.
         self._key = privkey
