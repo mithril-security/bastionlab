@@ -60,7 +60,7 @@ class Client:
         self._channel = channel
 
     @property
-    def torch(self):
+    def torch(self) -> "BastionLabTorch":
         """
         Returns the BastionLabTorch instance used by this client.
         """
@@ -71,7 +71,7 @@ class Client:
         return self._bastionlab_torch
 
     @property
-    def polars(self):
+    def polars(self) -> "BastionLabPolars":
         """
         Returns the BastionLabPolars instance used by this client.
         """
@@ -82,7 +82,7 @@ class Client:
         return self._bastionlab_polars
 
 
-class AuthPlugin(grpc.AuthMetadataPlugin):
+class _AuthPlugin(grpc.AuthMetadataPlugin):
     # A gRPC authentication metadata plugin that uses an access token for authentication.
     def __init__(self, token):
         # The access token to used for authentication.
@@ -203,7 +203,7 @@ class Connection:
             else server_creds
             if self.token is None
             else grpc.composite_channel_credentials(
-                server_creds, grpc.metadata_call_credentials(AuthPlugin(self.token))
+                server_creds, grpc.metadata_call_credentials(_AuthPlugin(self.token))
             )
         )
 
