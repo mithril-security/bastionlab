@@ -37,16 +37,11 @@ CLIENT_INFO = ClientInfo(
 class Client:
     """
     A BastionLab client class that provides access to the BastionLab machine learning platform.
-
-    Attributes:
-        _bastionlab_torch (BastionLabTorch): The BastionLabTorch object for accessing the torch functionality.
-        _bastionlab_polars (BastionLabPolars): The BastionLabPolars object for accessing the polars functionality.
-        _channel (grpc.Channel): The underlying gRPC channel used to communicate with the server.
     """
 
-    _bastionlab_torch: "BastionLabTorch" = None
-    _bastionlab_polars: "BastionLabPolars" = None
-    _channel: grpc.Channel
+    _bastionlab_torch: "BastionLabTorch" = None #: The BastionLabTorch object for accessing the torch functionality.
+    _bastionlab_polars: "BastionLabPolars" = None #: The BastionLabPolars object for accessing the polars functionality.
+    _channel: grpc.Channel #: The underlying gRPC channel used to communicate with the server.
 
     def __init__(
         self,
@@ -108,7 +103,6 @@ class Connection:
         channel (Any): The underlying channel object used to send and receive messages.
         token (bytes, optional): The authentication token to use for the connection.
             If not provided, the connection will not be authenticated.
-        _client (Client, optional): The gRPC client object used to send messages.
         server_name (str, optional): The name of the remote server. Defaults to "bastionlab-server".
     """
 
@@ -117,7 +111,7 @@ class Connection:
     identity: Optional[SigningKey] = None
     channel: Any = None
     token: Optional[bytes] = None
-    _client: Optional[Client] = None
+    _client: Optional[Client] = None # The gRPC client object used to send messages.
     server_name: Optional[str] = "bastionlab-server"
 
     @staticmethod

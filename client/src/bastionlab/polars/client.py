@@ -27,13 +27,11 @@ class BastionLabPolars:
 
     This class contains all the endpoints allowed on the BastionLab server.
 
-    Parameters
+    Attributes
     ----------
     stub : bastionlab.pb.bastionlab_polars_pb2_grpc.PolarsServiceStub
         The gRPC service for BastionLab Polars. This define all the API calls for BastionLab Polars.
-
     """
-
     def __init__(
         self,
         channel: grpc.Channel,
@@ -52,8 +50,8 @@ class BastionLabPolars:
         It readily accepts `polars.internals.dataframe.frame.DataFrame` and also specifies the DataFrame policy and a list of
         sensitive columns.
 
-        Parameters
-        ----------
+        Args
+        ----
         df : polars.internals.dataframe.frame.DataFrame
             Polars DataFrame
         policy : bastionlab.polars.policy.Policy
@@ -64,7 +62,7 @@ class BastionLabPolars:
             wishes to fetch a query performed on the DataFrame.
 
         Returns
-        ------
+        -------
         bastionlab.polars.remote_polars.FetchableLazyFrame
 
         Example
@@ -98,17 +96,17 @@ class BastionLabPolars:
         return FetchableLazyFrame._from_reference(self, res)
 
     def _fetch_df(self, ref: str) -> Optional[pl.DataFrame]:
-        # Fetches the specified `pl.DataFrame` from the BastionLab server
-        # with the provided reference identifier.
+        #: Fetches the specified `pl.DataFrame` from the BastionLab server
+        #: with the provided reference identifier.
 
-        #Parameters
-        #----------
-        #ref : str
-        #    A unique identifier for the Remote DataFrame.
+        #: Parameters
+        #: ----------
+        #: ref : str
+        #:     A unique identifier for the Remote DataFrame.
 
-        #Returns
-        #-------
-        #Optional[pl.DataFrame]
+        #: Returns
+        #: -------
+        #: Optional[pl.DataFrame]
         def inner() -> bytes:
             joined_bytes = b""
             blocked = False
@@ -157,18 +155,18 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
         composite_plan: str,
     ) -> "FetchableLazyFrame":
        
-       # Executes a Composite Plan on the BastionLab server.
-       # A composite plan is BastionLab's internal instruction set.
+       #: Executes a Composite Plan on the BastionLab server.
+       #: A composite plan is BastionLab's internal instruction set.
 
-       # Parameters
-       # ----------
-       # composite_plan : str
-       #     Serialized instructions to be executed on BastionLab server.
+       #: Parameters
+       #: ----------
+       #: composite_plan : str
+       #:     Serialized instructions to be executed on BastionLab server.
 
-       # Returns
-       # -------
-       # bastionlab.polars.remote_polars.FetchableLazyFrame
-       
+       #: Returns
+       #: -------
+       #: bastionlab.polars.remote_polars.FetchableLazyFrame
+
         from .remote_polars import FetchableLazyFrame
 
         res = GRPCException.map_error(
@@ -194,8 +192,8 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
         """
         Returns a `bastionlab.polars.remote_polars.FetchableLazyFrame` from an BastionLab DataFrame identifier.
 
-        Parameters
-        ----------
+        Args
+        ----
         identifier : str
             A unique identifier for the Remote DataFrame.
 
