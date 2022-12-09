@@ -480,14 +480,14 @@ impl PolarsService for BastionLabPolars {
         &self,
         request: Request<ReferenceRequest>,
     ) -> Result<Response<Empty>, Status> {
-        self.sess_manager.verify_request(&request)?;
+        let token = self.sess_manager.verify_request(&request)?;
         let identifier = &request.get_ref().identifier;
         self.persist_df(identifier)?;
         telemetry::add_event(
             TelemetryEventProps::SaveDataframe {
                 dataset_name: Some(identifier.clone()),
             },
-            Some(self.sess_manager.get_client_info(&request)?),
+            Some(self.sess_manager.get_client_info(token)?),
         );
         Ok(Response::new(Empty {}))
     }
