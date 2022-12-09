@@ -13,37 +13,74 @@
   <a href="https://www.twitter.com/mithrilsecurity">Twitter</a>
 </h4><br>
 
-
-# 👋 Welcome to BastionLab!
+# 👋 Welcome to BastionLab! 
 
 Where data owners and data scientists can securely collaborate without exposing data - opening the way to projects that were too risky to consider.
 
-## What is BastionLab?
+## ⚙️ What is BastionLab?
 
-**BastionLab is a data science framework to perform remote and secure Exploratory Data Analysis.**
+**BastionLab is a simple privacy framework for data science collaboration.** 
 
+It acts like an **access control** solution, for data owners to protect the privacy of their datasets, **and stands as a guard**, to enforce that only privacy-friendly operations are allowed on the data and anonymized outputs are shown to the data scientist. 
+
+- Data owners can let **external or internal data scientists explore and extract values from their datasets, according to a strict privacy policy they'll define in BastionLab**.
 - Data scientists can **remotely run queries on data frames without seeing the original data or intermediary results**.
-- Data owners can let **external or internal data scientists explore and extract values from their datasets, according to the strict privacy policies they defined**.
 
-This wasn’t possible until now for highly regulated fields like health, finance, or advertising. When collaborating remotely, data owners had to open their whole dataset, often through a Jupyter notebook. This was dangerous because too many operations were allowed and the data scientist had numerous ways to extract information from the remote infrastructure (print the whole database, save the dataset in the weights, etc).
+**BastionLab is an open-source project.** Our solution is coded in Rust 🦀 and uses Polars 🐻, a pandas-like library for data exploration.
 
-BastionLab solves this problem by ensuring that only privacy-friendly operations are allowed on the data and aggregated outputs are shown to the data scientist. 
+## 👌 Built to be easy and safe to use
 
-**BastionLab is an open-source project.** Our solution is coded in Rust and uses Polars, a pandas-like library for data exploration.
+Collaborating remotely and safely when it came to data science wasn’t possible until now for highly regulated fields like health, finance, or advertising. When they wanted to put their assets to good use, data owners had to open unrestricted access to their dataset, often through a Jupyter notebook. This was dangerous because too many operations were allowed and the data scientist had numerous ways to extract information from the remote infrastructure (print the whole database, save the dataset in the weights, etc). 
 
->  **Disclaimer**: BastionAI, our fortified learning framework relying on Trusted Execution Environement (TEE) will be incorporated in the broader offers of BastionLab. While waiting for the merge, you can still use BastionAI under the folder bastionai.
+That is why we built BastionLab with the aim to ensure privacy while fitting easily in the whole data science workflow of both data owners and data scientists.
 
-## Getting Started
+## 🚀 Quick Tour
 
-- Follow our [“Quick Tour”](docs/docs/quick-tour/quick-tour.ipynb) tutorial
-- [Read](docs/docs/concept-guides/threat_model.md) about the technologies we use to ensure privacy
-- Find [our benchmarks](docs/docs/reference-guides/benchmarks/polars.md) documenting BastionLab’s speed
+You can go try out our [Quick Tour](https://github.com/mithril-security/bastionlab/tree/master/docs/docs/quick-tour) in the documentation to discover BastionLab with a hands-on example using the famous Titanic dataset. 
 
-## Getting Help
+But here’s a taste of what using BastionLab could look like 🍒
+
+### Data Owner's side
+```py
+from bastionlab import Connection
+import polars as pl
+
+df = pl.read_csv("titanic.csv")
+
+with Connection("bastionlab.example.com") as client:
+    client.polars.send_df(df)
+```
+
+### Data Scientist's side
+```py
+from bastionlab import Connection
+
+with Connection("bastionlab.example.com") as client:
+    all_remote_dfs = client.polars.list_dfs()
+    remote_df = all_remote_dfs[0]
+    remote_df.head(5).collect().fetch()
+```
+
+## 🗝️ Key Features
+
+- **Access control**: data owners can define an interactive privacy policy that will filter the data scientist queries. They do not have to open unrestricted access to their datasets anymore. 
+- **Limited expressivity**: BastionLab limits the type of operations that can be executed by the data scientists to avoid arbitrary code execution.
+- **Transparent remote access**: the data scientists never access the dataset directly. They only manipulate a local object that contains metadata to interact with a remotely hosted dataset. Calls can always be seen by data owners.
+
+## 🙋 Getting Help
 
 - Go to our [Discord](https://discord.com/invite/TxEHagpWd4) #support channel
 - Report bugs by [opening an issue on our BastionLab Github](https://github.com/mithril-security/bastionlab/issues)
 - [Book a meeting](https://calendly.com/contact-mithril-security/15mins?month=2022-11) with us
 
-## Who made BastionLab?
-Mithril Security is a startup aiming to make privacy-friendly data science easy so data scientists and data owners can collaborate without friction. Our solutions apply Privacy Enhancing Technologies and security best practices, like [Remote Data Science](https://github.com/mithril-security/bastionlab/blob/master/docs/docs/concept-guides/remote_data_science.md) and [Confidential Computing](https://github.com/mithril-security/bastionlab/blob/master/docs/docs/concept-guides/confidential_computing.md).
+## 🚨 Disclaimer
+
+BastionLab is still in development. **Do not use it yet in a production workload.** We will audit our solution in the future to attest that it enforces the security standards of the market. 
+
+## 📝 License
+
+BastionLab is licensed under the Apache License, Version 2.0.
+
+*Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.* 
+
+*[See the License](http://www.apache.org/licenses/LICENSE-2.0) for the specific language governing permissions and limitations under the License.*
