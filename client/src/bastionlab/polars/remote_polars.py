@@ -573,12 +573,14 @@ class RemoteLazyFrame:
         # run query
         sns.scatterplot(data=df, x=x, y=y, **kwargs)
 
-    def barplot(self: LDF,
-        x: str = None, 
+    def barplot(
+        self: LDF,
+        x: str = None,
         y: str = None,
         estimator: str = "mean",
         hue: str = None,
-        **kwargs):
+        **kwargs,
+    ):
         """Draws a barchart
         barplot filters data down to necessary columns only and then calls Seaborn's barplot function.
         Args:
@@ -595,7 +597,7 @@ class RemoteLazyFrame:
         # if there is a hue argument add them to cols and no duplicates
         if x == None and y == None:
             raise ValueError("Please provide a x or y column name")
-        
+
         allowed_fns = ["mean", "count", "max", "min", "std", "sum", "median"]
 
         if estimator not in allowed_fns:
@@ -611,15 +613,21 @@ class RemoteLazyFrame:
                 groups.append(hue)
             if hue != x and hue != y:
                 selects.append(hue)
-        
+
         for col in selects:
             if not col in self.columns:
                 raise ValueError("Column ", col, " not found in dataframe")
 
         agg = y if y != None else x
-        agg_dict = { 'mean':pl.col(agg).mean(), 'count':pl.col(agg).count(), 
-        'max':pl.col(agg).max(), 'min':pl.col(agg).min(), 'std':pl.col(agg).std(), 
-        'sum':pl.col(agg).sum(), 'median':pl.col(agg).median() }
+        agg_dict = {
+            "mean": pl.col(agg).mean(),
+            "count": pl.col(agg).count(),
+            "max": pl.col(agg).max(),
+            "min": pl.col(agg).min(),
+            "std": pl.col(agg).std(),
+            "sum": pl.col(agg).sum(),
+            "median": pl.col(agg).median(),
+        }
         if x == None or y == None:
             c = x if x != None else y
             df = (
@@ -628,19 +636,19 @@ class RemoteLazyFrame:
                 .collect()
                 .fetch()
                 .to_pandas()
-        )
+            )
         else:
             agg_fn = pl.col(y).mean()
             df = (
-                    self.filter(pl.col(x) != None)
-                    .select(pl.col(y) for y in selects)
-                    .groupby(pl.col(y) for y in groups)
-                    .agg(agg_dict[estimator])
-                    .sort(pl.col(x))
-                    .collect()
-                    .fetch()
-                    .to_pandas()
-                )
+                self.filter(pl.col(x) != None)
+                .select(pl.col(y) for y in selects)
+                .groupby(pl.col(y) for y in groups)
+                .agg(agg_dict[estimator])
+                .sort(pl.col(x))
+                .collect()
+                .fetch()
+                .to_pandas()
+            )
         # run query
         if x == None:
             sns.barplot(data=df, y=y, **kwargs)
