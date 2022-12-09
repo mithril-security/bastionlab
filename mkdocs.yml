@@ -59,8 +59,14 @@ nav:
   - Installation: 'docs/tutorials/installation.md'
   - Data Visualization: 'docs/tutorials/visualization.ipynb'
   - Data Cleaning with BastionLab: 'docs/tutorials/data_cleaning.ipynb'
+  - Authentication: 'docs/tutorials/authentication.ipynb'
+  - "Combining Datasets": 'docs/tutorials/combining_datasets.ipynb'
+- Use Cases:
+  - Covid-19 cleaning and exploration: 'docs/use-cases/covid_use_case.ipynb'
 - Concepts:
   - Remote Data Science: 'docs/concept-guides/remote_data_science.md'
+- "API Reference": "docs/resources/bastionlab/index.html"
+
 - Security: 'docs/concept-guides/threat_model.md'
 - Advanced:
   - Benchmarks:
