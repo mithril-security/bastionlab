@@ -20,6 +20,7 @@ pub enum CompositePlanSegment {
     PolarsPlanSegment(LogicalPlan),
     UdfPlanSegment { columns: Vec<String>, udf: String },
     EntryPointPlanSegment(String),
+    StackPlanSegment,
 }
 
 impl CompositePlan {
@@ -76,6 +77,20 @@ impl CompositePlan {
                 }
                 CompositePlanSegment::EntryPointPlanSegment(identifier) => {
                     input_dfs.push(state.get_df_unchecked(&identifier)?);
+                }
+                CompositePlanSegment::StackPlanSegment => {
+                    let mut df1 = input_dfs.pop().ok_or(Status::invalid_argument(
+                        "Could not apply stack: no input data frame",
+                    ))?;
+
+                    let df2 = input_dfs.pop().ok_or(Status::invalid_argument(
+                        "Could not apply stack: no df2 input data frame",
+                    ))?;
+
+                    df1 = df1.vstack(&df2).map_err(|e| {
+                        Status::invalid_argument(format!("Error while running vstack: {}", e))
+                    })?;
+                    input_dfs.push(df1);
                 }
             }
         }

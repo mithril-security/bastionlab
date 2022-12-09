@@ -1,11 +1,13 @@
-# Threat Model
+# Security
+__________________________________________________________________________
 
-In this scenario:
+We'll address in this security guide the following threat model scenario:
 
 - **The data owner owns the infrastructure**, meaning the dataset does not leave its premises and the owner provides the computing and opens access to a remote data scientist to work on it. 
+
 - The **remote data scientist is not trusted**, and BastionLab aims to ensure minimal data exposure for the data owner while providing a smooth and interactive experience for the remote data scientist.
 
-BastionLab seeks to protect data as it is not directly accessible by untrusted data scientists. For more information on how it is implemented, look at our guide on [remote data science](). 
+BastionLab seeks to protect data as it is not directly accessible by untrusted data scientists. For more information on how it is implemented, look at our guide on [remote data science](https://bastionlab.readthedocs.io/en/latest/docs/concept-guides/remote_data_science/). 
 
 To guarantee privacy we must identify every threat leading to data exposure and the measures BastionLab implements to defend against them. 
 
@@ -28,4 +30,4 @@ Let’s look at threats to the data and how BastionLab defends against them:
 
 
 
-* The likelihood of these threats succeeding is based on the actions of the data owner. For example, the data owner may approve an operation that does not perform an aggregation and returns an individual row to the data scientist.
+*\* The likelihood of these threats succeeding is based on the actions of the data owner. For example, the data owner may approve an operation that does not perform an aggregation and returns an individual row to the data scientist.*
