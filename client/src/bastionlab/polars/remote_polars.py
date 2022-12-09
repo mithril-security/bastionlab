@@ -407,36 +407,57 @@ class RemoteLazyFrame:
             ax = sns.heatmap(pivot, **kwargs)
             ax.invert_yaxis()
 
-    def curveplot(
+    def lineplot(
         self: LDF,
         x: str,
         y: str,
-        order: int = 3,
-        ci: Union[int, None] = None,
-        scatter: bool = False,
+        hue: str = None,
+        size: str = None,
+        style: str = None,
+        units: str = None,
         **kwargs,
     ):
-        """Plot data and a linear regression model fit.
-        Curveplot filters data down to necessary columns only and then calls Seaborn's regplot function.
+        """Draws a lineplot based on x and y values.
+
+        Lineplot filters data down to necessary columns only and then calls Seaborn's lineplot function with this scaled down dataframe.
+
+        Lineplot accepts any additional options supported by Seaborn's lineplot as kwargs, which can be viewed in Seaborn's documentation.
+
         Args:
             x (str): The name of column to be used for x axes.
             y (str): The name of column to be used for y axes.
-            order (int) = 3: If order is greater than 1, Seaborn's regplot uses numpy.polyfit to estimate a polynomial regression.
-            ci (Union[int, None] = None): Size of the confidence interval for the regression estimate.
-            scatter (bool = False): Option to display a scatterplot of data with the underlying observations.
-            **kwargs: Other keyword arguments that will be passed to Seaborn's regplot function.
+            hue (str = None): The name of the column to be used as a grouping variable that will produce lines with different colors.
+            size (str = None): The name of the column to be used as a grouping variable that will produce lines with different widths.
+            style (str = None): The name of the column to be used as a grouping variable that will produce lines with different dashes and/or markers.
+            units (str = None): The name of the column to be used as a grouping variable identifying sampling units.
+            **kwargs: Other keyword arguments that will be passed to Seaborn's lineplot function.
         Raises:
             ValueError: Incorrect column name given
-            various exceptions: Note that exceptions may be raised from Seaborn when the regplot function is called,
+            various exceptions: Note that exceptions may be raised from Seaborn when the lineplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
-        for col in [x, y]:
+        selects = [x, y] if x != y else [x]
+
+        for op in [hue, size, style, units]:
+            if op not in selects and op != None:
+                selects.append(op)
+
+        if hue != None:
+            kwargs["hue"] = hue
+        if size != None:
+            kwargs["size"] = size
+        if style != None:
+            kwargs["style"] = style
+        if units != None:
+            kwargs["units"] = units
+
+        for col in selects:
             if not col in self.columns:
                 raise ValueError("Column ", col, " not found in dataframe")
 
         # get df with necessary columns
-        df = self.select([pl.col(x), pl.col(y)]).collect().fetch().to_pandas()
-        sns.regplot(data=df, x=x, y=y, order=order, ci=ci, scatter=scatter, **kwargs)
+        df = self.select([pl.col(x) for x in selects]).collect().fetch().to_pandas()
+        sns.lineplot(data=df, x=x, y=y, **kwargs)
 
     def scatterplot(self: LDF, x: str, y: str, **kwargs):
         """Draws a scatter plot
@@ -552,29 +573,26 @@ class Facet:
         """
         self.__map(sns.scatterplot, *args, **kwargs)
 
-    def curveplot(
+    def lineplot(
         self: LDF,
-        *args: list[str],
-        order: int = 3,
-        ci: int | None = None,
-        scatter: bool = False,
+        x: str,
+        y: str,
         **kwargs,
     ) -> None:
-        """Plot data and a linear regression model fit for each subset in row/column facet grid.
-        Curveplot filters data down to necessary columns only and then calls Seaborn's regplot function on rows of dataset
+        """Draws a lineplot based on x and y values for each subset in row/column facet grid.
+         Lineplot filters data down to necessary columns only and then calls Seaborn's lineplot function on rows of dataset
         where values match with each combination of row/grid values.
+
         Args:
-            *args: (list[str]): Arguments to be passed to Seaborn's regplot function.
-            order (int): If order is greater than 1, Seaborn's regplot uses numpy.polyfit to estimate a polynomial regression. Default value is 3.
-            ci: Size of the confidence interval for the regression estimate. Default value is None.
-            scatter (bool): Option to display a scatterplot of data with the underlying observations. Default value is False.
-            **kwargs: Other keyword arguments that will be passed to Seaborn's regplot function.
+            x (str): The name of column to be used for x axes.
+            y (str): The name of column to be used for y axes.
+            **kwargs: Other keyword arguments that will be passed to Seaborn's lineplot function.
         Raises:
             ValueError: Incorrect column name given
-            various exceptions: Note that exceptions may be raised from internal Seaborn (scatterplot) or Matplotlib.pyplot functions (subplots, set_title),
-            for example, if kwargs keywords are not expected. See Seaborn/Matplotlib documentation for further details.
+            various exceptions: Note that exceptions may be raised from Seaborn when the lineplot function is called,
+            for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
-        self.__map(sns.regplot, *args, order=order, ci=ci, scatter=scatter, **kwargs)
+        self.__map(sns.lineplot, hue=hue, size=size, style=style, units=units, **kwargs)
 
     def histplot(
         self: LDF,
