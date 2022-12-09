@@ -360,7 +360,7 @@ impl PolarsService for BastionLabPolars {
 
         let start_time = Instant::now();
 
-        let res = composite_plan.run(self)?;
+        let res = composite_plan.run(self, token.clone())?;
         let dataframe_bytes: Vec<u8> =
             df_to_bytes(&res.dataframe)
                 .iter_mut()
