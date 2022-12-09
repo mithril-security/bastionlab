@@ -315,6 +315,90 @@ class RemoteLazyFrame:
             ),
         )
 
+    def barplot(
+        self: LDF,
+        x: str = None,
+        y: str = None,
+        estimator: str = "mean",
+        hue: str = None,
+        **kwargs,
+    ):
+        """Draws a barchart
+        barplot filters data down to necessary columns only and then calls Seaborn's barplot function.
+        Args:
+            x (str) = None: The name of column to be used for x axes.
+            y (str) = None: The name of column to be used for y axes.
+            estimator (str) = "mean": string represenation of estimator to be used in aggregated query. Options are: "mean", "median", "count", "max", "min", "std" and "sum"
+            hue (str) = None: The name of column to be used for colour encoding.
+            **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function.
+        Raises:
+            ValueError: Incorrect column name given, no x or y values provided, estimator function not recognised
+            various exceptions: Note that exceptions may be raised from Seaborn when the barplot function is called,
+            for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
+        """
+        # if there is a hue argument add them to cols and no duplicates
+        if x == None and y == None:
+            raise ValueError("Please provide a x or y column name")
+
+        allowed_fns = ["mean", "count", "max", "min", "std", "sum", "median"]
+
+        if estimator not in allowed_fns:
+            raise ValueError("Column ", col, " not found in dataframe")
+        if x != None and y != None:
+            selects = [x, y] if x != y else [x]
+        else:
+            selects = [x] if x != None else [y]
+        groups = [x]
+        if hue != None:
+            kwargs["hue"] = hue
+            if hue != x:
+                groups.append(hue)
+            if hue != x and hue != y:
+                selects.append(hue)
+
+        for col in selects:
+            if not col in self.columns:
+                raise ValueError("Column ", col, " not found in dataframe")
+
+        agg = y if y != None else x
+        agg_dict = {
+            "mean": pl.col(agg).mean(),
+            "count": pl.col(agg).count(),
+            "max": pl.col(agg).max(),
+            "min": pl.col(agg).min(),
+            "std": pl.col(agg).std(),
+            "sum": pl.col(agg).sum(),
+            "median": pl.col(agg).median(),
+        }
+        if x == None or y == None:
+            c = x if x != None else y
+            df = (
+                self.filter(pl.col(c) != None)
+                .select(agg_dict[estimator])
+                .collect()
+                .fetch()
+                .to_pandas()
+            )
+        else:
+            agg_fn = pl.col(y).mean()
+            df = (
+                self.filter(pl.col(x) != None)
+                .select(pl.col(y) for y in selects)
+                .groupby(pl.col(y) for y in groups)
+                .agg(agg_dict[estimator])
+                .sort(pl.col(x))
+                .collect()
+                .fetch()
+                .to_pandas()
+            )
+        # run query
+        if x == None:
+            sns.barplot(data=df, y=y, **kwargs)
+        elif y == None:
+            sns.barplot(data=df, x=x, **kwargs)
+        else:
+            sns.barplot(data=df, x=x, y=y, **kwargs)
+
     def histplot(
         self: LDF, x: str = "count", y: str = "count", bins: int = 10, **kwargs
     ):
@@ -489,6 +573,82 @@ class RemoteLazyFrame:
         # run query
         sns.scatterplot(data=df, x=x, y=y, **kwargs)
 
+    def barplot(self: LDF,
+        x: str = None, 
+        y: str = None,
+        estimator: str = "mean",
+        hue: str = None,
+        **kwargs):
+        """Draws a barchart
+        barplot filters data down to necessary columns only and then calls Seaborn's barplot function.
+        Args:
+            x (str) = None: The name of column to be used for x axes.
+            y (str) = None: The name of column to be used for y axes.
+            estimator (str) = "mean": string represenation of estimator to be used in aggregated query. Options are: "mean", "median", "count", "max", "min", "std" and "sum"
+            hue (str) = None: The name of column to be used for colour encoding.
+            **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function.
+        Raises:
+            ValueError: Incorrect column name given, no x or y values provided, estimator function not recognised
+            various exceptions: Note that exceptions may be raised from Seaborn when the barplot function is called,
+            for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
+        """
+        # if there is a hue argument add them to cols and no duplicates
+        if x == None and y == None:
+            raise ValueError("Please provide a x or y column name")
+        
+        allowed_fns = ["mean", "count", "max", "min", "std", "sum", "median"]
+
+        if estimator not in allowed_fns:
+            raise ValueError("Column ", col, " not found in dataframe")
+        if x != None and y != None:
+            selects = [x, y] if x != y else [x]
+        else:
+            selects = [x] if x != None else [y]
+        groups = [x]
+        if hue != None:
+            kwargs["hue"] = hue
+            if hue != x:
+                groups.append(hue)
+            if hue != x and hue != y:
+                selects.append(hue)
+        
+        for col in selects:
+            if not col in self.columns:
+                raise ValueError("Column ", col, " not found in dataframe")
+
+        agg = y if y != None else x
+        agg_dict = { 'mean':pl.col(agg).mean(), 'count':pl.col(agg).count(), 
+        'max':pl.col(agg).max(), 'min':pl.col(agg).min(), 'std':pl.col(agg).std(), 
+        'sum':pl.col(agg).sum(), 'median':pl.col(agg).median() }
+        if x == None or y == None:
+            c = x if x != None else y
+            df = (
+                self.filter(pl.col(c) != None)
+                .select(agg_dict[estimator])
+                .collect()
+                .fetch()
+                .to_pandas()
+        )
+        else:
+            agg_fn = pl.col(y).mean()
+            df = (
+                    self.filter(pl.col(x) != None)
+                    .select(pl.col(y) for y in selects)
+                    .groupby(pl.col(y) for y in groups)
+                    .agg(agg_dict[estimator])
+                    .sort(pl.col(x))
+                    .collect()
+                    .fetch()
+                    .to_pandas()
+                )
+        # run query
+        if x == None:
+            sns.barplot(data=df, y=y, **kwargs)
+        elif y == None:
+            sns.barplot(data=df, x=x, **kwargs)
+        else:
+            sns.barplot(data=df, x=x, y=y, **kwargs)
+
     def facet(
         self: LDF, col: Optional[str] = None, row: Optional[str] = None, **kwargs
     ) -> any:
@@ -616,9 +776,41 @@ class Facet:
             various exceptions: Note that exceptions may be raised from internal Seaborn (scatterplot) or Matplotlib.pyplot functions (subplots, set_title),
             for example, if kwargs keywords are not expected. See Seaborn/Matplotlib documentation for further details.
         """
+        kwargs["bins"] = bins
+        self.__bastion_map("histplot", x=x, y=y, **kwargs)
+
+    def barplot(
+        self: LDF,
+        x: str = None,
+        y: str = None,
+        hue: str = None,
+        estimator: str = "mean",
+        **kwargs,
+    ) -> None:
+        """Draws a bar chart for each subset in row/column facet grid.
+
+         barplot filters data down to necessary columns only and then calls Seaborn's barplot function.
+        Args:
+            x (str) = None: The name of column to be used for x axes.
+            y (str) = None: The name of column to be used for y axes.
+            estimator (str) = "mean": string represenation of estimator to be used in aggregated query. Options are: "mean", "median", "count", "max", "min", "std" and "sum"
+            hue (str) = None: The name of column to be used for colour encoding.
+            **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function.
+        Raises:
+            ValueError: Incorrect column name given, no x or y values provided, estimator function not recognised
+            various exceptions: Note that exceptions may be raised from Seaborn when the barplot function is called,
+            for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
+
+        """
+        kwargs["estimator"] = estimator
+        kwargs["hue"] = hue
+        self.__bastion_map("barplot", x=x, y=y, **kwargs)
+
+    def __bastion_map(self, fn: str, x: str = None, y: str = None, **kwargs):
         # create list of all columns needed for query
+        hue = kwargs["hue"] if "hue" in kwargs else None
         selects = []
-        for to_add in [x, y, self.col, self.row]:
+        for to_add in [x, y, self.col, self.row, hue]:
             if to_add != None:
                 selects.append(to_add)
 
@@ -650,6 +842,14 @@ class Facet:
                 .tolist()
             )
 
+        if fn == "histplot":
+            bins = kwargs["bins"] if "bins" in kwargs else 10
+            del kwargs["bins"]
+        if fn == "barplot":
+            del kwargs["hue"]
+            estimator = kwargs["estimator"] if "estimator" in kwargs else None
+            del kwargs["estimator"]
+
         # mapping
         r_len = len(rows) if len(rows) != 0 else 1
         c_len = len(cols) if len(cols) != 0 else 1
@@ -677,9 +877,19 @@ class Facet:
                         + ": "
                         + str(cols[col_count])
                     )
-                    df.select([pl.col(x) for x in selects]).histplot(
-                        x, y, bins, ax=axes[row_count, col_count], **kwargs
-                    )
+                    if fn == "histplot":
+                        df.select([pl.col(x) for x in selects]).histplot(
+                            x, y, bins, ax=axes[row_count, col_count], **kwargs
+                        )
+                    else:
+                        df.select([pl.col(x) for x in selects]).barplot(
+                            x,
+                            y,
+                            hue=hue,
+                            estimator=estimator,
+                            ax=axes[row_count, col_count],
+                            **kwargs,
+                        )
                     axes[row_count, col_count].set_title(t1)
 
         else:
@@ -690,9 +900,14 @@ class Facet:
             for count in range(max_len):
                 df = self.inner_rdf.clone().filter((pl.col(t) == my_list[count]))
                 t1 = t + ": " + str(my_list[count])
-                df.select([pl.col(x) for x in selects]).histplot(
-                    x, y, bins, ax=axes[count], **kwargs
-                )
+                if fn == "histplot":
+                    df.select([pl.col(x) for x in selects]).histplot(
+                        x, y, bins, ax=axes[count], **kwargs
+                    )
+                else:
+                    df.select([pl.col(x) for x in selects]).barplot(
+                        x, y, hue=hue, estimator=estimator, ax=axes[count], **kwargs
+                    )
                 axes[count].set_title(t1)
 
     def __map(self: LDF, func, **kwargs) -> None:
