@@ -47,16 +47,17 @@ But here’s a taste of what using BastionLab could look like 🍒
 >>> df = pl.read_csv("titanic.csv")
 
 # Define a custom policy for your data.
-# In this example, request that aggregate at least 10 rows are safe.
+# In this example, requests that aggregate at least 10 rows are safe.
 # Other requests will be reviewed by the data owner.
 >>> from bastionlab.polars.policy import Policy, Aggregation, Review
 >>> policy = Policy(safe_zone=Aggregation(min_agg_size=10), unsafe_handling=Review())
 
 # Upload your dataset to the server.
+# Optionally anonymize sensitive columns.
 # The server returns a remote object that can be used to query the dataset.
 >>> from bastionlab import Connection
 >>> with Connection("bastionlab.example.com") as client:
-...     rdf = client.polars.send_df(df)
+...     rdf = client.polars.send_df(df, policy=policy, sanitized_columns=["Name"])
 ...     rdf
 ...
 FetchableLazyFrame(identifier=3a2d15c5-9f9d-4ced-9234-d9465050edb1)
