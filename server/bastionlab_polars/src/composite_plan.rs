@@ -1,4 +1,5 @@
 use base64;
+use bytes::Bytes;
 use polars::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::io::Cursor;
@@ -24,7 +25,7 @@ pub enum CompositePlanSegment {
 }
 
 impl CompositePlan {
-    pub fn run(self, state: &BastionLabPolars) -> Result<DataFrameArtifact, Status> {
+    pub fn run(self, state: &BastionLabPolars, token: Option<Bytes>) -> Result<DataFrameArtifact, Status> {
         let mut input_dfs = Vec::new();
         let plan_str = serde_json::to_string(&self.0).unwrap(); // FIX THIS
 
@@ -100,12 +101,17 @@ impl CompositePlan {
                 "Wrong number of input data frames",
             ));
         }
-
+        let sessions = state.sess_manager.sessions.read().unwrap();
+        let token = match &token {
+            Some(v) => &v[..],
+            None => &[0u8; 32],
+        };
+        let session = sessions.get(token).ok_or(Status::aborted("Session not found!"))?;
         Ok(DataFrameArtifact {
             dataframe: input_dfs.pop().unwrap(),
             fetchable: policy.verify(&Context {
                 min_agg_size,
-                user_id: String::new(),
+                user_id: session.pubkey.clone(),
             })?,
             policy,
             blacklist,
