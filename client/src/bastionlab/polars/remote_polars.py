@@ -592,7 +592,7 @@ class Facet:
             various exceptions: Note that exceptions may be raised from Seaborn when the lineplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
-        self.__map(sns.lineplot, hue=hue, size=size, style=style, units=units, **kwargs)
+        self.__map(sns.lineplot, x=x, y=y, **kwargs)
 
     def histplot(
         self: LDF,
