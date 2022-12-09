@@ -17,20 +17,29 @@ async fn main() -> Result<()> {
         toml::from_str(&fs::read_to_string("config.toml").context("Reading the config.toml file")?)
             .context("Parsing the config.toml file")?;
 
-    let keys = match KeyManagement::load_from_dir(Path::new(
-        &config
-            .public_keys_directory()
-            .context("Parsing the public_keys_directory config path")?,
-    )) {
-        Ok(keys) => {
-            info!("Authentication is enabled.");
-            Some(keys)
+    let disable_authentication = !std::env::var("DISABLE_AUTHENTICATION").is_err();
+
+    let keys = if !disable_authentication {
+        match KeyManagement::load_from_dir(Path::new(
+            &config
+                .public_keys_directory()
+                .context("Parsing the public_keys_directory config path")?,
+        )) {
+            Ok(keys) => {
+                info!("Authentication is enabled.");
+                Some(keys)
+            }
+            Err(e) => {
+                println!("Exiting due to an error reading keys. {}", e.message());
+                //Temp fix to exit early, returning an error seems to break the "?" handlers above.
+                return Ok(());
+            }
         }
-        Err(err) => {
-            info!("Authentication is disabled (error: {:?})", err);
-            None
-        }
+    } else {
+        info!("Authentication is disabled.");
+        None
     };
+
     let sess_manager = Arc::new(SessionManager::new(
         keys,
         config

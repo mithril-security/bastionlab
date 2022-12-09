@@ -20,6 +20,10 @@ all: build install
 bin:
 	mkdir bin
 
+bin/keys/owners bin/keys/users &:
+	mkdir bin/keys/owners -p
+	mkdir bin/keys/users -p
+
 bin/config.toml: bin
 	cp tools/config.toml bin/
 
@@ -32,7 +36,7 @@ bin/tls/host_server.pem bin/tls/host_server.key &: bin
 		-subj "/C=FR/CN=bastionlab-server"
 
 build:
-	LIBTORCH=$(LIBTORCH) CUDA=$(CUDA) LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) cargo build --release
+	LIBTORCH=$(LIBTORCH) CUDA=$(CUDA) LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) cargo build --release 
 
 target/release/$(PKG_NAME):
 	LIBTORCH=$(LIBTORCH) CUDA=$(CUDA) LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) cargo build --release
@@ -40,7 +44,7 @@ target/release/$(PKG_NAME):
 bin/$(PKG_NAME): target/release/$(PKG_NAME)
 	cp target/release/$(PKG_NAME) bin/
 	
-install: bin/tls/host_server.pem bin/tls/host_server.key bin/config.toml bin/data_frames
+install: bin/tls/host_server.pem bin/tls/host_server.key bin/config.toml bin/keys/owners bin/keys/users bin/data_frames
 	cp target/release/$(PKG_NAME) bin/
 
 run: bin/$(PKG_NAME) bin/tls/host_server.pem bin/tls/host_server.key bin/config.toml
