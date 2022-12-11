@@ -32,7 +32,7 @@ CLIENT_INFO = ClientInfo(
     platform_release=UNAME.release,
     user_agent="bastionlab_python",
     user_agent_version=app_version,
-    is_colab='google.colab' in sys.modules
+    is_colab="google.colab" in sys.modules,
 )
 
 
