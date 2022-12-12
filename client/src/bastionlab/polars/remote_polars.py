@@ -315,6 +315,145 @@ class RemoteLazyFrame:
             ),
         )
 
+    def uni_pieplot(
+        self: LDF,
+        parts: str,
+        title: str = None,
+        labels: Union[str, list[str]] = None,
+        fig_kwargs: dict = None,
+        key: bool = True,
+        key_loc: str = "center left",
+        key_title: str = None,
+        key_bbox=(1, 0, 0.5, 1),
+    ) -> None:
+        """Draws a pie chart based on values within single column.
+        uni_pieplot collects necessary data only and calculates percentage values before calling matplotlib pyplot's pie function to create a pie chart.
+        Args:
+            parts (str): The name of the column containing bar chart segment values.
+            title (str = None): Title to be displayed with the bar chart.
+            labels (Union[str, list[str]] = None) = The labels of segments in pie charts. Either a list of string labels following the same order as the values
+            in your `parts` column or the name of a column containing the labels.
+            fig_kwargs (dict = None): A dictionary argument where you can add any kwargs you wish to be forwarded onto matplotlib.pyplot.subplots()
+            when creating the figure that the pie chart will be displayed on.
+            key (bool = True): This key value specifies whether you want a color map key placed to the side of your pie chart.
+            key_loc (str = "center left"): A string argument where you can modify the location of your segment color key on your pie chart to be forward to matplotlib's legend function.
+            key_title (str = None): A string argument where you can specify a title for this segment color key to be forward to matplotlib's legend function.
+            key_bbox (tuple = 1, 0, 0.5, 1): bbox_to_anchor argument to be forward to matplotlib's legend function.
+        Raises:
+            ValueError: Incorrect column name given as parts or labels argument.
+            various exceptions: Note that exceptions may be raised from matplotlib pyplot's pie or subplots functions, for example if fig_kwargs keywords are not valid.
+        """
+
+        if parts not in self.columns:
+            raise ValueError("Parts column not found in dataframe")
+        if type(labels) == str and labels not in self.columns:
+            raise ValueError("Labels column not found in dataframe")
+
+        # get list of values in parts column
+        parts_tmp = self.select(pl.col(parts)).collect().fetch().to_numpy()
+        parts_list = [x[0] for x in parts_tmp]
+
+        # get total for calculating percentages
+        total = sum(parts_list)
+
+        # get percentages
+        pie_data = list(map(lambda x: x * 100 / total, parts_list))
+
+        # get labels list
+        if type(labels) == str:
+            labels_tmp = self.select(pl.col(labels)).collect().fetch().to_numpy()
+            labels_list = [x[0] for x in labels_tmp]
+        else:
+            labels_list = labels
+
+        # add these to figkwargs and go
+        if fig_kwargs == None:
+            fig, ax = plt.subplots(figsize=(7, 4), subplot_kw=dict(aspect="equal"))
+        else:
+            if "figsize" not in self.kwargs:
+                fig_kwargs["figsize"] = (7, 4)
+            fig, ax = plt.subplots(**fig_kwargs)
+        wedges, autotexts = plt.pie(pie_data, labels=labels_list)
+
+        if key == True:
+            ax.legend(
+                wedges,
+                labels_list,
+                title=key_title,
+                loc=key_loc,
+                bbox_to_anchor=key_bbox,
+            )
+        ax.set_title(title)
+        plt.show()
+
+    def multi_pieplot(
+        self: LDF,
+        parts: List[str],
+        title: str = None,
+        labels: List[str] = None,
+        fig_kwargs: dict = None,
+        key: bool = True,
+        key_loc: str = "center left",
+        key_title: str = None,
+        key_bbox: tuple = (1, 0, 0.5, 1),
+    ) -> None:
+        """Draws a pie chart based on sum of values in each parts column within the total value of the sum of all parts columns
+        multi_pieplot collects necessary data only and calculates percentage values before calling matplotlib pyplot's pie function to create a pie chart.
+        Args:
+            parts (List[str]): The list of columns to be used as segments in the bar chart.
+            title (str = None): Title to be displayed with the bar chart.
+            labels (List[str] = None) = The labels of segments in pie charts. These should be in the same order as the parts given.
+            fig_kwargs (dict = None): A dictionary argument where you can add any kwargs you wish to be forwarded onto matplotlib.pyplot.subplots()
+            when creating the figure that the pie chart will be displayed on.
+            key (bool = True): This key value specifies whether you want a color map key placed to the side of your pie chart.
+            key_loc (str = "center left"): A string argument where you can modify the location of your segment color key on your pie chart to be forward to matplotlib's legend function.
+            key_title (str = None): A string argument where you can specify a title for this segment color key to be forward to matplotlib's legend function.
+            key_bbox (tuple = 1, 0, 0.5, 1): bbox_to_anchor argument to be forward to matplotlib's legend function.
+        Raises:
+            ValueError: Incorrect or duplicate column name given in the parts argument.
+            various exceptions: Note that exceptions may be raised from matplotlib pyplot's pie or subplots functions, for example if fig_kwargs keywords are not valid.
+        """
+
+        # check if cols available
+        selects = []
+        for p in parts:
+            if p not in self.columns:
+                raise ValueError("Column not found in dataframe")
+            if p in selects:
+                raise ValueError("Duplicate column")
+            selects.append(p)
+
+            tmp = self.select(pl.col(x).sum() for x in parts)
+            totals = tmp.collect().fetch().to_numpy()[0]
+            total = sum(totals)
+
+            pie_data = (
+                self.select(pl.col(x).sum() * 100 / total for x in parts)
+                .collect()
+                .fetch()
+            )
+
+        # add these to figkwargs and go
+        if fig_kwargs == None:
+            fig, ax = plt.subplots(figsize=(7, 4), subplot_kw=dict(aspect="equal"))
+        else:
+            if "figsize" not in self.kwargs:
+                fig_kwargs["figsize"] = (7, 4)
+            fig, ax = plt.subplots(**fig_kwargs)
+        wedges, autotexts = plt.pie(pie_data.to_numpy()[0], labels=labels)
+
+        if key == True:
+            ax.legend(
+                wedges,
+                labels,
+                title=key_title,
+                loc=key_loc,
+                bbox_to_anchor=key_bbox,
+            )
+
+        ax.set_title(title)
+        plt.show()
+
     def barplot(
         self: LDF,
         x: str = None,
