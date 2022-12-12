@@ -22,16 +22,16 @@ We’ll update the documentation as new features come in, so dive in!
 ## Getting Started
 ________________________________________________________
 
-- Follow our [“Quick Tour”](docs/quick-tour/quick-tour.ipynb) tutorial
-- [Read](docs/concept-guides/threat_model.md) about the technologies we use to ensure privacy
-- Find [our benchmarks](docs/reference-guides/benchmarks/benchmarks.md) documenting BastionLab’s speed
+- Follow our **[“Quick Tour”](docs/quick-tour/quick-tour.ipynb)** tutorial
+- **[Read](docs/concept-guides/threat_model.md)** about the technologies we use to ensure privacy
+- Find **[our benchmarks](docs/reference-guides/benchmarks/benchmarks.md)** documenting BastionLab’s speed
 
 ## Getting Help
 ________________________________________________________
 
-- Go to our [Discord](https://discord.com/invite/TxEHagpWd4) #support channel
-- Report bugs by [opening an issue on our BastionLab Github](https://github.com/mithril-security/bastionlab/issues)
-- [Book a meeting](https://calendly.com/contact-mithril-security/15mins?month=2022-11) with us
+- Go to our **[Discord](https://discord.com/invite/TxEHagpWd4) #support channel**
+- Report bugs by **[opening an issue on our BastionLab Github](https://github.com/mithril-security/bastionlab/issues)**
+- **[Book a meeting]**(https://calendly.com/contact-mithril-security/15mins?month=2022-11) with us
 
 ## Who made BastionLab?
 
