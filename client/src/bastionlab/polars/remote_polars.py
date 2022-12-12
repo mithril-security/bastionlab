@@ -515,13 +515,13 @@ class RemoteLazyFrame:
         else:
             wedges, autotexts = ax.pie(pie_data)
 
-        if key==True:
+        if key == True:
             ax.legend(
-            wedges,
-            labels_list,
-            title=key_title,
-            loc=key_loc,
-            bbox_to_anchor=key_bbox,
+                wedges,
+                labels_list,
+                title=key_title,
+                loc=key_loc,
+                bbox_to_anchor=key_bbox,
             )
         ax.set_title(title)
 
