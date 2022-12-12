@@ -1,6 +1,6 @@
 import pytest
-from bastionai.utils import *
-from bastionai.pb.remote_torch_pb2 import ClientInfo
+from bastionlab.torch.utils import *
+from bastionlab.torch.pb.remote_torch_pb2 import ClientInfo
 from torch.nn.functional import relu
 from torch.nn import Module, Linear
 from transformers import DistilBertForSequenceClassification

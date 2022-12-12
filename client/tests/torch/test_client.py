@@ -1,8 +1,9 @@
 from typing import Iterator
 
-from bastionai.pb.remote_torch_pb2 import Chunk, Reference, TrainConfig, Metric
-from bastionai.utils import *
-from bastionai.client import Client
+from bastionlab.torch.pb.remote_torch_pb2 import Chunk, Reference, TrainConfig, Metric
+from bastionlab.torch.utils import *
+from bastionlab.torch.client import Client
+from bastionlab.client import ClientInfo
 from test_utils import Params, DummyModule, module_eq, simple_dataset
 
 
