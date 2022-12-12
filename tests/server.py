@@ -30,7 +30,7 @@ def launch_server(envs: Dict):
                 stdout=sys.stdout,
                 stderr=sys.stderr,
                 stdin=subprocess.DEVNULL,
-                env={**envs}
+                env={**envs},
             )
 
         # block until server ready (port open)

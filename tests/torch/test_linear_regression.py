@@ -70,7 +70,7 @@ def setUpModule():
             "LIBTORCH": LIBTORCH,
             "LD_LIBRARY_PATH": LD_LIBRARY_PATH,
             "DISABLE_AUTHENTICATION": "1",
-            "BASTIONLAB_DISABLE_TELEMETRY": "1"
+            "BASTIONLAB_DISABLE_TELEMETRY": "1",
         }
     )
 
