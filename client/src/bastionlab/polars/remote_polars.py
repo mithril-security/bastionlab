@@ -65,32 +65,72 @@ def delegate_properties(*names: str) -> Callable[[Callable], Callable]:
 
 
 class CompositePlanSegment:
+    """
+    Composite plan segment class which handles segment plans that have not been implemented
+    """
+
     def serialize(self) -> str:
+        """
+        will raise NotImplementedError
+
+        raises:
+            NotImplementedError
+        """
         raise NotImplementedError()
 
 
 @dataclass
 class EntryPointPlanSegment(CompositePlanSegment):
+    """
+    Composite plan segment class responsible for new entry points
+    """
+
     _inner: str
 
     def serialize(self) -> str:
+        """
+        returns serialized string of this plan segment
+
+        Returns:
+            str: serialized string of this plan segment
+        """
         return f'{{"EntryPointPlanSegment":"{self._inner}"}}'
 
 
 @dataclass
 class PolarsPlanSegment(CompositePlanSegment):
+    """
+    Composite plan segment class responsible for Polars queries
+    """
+
     _inner: LDF
 
     def serialize(self) -> str:
+        """
+        returns serialized string of this plan segment
+
+        Returns:
+            str: serialized string of this plan segment
+        """
         return f'{{"PolarsPlanSegment":{self._inner.write_json()}}}'
 
 
 @dataclass
 class UdfPlanSegment(CompositePlanSegment):
+    """
+    Composite plan segment class responsible for user defined functions
+    """
+
     _inner: ScriptFunction
     _columns: List[str]
 
     def serialize(self) -> str:
+        """
+        returns serialized string of this plan segment
+
+        Returns:
+            str: serialized string of this plan segment
+        """
         columns = ",".join([f'"{c}"' for c in self._columns])
         b64str = base64.b64encode(self._inner.save_to_buffer()).decode("ascii")
         return f'{{"UdfPlanSegment":{{"columns":[{columns}],"udf":"{b64str}"}}}}'
@@ -98,12 +138,20 @@ class UdfPlanSegment(CompositePlanSegment):
 
 @dataclass
 class StackPlanSegment(CompositePlanSegment):
+    """
+    Composite plan segment class responsible for vstack function
+    """
+
     def serialize(self) -> str:
         return '"StackPlanSegment"'
 
 
 @dataclass
 class Metadata:
+    """
+    A class containing metadata related to your dataframe
+    """
+
     _client: BastionLabPolars
     _prev_segments: List[CompositePlanSegment] = field(default_factory=list)
 
@@ -185,6 +233,24 @@ class Metadata:
 )
 @dataclass
 class RemoteLazyFrame:
+    """
+    A class to represent a RemoteLazyFrame.
+
+    Delegate attributes:
+        columns (str): Get column names.
+        dtypes: Get dtypes of columns in LazyFrame.
+        schema (dict[column name, DataType]): Get dataframe's schema
+
+    Delegate methods:
+    As well as the methods that will be later described, we also support the following Polars methods which are defined in detail
+    in Polar's documentation:
+
+    "sort", "cache", "filter", "select", "with_columns", "with_context", "with_column", "drop", "rename", "reverse",
+    "shift", "shift_and_fill", "slice", "limit", "head", "tail", "last", "first", "with_row_count", "take_every", "fill_null",
+    "fill_nan", "std", "var", "max", "min", "sum", "mean", "median", "quantile", "explode", "unique", "drop_nulls", "melt",
+    "interpolate", "unnest",
+    """
+
     _inner: pl.LazyFrame
     _meta: Metadata
 
@@ -195,10 +261,18 @@ class RemoteLazyFrame:
         return str(self)
 
     def clone(self: LDF) -> LDF:
+        """clones RemoteLazyFrame
+        Returns:
+            RemoteLazyFrame: clone of current RemoteLazyFrame
+        """
         return RemoteLazyFrame(self._inner.clone(), self._meta)
 
     @property
     def composite_plan(self: LDF) -> str:
+        """Gets composite_plan
+        Returns:
+            Composite_plan as str
+        """
         segments = ",".join(
             [
                 seg.serialize()
@@ -208,9 +282,20 @@ class RemoteLazyFrame:
         return f"[{segments}]"
 
     def collect(self: LDF) -> LDF:
+        """runs any pending queries/actions on RemoteLazyFrame that have not yet been performed.
+        Returns:
+            FetchableLazyFrame: FetchableLazyFrame of datarame after any queries have been performed
+        """
         return self._meta._client._run_query(self.composite_plan)
 
     def apply_udf(self: LDF, columns: List[str], udf: Callable) -> LDF:
+        """Applied user-defined function to selected columns of RemoteLazyFrame and returns result
+        Args:
+            columns (List[str]): List of columns that user-defined function should be applied to
+            udf (Callable): user-defined function to be applied to columns, must be a compatible input for torch.jit.script() function.
+        Returns:
+            RemoteLazyFrame: An updated RemoteLazyFrame after udf applied
+        """
         ts_udf = torch.jit.script(udf)
         df = pl.DataFrame(
             [pl.Series(k, dtype=v) for k, v in self._inner.schema.items()]
@@ -228,6 +313,12 @@ class RemoteLazyFrame:
         )
 
     def vstack(self: LDF, df2: LDF) -> LDF:
+        """appends df2 to df1 provided columns have the same name/type
+        Args:
+            df2 (RemoteLazyFrame): The RemoteLazyFrame you wish to append to your current RemoteLazyFrame.
+        Returns:
+            RemoteLazyFrame: The combined RemoteLazyFrame as result of vstack
+        """
         df = pl.DataFrame(
             [pl.Series(k, dtype=v) for k, v in self._inner.schema.items()]
         )
@@ -256,6 +347,21 @@ class RemoteLazyFrame:
         allow_parallel: bool = True,
         force_parallel: bool = False,
     ) -> LDF:
+        """Joins columns of another DataFrame.
+        Args:
+            other (RemoteLazyFrame): The other RemoteLazyFrame you want to join your current dataframe with.
+            left_on (Union[str, pl.Expr, Sequence[Union[str, pl.Expr]], None] = None): Name(s) of the left join column(s).
+            right_on (Union[str, pl.Expr, Sequence[Union[str, pl.Expr]], None] = None): Name(s) of the right join column(s).
+            on (Union[str, pl.Expr, Sequence[Union[str, pl.Expr]], None] = None): Name(s) of the join columns in both DataFrames.
+            how (pl.internals.type_aliases.JoinStrategy = "inner"): Join strategy {'inner', 'left', 'outer', 'semi', 'anti', 'cross'}
+            suffix (str = "_right"): Suffix to append to columns with a duplicate name.
+            allow_parallel (bool = True): Boolean value for allowing the physical plan to evaluate the computation of both RemoteLazyFrames up to the join in parallel.
+            force_parallel (bool = False): Boolean value for forcing parallel the physical plan to evaluate the computation of both RemoteLazyFrames up to the join in parallel.
+        Raises:
+            Exception: Where remote dataframes are from two different servers.
+        Returns:
+            RemoteLazyFrame: An updated RemoteLazyFrame after join performed
+        """
         if self._meta._client is not other._meta._client:
             raise Exception("Cannot join remote data frames from two different servers")
         res = self._inner.join(
@@ -291,6 +397,27 @@ class RemoteLazyFrame:
         allow_parallel: bool = True,
         force_parallel: bool = False,
     ) -> LDF:
+        """Performs an asof join, which is similar to a left-join but matches on nearest key rather than equal keys.
+
+        Args:
+            other (RemoteLazyFrame): The other RemoteLazyFrame you want to join your current dataframe with.
+            left_on (Union[str, None] = None): Name(s) of the left join column(s).
+            right_on (Union[str, None] = None): Name(s) of the right join column(s).
+            on (Union[str, None] = None): Name(s) of the join columns in both DataFrames.
+            by_left (Union[str, Sequence[str], None] = None): Join on these columns before doing asof join
+            by_right (Union[str, Sequence[str], None] = None): Join on these columns before doing asof join
+            by (Union[str, Sequence[str], None] = None): Join on these columns before doing asof join
+            strategy (pl.internals.type_aliases.AsofJoinStrategy = "backward"): Join strategy: {'backward', 'forward'}.
+            suffix (str  = "_right"): Suffix to append to columns with a duplicate name.
+            tolerance (Union[str, int, float, None] = None): Numeric tolerance. By setting this the join will only be done if the near keys are within this distance.
+            suffix (str): Suffix to append to columns with a duplicate name.
+            allow_parallel (bool = True): Boolean value for allowing the physical plan to evaluate the computation of both RemoteLazyFrames up to the join in parallel.
+            force_parallel (bool = False): Boolean value for forcing parallel the physical plan to evaluate the computation of both RemoteLazyFrames up to the join in parallel.
+        Raises:
+            Exception: Where remote dataframes are from two different servers.
+        Returns:
+            RemoteLazyFrame: An updated RemoteLazyFrame after join performed
+        """
         if self._meta._client is not other._meta._client:
             raise Exception("Cannot join remote data frames from two different servers")
         res = self._inner.join_asof(
@@ -820,10 +947,20 @@ class RemoteLazyFrame:
 
 @dataclass
 class FetchableLazyFrame(RemoteLazyFrame):
+    """
+    A class to represent a FetchableLazyFrame, which can then be accessed as a Polar's dataframe via the fetch() method.
+    """
+
     _identifier: str
 
     @property
     def identifier(self) -> str:
+        """
+        Gets identifier
+
+        Return:
+            returns identifier
+        """
         return self._identifier
 
     @staticmethod
@@ -845,6 +982,10 @@ class FetchableLazyFrame(RemoteLazyFrame):
         return str(self)
 
     def fetch(self) -> pl.DataFrame:
+        """Fetches your FetchableLazyFrame and returns it as a Polars DataFrame
+        Returns:
+            Polars.DataFrame: returns a Polars DataFrame instance of your FetchableLazyFrame
+        """
         return self._meta._client._fetch_df(self._identifier)
 
 

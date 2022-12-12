@@ -190,7 +190,7 @@ checksum = "b645a089122eccb6111b4f81cbc1a49f5900ac4666bb93ac027feaecf15607bf"
 
 [[package]]
 name = "bastionlab"
-version = "0.3.4"
+version = "0.3.5"
 dependencies = [
  "anyhow",
  "base64",
@@ -224,7 +224,7 @@ dependencies = [
 
 [[package]]
 name = "bastionlab_common"
-version = "0.3.4"
+version = "0.3.5"
 dependencies = [
  "anyhow",
  "base64",
@@ -255,7 +255,7 @@ dependencies = [
 
 [[package]]
 name = "bastionlab_learning"
-version = "0.3.4"
+version = "0.3.5"
 dependencies = [
  "libc",
  "rand",
@@ -265,7 +265,7 @@ dependencies = [
 
 [[package]]
 name = "bastionlab_polars"
-version = "0.3.4"
+version = "0.3.5"
 dependencies = [
  "anyhow",
  "base64",
@@ -297,7 +297,7 @@ dependencies = [
 
 [[package]]
 name = "bastionlab_torch"
-version = "0.3.4"
+version = "0.3.5"
 dependencies = [
  "anyhow",
  "base64",
