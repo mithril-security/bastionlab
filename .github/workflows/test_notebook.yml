@@ -3,10 +3,10 @@ name: Test client
 on:
   push:
     branches: [master]
-    paths: ["client/**", ".github/**"]
+    paths: ["docs/**", "examples/**", "bastionai/examples/**", ".github/**"]
   pull_request:
     branches: [master]
-    paths: ["client/**", ".github/**"]
+    paths: ["docs/**", "examples/**", "bastionai/examples/**", ".github/**"]
 
 jobs:
   python_ci:
@@ -18,7 +18,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - serverImage: bastionlab
+          - clientImage: bastionlab
             os: ubuntu-latest
         python-version: [3.9]
 
@@ -29,11 +29,26 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python-version }}
-      ########## INSTALL CLIENT ##########
-      - name: Install bastionlab
+      ########### GET CLIENT ##########
+      - name: Wait for build of server to finish
+        uses: lewagon/wait-on-check-action@v1.2.0
+        with:
+          ref: ${{ github.ref }}
+          check-name: "build-client (ubuntu-latest)"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 10
+      - name: Download artifact
+        id: download-artifact-client
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          workflow: main.yml
+          name: ${{ matrix.clientImage }}
+          workflow_conclusion: success
+          path: /tmp
+      - name: Install client wheel
         run: |
-          make dev-install
-          source env/bin/activate
+          python -m pip install ./tmp/${{ matrix.clientImage }}.whl
 
       ########### GET SERVER ##########
       - name: Wait for build of server to finish
@@ -60,35 +75,7 @@ jobs:
         run: |
           docker kill -f app > /dev/null 2>&1 || true
           docker run --rm -d -e BASTIONLAB_DISABLE_TELEMETRY=1 -p 50056:50056  --name app ${{ matrix.serverImage }}:latest
-
-      ########## TESTING CLIENT ##########
-      - name: Install dependencies
-        if: always()
+      ########## TESTING NOTEBOOK ##########
+      - name: Testing the notebooks
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install flake8 mypy pytest-cov
-
-      - name: Lint with flake8
-        if: always()
-        run: |
-          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=120 --statistics
-
-      - name: Test with pytest
-        if: always()
-        run: pytest --cov --cov-report=xml
-        env:
-          bastionlab_TEST_NO_LAUNCH_SERVER: "true"
-      # Need test to be written in order to work properly
-
-      - name: Coverage report
-        uses: orgoro/coverage@v2
-        with:
-          coverageFile: client/coverage.xml
-          token: ${{ secrets.GITHUB_TOKEN }}
-          retention-days: 5
-
-      - name: Check types with mypy
-        if: always()
-        run: |
-          mypy src/bastionlab
+          find . -name "*.ipynb" -exec jupyter nbconvert --to notebook --execute {} \;
