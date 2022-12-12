@@ -1,4 +1,4 @@
-# Installation
+# Installation Tutorial
 ______________________________________________________________________________
 
 To install **BastionLab Client and BastionLab Server**, ensure the following are already installed in your system:
