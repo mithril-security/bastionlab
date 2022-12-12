@@ -30,7 +30,7 @@ ________________________________________________________
 ________________________________________________________
 
 - Go to our **[Discord](https://discord.com/invite/TxEHagpWd4) #support channel**
-- Report bugs by **[opening an issue on our BastionLab Github](https://github.com/mithril-security/bastionlab/issues)**
+- Report bugs by **[opening an issue on our BastionLab Github]**(https://github.com/mithril-security/bastionlab/issues)
 - **[Book a meeting]**(https://calendly.com/contact-mithril-security/15mins?month=2022-11) with us
 
 ## Who made BastionLab?
