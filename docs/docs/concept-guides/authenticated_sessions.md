@@ -21,13 +21,16 @@ The transfer of the public key to the data owner is not something we cover. We l
 We are working under the assumption that the server is hosted on the data owner’s infrastructure and that the infrastructure is trusted and safe.
 
 The keys are stored in the bin directory with the following directory structure:
+```
 bin/keys:
+|
 	-owners:
 		-owner’s public key
 	-users:
 		-user 1’s public key
 		-user 2’s public key
 		- …
+```
 
 When the server is initiated the keys are loaded from the directory. The keys are never read again until a server restart. This means that no keys can be added while the server is running.
 
