@@ -88,7 +88,10 @@ class Client:
 
 
 class AuthPlugin(grpc.AuthMetadataPlugin):
-    # A gRPC authentication metadata plugin that uses an access token for authentication.
+    """
+    A gRPC authentication metadata plugin that uses an access token for authentication.
+    """
+
     def __init__(self, token):
         # The access token to used for authentication.
         self._token = token
@@ -129,13 +132,24 @@ class Connection:
         server_target, server_creds, options, signing_key: Optional[SigningKey] = None
     ):
 
-        # Set up initial connection to BastionLab for verification
-        # if pubkey not known:
-        #    Drop connection and fail fast authentication
+        """Set up initial connection to BastionLab for verification
+        if pubkey not known:
+           Drop connection and fail fast authentication
 
-        # elif known:
-        #    return token and add token to channel metadata
-        # """
+        elif known:
+           return token and add token to channel metadata
+
+        Arguments:
+            server_target {str} -- The hostname or IP address of the remote server.
+            server_creds {grpc.ChannelCredentials} -- The credentials to use for the connection.
+            options {Any} -- The options to use for the connection.
+
+        Keyword Arguments:
+            signing_key {Optional[SigningKey]} -- The signing key to use for authentication. (default: {None})
+
+        Returns:
+            bytes -- The authentication token to use for the connection.
+        """
         channel = grpc.secure_channel(server_target, server_creds, options)
 
         session_stub = SessionServiceStub(channel)
@@ -179,18 +193,20 @@ class Connection:
             self.__exit__(None, None, None)
 
     def _heart_beat(self, stub):
-        # Sends periodic "heartbeat" messages to the server to keep the connection alive.
-        # Args:
-        #    stub: The `SessionServiceStub` object to use to send the heartbeat messages.
+        """Sends periodic "heartbeat" messages to the server to keep the connection alive.
+        Args:
+           stub: The `SessionServiceStub` object to use to send the heartbeat messages.
+        """
         while self._client is not None:
             stub.RefreshSession(Empty(), metadata=(("accesstoken-bin", self.token),))
             sleep(HEART_BEAT_TICK)
 
     def __enter__(self) -> Client:
-        # """Establishes a secure channel to the server and returns a `Client` object that can be used to interact with the server.
-        # This method is called automatically when the `Connection` object is used in a `with` statement.
-        # Returns:
-        #    A `Client` object that can be used to interact with the server.
+        """Establishes a secure channel to the server and returns a `Client` object that can be used to interact with the server.
+        This method is called automatically when the `Connection` object is used in a `with` statement.
+        Returns:
+           A `Client` object that can be used to interact with the server.
+        """
         server_target = f"{self.host}:{self.port}"
         server_cert = ssl.get_server_certificate((self.host, self.port))
         server_creds = grpc.ssl_channel_credentials(
@@ -234,7 +250,12 @@ class Connection:
         return self._client
 
     def __exit__(self, exc_type: Any, exc_value: Any, exc_traceback: Any) -> None:
-        # """Closes the connection to the server and cleans up any resources being used by the `Client` object.
-        # This method is called automatically when the `with` statement is exited.
+        """Closes the connection to the server and cleans up any resources being used by the `Client` object.
+        This method is called automatically when the `with` statement is exited.
+        Arguments:
+           exc_type: The type of the exception that caused the `with` statement to exit.
+           exc_value: The value of the exception that caused the `with` statement to exit.
+           exc_traceback: The traceback of the exception that caused the `with` statement to exit.
+        """
         self._client = None
         self.channel.close()
