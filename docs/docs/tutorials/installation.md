@@ -36,6 +36,12 @@ make dev-install
 ## Installing BastionLab Server
 _______________________________________________________________________________
 
+### From PyPI
+    
+```bash
+pip install bastionlab-server
+```
+
 ### Using the official Docker image
 
 ```bash
