@@ -54,7 +54,7 @@ import bastionlab_server
 srv = bastionlab_server.start()
 ```
 
-And closed this way:
+And stoped this way:
 
 ```py
 bastionlab_server.stop(srv)
