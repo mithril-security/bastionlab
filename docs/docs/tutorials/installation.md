@@ -37,9 +37,27 @@ make dev-install
 _______________________________________________________________________________
 
 ### From PyPI
+
+For testing purposes only, BastionLab can be installed using our pip package.
+This package is meant to quickly setup a running instance of the server and is particularly useful in colab notebooks.
+The package does not provide any mean to configure the server which makes certain features impossible to use (e.g. authentication).
+For production, please use the Docker image or install the server from source.
     
 ```bash
 pip install bastionlab-server
+```
+
+Once installed, the server can be launched using the following script:
+
+```py
+import bastionlab_server
+srv = bastionlab_server.start()
+```
+
+And closed this way:
+
+```py
+bastionlab_server.stop(srv)
 ```
 
 ### Using the official Docker image
