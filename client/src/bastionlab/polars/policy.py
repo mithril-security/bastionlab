@@ -131,11 +131,6 @@ class Policy:
         Describes what operations are considered _safe_ on the RDF.
     unsafe_handling : UnsafeAction
         Describes what should happen if a user violates the `safe_zone`. For example (logging operations)
-
-    Examples
-    --------
-    >>> from bastionlab.polars.policy import Policy, Aggregation, Log
-    >>> policy = Policy(safe_zone=Aggregation(10), unsafe_handling=Log())
     """
 
     safe_zone: Rule
