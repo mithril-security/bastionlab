@@ -57,7 +57,7 @@ class BastionLabPolars:
             Polars DataFrame
         policy : bastionlab.polars.policy.Policy
             BastionLab Remote DataFrame policy. This specifies which operations can be performed on
-            DataFrames and they specified the _data owner_.
+            DataFrames and they specified the data owner.
         sanitized_columns : List[str]
             This field contains (sensitive) columns in the DataFrame that are to be removed when a Data Scientist
             wishes to fetch a query performed on the DataFrame.
@@ -66,26 +66,6 @@ class BastionLabPolars:
         -------
         bastionlab.polars.remote_polars.FetchableLazyFrame
 
-        Example
-        -------
-        Import the necessary packages
-        >>> import polars as pl
-        >>> from bastionlab import Connection
-        >>> from bastionlab.polars.policy import Policy, Aggregation, Log
-
-
-        We create the DataFrame locally
-        >>> data = {"col1": [1, 2, 3, 4]}
-        >>> df = pl.DataFrame(data)
-
-        We create a connection to the BastionLab server running `locally`.
-        >>> connection = Connection("localhost", identity=data_owner)
-
-        Here, we create a sample `Policy`.
-        >>> policy = Policy(safe_zone=Aggregation(min_agg_size=2), unsafe_handling=Log())
-
-        We send the DataFrame to the server.
-        >>> connection.client.polars.send_df(df, policy=policy, sanitized_columns=["Name"])
         """
         from .remote_polars import FetchableLazyFrame
 

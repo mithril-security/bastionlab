@@ -47,7 +47,7 @@ def serialize_dataframe(
     #:     Polars DataFrame
     #: policy : Policy
     #:     BastionLab Remote DataFrame policy. This specifies which operations can be performed on
-    #:     DataFrames and they specified the _data owner_.
+    #:     DataFrames and they specified the data owner.
     #: sanitized_columns : List[str]
     #:     This field contains (sensitive) columns in the DataFrame that are to be removed when a Data Scientist
     #:     wishes to fetch a query performed on the DataFrame.
@@ -55,32 +55,6 @@ def serialize_dataframe(
     #: Returns
     #: -------
     #: Iterator[SendChunk]
-
-    #: Example
-    #: -------
-    #: >>> import polars as pl
-    #: >>> data = {"col1": [1, 2, 3, 4]}
-    #: >>> df = pl.DataFrame(data)
-    #: >>> df
-    #: shape (4, 4)
-    #:   ┌──────┐
-    #:   │ col1 │
-    #:   │ ---  │
-    #:   │ i64  │
-    #:   ╞══════╡
-    #:   │ 1    │
-    #:   ├╌╌╌╌╌╌┤
-    #:   │ 2    │
-    #:   ├╌╌╌╌╌╌┤
-    #:   │ 3    │
-    #:   ├╌╌╌╌╌╌┤
-    #:   │ 4    │
-    #:   └──────┘
-
-    #: And `df` will be converted to this bytes.
-    #: >>> from bastionlab.polars.policy import DEFAULT_POLICY
-    #: >>> from bastionlab.polars.utils import serialize_dataframe
-    #: >>> next(serialize_dataframe(df, DEFAULT_POLICY, []))
     #: """
     END_PATTERN = b"[end]"
     df_bytes = bytearray()
