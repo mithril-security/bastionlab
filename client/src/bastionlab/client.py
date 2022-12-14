@@ -93,6 +93,7 @@ class AuthPlugin(grpc.AuthMetadataPlugin):
     """
     A gRPC authentication metadata plugin that uses an access token for authentication.
     """
+
     def __init__(self, token):
         # The access token to used for authentication.
         self._token = token
