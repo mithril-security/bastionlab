@@ -35,6 +35,19 @@ ________________________________________________________
 - Report bugs by **[opening an issue on our BastionLab Github](https://github.com/mithril-security/bastionlab/issues)**
 - **[Book a meeting](https://calendly.com/contact-mithril-security/15mins?month=2022-11)** with us
 
+## How do we organize the documentation?
+____________________________________________
+
+- **[Tutorials]()** take you by the hand to install and run BastionLab. We recommend you start with the **[Quick Tour]()** and then move on to the other tutorials!  
+
+- **[How-to guides]()** are recipes. They guide you through the steps involved in addressing key problems and use cases. They are more advanced than tutorials and assume some knowledge of how BastionLab works.
+
+- **[Concepts]()** guides discuss key topics and concepts at a high level. They provide useful background information and explanations, especially on cybersecurity.
+
+- **[Security]()** guides contain technical information for security engineers. They explain the threat models and other cybersecurity topics required to audit BastionLab's security standards.
+
+- **[Advanced]()** contain technical references for BastionLab’s API machinery. They describe how it works and how to use it but assume you have a good understanding of key concepts. In the future, this section will also explain how to contribute to BastionLab. 
+
 ## Who made BastionLab?
 
 [Mithril Security](https://www.mithrilsecurity.io/) is a startup aiming to make privacy-friendly data science easy so data scientists and data owners can collaborate without friction. Our solutions apply Privacy Enhancing Technologies and security best practices, like [Remote Data Science](docs/concept-guides/remote_data_science.md) and Confidential Computing.
