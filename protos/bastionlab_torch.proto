@@ -15,8 +15,6 @@
 syntax = "proto3";
 package bastionlab_torch;
 
-// import "bastionlab_session.proto";
-
 message Reference {
     // BastionAI reference object. 
     string identifier = 1;
@@ -25,6 +23,16 @@ message Reference {
     bytes meta = 4;
 }
 
+message Meta {
+    message Shape {
+        repeated int64 elem =1;
+    }
+    repeated Shape input_shape = 1;
+    repeated string input_dtype = 2;
+    int32 nb_samples = 3;
+    float privacy_limit = 4;
+    optional Reference train_dataset = 5;
+}
 message Chunk {
     // Chunk of data sent from and to the BastionAI server.
     bytes data = 1;

@@ -204,7 +204,7 @@ dependencies = [
  "http",
  "log",
  "once_cell",
- "prost",
+ "prost 0.8.0",
  "rand",
  "ring",
  "serde",
@@ -235,7 +235,7 @@ dependencies = [
  "http",
  "log",
  "once_cell",
- "prost",
+ "prost 0.8.0",
  "rand",
  "reqwest",
  "ring",
@@ -270,6 +270,8 @@ dependencies = [
  "anyhow",
  "base64",
  "bastionlab_common",
+ "bastionlab_learning",
+ "bastionlab_torch",
  "bincode",
  "bytes",
  "hex",
@@ -277,7 +279,8 @@ dependencies = [
  "log",
  "once_cell",
  "polars",
- "prost",
+ "prost 0.8.0",
+ "prost-types 0.11.2",
  "rand",
  "ring",
  "serde",
@@ -310,7 +313,7 @@ dependencies = [
  "http",
  "log",
  "once_cell",
- "prost",
+ "prost 0.8.0",
  "rand",
  "reqwest",
  "ring",
@@ -1848,7 +1851,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "de5e2533f59d08fcf364fd374ebda0692a70bd6d7e66ef97f306f45c6c5d8020"
 dependencies = [
  "bytes",
- "prost-derive",
+ "prost-derive 0.8.0",
+]
+
+[[package]]
+name = "prost"
+version = "0.11.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0b18e655c21ff5ac2084a5ad0611e827b3f92badf79f4910b5a5c58f4d87ff0"
+dependencies = [
+ "bytes",
+ "prost-derive 0.11.2",
 ]
 
 [[package]]
@@ -1863,8 +1876,8 @@ dependencies = [
  "log",
  "multimap",
  "petgraph",
- "prost",
- "prost-types",
+ "prost 0.8.0",
+ "prost-types 0.8.0",
  "tempfile",
  "which",
 ]
@@ -1883,13 +1896,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "prost-derive"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "164ae68b6587001ca506d3bf7f1000bfa248d0e1217b618108fba4ec1d0cc306"
+dependencies = [
+ "anyhow",
+ "itertools",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "prost-types"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "603bbd6394701d13f3f25aada59c7de9d35a6a5887cfc156181234a44002771b"
 dependencies = [
  "bytes",
- "prost",
+ "prost 0.8.0",
+]
+
+[[package]]
+name = "prost-types"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "747761bc3dc48f9a34553bf65605cf6cb6288ba219f3450b4275dbd81539551a"
+dependencies = [
+ "bytes",
+ "prost 0.11.3",
 ]
 
 [[package]]
@@ -2574,8 +2610,8 @@ dependencies = [
  "hyper-timeout",
  "percent-encoding",
  "pin-project",
- "prost",
- "prost-derive",
+ "prost 0.8.0",
+ "prost-derive 0.8.0",
  "tokio",
  "tokio-rustls",
  "tokio-stream",

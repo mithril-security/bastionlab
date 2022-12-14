@@ -1,5 +1,8 @@
 syntax = "proto3";
+
 package bastionlab_polars;
+
+import "bastionlab.proto";
 
 message ReferenceRequest {
     string identifier = 1;
@@ -34,10 +37,37 @@ message Query {
 
 message Empty {}
 
+message ToDataset {
+    repeated string inputs = 1;
+    string labels = 2;
+    bytes inputs_conv_fn = 3;
+    bytes labels_conv_fn = 4;
+    string identifier = 5;
+}
+message Reference {
+    // BastionAI reference object. 
+    string identifier = 1;
+    string name = 2;
+    string description = 3;
+    bytes meta = 4;
+}
+
+message Meta {
+    message Shape {
+        repeated int64 elem =1;
+    }
+    repeated Shape input_shape = 1;
+    repeated string input_dtype = 2;
+    int32 nb_samples = 3;
+    float privacy_limit = 4;
+    optional Reference train_dataset = 5;
+}
+
 service PolarsService {
     rpc SendDataFrame (stream SendChunk) returns (ReferenceResponse) {}
     rpc RunQuery (Query) returns (ReferenceResponse) {}
     rpc FetchDataFrame (ReferenceRequest) returns (stream FetchChunk) {}
     rpc ListDataFrames (Empty) returns (ReferenceList) {}
     rpc GetDataFrameHeader (ReferenceRequest) returns (ReferenceResponse) {}
+    rpc ConvToDataset(ToDataset) returns (Reference) {}
 }

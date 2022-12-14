@@ -6,7 +6,7 @@ from torch.nn import Module
 from torch.nn.parameter import Parameter
 from torch.utils.data import Dataset
 from tqdm import tqdm  # type: ignore [import]
-from ..pb.bastionlab_torch_pb2 import Chunk, Reference  # type: ignore [import]
+from ..pb.bastionlab_torch_pb2 import Chunk, Reference, Meta  # type: ignore [import]
 
 T = TypeVar("T")
 U = TypeVar("U")
@@ -312,15 +312,13 @@ def serialize_dataset(
         ),
         name=name,
         description=description,
-        meta=bulk_serialize(
-            {
-                "input_shape": [input.size() for input in dataset[0][0]],
-                "input_dtype": [input.dtype for input in dataset[0][0]],
-                "nb_samples": len(dataset),  # type: ignore [arg-type]
-                "privacy_limit": privacy_limit,
-                "train_dataset": train_dataset,
-            }
-        ),
+        meta=Meta(
+            input_shape=[Meta.Shape(elem=input.size()) for input in dataset[0][0]],
+            input_dtype=[f'{input.dtype}' for input in dataset[0][0]],
+            nb_samples=len(dataset),  # type: ignore [arg-type]
+            privacy_limit=privacy_limit,
+            train_dataset=train_dataset,
+        ).SerializeToString(),
         progress=progress,
     )
 

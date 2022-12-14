@@ -5,7 +5,7 @@ from grpc import StatusCode
 from torch.nn import Module
 from torch.utils.data import Dataset
 import torch
-from ..pb.bastionlab_torch_pb2 import Metric, Reference, TestConfig, TrainConfig  # type: ignore [import]
+from ..pb.bastionlab_torch_pb2 import Metric, Reference, TestConfig, TrainConfig, Meta  # type: ignore [import]
 from ..errors import GRPCException
 from .psg import expand_weights
 from .client import BastionLabTorch
@@ -36,6 +36,25 @@ class RemoteDataset:
         description: str = "",
         progress: bool = True,
     ) -> None:
+
+        torch_dtypes = {
+            "Int8": torch.uint8,
+            "UInt8": torch.uint8,
+            "Int16": torch.int16,
+            "Int32": torch.int32,
+            "Int64": torch.int64,
+            "Half": torch.half,
+            "Float": torch.float,
+            "Double": torch.double,
+            "ComplexHalf": torch.complex32,
+            "ComplexFloat": torch.complex64,
+            "ComplexDouble": torch.complex128,
+            "Bool": torch.bool,
+            "QInt8": torch.qint8,
+            "QInt32": torch.qint32,
+            "BFloat16": torch.bfloat16,
+
+        }
         if isinstance(train_dataset, Dataset):
             self.train_dataset_ref = client.send_dataset(
                 train_dataset,
@@ -53,16 +72,17 @@ class RemoteDataset:
             self.train_dataset_ref = train_dataset
             self.name = self.train_dataset_ref.name
             self.description = self.train_dataset_ref.description
-            meta = bulk_deserialize(train_dataset.meta)
+            meta = Meta()
+            meta.ParseFromString(train_dataset.meta)
             self.trace_input = [
-                torch.zeros(s, dtype=dtype)
-                if dtype
+                torch.zeros(list(s.elem), dtype=torch_dtypes[dtype])
+                if torch_dtypes[dtype]
                 in [torch.uint8, torch.int8, torch.int16, torch.int32, torch.int64]
-                else torch.randn(s, dtype=dtype)
-                for s, dtype in zip(meta["input_shape"], meta["input_dtype"])
+                else torch.randn(list(s.elem), dtype=torch_dtypes[dtype])
+                for s, dtype in zip(meta.input_shape, meta.input_dtype)
             ]
-            self.nb_samples = meta["nb_samples"]
-            self.privacy_limit = meta["privacy_limit"]
+            self.nb_samples = meta.nb_samples
+            self.privacy_limit = meta.privacy_limit
         if test_dataset is not None and isinstance(test_dataset, Dataset):
             self.test_dataset_ref = client.send_dataset(
                 test_dataset,

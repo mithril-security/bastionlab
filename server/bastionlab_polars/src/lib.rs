@@ -4,8 +4,12 @@ use bastionlab_common::{
     session_proto::ClientInfo,
     telemetry::{self, TelemetryEventProps},
 };
+
+use bastionlab_learning::data::Dataset;
+use bastionlab_torch::{storage::Artifact, BastionLabTorch};
 use polars::prelude::*;
-use ring::digest;
+use prost::Message;
+use ring::{digest, hmac};
 use serde_json;
 use std::{future::Future, pin::Pin, time::Instant};
 use tokio_stream::wrappers::ReceiverStream;
@@ -16,9 +20,10 @@ use uuid::Uuid;
 pub mod polars_proto {
     tonic::include_proto!("bastionlab_polars");
 }
+
 use polars_proto::{
-    polars_service_server::PolarsService, Empty, FetchChunk, Query, ReferenceList,
-    ReferenceRequest, ReferenceResponse, SendChunk,
+    polars_service_server::PolarsService, Empty, FetchChunk, Query, Reference, ReferenceList,
+    ReferenceRequest, ReferenceResponse, SendChunk, ToDataset,
 };
 
 mod serialization;
@@ -33,6 +38,9 @@ mod access_control;
 use access_control::*;
 
 mod utils;
+use utils::*;
+
+use crate::polars_proto::Meta;
 
 pub enum FetchStatus {
     Ok,
@@ -69,17 +77,18 @@ impl DataFrameArtifact {
     }
 }
 
-#[derive(Debug)]
 pub struct BastionLabPolars {
     dataframes: Arc<RwLock<HashMap<String, DataFrameArtifact>>>,
     sess_manager: Arc<SessionManager>,
+    torch: Arc<BastionLabTorch>,
 }
 
 impl BastionLabPolars {
-    pub fn new(sess_manager: Arc<SessionManager>) -> Self {
+    pub fn new(sess_manager: Arc<SessionManager>, torch: Arc<BastionLabTorch>) -> Self {
         Self {
             dataframes: Arc::new(RwLock::new(HashMap::new())),
             sess_manager,
+            torch,
         }
     }
 
@@ -276,6 +285,48 @@ Reason: {}",
         dfs.insert(identifier.clone(), df);
         identifier
     }
+
+    fn insert_torch_dataset(
+        &self,
+        df: &DataFrame,
+        inputs: &Vec<String>,
+        labels: &str,
+        client_info: Option<ClientInfo>,
+    ) -> Result<Reference, Status> {
+        let inputs = to_status_error(df.columns(&inputs[..]))?;
+        let labels = to_status_error(df.column(labels))?;
+
+        let (inputs, shapes, dtypes, nb_samples) = vec_series_to_tensor(inputs)?;
+
+        let labels = Mutex::new(series_to_tensor(labels)?);
+        let identifier = format!("{}", Uuid::new_v4());
+
+        let data = Dataset::new(inputs, labels);
+        let meta = Meta {
+            input_shape: shapes,
+            input_dtype: dtypes,
+            nb_samples: nb_samples.try_into().unwrap(),
+            privacy_limit: 0.0,
+            train_dataset: None,
+        };
+
+        let dataset = Artifact {
+            data: Arc::new(RwLock::new(data)),
+            name: String::default(),
+            description: String::default(),
+            secret: hmac::Key::new(ring::hmac::HMAC_SHA256, &[0]),
+            meta: meta.encode_to_vec(),
+            client_info,
+        };
+        let (identifier, name, description, meta) =
+            self.torch.insert_dataset(&identifier, dataset)?;
+        Ok(Reference {
+            identifier,
+            name,
+            description,
+            meta,
+        })
+    }
 }
 
 fn get_df_header(df: &DataFrame) -> Result<String, Status> {
@@ -418,5 +469,28 @@ impl PolarsService for BastionLabPolars {
             Some(self.sess_manager.get_client_info(token)?),
         );
         Ok(Response::new(ReferenceResponse { identifier, header }))
+    }
+
+    async fn conv_to_dataset(
+        &self,
+        request: Request<ToDataset>,
+    ) -> Result<Response<Reference>, Status> {
+        let token = self.sess_manager.verify_request(&request)?;
+        let client_info = self.sess_manager.get_client_info(token)?;
+        let (inputs, labels, identifier) = {
+            (
+                &request.get_ref().inputs,
+                &request.get_ref().labels,
+                &request.get_ref().identifier,
+            )
+        };
+
+        let df = self.get_df_unchecked(&identifier)?;
+        Ok(Response::new(self.insert_torch_dataset(
+            &df,
+            inputs,
+            labels,
+            Some(client_info),
+        )?))
     }
 }

@@ -18,7 +18,7 @@ use torch_proto::{
     Chunk, Devices, Empty, Metric, Optimizers, Reference, References, TestConfig, TrainConfig,
 };
 
-mod storage;
+pub mod storage;
 use storage::Artifact;
 
 mod utils;
@@ -33,23 +33,46 @@ use serialization::*;
 use bastionlab_learning::serialization::{BinaryModule, SizedObjectsBytes};
 
 /// The server's state
+#[derive(Clone)]
 pub struct BastionLabTorch {
-    binaries: RwLock<HashMap<String, Artifact<BinaryModule>>>,
-    checkpoints: RwLock<HashMap<String, Artifact<CheckPoint>>>,
-    datasets: RwLock<HashMap<String, Artifact<Dataset>>>,
-    runs: RwLock<HashMap<Uuid, Arc<RwLock<Run>>>>,
+    binaries: Arc<RwLock<HashMap<String, Artifact<BinaryModule>>>>,
+    checkpoints: Arc<RwLock<HashMap<String, Artifact<CheckPoint>>>>,
+    datasets: Arc<RwLock<HashMap<String, Artifact<Dataset>>>>,
+    runs: Arc<RwLock<HashMap<Uuid, Arc<RwLock<Run>>>>>,
     sess_manager: Arc<SessionManager>,
 }
 
 impl BastionLabTorch {
     pub fn new(sess_manager: Arc<SessionManager>) -> Self {
         BastionLabTorch {
-            binaries: RwLock::new(HashMap::new()),
-            checkpoints: RwLock::new(HashMap::new()),
-            datasets: RwLock::new(HashMap::new()),
-            runs: RwLock::new(HashMap::new()),
+            binaries: Arc::new(RwLock::new(HashMap::new())),
+            checkpoints: Arc::new(RwLock::new(HashMap::new())),
+            datasets: Arc::new(RwLock::new(HashMap::new())),
+            runs: Arc::new(RwLock::new(HashMap::new())),
             sess_manager,
         }
+    }
+
+    pub fn get_inner(&self) -> &Self {
+        self
+    }
+
+    pub fn insert_dataset(
+        &self,
+        identifier: &str,
+        dataset: Artifact<Dataset>,
+    ) -> Result<(String, String, String, Vec<u8>), Status> {
+        let identifier = identifier.to_string();
+        let name = dataset.name.clone();
+        let description = dataset.description.clone();
+        let meta = dataset.meta.clone();
+
+        self.datasets
+            .write()
+            .unwrap()
+            .insert(identifier.clone(), dataset);
+
+        Ok((identifier.clone(), name, description, meta))
     }
 }
 
@@ -76,14 +99,7 @@ impl TorchService for BastionLabTorch {
         };
 
         let dataset: Artifact<Dataset> = tcherror_to_status((artifact).deserialize())?;
-        let name = dataset.name.clone();
-        let description = dataset.description.clone();
-        let meta = dataset.meta.clone();
-
-        self.datasets
-            .write()
-            .unwrap()
-            .insert(dataset_hash.clone(), dataset);
+        let (_, name, description, meta) = self.insert_dataset(&dataset_hash, dataset)?;
 
         let elapsed = start_time.elapsed();
         info!("Upload Dataset successful in {}ms", elapsed.as_millis());

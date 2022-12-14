@@ -1,4 +1,4 @@
-from typing import List, TYPE_CHECKING, Optional
+from typing import List, TYPE_CHECKING, Optional, Callable
 import grpc
 from grpc import StatusCode
 import polars as pl
@@ -7,6 +7,7 @@ from ..pb.bastionlab_polars_pb2 import (
     ReferenceRequest,
     Query,
     Empty,
+    ToDataset,
 )
 from ..pb.bastionlab_polars_pb2_grpc import PolarsServiceStub
 from ..errors import GRPCException
@@ -18,7 +19,8 @@ from .policy import Policy, DEFAULT_POLICY
 
 
 if TYPE_CHECKING:
-    from .remote_polars import RemoteLazyFrame, FetchableLazyFrame
+    from .remote_polars import FetchableLazyFrame
+    from ..torch import BastionLabTorch
 
 
 class BastionLabPolars:
@@ -36,8 +38,10 @@ class BastionLabPolars:
     def __init__(
         self,
         channel: grpc.Channel,
+        torch: "BastionLabTorch"
     ):
         self.stub = PolarsServiceStub(channel)
+        self._torch = torch
 
     def send_df(
         self,
@@ -210,3 +214,4 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
             )
         )
         return FetchableLazyFrame._from_reference(self, res)
+

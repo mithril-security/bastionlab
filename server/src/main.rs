@@ -5,6 +5,7 @@ use bastionlab_common::{
     session::SessionManager,
     telemetry::{self, TelemetryEventProps},
 };
+use bastionlab_torch::BastionLabTorch;
 use std::collections::hash_map::DefaultHasher;
 use std::fs;
 use std::path::Path;
@@ -46,7 +47,6 @@ async fn main() -> Result<()> {
             .session_expiry()
             .context("Parsing the public session_expiry config")?,
     ));
-
     let server_cert =
         fs::read("tls/host_server.pem").context("Reading the tls/host_server.pem file")?;
     let server_key =
@@ -86,22 +86,23 @@ async fn main() -> Result<()> {
         builder.add_service(SessionServiceServer::new(svc))
     };
 
+    // Torch
+    let (builder, torch_svc) = {
+        use bastionlab_torch::torch_proto::torch_service_server::TorchServiceServer;
+        let svc = BastionLabTorch::new(sess_manager.clone());
+        (
+            builder.add_service(TorchServiceServer::new(svc.clone())),
+            svc.clone(),
+        )
+    };
+
     // Polars
     let builder = {
         use bastionlab_polars::{
             polars_proto::polars_service_server::PolarsServiceServer, BastionLabPolars,
         };
-        let svc = BastionLabPolars::new(sess_manager.clone());
+        let svc = BastionLabPolars::new(sess_manager.clone(), Arc::new(torch_svc));
         builder.add_service(PolarsServiceServer::new(svc))
-    };
-
-    // Torch
-    let builder = {
-        use bastionlab_torch::{
-            torch_proto::torch_service_server::TorchServiceServer, BastionLabTorch,
-        };
-        let svc = BastionLabTorch::new(sess_manager.clone());
-        builder.add_service(TorchServiceServer::new(svc))
     };
 
     let addr = config

@@ -1,6 +1,10 @@
+use std::{error::Error, i64::MAX, sync::Mutex};
+
 use polars::prelude::*;
 use tch::{kind::Element, Tensor};
 use tonic::Status;
+
+use crate::polars_proto::meta::Shape;
 
 pub fn sanitize_df(df: &mut DataFrame, blacklist: &Vec<String>) {
     for name in blacklist {
@@ -28,6 +32,26 @@ pub fn series_to_tensor(series: &Series) -> Result<Tensor, Status> {
             )))
         }
     })
+}
+
+pub fn vec_series_to_tensor(
+    v_series: Vec<&Series>,
+) -> Result<(Vec<Mutex<Tensor>>, Vec<Shape>, Vec<String>, i64), Status> {
+    let mut ts = Vec::new();
+    let mut shapes = Vec::new();
+    let mut dtypes = Vec::new();
+    let mut nb_samples = MAX;
+    for s in v_series {
+        let t = series_to_tensor(s)?;
+        if nb_samples == MAX {
+            nb_samples = t.size()[0];
+        }
+        shapes.push(Shape { elem: t.size() });
+        dtypes.push(format!("{:?}", t.kind()));
+        ts.push(Mutex::new(t));
+    }
+
+    Ok((ts, shapes, dtypes, nb_samples))
 }
 
 pub fn tensor_to_series(name: &str, dtype: &DataType, tensor: Tensor) -> Result<Series, Status> {
@@ -79,4 +103,8 @@ pub fn lazy_frame_from_logical_plan(plan: LogicalPlan) -> LazyFrame {
     let mut ldf = LazyFrame::default();
     ldf.logical_plan = plan;
     ldf
+}
+
+pub fn to_status_error<T, E: Error>(input: Result<T, E>) -> Result<T, Status> {
+    input.map_err(|err| Status::aborted(err.to_string()))
 }

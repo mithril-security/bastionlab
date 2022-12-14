@@ -80,7 +80,7 @@ class Client:
         if self._bastionlab_polars is None:
             from bastionlab.polars import BastionLabPolars
 
-            self._bastionlab_polars = BastionLabPolars(self._channel)
+            self._bastionlab_polars = BastionLabPolars(self._channel, self.torch)
         return self._bastionlab_polars
 
 

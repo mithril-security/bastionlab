@@ -81,6 +81,16 @@ impl<'a> Iterator for DatasetIter<'a> {
 }
 
 impl Dataset {
+    pub fn new(samples_inputs: Vec<Mutex<Tensor>>, labels: Mutex<Tensor>) -> Self {
+        Dataset {
+            samples_inputs,
+            labels,
+            privacy_context: Arc::new(RwLock::new(PrivacyContext::new(
+                PrivacyBudget::NotPrivate,
+                0,
+            ))),
+        }
+    }
     /// Returns an iterator over this dataset.
     pub fn iter_shuffle<'a>(&'a self, batch_size: usize) -> DatasetIter<'a> {
         let mut rng = thread_rng();

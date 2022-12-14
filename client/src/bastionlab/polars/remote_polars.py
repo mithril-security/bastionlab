@@ -7,12 +7,17 @@ from torch.jit import ScriptFunction
 import base64
 import json
 import torch
-from ..pb.bastionlab_polars_pb2 import ReferenceResponse
+from ..pb.bastionlab_polars_pb2 import ReferenceResponse, ToDataset
 from .client import BastionLabPolars
 from .utils import ApplyBins
 import matplotlib.pyplot as plt
+from typing import TYPE_CHECKING
 
 LDF = TypeVar("LDF", bound="pl.LazyFrame")
+
+if TYPE_CHECKING:
+    from ..torch.learner import RemoteDataset
+
 
 
 def delegate(
@@ -680,6 +685,30 @@ class FetchableLazyFrame(RemoteLazyFrame):
             Polars.DataFrame: returns a Polars DataFrame instance of your FetchableLazyFrame
         """
         return self._meta._client._fetch_df(self._identifier)
+    def to_dataset(
+        self,
+        inputs: Optional[List[str]] = None,
+        labels: Optional[str] = None,
+        inputs_conv_fn: Optional[Callable] = None,
+        labels_conv_fn: Optional[Callable] = None,
+    ) -> "RemoteDataset":
+        from ..torch.learner import RemoteDataset
+
+        inputs_conv_fn = b""
+        labels_conv_fn = b""
+        ref = self._meta._client.stub.ConvToDataset(
+            ToDataset(
+                identifier=self.identifier,
+                inputs=inputs,
+                labels=labels,
+                inputs_conv_fn=inputs_conv_fn,
+                labels_conv_fn = labels_conv_fn
+            )
+        )
+        print(ref.meta)
+        return RemoteDataset(client=self._meta._client._torch, train_dataset=ref)
+        
+
 
 
 @dataclass
