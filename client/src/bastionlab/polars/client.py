@@ -35,11 +35,7 @@ class BastionLabPolars:
         The gRPC service for BastionLab Polars. This define all the API calls for BastionLab Polars.
     """
 
-    def __init__(
-        self,
-        channel: grpc.Channel,
-        torch: "BastionLabTorch"
-    ):
+    def __init__(self, channel: grpc.Channel, torch: "BastionLabTorch"):
         self.stub = PolarsServiceStub(channel)
         self._torch = torch
 
@@ -214,4 +210,3 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
             )
         )
         return FetchableLazyFrame._from_reference(self, res)
-

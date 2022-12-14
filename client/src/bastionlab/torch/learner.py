@@ -53,7 +53,6 @@ class RemoteDataset:
             "QInt8": torch.qint8,
             "QInt32": torch.qint32,
             "BFloat16": torch.bfloat16,
-
         }
         if isinstance(train_dataset, Dataset):
             self.train_dataset_ref = client.send_dataset(

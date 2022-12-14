@@ -314,7 +314,7 @@ def serialize_dataset(
         description=description,
         meta=Meta(
             input_shape=[Meta.Shape(elem=input.size()) for input in dataset[0][0]],
-            input_dtype=[f'{input.dtype}' for input in dataset[0][0]],
+            input_dtype=[f"{input.dtype}" for input in dataset[0][0]],
             nb_samples=len(dataset),  # type: ignore [arg-type]
             privacy_limit=privacy_limit,
             train_dataset=train_dataset,

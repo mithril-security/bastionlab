@@ -19,7 +19,6 @@ if TYPE_CHECKING:
     from ..torch.learner import RemoteDataset
 
 
-
 def delegate(
     target_cls: Callable,
     target_attr: str,
@@ -685,6 +684,7 @@ class FetchableLazyFrame(RemoteLazyFrame):
             Polars.DataFrame: returns a Polars DataFrame instance of your FetchableLazyFrame
         """
         return self._meta._client._fetch_df(self._identifier)
+
     def to_dataset(
         self,
         inputs: Optional[List[str]] = None,
@@ -702,13 +702,11 @@ class FetchableLazyFrame(RemoteLazyFrame):
                 inputs=inputs,
                 labels=labels,
                 inputs_conv_fn=inputs_conv_fn,
-                labels_conv_fn = labels_conv_fn
+                labels_conv_fn=labels_conv_fn,
             )
         )
         print(ref.meta)
         return RemoteDataset(client=self._meta._client._torch, train_dataset=ref)
-        
-
 
 
 @dataclass
