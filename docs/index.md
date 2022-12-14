@@ -48,7 +48,7 @@ ____________________________________________
 
 - **[API Reference](docs/resources/bastionlab/index.html)** contains technical references for BastionLab’s API machinery. They describe how it works and how to use it but assume you have a good understanding of key concepts. 
 
-- **[Advanced]() guides are destined to advanced users of BastionLab wanting to dive deep into BastionLab and eventually collaborate with us to the open-source code. We'll cover in the future exactly how to do so. 
+- **[Advanced](docs/reference-guides/benchmarks/benchmarks/) guides are destined to advanced users of BastionLab wanting to dive deep into BastionLab and eventually collaborate with us to the open-source code. We'll cover in the future exactly how to do so. 
 
 ## Who made BastionLab?
 
