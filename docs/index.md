@@ -46,7 +46,7 @@ ____________________________________________
 
 - **[Security](docs/concept-guides/threat_model.md)** guides contain technical information for security engineers. They explain the threat models and other cybersecurity topics required to audit BastionLab's security standards.
 
-- **[Advanced](docs/resources/bastionlab/index.html)** contain technical references for BastionLab’s API machinery. They describe how it works and how to use it but assume you have a good understanding of key concepts. In the future, this section will also explain how to contribute to BastionLab. 
+- **[Advanced](docs/resources/bastionlab/index.html)** guides contain technical references for BastionLab’s API machinery. They describe how it works and how to use it but assume you have a good understanding of key concepts. In the future, this section will also explain how to contribute to BastionLab. 
 
 ## Who made BastionLab?
 
