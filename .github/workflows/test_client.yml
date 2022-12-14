@@ -1,12 +1,6 @@
 name: Test client
 
-on:
-  push:
-    branches: [master]
-    paths: ["client/**", ".github/**"]
-  pull_request:
-    branches: [master]
-    paths: ["client/**", ".github/**"]
+on: [push, pull_request]
 
 jobs:
   python_ci:

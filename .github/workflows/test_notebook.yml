@@ -1,13 +1,6 @@
 name: Test notebook
 
-on:
-  push:
-    branches: [master]
-    paths: ["docs/**", "examples/**", "bastionai/examples/**", ".github/**"]
-  pull_request:
-    branches: [master]
-    paths: ["docs/**", "examples/**", "bastionai/examples/**", ".github/**"]
-
+on: [push, pull_request]
 jobs:
   python_ci:
     defaults:
