@@ -43,7 +43,7 @@ impl CompositePlan {
                     let module =
                         CModule::load_data(&mut Cursor::new(base64::decode(udf).map_err(|e| {
                             Status::invalid_argument(format!(
-                                "Could not decode bas64-encoded udf: {}",
+                                "Could not decode base64-encoded udf: {}",
                                 e
                             ))
                         })?))
@@ -130,10 +130,24 @@ impl CompositePlan {
     }
 }
 
+fn check_exprs(exprs: &[Expr]) -> bool {
+    exprs.iter().all(|e| match e {
+        Expr::Agg(AggExpr::List(_)) | Expr::Agg(AggExpr::AggGroups(_)) => false,
+        Expr::Agg(_) => true,
+        _ => false,
+    })
+}
+
 fn aggregation_size(plan: &LogicalPlan, state: &mut Option<usize>) -> Result<(), Status> {
     plan.visit(state, |plan, state| {
         match plan {
-            LogicalPlan::Aggregate { input, keys, .. } => {
+            LogicalPlan::Projection {  expr, .. } => if check_exprs(expr) {
+                *state = Some(usize::MAX);
+            },
+            LogicalPlan::LocalProjection {  expr, .. } => if check_exprs(expr) {
+                *state = Some(usize::MAX);
+            },
+            LogicalPlan::Aggregate { input, keys, aggs, .. } => {
                 let keys = &(**keys)[..];
                 let ldf = lazy_frame_from_logical_plan((&**input).clone());
                 let agg_size: usize = ldf
@@ -153,10 +167,13 @@ fn aggregation_size(plan: &LogicalPlan, state: &mut Option<usize>) -> Result<(),
                     .unwrap()[0]
                     .try_extract()
                     .unwrap();
-                *state = match *state {
-                    Some(prev_agg_size) => Some(prev_agg_size.min(agg_size)),
-                    None => Some(agg_size),
-                };
+                
+                if check_exprs(aggs) {
+                    *state = match *state {
+                        Some(prev_agg_size) => Some(prev_agg_size.min(agg_size)),
+                        None => Some(agg_size),
+                    };
+                }
             }
             LogicalPlan::Join { .. } => *state = None,
             // These are not currently supported
