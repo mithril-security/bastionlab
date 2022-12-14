@@ -1,7 +1,7 @@
 # Installation
 ____________________________________________
 
-You'll see in this page how to **install BastionLab Client** and **BastionLab Server**.
+Get started here by **installing BastionLab Client** and **BastionLab Server**.
 
 ## Pre-requisites
 ___________________________________________
