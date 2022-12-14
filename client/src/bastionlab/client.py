@@ -13,6 +13,7 @@ from .pb.bastionlab_pb2_grpc import SessionServiceStub
 import platform
 import socket
 import getpass
+import sys
 
 
 if TYPE_CHECKING:
@@ -31,6 +32,7 @@ CLIENT_INFO = ClientInfo(
     platform_release=UNAME.release,
     user_agent="bastionlab_python",
     user_agent_version=app_version,
+    is_colab="google.colab" in sys.modules,
 )
 
 
@@ -65,7 +67,7 @@ class Client:
         self._channel = channel
 
     @property
-    def torch(self):
+    def torch(self) -> "BastionLabTorch":
         """
         Returns the BastionLabTorch instance used by this client.
         """
@@ -76,7 +78,7 @@ class Client:
         return self._bastionlab_torch
 
     @property
-    def polars(self):
+    def polars(self) -> "BastionLabPolars":
         """
         Returns the BastionLabPolars instance used by this client.
         """
@@ -91,7 +93,6 @@ class AuthPlugin(grpc.AuthMetadataPlugin):
     """
     A gRPC authentication metadata plugin that uses an access token for authentication.
     """
-
     def __init__(self, token):
         # The access token to used for authentication.
         self._token = token
@@ -225,7 +226,7 @@ class Connection:
             else server_creds
             if self.token is None
             else grpc.composite_channel_credentials(
-                server_creds, grpc.metadata_call_credentials(AuthPlugin(self.token))
+                server_creds, grpc.metadata_call_credentials(_AuthPlugin(self.token))
             )
         )
 

@@ -1,4 +1,5 @@
 use bastionlab_common::prelude::*;
+use bastionlab_common::session::get_token;
 use bastionlab_common::session::SessionManager;
 use bastionlab_common::telemetry::{self, TelemetryEventProps};
 use bastionlab_learning::nn::Module;
@@ -61,7 +62,8 @@ impl TorchService for BastionLabTorch {
         &self,
         request: Request<Streaming<Chunk>>,
     ) -> Result<Response<Reference>, Status> {
-        let client_info = self.sess_manager.get_client_info(&request)?;
+        let token = get_token(&request, self.sess_manager.auth_enabled())?;
+        let client_info = self.sess_manager.get_client_info(token)?;
         let start_time = Instant::now();
 
         let artifact: Artifact<SizedObjectsBytes> = unstream_data(request.into_inner()).await?;
@@ -109,7 +111,8 @@ impl TorchService for BastionLabTorch {
     ) -> Result<Response<Reference>, Status> {
         let start_time = Instant::now();
 
-        let client_info = self.sess_manager.get_client_info(&request)?;
+        let token = get_token(&request, self.sess_manager.auth_enabled())?;
+        let client_info = self.sess_manager.get_client_info(token)?;
         let artifact: Artifact<SizedObjectsBytes> = unstream_data(request.into_inner()).await?;
 
         let (model_hash, model_size) = {
@@ -170,7 +173,8 @@ impl TorchService for BastionLabTorch {
         &self,
         request: Request<Reference>,
     ) -> Result<Response<Self::FetchModuleStream>, Status> {
-        let client_info = self.sess_manager.get_client_info(&request)?;
+        let token = get_token(&request, self.sess_manager.auth_enabled())?;
+        let client_info = self.sess_manager.get_client_info(token)?;
         let identifier = request.into_inner().identifier;
 
         let serialized = {
@@ -231,7 +235,8 @@ impl TorchService for BastionLabTorch {
     }
 
     async fn train(&self, request: Request<TrainConfig>) -> Result<Response<Reference>, Status> {
-        let client_info = self.sess_manager.get_client_info(&request)?;
+        let token = get_token(&request, self.sess_manager.auth_enabled())?;
+        let client_info = self.sess_manager.get_client_info(token)?;
         let config = request.into_inner();
         let dataset_id = config
             .dataset
@@ -306,7 +311,8 @@ impl TorchService for BastionLabTorch {
     }
 
     async fn test(&self, request: Request<TestConfig>) -> Result<Response<Reference>, Status> {
-        let client_info = self.sess_manager.get_client_info(&request)?;
+        let token = get_token(&request, self.sess_manager.auth_enabled())?;
+        let client_info = self.sess_manager.get_client_info(token)?;
         let config = request.into_inner();
         let dataset_id = config
             .dataset
