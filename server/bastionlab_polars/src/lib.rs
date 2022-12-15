@@ -394,7 +394,7 @@ impl PolarsService for BastionLabPolars {
 
         let elapsed = start_time.elapsed();
         let hash = hex::encode(digest::digest(&digest::SHA256, &dataframe_bytes).as_ref());
-        println!("{:?}",token);
+
         telemetry::add_event(
             TelemetryEventProps::RunQuery {
                 dataset_name: Some(identifier.clone()),
