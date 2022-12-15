@@ -14,7 +14,8 @@ Black: #000000
 /* Dark mode */
 [data-md-color-scheme="slate"] {
     --md-primary-fg-color:#142540; /*header color*/
-	--md-default-bg-color: #1d232d; /*background*/
+	--md-default-bg-color: #0d182b; 
+	/*--md-default-bg-color: #1d232d; background*/
     --md-typeset-a-color:#106ba3; /*clicked link*/
     --md-accent-fg-color: #106ba3; /*hover color*/
 }
