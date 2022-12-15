@@ -68,13 +68,9 @@ nav:
 - "API Reference": "docs/resources/bastionlab/index.html"
 - Torch:
   - 'docs/torch/overview.md'
-  - Advanced: 
-    - Benchmarks:
-      - AMD EPY 7763: 'docs/torch/reference-guides/benchmarks/bench-amd-epyc-7763.md'
-      - NVIDIA A100/V100: 'docs/torch/reference-guides/benchmarks/bench-nvidia-a100-v100.md'
 - Security: 'docs/concept-guides/threat_model.md'
+- API Reference: "docs/resources/bastionlab/index.html"
 - Advanced:
-  - API Reference: "docs/resources/bastionlab/index.html"
   - Benchmarks:
     - Polars : 'docs/reference-guides/benchmarks/benchmarks.md'
     - Torch :
