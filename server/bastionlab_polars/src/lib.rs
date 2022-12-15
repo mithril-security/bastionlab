@@ -367,6 +367,8 @@ impl PolarsService for BastionLabPolars {
             user_id: session.pubkey.clone(),
         };
 
+        drop(sessions);
+
         let composite_plan: CompositePlan = serde_json::from_str(&request.get_ref().composite_plan)
             .map_err(|e| {
                 Status::invalid_argument(format!(
@@ -392,6 +394,7 @@ impl PolarsService for BastionLabPolars {
 
         let elapsed = start_time.elapsed();
         let hash = hex::encode(digest::digest(&digest::SHA256, &dataframe_bytes).as_ref());
+        println!("{:?}",token);
         telemetry::add_event(
             TelemetryEventProps::RunQuery {
                 dataset_name: Some(identifier.clone()),
