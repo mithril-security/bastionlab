@@ -438,7 +438,7 @@ class RemoteLazyFrame:
             res,
             Metadata(
                 self._meta._client,
-                [*self._meta._prev_segments, *other._meta._prev_segments],
+                [*other._meta._prev_segments, *self._meta._prev_segments],
             ),
         )
 
