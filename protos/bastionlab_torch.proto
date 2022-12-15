@@ -18,7 +18,7 @@ package bastionlab_torch;
 // import "bastionlab_session.proto";
 
 message Reference {
-    // BastionAI reference object. 
+    // BastionLab Torch reference object. 
     string identifier = 1;
     string name = 2;
     string description = 3;
@@ -26,7 +26,7 @@ message Reference {
 }
 
 message Chunk {
-    // Chunk of data sent from and to the BastionAI server.
+    // Chunk of data sent from and to the BastionLab Torch server.
     bytes data = 1;
     string name = 2;
     string description = 3;
@@ -35,11 +35,11 @@ message Chunk {
 }
 
 message Empty {
-    // Empty response object from BastionAI.
+    // Empty response object from BastionLab Torch.
 }
 
 message TrainConfig {
-    // Configuration for training sent to BastionAI.
+    // Configuration for training sent to BastionLab Torch.
     Reference model = 1;
     Reference dataset = 2;
     int32 batch_size = 3;

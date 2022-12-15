@@ -232,7 +232,7 @@ def data_chunks_generator(
     meta: bytes,
     progress: bool = False,
 ) -> Iterator[Chunk]:
-    """Converts an iterator of bytes chunks into an iterator of BastionAI gRPC protocol `Chunk` messages.
+    """Converts an iterator of bytes chunks into an iterator of BastionLab Torch gRPC protocol `Chunk` messages.
 
     Args:
         stream: Iterator of bytes chunks.
@@ -354,7 +354,7 @@ def serialize_model(
 
 
 def deserialize_weights_to_model(model: Module, chunks: Iterator[Chunk]) -> None:
-    """Deserializes weights from an iterator of BastionAI gRPC protocol `Chunks` writes
+    """Deserializes weights from an iterator of BastionLab Torch gRPC protocol `Chunks` writes
     them to the passed model.
     """
     wrapper = list(

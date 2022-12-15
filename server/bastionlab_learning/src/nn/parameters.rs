@@ -34,8 +34,8 @@ pub enum LossType {
 ///
 /// The standard variant provides standard parameter update, the private variant performs DP-SGD.
 /// Note that the private variant requires the model to use expanded weights. In the Python API,
-/// layers with expanded weights may be found under `bastionai.psg.nn`. A standard model may also
-/// be turned into an expanded one using the `bastionai.psg.expand` function.
+/// layers with expanded weights may be found under `bastionlab.torch.psg.nn`. A standard model may also
+/// be turned into an expanded one using the `bastionlab.torch.psg.expand` function.
 #[derive(Debug)]
 pub enum Parameters<'a> {
     Standard {
