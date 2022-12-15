@@ -73,6 +73,7 @@ features = [
   "ndarray",
   "unique_counts",
   "log",
+  "asof_join",
   "serde-lazy",
   "partition_by",
   "semi_anti_join",
