@@ -24,16 +24,16 @@ We’ll update the documentation as new features come in, so dive in!
 ## Getting Started
 ________________________________________________________
 
-- Follow our **[“Quick Tour”](docs/quick-tour/quick-tour.ipynb)** tutorial
-- **[Read](docs/concept-guides/threat_model.md)** about the technologies we use to ensure privacy
-- Find **[our benchmarks](docs/reference-guides/benchmarks/benchmarks.md)** documenting BastionLab’s speed
+- Follow our [“Quick Tour”](docs/quick-tour/quick-tour.ipynb) tutorial
+- [Read](docs/concept-guides/threat_model.md) about the technologies we use to ensure privacy
+- Find [our benchmarks](docs/reference-guides/benchmarks/benchmarks.md) documenting BastionLab’s speed
 
 ## Getting Help
 ________________________________________________________
 
-- Go to our **[Discord](https://discord.com/invite/TxEHagpWd4) #support** channel
-- Report bugs by **[opening an issue on our BastionLab Github](https://github.com/mithril-security/bastionlab/issues)**
-- **[Book a meeting](https://calendly.com/contact-mithril-security/15mins?month=2022-11)** with us
+- Go to our [Discord](https://discord.com/invite/TxEHagpWd4) *#support* channel
+- Report bugs by [opening an issue on our BastionLab Github](https://github.com/mithril-security/bastionlab/issues)
+- [Book a meeting](https://calendly.com/contact-mithril-security/15mins?month=2022-11) with us
 
 ## How do we organize the documentation?
 ____________________________________________
@@ -44,9 +44,9 @@ ____________________________________________
 
 - **[Concepts](docs/concept-guides/remote_data_science.md)** guides discuss key topics and concepts at a high level. They provide useful background information and explanations, especially on cybersecurity.
 
-- **[Security](docs/concept-guides/threat_model.md)** guides contain technical information for security engineers. They explain the threat models and other cybersecurity topics required to audit BastionLab's security standards.
-
 - **[API Reference](docs/resources/bastionlab/index.html)** contains technical references for BastionLab’s API machinery. They describe how it works and how to use it but assume you have a good understanding of key concepts. 
+
+- **[Security](docs/concept-guides/threat_model.md)** guides contain technical information for security engineers. They explain the threat models and other cybersecurity topics required to audit BastionLab's security standards.
 
 - **[Advanced](docs/reference-guides/benchmarks/benchmarks/) guides are destined to advanced users of BastionLab wanting to dive deep into BastionLab and eventually collaborate with us to the open-source code. We'll cover in the future exactly how to do so. 
 

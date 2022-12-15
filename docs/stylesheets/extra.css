@@ -1,11 +1,27 @@
+/* MKDOCS CSS */
+
+/* Color chart
+
+Oxford blue: #142540
+Blue Yonder: #647693
+Light Steel Blue: #B3C6E5
+Blue links from Jupyter: #106ba3
+Orange Yellow: #F0BA2D
+Black: #000000
+
+*/
+
+/* Dark mode */
 [data-md-color-scheme="slate"] {
-    --md-primary-fg-color:#142540;
-    --md-typeset-a-color:#b3c6e5;
-    --md-default-bg-color: #202023;
-    --md-accent-fg-color: #647693;
+    --md-primary-fg-color:#142540; /*header color*/
+	--md-default-bg-color: #1d232d; /*background*/
+    --md-typeset-a-color:#106ba3; /*clicked link*/
+    --md-accent-fg-color: #106ba3; /*hover color*/
 }
 
+/* Light mode */
 [data-md-color-scheme="default"] {
-    --md-primary-fg-color: #142540;
-    --md-accent-fg-color: #647693;
+    --md-primary-fg-color: #142540; /*header color*/
+	--md-typeset-a-color:#106ba3; /*clicked link*/
+	--md-accent-fg-color: #106ba3; /*hover color*/
 }
