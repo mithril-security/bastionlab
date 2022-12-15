@@ -71,7 +71,7 @@ def start_server(bastionlab_path: str, libtorch_path: str) -> BastionLabServer:
     os.chmod(bastionlab_path, 0o755)
     os.chdir(os.getcwd() + "/bin")
     os.environ["LD_LIBRARY_PATH"] = libtorch_path + "/lib"
-    os.environ["DISABLE_AUTHENTICATION"] = 1
+    os.environ["DISABLE_AUTHENTICATION"] = "1"
     process = subprocess.Popen([bastionlab_path], env=os.environ)
     os.chdir("..")
     print("Bastionlab server is now running on port 50056")

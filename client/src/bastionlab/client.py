@@ -13,6 +13,7 @@ from .pb.bastionlab_pb2_grpc import SessionServiceStub
 import platform
 import socket
 import getpass
+import sys
 
 
 if TYPE_CHECKING:
@@ -31,6 +32,7 @@ CLIENT_INFO = ClientInfo(
     platform_release=UNAME.release,
     user_agent="bastionlab_python",
     user_agent_version=app_version,
+    is_colab="google.colab" in sys.modules,
 )
 
 

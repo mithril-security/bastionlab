@@ -111,6 +111,7 @@ struct RequestUserProperties<'a> {
     client_platform_release: Option<&'a str>,
     client_user_agent: Option<&'a str>,
     client_user_agent_version: Option<&'a str>,
+    is_colab: bool,
 }
 
 pub fn setup(platform: String, uid: String, tee: String) -> Result<()> {
@@ -151,6 +152,7 @@ pub fn setup(platform: String, uid: String, tee: String) -> Result<()> {
                         user_properties.client_user_agent = Some(client_info.user_agent.as_ref());
                         user_properties.client_user_agent_version =
                             Some(client_info.user_agent_version.as_ref());
+                        user_properties.is_colab = client_info.is_colab;
                     }
 
                     let event_type = properties.event_type;
