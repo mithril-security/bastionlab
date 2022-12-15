@@ -57,10 +57,10 @@ nav:
 - Quick Tour: 'docs/quick-tour/quick-tour.ipynb'
 - Tutorials:
   - Installation: 'docs/tutorials/installation.md'
-  - Data visualization: 'docs/tutorials/visualization.ipynb'
-  - Data cleaning: 'docs/tutorials/data_cleaning.ipynb'
   - Authentication: 'docs/tutorials/authentication.ipynb'
   - Combining datasets: 'docs/tutorials/combining_datasets.ipynb'
+  - Data cleaning: 'docs/tutorials/data_cleaning.ipynb'
+  - Data visualization: 'docs/tutorials/visualization.ipynb'
 - How-to guides:
   - Covid-19 cleaning and exploration: 'docs/use-cases/covid_use_case.ipynb'
 - Concepts:
