@@ -25,6 +25,15 @@ theme:
 
 extra:
   homepage: https://mithrilsecurity.io
+  social:
+    - icon: fontawesome/brands/discord
+      link: https://discord.com/invite/TxEHagpWd4
+    - icon: fontawesome/brands/github
+      link: https://github.com/mithril-security/
+    - icon: fontawesome/brands/linkedin
+      link: https://www.linkedin.com/company/mithril-security-company/
+    - icon: fontawesome/brands/twitter
+      link: https://twitter.com/mithrilsecurity
 
 extra_css:
   - stylesheets/extra.css
