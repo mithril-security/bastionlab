@@ -11,6 +11,8 @@ theme:
     - navigation.instant
     - search.highlight
     - content.tabs.link
+    - navigation.tabs
+    - navigation.sections
   logo: assets/logo.png
   favicon: assets/logo.png
   palette:
