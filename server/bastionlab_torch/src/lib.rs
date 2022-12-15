@@ -37,7 +37,7 @@ use bastionlab_learning::serialization::{BinaryModule, SizedObjectsBytes};
 pub struct BastionLabTorch {
     binaries: Arc<RwLock<HashMap<String, Artifact<BinaryModule>>>>,
     checkpoints: Arc<RwLock<HashMap<String, Artifact<CheckPoint>>>>,
-    datasets: Arc<RwLock<HashMap<String, Artifact<Dataset>>>>,
+    pub datasets: Arc<RwLock<HashMap<String, Artifact<Dataset>>>>,
     runs: Arc<RwLock<HashMap<Uuid, Arc<RwLock<Run>>>>>,
     sess_manager: Arc<SessionManager>,
 }
@@ -51,10 +51,6 @@ impl BastionLabTorch {
             runs: Arc::new(RwLock::new(HashMap::new())),
             sess_manager,
         }
-    }
-
-    pub fn get_inner(&self) -> &Self {
-        self
     }
 
     pub fn insert_dataset(

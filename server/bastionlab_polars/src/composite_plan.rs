@@ -1,4 +1,5 @@
 use base64;
+use bastionlab_common::utils::tensor_to_series;
 use polars::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::io::Cursor;

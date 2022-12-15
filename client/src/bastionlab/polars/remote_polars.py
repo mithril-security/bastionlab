@@ -7,7 +7,8 @@ from torch.jit import ScriptFunction
 import base64
 import json
 import torch
-from ..pb.bastionlab_polars_pb2 import ReferenceResponse, ToDataset
+from ..pb.bastionlab_conversion_pb2 import ToDataset
+from ..pb.bastionlab_polars_pb2 import ReferenceResponse
 from .client import BastionLabPolars
 from .utils import ApplyBins
 import matplotlib.pyplot as plt
@@ -693,10 +694,11 @@ class FetchableLazyFrame(RemoteLazyFrame):
         labels_conv_fn: Optional[Callable] = None,
     ) -> "RemoteDataset":
         from ..torch.learner import RemoteDataset
+        from ..config import CONFIG
 
         inputs_conv_fn = b""
         labels_conv_fn = b""
-        ref = self._meta._client.stub.ConvToDataset(
+        ref = self._meta._client._conv._stub.ConvToDataset(
             ToDataset(
                 identifier=self.identifier,
                 inputs=inputs,
@@ -705,8 +707,8 @@ class FetchableLazyFrame(RemoteLazyFrame):
                 labels_conv_fn=labels_conv_fn,
             )
         )
-        print(ref.meta)
-        return RemoteDataset(client=self._meta._client._torch, train_dataset=ref)
+        print(CONFIG["torch_client"])
+        return RemoteDataset(client=CONFIG["torch_client"], train_dataset=ref)
 
 
 @dataclass

@@ -195,6 +195,7 @@ dependencies = [
  "anyhow",
  "base64",
  "bastionlab_common",
+ "bastionlab_conversion",
  "bastionlab_polars",
  "bastionlab_torch",
  "bincode",
@@ -235,6 +236,7 @@ dependencies = [
  "http",
  "log",
  "once_cell",
+ "polars",
  "prost 0.8.0",
  "rand",
  "reqwest",
@@ -243,6 +245,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "spki",
+ "tch",
  "tokio",
  "tokio-stream",
  "toml",
@@ -251,6 +254,22 @@ dependencies = [
  "uuid",
  "whoami",
  "x509-parser",
+]
+
+[[package]]
+name = "bastionlab_conversion"
+version = "0.1.0"
+dependencies = [
+ "bastionlab_common",
+ "bastionlab_learning",
+ "bastionlab_polars",
+ "bastionlab_torch",
+ "polars",
+ "prost 0.8.0",
+ "ring",
+ "tonic",
+ "tonic-build",
+ "uuid",
 ]
 
 [[package]]

@@ -1,4 +1,4 @@
-from typing import Optional, Union, List
+from typing import Optional, Union, List, Callable, TYPE_CHECKING
 from time import sleep
 from tqdm import tqdm  # type: ignore [import]
 from grpc import StatusCode
@@ -6,12 +6,17 @@ from torch.nn import Module
 from torch.utils.data import Dataset
 import torch
 from ..pb.bastionlab_torch_pb2 import Metric, Reference, TestConfig, TrainConfig, Meta  # type: ignore [import]
+from ..pb.bastionlab_conversion_pb2 import ToDataFrame
+from ..pb.bastionlab_polars_pb2 import ReferenceResponse
 from ..errors import GRPCException
 from .psg import expand_weights
 from .client import BastionLabTorch
 from .optimizer_config import *
 
 from .utils import bulk_deserialize
+
+if TYPE_CHECKING:
+    from ..polars.remote_polars import FetchableLazyFrame
 
 
 class RemoteDataset:
@@ -126,6 +131,32 @@ class RemoteDataset:
             )
         else:
             self.test_dataset_ref = test_dataset
+
+    def to_df(
+        self,
+        inputs_col_names: List[str],
+        labels_col_name: str,
+        inputs_conv_fn: Optional[Callable] = None,
+        labels_conv_fn: Optional[Callable] = None,
+    ) -> "FetchableLazyFrame":
+        from ..config import CONFIG
+        from ..polars.remote_polars import FetchableLazyFrame
+
+        inputs_conv_fn = b""
+        labels_conv_fn = b""
+
+        print(CONFIG["polars_client"])
+        ref = self.client._conv._stub.ConvToDataFrame(
+            ToDataFrame(
+                inputs_col_names=inputs_col_names,
+                labels_col_name=labels_col_name,
+                inputs_conv_fn=inputs_conv_fn,
+                labels_conv_fn=labels_conv_fn,
+                identifier=self.train_dataset_ref.identifier,
+            )
+        )
+        ref = ReferenceResponse(identifier=ref.identifier, header=ref.header)
+        return FetchableLazyFrame._from_reference(CONFIG["polars_client"], ref)
 
 
 class RemoteLearner:

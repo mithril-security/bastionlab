@@ -44,13 +44,6 @@ message ToDataset {
     bytes labels_conv_fn = 4;
     string identifier = 5;
 }
-message Reference {
-    // BastionAI reference object. 
-    string identifier = 1;
-    string name = 2;
-    string description = 3;
-    bytes meta = 4;
-}
 
 message Meta {
     message Shape {
@@ -63,11 +56,19 @@ message Meta {
     optional Reference train_dataset = 5;
 }
 
+message Reference {
+    // BastionAI reference object. 
+    string identifier = 1;
+    string name = 2;
+    string description = 3;
+    bytes meta = 4;
+}
+
+
 service PolarsService {
     rpc SendDataFrame (stream SendChunk) returns (ReferenceResponse) {}
     rpc RunQuery (Query) returns (ReferenceResponse) {}
     rpc FetchDataFrame (ReferenceRequest) returns (stream FetchChunk) {}
     rpc ListDataFrames (Empty) returns (ReferenceList) {}
     rpc GetDataFrameHeader (ReferenceRequest) returns (ReferenceResponse) {}
-    rpc ConvToDataset(ToDataset) returns (Reference) {}
 }

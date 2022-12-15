@@ -5,11 +5,8 @@ use bastionlab_common::{
     telemetry::{self, TelemetryEventProps},
 };
 
-use bastionlab_learning::data::Dataset;
-use bastionlab_torch::{storage::Artifact, BastionLabTorch};
 use polars::prelude::*;
-use prost::Message;
-use ring::{digest, hmac};
+use ring::digest;
 use serde_json;
 use std::{future::Future, pin::Pin, time::Instant};
 use tokio_stream::wrappers::ReceiverStream;
@@ -22,8 +19,8 @@ pub mod polars_proto {
 }
 
 use polars_proto::{
-    polars_service_server::PolarsService, Empty, FetchChunk, Query, Reference, ReferenceList,
-    ReferenceRequest, ReferenceResponse, SendChunk, ToDataset,
+    polars_service_server::PolarsService, Empty, FetchChunk, Query, ReferenceList,
+    ReferenceRequest, ReferenceResponse, SendChunk,
 };
 
 mod serialization;
@@ -34,13 +31,10 @@ use composite_plan::*;
 
 mod visitable;
 
-mod access_control;
+pub mod access_control;
 use access_control::*;
 
-mod utils;
-use utils::*;
-
-use crate::polars_proto::Meta;
+pub mod utils;
 
 pub enum FetchStatus {
     Ok,
@@ -75,20 +69,23 @@ impl DataFrameArtifact {
             query_details: String::from("uploaded dataframe"),
         }
     }
-}
 
+    pub fn with_fetchable(mut self, fetchable: VerificationResult) -> Self {
+        self.fetchable = fetchable;
+        self
+    }
+}
+#[derive(Clone)]
 pub struct BastionLabPolars {
     dataframes: Arc<RwLock<HashMap<String, DataFrameArtifact>>>,
     sess_manager: Arc<SessionManager>,
-    torch: Arc<BastionLabTorch>,
 }
 
 impl BastionLabPolars {
-    pub fn new(sess_manager: Arc<SessionManager>, torch: Arc<BastionLabTorch>) -> Self {
+    pub fn new(sess_manager: Arc<SessionManager>) -> Self {
         Self {
             dataframes: Arc::new(RwLock::new(HashMap::new())),
             sess_manager,
-            torch,
         }
     }
 
@@ -230,7 +227,7 @@ Reason: {}",
         })
     }
 
-    fn get_df_unchecked(&self, identifier: &str) -> Result<DataFrame, Status> {
+    pub fn get_df_unchecked(&self, identifier: &str) -> Result<DataFrame, Status> {
         let dfs = self.dataframes.read().unwrap();
         Ok(dfs
             .get(identifier)
@@ -254,7 +251,7 @@ Reason: {}",
         )))?))
     }
 
-    fn get_header(&self, identifier: &str) -> Result<String, Status> {
+    pub fn get_header(&self, identifier: &str) -> Result<String, Status> {
         Ok(get_df_header(
             &self
                 .dataframes
@@ -279,53 +276,11 @@ Reason: {}",
         Ok(res)
     }
 
-    fn insert_df(&self, df: DataFrameArtifact) -> String {
+    pub fn insert_df(&self, df: DataFrameArtifact) -> String {
         let mut dfs = self.dataframes.write().unwrap();
         let identifier = format!("{}", Uuid::new_v4());
         dfs.insert(identifier.clone(), df);
         identifier
-    }
-
-    fn insert_torch_dataset(
-        &self,
-        df: &DataFrame,
-        inputs: &Vec<String>,
-        labels: &str,
-        client_info: Option<ClientInfo>,
-    ) -> Result<Reference, Status> {
-        let inputs = to_status_error(df.columns(&inputs[..]))?;
-        let labels = to_status_error(df.column(labels))?;
-
-        let (inputs, shapes, dtypes, nb_samples) = vec_series_to_tensor(inputs)?;
-
-        let labels = Mutex::new(series_to_tensor(labels)?);
-        let identifier = format!("{}", Uuid::new_v4());
-
-        let data = Dataset::new(inputs, labels);
-        let meta = Meta {
-            input_shape: shapes,
-            input_dtype: dtypes,
-            nb_samples: nb_samples.try_into().unwrap(),
-            privacy_limit: 0.0,
-            train_dataset: None,
-        };
-
-        let dataset = Artifact {
-            data: Arc::new(RwLock::new(data)),
-            name: String::default(),
-            description: String::default(),
-            secret: hmac::Key::new(ring::hmac::HMAC_SHA256, &[0]),
-            meta: meta.encode_to_vec(),
-            client_info,
-        };
-        let (identifier, name, description, meta) =
-            self.torch.insert_dataset(&identifier, dataset)?;
-        Ok(Reference {
-            identifier,
-            name,
-            description,
-            meta,
-        })
     }
 }
 
@@ -469,28 +424,5 @@ impl PolarsService for BastionLabPolars {
             Some(self.sess_manager.get_client_info(token)?),
         );
         Ok(Response::new(ReferenceResponse { identifier, header }))
-    }
-
-    async fn conv_to_dataset(
-        &self,
-        request: Request<ToDataset>,
-    ) -> Result<Response<Reference>, Status> {
-        let token = self.sess_manager.verify_request(&request)?;
-        let client_info = self.sess_manager.get_client_info(token)?;
-        let (inputs, labels, identifier) = {
-            (
-                &request.get_ref().inputs,
-                &request.get_ref().labels,
-                &request.get_ref().identifier,
-            )
-        };
-
-        let df = self.get_df_unchecked(&identifier)?;
-        Ok(Response::new(self.insert_torch_dataset(
-            &df,
-            inputs,
-            labels,
-            Some(client_info),
-        )?))
     }
 }

@@ -124,6 +124,19 @@ message Metric {
     int32 nb_batches = 6;
 }
 
+message ReferenceResponse {
+    string identifier = 1;
+    string header = 2;
+}
+
+message ToDataFrame {
+    repeated string inputs_col_names = 1;
+    string labels_col_name = 2;
+    bytes inputs_conv_fn = 3;
+    bytes labels_conv_fn = 4;
+    string identifier = 5;
+}
+
 service TorchService {
     rpc SendDataset (stream Chunk) returns (Reference) {}
     rpc SendModel (stream Chunk) returns (Reference) {}

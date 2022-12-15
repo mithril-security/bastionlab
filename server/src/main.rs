@@ -5,6 +5,7 @@ use bastionlab_common::{
     session::SessionManager,
     telemetry::{self, TelemetryEventProps},
 };
+use bastionlab_polars::BastionLabPolars;
 use bastionlab_torch::BastionLabTorch;
 use std::collections::hash_map::DefaultHasher;
 use std::fs;
@@ -86,23 +87,31 @@ async fn main() -> Result<()> {
         builder.add_service(SessionServiceServer::new(svc))
     };
 
+    let torch_svc = BastionLabTorch::new(sess_manager.clone());
     // Torch
-    let (builder, torch_svc) = {
+    let builder = {
         use bastionlab_torch::torch_proto::torch_service_server::TorchServiceServer;
-        let svc = BastionLabTorch::new(sess_manager.clone());
-        (
-            builder.add_service(TorchServiceServer::new(svc.clone())),
-            svc.clone(),
-        )
+        builder.add_service(TorchServiceServer::new(torch_svc.clone()))
     };
 
+    let polars_svc = BastionLabPolars::new(sess_manager.clone());
     // Polars
     let builder = {
-        use bastionlab_polars::{
-            polars_proto::polars_service_server::PolarsServiceServer, BastionLabPolars,
+        use bastionlab_polars::polars_proto::polars_service_server::PolarsServiceServer;
+        builder.add_service(PolarsServiceServer::new(polars_svc.clone()))
+    };
+
+    // Conversion
+    let builder = {
+        use bastionlab_conversion::{
+            conversion_proto::conversion_service_server::ConversionServiceServer,
+            converter::Converter,
         };
-        let svc = BastionLabPolars::new(sess_manager.clone(), Arc::new(torch_svc));
-        builder.add_service(PolarsServiceServer::new(svc))
+        builder.add_service(ConversionServiceServer::new(Converter::new(
+            Arc::new(torch_svc.clone()),
+            Arc::new(polars_svc.clone()),
+            sess_manager.clone(),
+        )))
     };
 
     let addr = config

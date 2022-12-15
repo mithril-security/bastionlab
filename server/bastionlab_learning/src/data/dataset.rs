@@ -10,8 +10,8 @@ use tch::{Device, IndexOp, TchError, Tensor};
 /// Simple in-memory dataset that keeps track of its usage in terms of privacy budget
 #[derive(Debug)]
 pub struct Dataset {
-    samples_inputs: Vec<Mutex<Tensor>>,
-    labels: Mutex<Tensor>,
+    pub samples_inputs: Vec<Mutex<Tensor>>,
+    pub labels: Mutex<Tensor>,
     privacy_context: Arc<RwLock<PrivacyContext>>,
 }
 

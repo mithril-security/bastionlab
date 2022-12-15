@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package bastionlab_conversion;
+
+message ToDataset {
+    repeated string inputs = 1;
+    string labels = 2;
+    bytes inputs_conv_fn = 3;
+    bytes labels_conv_fn = 4;
+    string identifier = 5;
+}
+
+message ConvReference {
+    // BastionAI reference object. 
+    string identifier = 1;
+    string name = 2;
+    string description = 3;
+    bytes meta = 4;
+}
+
+message ConvReferenceResponse {
+    string identifier = 1;
+    string header = 2;
+}
+
+message ToDataFrame {
+    repeated string inputs_col_names = 1;
+    string labels_col_name = 2;
+    bytes inputs_conv_fn = 3;
+    bytes labels_conv_fn = 4;
+    string identifier = 5;
+}
+
+service ConversionService {
+    rpc ConvToDataset(ToDataset) returns (ConvReference) {}
+    rpc ConvToDataFrame (ToDataFrame) returns (ConvReferenceResponse) {}
+}

@@ -14,11 +14,12 @@ import platform
 import socket
 import getpass
 import sys
-
+from .config import CONFIG
 
 if TYPE_CHECKING:
     from .torch import BastionLabTorch
     from .polars import BastionLabPolars
+    from .converter import BastionLabConverter
 
 HEART_BEAT_TICK = 25 * 60
 UNAME = platform.uname()
@@ -47,6 +48,7 @@ class Client:
     _bastionlab_polars: "BastionLabPolars" = (
         None  #: The BastionLabPolars object for accessing the polars functionality.
     )
+    _bastionlab_converter: "BastionLabConverter" = None  #: The BastionLabConverter object for converting internal objects (DF->Dataset, Dataset->DF).
     _channel: grpc.Channel  #: The underlying gRPC channel used to communicate with the server.
 
     def __init__(
@@ -60,6 +62,8 @@ class Client:
             channel (grpc.Channel): A gRPC channel to the BastionLab server.
         """
         self._channel = channel
+        CONFIG["torch_client"] = self.torch
+        CONFIG["polars_client"] = self.polars
 
     @property
     def torch(self) -> "BastionLabTorch":
@@ -69,7 +73,7 @@ class Client:
         if self._bastionlab_torch is None:
             from bastionlab.torch import BastionLabTorch
 
-            self._bastionlab_torch = BastionLabTorch(self._channel)
+            self._bastionlab_torch = BastionLabTorch(self._channel, self.converter)
         return self._bastionlab_torch
 
     @property
@@ -80,8 +84,20 @@ class Client:
         if self._bastionlab_polars is None:
             from bastionlab.polars import BastionLabPolars
 
-            self._bastionlab_polars = BastionLabPolars(self._channel, self.torch)
+            self._bastionlab_polars = BastionLabPolars(self._channel, self.converter)
+
         return self._bastionlab_polars
+
+    @property
+    def converter(self) -> "BastionLabConverter":
+        """
+        Returns the BastionLabPolars instance used by this client.
+        """
+        if self._bastionlab_converter is None:
+            from bastionlab.converter import BastionLabConverter
+
+            self._bastionlab_converter = BastionLabConverter(self._channel)
+        return self._bastionlab_converter
 
 
 class _AuthPlugin(grpc.AuthMetadataPlugin):

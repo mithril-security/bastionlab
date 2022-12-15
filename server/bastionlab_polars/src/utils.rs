@@ -1,7 +1,8 @@
 use std::{error::Error, i64::MAX, sync::Mutex};
 
+use bastionlab_common::utils::array_to_tensor;
 use polars::prelude::*;
-use tch::{kind::Element, Tensor};
+use tch::Tensor;
 use tonic::Status;
 
 use crate::polars_proto::meta::Shape;
@@ -52,51 +53,6 @@ pub fn vec_series_to_tensor(
     }
 
     Ok((ts, shapes, dtypes, nb_samples))
-}
-
-pub fn tensor_to_series(name: &str, dtype: &DataType, tensor: Tensor) -> Result<Series, Status> {
-    Ok(match dtype {
-        DataType::Float32 => Series::from(tensor_to_array::<Float32Type>(&name, tensor)),
-        DataType::Float64 => Series::from(tensor_to_array::<Float64Type>(&name, tensor)),
-        DataType::Int64 => Series::from(tensor_to_array::<Int64Type>(&name, tensor)),
-        DataType::Int32 => Series::from(tensor_to_array::<Int32Type>(&name, tensor)),
-        DataType::Int16 => Series::from(tensor_to_array::<Int16Type>(&name, tensor)),
-        DataType::Int8 => Series::from(tensor_to_array::<Int8Type>(&name, tensor)),
-        d => {
-            return Err(Status::invalid_argument(format!(
-                "Unsuported data type in udf: {}",
-                d
-            )))
-        }
-    })
-}
-
-pub fn array_to_tensor<T>(series: &ChunkedArray<T>) -> Result<Tensor, Status>
-where
-    T: PolarsNumericType,
-    T::Native: Element,
-{
-    Ok(match series.rechunk().cont_slice() {
-        Ok(slice) => Tensor::from(slice),
-        Err(_) => {
-            if !series.has_validity() {
-                return Err(Status::invalid_argument(
-                    "Cannot apply udf on a column that contains empty values",
-                ));
-            }
-            let v: Vec<T::Native> = series.into_no_null_iter().collect();
-            Tensor::from(&v[..])
-        }
-    })
-}
-
-pub fn tensor_to_array<T>(name: &str, tensor: Tensor) -> ChunkedArray<T>
-where
-    T: PolarsNumericType,
-    T::Native: Element,
-{
-    let v = Vec::from(tensor);
-    ChunkedArray::new_vec(name, v)
 }
 
 pub fn lazy_frame_from_logical_plan(plan: LogicalPlan) -> LazyFrame {

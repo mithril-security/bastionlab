@@ -18,6 +18,8 @@ from .utils import (
 
 if TYPE_CHECKING:
     from .learner import RemoteLearner, RemoteDataset
+    from ..polars import BastionLabPolars
+    from ..converter import BastionLabConverter
 
 
 class BastionLabTorch:
@@ -30,8 +32,10 @@ class BastionLabTorch:
     def __init__(
         self,
         channel: grpc.Channel,
+        conv: "BastionLabConverter",
     ) -> None:
         self.stub = TorchServiceStub(channel)
+        self._conv = conv
 
     def send_model(
         self,
