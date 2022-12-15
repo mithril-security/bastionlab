@@ -21,14 +21,14 @@ BastionLab solves this problem by ensuring that only privacy-friendly operations
 
 We’ll update the documentation as new features come in, so dive in!
 
-## Getting Started
+## Getting started
 ________________________________________________________
 
 - Follow our [“Quick Tour”](docs/quick-tour/quick-tour.ipynb) tutorial
 - [Read](docs/concept-guides/threat_model.md) about the technologies we use to ensure privacy
 - Find [our benchmarks](docs/reference-guides/benchmarks/benchmarks.md) documenting BastionLab’s speed
 
-## Getting Help
+## Getting help
 ________________________________________________________
 
 - Go to our [Discord](https://discord.com/invite/TxEHagpWd4) *#support* channel
