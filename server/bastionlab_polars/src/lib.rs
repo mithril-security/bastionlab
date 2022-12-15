@@ -353,21 +353,12 @@ impl PolarsService for BastionLabPolars {
         request: Request<Query>,
     ) -> Result<Response<ReferenceResponse>, Status> {
         let token = self.sess_manager.verify_request(&request)?;
-        let token_bytes = match &token {
-            Some(v) => &v[..],
-            None => &[0u8; 32],
-        };
-        let sessions = self.sess_manager.sessions.read().unwrap();
-        let session = sessions
-            .get(token_bytes)
-            .ok_or(Status::aborted("Session not found!"))?;
 
+        let user_id = self.sess_manager.get_user_id(token.clone())?;
         let context = Context {
             min_agg_size: None,
-            user_id: session.pubkey.clone(),
+            user_id,
         };
-
-        drop(sessions);
 
         let composite_plan: CompositePlan = serde_json::from_str(&request.get_ref().composite_plan)
             .map_err(|e| {
