@@ -8,7 +8,7 @@ You can use BastionLab’s Client `Identity.create()` function to generate the k
 
 Here’s how the keys are generated:
 
-We use Python’s cryptography library](https://pypi.org/project/cryptography/) to generate a key pair, using the elliptic curve NIST P-256 algorithm. The Python cryptography library itself uses OpenSSL, a standard library for cryptography.
+We use [Python’s cryptography library](https://pypi.org/project/cryptography/) to generate a key pair, using the elliptic curve NIST P-256 algorithm. The Python cryptography library itself uses OpenSSL, a standard library for cryptography.
 The keys are saved to the bin directory and labeled as `foo` (private key) and `foo.pub` (public key).
 You must share your public key with the server or the data owner so it can be added to the set of trusted keys when the server is initiated.
 
