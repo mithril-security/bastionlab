@@ -33,6 +33,7 @@ use composite_plan::*;
 mod visitable;
 
 mod access_control;
+use access_control::Context;
 use access_control::*;
 
 mod utils;
@@ -281,6 +282,20 @@ Reason: {}",
     }
 
     fn persist_df(&self, identifier: &str) -> Result<(), Status> {
+        let dataframes = self
+            .dataframes
+            .read()
+            .map_err(|_| Status::not_found("Unable to read dataframes!"))?;
+
+        let df_artifact = dataframes
+            .get(identifier)
+            .ok_or("")
+            .map_err(|_| Status::not_found("Unable to find dataframe!"))?;
+
+        if df_artifact.fetchable != VerificationResult::Safe {
+            return Err(Status::failed_precondition("Dataframe is not fetchable"));
+        }
+
         let error = create_dir("data_frames");
         match error {
             Ok(_) => {}
@@ -297,16 +312,6 @@ Reason: {}",
             .create(true)
             .open(path)
             .map_err(|_| Status::not_found("Unable to find or create storage file!"))?;
-
-        let dataframes = self
-            .dataframes
-            .read()
-            .map_err(|_| Status::not_found("Unable to read dataframes!"))?;
-
-        let df_artifact = dataframes
-            .get(identifier)
-            .ok_or("")
-            .map_err(|_| Status::not_found("Unable to find dataframe!"))?;
 
         serde_json::to_writer(df_store, df_artifact)
             .map_err(|_| Status::unknown("Could not serialize dataframe artifact!"))?;
@@ -348,6 +353,19 @@ impl PolarsService for BastionLabPolars {
         request: Request<Query>,
     ) -> Result<Response<ReferenceResponse>, Status> {
         let token = self.sess_manager.verify_request(&request)?;
+        let token_bytes = match &token {
+            Some(v) => &v[..],
+            None => &[0u8; 32],
+        };
+        let sessions = self.sess_manager.sessions.read().unwrap();
+        let session = sessions
+            .get(token_bytes)
+            .ok_or(Status::aborted("Session not found!"))?;
+
+        let context = Context {
+            min_agg_size: None,
+            user_id: session.pubkey.clone(),
+        };
 
         let composite_plan: CompositePlan = serde_json::from_str(&request.get_ref().composite_plan)
             .map_err(|e| {
@@ -360,7 +378,7 @@ impl PolarsService for BastionLabPolars {
 
         let start_time = Instant::now();
 
-        let res = composite_plan.run(self, token.clone())?;
+        let res = composite_plan.run(self, context)?;
         let dataframe_bytes: Vec<u8> =
             df_to_bytes(&res.dataframe)
                 .iter_mut()
