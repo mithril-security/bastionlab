@@ -1,7 +1,7 @@
 use polars::{
     prelude::{
         ChunkedArray, DataType, Float32Type, Int16Type, Int32Type, Int64Type, Int8Type,
-        PolarsNumericType,
+        PolarsDataType, PolarsNumericType,
     },
     series::Series,
 };
@@ -26,7 +26,7 @@ pub fn tensor_to_series(name: &str, dtype: &DataType, tensor: Tensor) -> Result<
 }
 pub fn array_to_tensor<T>(series: &ChunkedArray<T>) -> Result<Tensor, Status>
 where
-    T: PolarsNumericType,
+    T: PolarsNumericType + PolarsDataType,
     T::Native: Element,
 {
     Ok(match series.rechunk().cont_slice() {
@@ -52,6 +52,7 @@ where
     ChunkedArray::new_vec(name, v)
 }
 
+// TODO: Find more conversion equivalents.
 pub fn kind_to_datatype(kind: Kind) -> DataType {
     match kind {
         Kind::Uint8 => DataType::UInt8,

@@ -18,6 +18,12 @@ pub fn sanitize_df(df: &mut DataFrame, blacklist: &Vec<String>) {
     }
 }
 
+fn list_to_tensor(series: &Series) -> Result<Vec<Tensor>, Status> {
+    let rows = to_status_error(series.list())?;
+    let mut out = vec![];
+    // let _ = rows.
+    Ok(out)
+}
 pub fn series_to_tensor(series: &Series) -> Result<Tensor, Status> {
     Ok(match series.dtype() {
         DataType::Float32 => array_to_tensor(series.f32().unwrap())?,
@@ -26,6 +32,7 @@ pub fn series_to_tensor(series: &Series) -> Result<Tensor, Status> {
         DataType::Int32 => array_to_tensor(series.i32().unwrap())?,
         DataType::Int16 => array_to_tensor(series.i16().unwrap())?,
         DataType::Int8 => array_to_tensor(series.i8().unwrap())?,
+        DataType::UInt32 => array_to_tensor(series.i64().unwrap())?,
         d => {
             return Err(Status::invalid_argument(format!(
                 "Unsuported data type in udf: {}",

@@ -136,14 +136,28 @@ class RemoteDataset:
         self,
         inputs_col_names: List[str],
         labels_col_name: str,
-        inputs_conv_fn: Optional[Callable] = None,
-        labels_conv_fn: Optional[Callable] = None,
+        inputs_conv_fn: str = "",
+        labels_conv_fn: str = "",
     ) -> "FetchableLazyFrame":
+        """Converts BastionLabTorch `RemoteDataset` to a `FetchableLazyFrame`.
+
+        Args
+        ----
+            inputs_col_names: List[str]
+                The list of input columns names to used as `DataFrame` columns.
+            labels_col_name: str
+                The column name of the labels column in the resulting `DataFrame`
+            inputs_conv_fn: str
+                Function to convert inputs to `DataFrame` dtypes.
+            labels_conv_fn: str
+                Function to convert labels to `DataFrame` dtypes.
+
+        Returns
+        -------
+            FetchableLazyFrame
+        """
         from ..config import CONFIG
         from ..polars.remote_polars import FetchableLazyFrame
-
-        inputs_conv_fn = b""
-        labels_conv_fn = b""
 
         print(CONFIG["polars_client"])
         ref = self.client._conv._stub.ConvToDataFrame(

@@ -690,14 +690,27 @@ class FetchableLazyFrame(RemoteLazyFrame):
         self,
         inputs: Optional[List[str]] = None,
         labels: Optional[str] = None,
-        inputs_conv_fn: Optional[Callable] = None,
-        labels_conv_fn: Optional[Callable] = None,
+        inputs_conv_fn: str = "",
+        labels_conv_fn: str = "",
     ) -> "RemoteDataset":
+        """Converts BastionLab `FetchableLazy` to a `RemoteDataset`.
+
+        Args:
+            inputs: List[str]
+                The list of input columns names to used as `DataFrame` columns.
+            labels: str
+                The column name of the labels column in the resulting `DataFrame`
+            inputs_conv_fn: Optional[Callable]
+                Function to convert inputs to `torch.Tensor` dtypes.
+            labels_conv_fn: Optional[Callable]
+                Function to convert labels to `torch.Tensor` dtypes.
+
+        Returns:
+            RemoteDataset
+        """
         from ..torch.learner import RemoteDataset
         from ..config import CONFIG
 
-        inputs_conv_fn = b""
-        labels_conv_fn = b""
         ref = self._meta._client._conv._stub.ConvToDataset(
             ToDataset(
                 identifier=self.identifier,
@@ -707,7 +720,6 @@ class FetchableLazyFrame(RemoteLazyFrame):
                 labels_conv_fn=labels_conv_fn,
             )
         )
-        print(CONFIG["torch_client"])
         return RemoteDataset(client=CONFIG["torch_client"], train_dataset=ref)
 
 
