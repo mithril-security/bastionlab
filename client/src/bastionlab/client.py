@@ -64,7 +64,6 @@ class Client:
     _token: Optional[bytes] = None
     signing_key: Optional[SigningKey]
 
-
     def __init__(
         self,
         channel: grpc.Channel,
@@ -215,7 +214,6 @@ class Connection:
         if self._client is not None:
             self.__exit__(None, None, None)
 
-
     def __enter__(self) -> Client:
         # """Establishes a secure channel to the server and returns a `Client` object that can be used to interact with the server.
         # This method is called automatically when the `Connection` object is used in a `with` statement.
@@ -227,7 +225,7 @@ class Connection:
             root_certificates=bytes(server_cert, encoding="utf8")
         )
         connection_options = (("grpc.ssl_target_name_override", self.server_name),)
-        
+
         # Verify user by creating session
         self.token = Connection._verify_user(
             server_target, server_creds, connection_options, self.identity
@@ -241,8 +239,8 @@ class Connection:
             else server_creds
             if self.token is None
             else grpc.composite_channel_credentials(
-            server_creds, grpc.metadata_call_credentials(auth_plugin)
-        )
+                server_creds, grpc.metadata_call_credentials(auth_plugin)
+            )
         )
 
         self.channel = grpc.secure_channel(
