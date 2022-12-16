@@ -932,6 +932,9 @@ class FetchableLazyFrame(RemoteLazyFrame):
         """
         return self._meta._client._fetch_df(self._identifier)
 
+    def save(self):
+        return self._meta._client.persist_df(self._identifier)
+
 
 @dataclass
 class Facet:

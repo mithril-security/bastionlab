@@ -24,7 +24,11 @@ pub enum CompositePlanSegment {
 }
 
 impl CompositePlan {
-    pub fn run(self, state: &BastionLabPolars) -> Result<DataFrameArtifact, Status> {
+    pub fn run(
+        self,
+        state: &BastionLabPolars,
+        mut context: Context,
+    ) -> Result<DataFrameArtifact, Status> {
         let mut input_dfs = Vec::new();
         let plan_str = serde_json::to_string(&self.0).unwrap(); // FIX THIS
 
@@ -100,13 +104,10 @@ impl CompositePlan {
                 "Wrong number of input data frames",
             ));
         }
-
+        context.min_agg_size = min_agg_size;
         Ok(DataFrameArtifact {
             dataframe: input_dfs.pop().unwrap(),
-            fetchable: policy.verify(&Context {
-                min_agg_size,
-                user_id: String::new(),
-            })?,
+            fetchable: policy.verify(&context)?,
             policy,
             blacklist,
             query_details: plan_str,

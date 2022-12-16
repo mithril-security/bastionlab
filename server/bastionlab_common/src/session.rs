@@ -54,7 +54,7 @@ pub struct Session {
 #[derive(Debug)]
 pub struct SessionManager {
     keys: Option<Mutex<KeyManagement>>,
-    sessions: Arc<RwLock<HashMap<[u8; 32], Session>>>,
+    pub sessions: Arc<RwLock<HashMap<[u8; 32], Session>>>,
     session_expiry: u64,
     challenges: Mutex<HashSet<[u8; 32]>>,
 }
@@ -71,6 +71,20 @@ impl SessionManager {
 
     pub fn auth_enabled(&self) -> bool {
         self.keys.is_some()
+    }
+
+    pub fn get_user_id(&self, token: Option<Bytes>) -> Result<String, Status> {
+        let token_bytes = match &token {
+            Some(v) => &v[..],
+            None => &[0u8; 32],
+        };
+        let sessions = self.sessions.read().unwrap();
+        let session = sessions
+            .get(token_bytes)
+            .ok_or(Status::aborted("Session not found!"))?;
+
+        let user_id = session.pubkey.clone();
+        Ok(user_id)
     }
 
     pub fn verify_request<T>(&self, req: &Request<T>) -> Result<Option<Bytes>, Status> {
