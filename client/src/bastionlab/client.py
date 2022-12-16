@@ -104,8 +104,7 @@ class AuthPlugin(grpc.AuthMetadataPlugin):
 
 @dataclass
 class Connection:
-    """
-    This class represents a connection to a remote server. It holds the necessary
+    """This class represents a connection to a remote server. It holds the necessary
     information to establish and manage the connection, such as the hostname, port,
     identity (signing key), and token (if applicable).
 
@@ -141,12 +140,12 @@ class Connection:
         elif known:
            return token and add token to channel metadata
 
-        Arguments:
+        Args:
             server_target {str} -- The hostname or IP address of the remote server.
             server_creds {grpc.ChannelCredentials} -- The credentials to use for the connection.
             options {Any} -- The options to use for the connection.
 
-        Keyword Arguments:
+        Keyword Args:
             signing_key {Optional[SigningKey]} -- The signing key to use for authentication. (default: {None})
 
         Returns:
@@ -254,7 +253,7 @@ class Connection:
     def __exit__(self, exc_type: Any, exc_value: Any, exc_traceback: Any) -> None:
         """Closes the connection to the server and cleans up any resources being used by the `Client` object.
         This method is called automatically when the `with` statement is exited.
-        Arguments:
+        Args:
            exc_type: The type of the exception that caused the `with` statement to exit.
            exc_value: The value of the exception that caused the `with` statement to exit.
            exc_traceback: The traceback of the exception that caused the `with` statement to exit.

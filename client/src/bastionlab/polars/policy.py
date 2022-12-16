@@ -12,12 +12,11 @@ class AtLeastNof(Rule):
     """
     specifies a collection of `Rule`s.
 
-    Args
-    ----
-    n : int
-        Specifies the number of rules to combine.
-    of : List[Rule]
-        Collection of rules.
+    Args:
+        n : int
+            Specifies the number of rules to combine.
+        of : List[Rule]
+            Collection of rules.
     """
 
     n: int
@@ -33,10 +32,9 @@ class UserId(Rule):
     """
     BastionLab instruction `Rule` that attaches a user identifier to the safe zone.
 
-    Args
-    ----
-    id : str
-        User Identifier.
+    Args:
+        id : str
+            User Identifier.
     """
 
     id: str
@@ -50,10 +48,9 @@ class Aggregation(Rule):
     """
     Specifies a `Rule` for the number of rows an operation on a Remote DataFrame can aggregate.
 
-    Args
-    ----
-    min_agg_size : int
-        The minimum allowable row aggregation size.
+    Args:
+        min_agg_size : int
+            The minimum allowable row aggregation size.
     """
 
     min_agg_size: int
@@ -125,12 +122,11 @@ class Policy:
 
     Express the allowable operations on Remote DataFrames [RDFs] (i.e., DataFrames on the BastionLab server).
 
-    Args
-    ----
-    safe_zone : Rule
-        Describes what operations are considered _safe_ on the RDF.
-    unsafe_handling : UnsafeAction
-        Describes what should happen if a user violates the `safe_zone`. For example (logging operations)
+    Args:
+        safe_zone : Rule
+            Describes what operations are considered _safe_ on the RDF.
+        unsafe_handling : UnsafeAction
+            Describes what should happen if a user violates the `safe_zone`. For example (logging operations)
     """
 
     safe_zone: Rule

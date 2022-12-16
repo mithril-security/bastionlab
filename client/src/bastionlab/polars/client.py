@@ -22,15 +22,13 @@ if TYPE_CHECKING:
 
 
 class BastionLabPolars:
-    """
-    Main BastionLabPolars API class.
+    """Main BastionLabPolars API class.
 
     This class contains all the endpoints allowed on the BastionLab server.
 
-    Attributes
-    ----------
-    stub : bastionlab.pb.bastionlab_polars_pb2_grpc.PolarsServiceStub
-        The gRPC service for BastionLab Polars. This define all the API calls for BastionLab Polars.
+    Args:
+        stub : bastionlab.pb.bastionlab_polars_pb2_grpc.PolarsServiceStub
+            The gRPC service for BastionLab Polars. This define all the API calls for BastionLab Polars.
     """
 
     def __init__(
@@ -51,19 +49,18 @@ class BastionLabPolars:
         It readily accepts `polars.internals.dataframe.frame.DataFrame` and also specifies the DataFrame policy and a list of
         sensitive columns.
 
-        Args
-        ----
-        df : polars.internals.dataframe.frame.DataFrame
-            Polars DataFrame
-        policy : bastionlab.polars.policy.Policy
-            BastionLab Remote DataFrame policy. This specifies which operations can be performed on
-            DataFrames and they specified the data owner.
-        sanitized_columns : List[str]
-            This field contains (sensitive) columns in the DataFrame that are to be removed when a Data Scientist
-            wishes to fetch a query performed on the DataFrame.
+        Args:
+            df : polars.internals.dataframe.frame.DataFrame
+                Polars DataFrame
+            policy : bastionlab.polars.policy.Policy
+                BastionLab Remote DataFrame policy. This specifies which operations can be performed on
+                DataFrames and they specified the data owner.
+            sanitized_columns : List[str]
+                This field contains (sensitive) columns in the DataFrame that are to be removed when a Data Scientist
+                wishes to fetch a query performed on the DataFrame.
 
-        Returns
-        -------
+        Returns:
+
         bastionlab.polars.remote_polars.FetchableLazyFrame
 
         """
@@ -77,17 +74,16 @@ class BastionLabPolars:
         return FetchableLazyFrame._from_reference(self, res)
 
     def _fetch_df(self, ref: str) -> Optional[pl.DataFrame]:
-        """Fetches the specified `pl.DataFrame` from the BastionLab server
+        """
+        Fetches the specified `pl.DataFrame` from the BastionLab server
         with the provided reference identifier.
 
-        Parameters
-        ----------
-        ref : str
-             A unique identifier for the Remote DataFrame.
+        Args:
+            ref : str
+                A unique identifier for the Remote DataFrame.
 
-        Returns
-        -------
-        Optional[pl.DataFrame]
+        Returns:
+            Optional[pl.DataFrame]
         """
 
         def inner() -> bytes:
@@ -138,17 +134,16 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
         composite_plan: str,
     ) -> "FetchableLazyFrame":
 
-        """Executes a Composite Plan on the BastionLab server.
+        """
+        Executes a Composite Plan on the BastionLab server.
         A composite plan is BastionLab's internal instruction set.
 
-        Parameters
-        ----------
-        composite_plan : str
-             Serialized instructions to be executed on BastionLab server.
+        Args:
+            composite_plan : str
+                Serialized instructions to be executed on BastionLab server.
 
-        Returns
-        -------
-        bastionlab.polars.remote_polars.FetchableLazyFrame
+        Returns:
+            bastionlab.polars.remote_polars.FetchableLazyFrame
         """
 
         from .remote_polars import FetchableLazyFrame
@@ -162,9 +157,8 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
         """
         Enlists all the DataFrames available on the BastionLab server.
 
-        Returns
-        -------
-        List[bastionlab.polars.remote_polars.FetchableLazyFrame]
+        Returns:
+            List[bastionlab.polars.remote_polars.FetchableLazyFrame]
 
         """
         from .remote_polars import FetchableLazyFrame
@@ -176,14 +170,12 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
         """
         Returns a `bastionlab.polars.remote_polars.FetchableLazyFrame` from an BastionLab DataFrame identifier.
 
-        Args
-        ----
-        identifier : str
-            A unique identifier for the Remote DataFrame.
+        Args:
+            identifier : str
+                A unique identifier for the Remote DataFrame.
 
-        Returns
-        -------
-        bastionlab.polars.remote_polars.FetchableLazyFrame
+        Returns:
+            bastionlab.polars.remote_polars.FetchableLazyFrame
         """
         from .remote_polars import FetchableLazyFrame
 
