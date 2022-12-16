@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use tonic::Status;
 
+use crate::composite_plan::StatsEntry;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Policy {
     safe_zone: Rule,
@@ -44,8 +46,9 @@ pub enum Rule {
 
 #[derive(Debug, Clone)]
 pub struct Context {
-    pub min_agg_size: Option<usize>,
+    pub stats: StatsEntry,
     pub user_id: String,
+    pub df_identifier: String,
 }
 
 impl Rule {
@@ -76,12 +79,15 @@ impl Rule {
                 RuleMatch::Mismatch(String::from("UserId mismatch"))
             }),
             Rule::Aggregation(min_allowed_agg_size) => {
-                Ok(match ctx.min_agg_size {
-                    Some(min_agg_size) if min_agg_size >= *min_allowed_agg_size => RuleMatch::Match,
-                    _ => RuleMatch::Mismatch(format!(
-                        "Cannot fetch a DataFrame that does not aggregate at least {} rows of the initial dataframe uploaded by the data owner.",
-                        min_allowed_agg_size
-                    )),
+                let min_allowed_agg_size = *min_allowed_agg_size * ctx.stats.join_scaling;
+                Ok(if ctx.stats.agg_size >= min_allowed_agg_size {
+                    RuleMatch::Match
+                } else {
+                    RuleMatch::Mismatch(format!(
+                        "Cannot fetch a result DataFrame that does not aggregate at least {} rows of DataFrame {}.",
+                        min_allowed_agg_size,
+                        ctx.df_identifier,
+                    ))
                 })
             }
             Rule::True => Ok(RuleMatch::Match),
@@ -123,4 +129,22 @@ pub enum VerificationResult {
         action: UnsafeAction,
         reason: String,
     },
+}
+
+impl VerificationResult {
+    pub fn merge(&mut self, other: Self) {
+        match (self, other) {
+            (
+                VerificationResult::Unsafe { action: left_action, reason: left_reason },
+                VerificationResult::Unsafe { action: right_action, reason: right_reason }
+            ) => {
+                *left_action = left_action.merge(right_action);
+                if *left_action == right_action {
+                    *left_reason = right_reason;
+                }
+            }
+            (x @ VerificationResult::Safe, y) => *x = y,
+            _ => (), 
+        }
+    }
 }
