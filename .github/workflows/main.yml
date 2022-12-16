@@ -21,9 +21,18 @@ jobs:
         with:
           driver: docker-container
 
+      # Reuse previous wheels if the client is unchanged
+      - name: Cache Docker server image
+        id: cache-docker-server
+        uses: actions/cache@v3
+        with:
+          path: /tmp/${{ matrix.image }}.tar
+          key: docker-server-${{ runner.os }}-${{ hashFiles('server/') }}
+
       # Build server
       - name: Build server
         uses: docker/build-push-action@v2.10.0
+        if: ${{ steps.cache-docker-server.outputs.cache-hit != 'true' }}
         with:
           push: false
           load: true

@@ -1,17 +1,23 @@
 name: Test notebook
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+    paths: ["**/*.ipynb", ".github/**"]
+  pull_request:
+    branches: [main]
+    paths: ["**/*.ipynb", ".github/**"]
+
 jobs:
-  python_ci:
-    defaults:
-      run:
-        working-directory: client
+  testing_notebook:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - clientImage: bastionlab
+          - serverImage: bastionlab
+            clientImage: bastionlab
+            client-wheel: client-artifacts
             os: ubuntu-latest
         python-version: [3.9]
 
@@ -22,37 +28,59 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python-version }}
-      ########### GET CLIENT ##########
-      - name: Wait for build of server to finish
+
+      ########### WAIT BUILD CLIENT ##########
+      - name: Wait for build of client to finish
         uses: lewagon/wait-on-check-action@v1.2.0
+        id: wait-on-check-action-client
         with:
           ref: ${{ github.ref }}
-          check-name: "Upload artifact client"
+          check-name: "build-client (ubuntu-latest)"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           wait-interval: 10
-      - name: Download artifact
+          check_artifacts: true
+          continue-on-error: true
+      ########### DOWNLOAD WHEEL CLIENT ##########
+      - name: Download artifact client wheel
         id: download-artifact-client
         uses: dawidd6/action-download-artifact@v2
+        if: ${{ steps.wait-on-check-action-client.outcome == 'success' }}
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
           workflow: main.yml
-          name: ${{ matrix.clientImage }}
+          name: ${{ matrix.client-wheel }}
           workflow_conclusion: success
           path: /tmp
+      ########### INSTALL CLIENT WHEEL ##########
       - name: Install client wheel
+        id: install-client-wheel
+        if: ${{ steps.download-artifact-client.outcome == 'success' }}
         run: |
-          python -m pip install ./tmp/${{ matrix.clientImage }}.whl
+          python -m pip install /tmp/*.whl
+
+      ######### INSTALL CLIENT FROM SOURCE OTHERWISE ##########
+      - name: Install bastionlab client from source
+        if: ${{ steps.install-client-wheel.outcome == 'failure' }}
+        run: |
+          cd client
+          make dev-install
+          source env/bin/activate
 
       ########### GET SERVER ##########
       - name: Wait for build of server to finish
         uses: lewagon/wait-on-check-action@v1.2.0
+        id: wait-on-check-action-server
         with:
           ref: ${{ github.ref }}
-          check-name: "Upload artifact server"
+          check-name: "build-server (bastionlab)"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           wait-interval: 10
+          check_artifacts: true
+
+      ########### DOWNLOAD SERVER ###########
       - name: Download artifact
-        id: download-artifact
+        id: download-artifact-server
+        if: ${{ steps.wait-on-check-action-server.outcome == 'success' }}
         uses: dawidd6/action-download-artifact@v2
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
@@ -60,15 +88,45 @@ jobs:
           name: ${{ matrix.serverImage }}
           workflow_conclusion: success
           path: /tmp
+
+      ########### LOAD SERVER ###########
       - name: Load image
+        id: load-server
+        if: ${{ steps.download-artifact-server.outcome == 'success' }}
         run: |
           docker load --input /tmp/${{ matrix.serverImage }}.tar
           docker image ls -a
+
+      ###### BUILD SERVER OTHERWISE ######
+      - name: Build server
+        id: build-server-no-download
+        if: ${{ steps.load-server.outcome == 'failure' }}
+        run: |
+          docker build -t ${{ matrix.serverImage }}:latest -f server/Dockerfile .
+
+      ###### CHECK BASTIONLAB IMAGE IS INSTALLED ######
+      - name: Check bastionlab image is installed
+        id: check-bastionlab-image
+        run: |
+          docker image ls -a
+          docker image inspect ${{ matrix.serverImage }}:latest
+
+      ########## LAUNCH SERVER ##########
       - name: Launch server
+        if: ${{ steps.check-bastionlab-image.outcome == 'success' }}
         run: |
           docker kill -f app > /dev/null 2>&1 || true
           docker run --rm -d -e BASTIONLAB_DISABLE_TELEMETRY=1 -p 50056:50056  --name app ${{ matrix.serverImage }}:latest
       ########## TESTING NOTEBOOK ##########
       - name: Testing the notebooks
+        # Here we convert the notebooks to python scripts and run them
+        # In order to avoid running shell commands that we don't want to run
+        # we replace the get_ipython().system function by a function that prints whatever
+        # For shell commands that we would want to run, we use the % prefix
         run: |
-          find . -name "*.ipynb" -exec jupyter nbconvert --to notebook --execute {} \;
+          pip install jupyter ipython
+          find . -name "*.ipynb" -exec jupyter nbconvert --output-dir='./converted' --to script {} \;
+          for file in ./converted/*.py; do
+            echo -e "get_ipython().system = lambda *args: print('! is disabled!')\n$(cat $file)" > $file
+            ipython $file
+          done
