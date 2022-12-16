@@ -183,3 +183,4 @@ ex.c
 **/libtorch
 *.pem
 *.key.pem
+*.html

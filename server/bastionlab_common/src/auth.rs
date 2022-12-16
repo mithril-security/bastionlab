@@ -1,7 +1,6 @@
-use std::{fs, path::Path};
+use std::{collections::HashMap, fs, path::Path};
 
 use crate::prelude::*;
-
 use ring::{
     digest::{digest, SHA256},
     signature,
@@ -40,20 +39,23 @@ impl KeyManagement {
         Ok(res)
     }
 
-    pub fn load_from_dir(path: &Path) -> Result<Self> {
-        ensure!(path.is_dir(), "keys path is not a folder");
-
+    pub fn load_from_dir(path: &Path) -> Result<Self, Status> {
+        if !Path::new(&path).is_dir() {
+            Err(Status::aborted("Please provide a public keys directory!"))?
+        }
         let owners_path = &path.join("owners");
-        let owners = fs::read_dir(owners_path)
-            .with_context(|| anyhow!("Listing files in directory {owners_path:?}"))?;
-        let users_path = &path.join("users");
-        let users = fs::read_dir(users_path)
-            .with_context(|| anyhow!("Listing files in directory {users_path:?}"))?;
+        let owners =
+            fs::read_dir(owners_path).map_err(|_| Status::aborted("No owners directory found!"))?;
 
-        let owners = Self::get_hash_and_keys(owners)
-            .with_context(|| anyhow!("Reading hash and keys for path {owners_path:?}"))?;
-        let users = Self::get_hash_and_keys(users)
-            .with_context(|| anyhow!("Reading hash and keys for path {users_path:?}"))?;
+        let users_path = &path.join("users");
+        let users =
+            fs::read_dir(users_path).map_err(|_| Status::aborted("No users directory found!"))?;
+
+        let owners = KeyManagement::get_hash_and_keys(owners)
+            .map_err(|_| Status::aborted("There is an issue with the owner's key!"))?;
+
+        let users = KeyManagement::get_hash_and_keys(users)
+            .map_err(|_| Status::aborted("There is an issue with the user's key!"))?;
 
         Ok(Self { owners, users })
     }

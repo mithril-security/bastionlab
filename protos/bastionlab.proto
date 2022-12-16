@@ -9,8 +9,6 @@ message ChallengeResponse {
 
 message SessionInfo {
     bytes token = 1;
-    // This is the time in miliseconds before the token will expire.
-    uint64 expiry_time = 2;
 }
 
 message ClientInfo {
@@ -21,6 +19,7 @@ message ClientInfo {
     string platform_release = 5;
     string user_agent = 6;
     string user_agent_version = 7;
+    bool is_colab = 8;
 }
 
 service SessionService {

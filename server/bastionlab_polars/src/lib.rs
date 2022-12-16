@@ -34,9 +34,15 @@ use access_control::*;
 
 mod utils;
 
+pub enum FetchStatus {
+    Ok,
+    Pending(String),
+    Warning(String),
+}
+
 pub struct DelayedDataFrame {
     future: Pin<Box<dyn Future<Output = Result<DataFrame, Status>> + Send>>,
-    needs_approval: Option<String>,
+    fetch_status: FetchStatus,
 }
 
 #[derive(Debug, Clone)]
@@ -111,7 +117,15 @@ Reason: {}",
                 );
                 DelayedDataFrame {
                     future: Box::pin(async { Ok(df) }),
-                    needs_approval: None,
+                    fetch_status: if let VerificationResult::Unsafe {
+                        action: UnsafeAction::Log,
+                        reason,
+                    } = &artifact.fetchable
+                    {
+                        FetchStatus::Warning(String::from(reason))
+                    } else {
+                        FetchStatus::Ok
+                    },
                 }
             }
             VerificationResult::Unsafe {
@@ -127,7 +141,7 @@ Reason: {}",
                         reason,
                     )))
                     }),
-                    needs_approval: None,
+                    fetch_status: FetchStatus::Ok,
                 }
             }
             VerificationResult::Unsafe {
@@ -139,7 +153,7 @@ Reason: {}",
                 let query_details = artifact.query_details.clone();
                 let dfs = Arc::clone(&self.dataframes);
                 DelayedDataFrame {
-                    needs_approval: Some(reason.clone()),
+                    fetch_status: FetchStatus::Pending(reason.clone()),
                     future: Box::pin(async move {
                         println!(
                             "A user requests unsafe access to one of your DataFrames
@@ -277,7 +291,7 @@ impl PolarsService for BastionLabPolars {
         &self,
         request: Request<Query>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        self.sess_manager.verify_request(&request)?;
+        let token = self.sess_manager.verify_request(&request)?;
 
         let composite_plan: CompositePlan = serde_json::from_str(&request.get_ref().composite_plan)
             .map_err(|e| {
@@ -310,8 +324,11 @@ impl PolarsService for BastionLabPolars {
                 dataset_hash: Some(hash),
                 time_taken: elapsed.as_millis() as f64,
             },
-            Some(self.sess_manager.get_client_info(&request)?),
+            Some(self.sess_manager.get_client_info(token)?),
         );
+
+        info!("Succesfully ran query on {}", identifier.clone());
+
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
 
@@ -321,9 +338,9 @@ impl PolarsService for BastionLabPolars {
     ) -> Result<Response<ReferenceResponse>, Status> {
         let start_time = Instant::now();
 
-        self.sess_manager.verify_request(&request)?;
+        let token = self.sess_manager.verify_request(&request)?;
 
-        let client_info = self.sess_manager.get_client_info(&request)?;
+        let client_info = self.sess_manager.get_client_info(token)?;
         let df = df_artifact_from_stream(request.into_inner()).await?;
         let dataframe_bytes: Vec<u8> =
             df_to_bytes(&df.dataframe)
@@ -345,6 +362,12 @@ impl PolarsService for BastionLabPolars {
             },
             Some(client_info),
         );
+
+        info!(
+            "Succesfully sent dataframe {} to server",
+            identifier.clone()
+        );
+
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
 
@@ -352,12 +375,12 @@ impl PolarsService for BastionLabPolars {
         &self,
         request: Request<ReferenceRequest>,
     ) -> Result<Response<Self::FetchDataFrameStream>, Status> {
-        self.sess_manager.verify_request(&request)?;
+        let token = self.sess_manager.verify_request(&request)?;
 
         let fut = {
             let df = self.get_df(
                 &request.get_ref().identifier,
-                Some(self.sess_manager.get_client_info(&request)?),
+                Some(self.sess_manager.get_client_info(token)?),
             )?;
             stream_data(df, 32)
         };
@@ -368,7 +391,7 @@ impl PolarsService for BastionLabPolars {
         &self,
         request: Request<Empty>,
     ) -> Result<Response<ReferenceList>, Status> {
-        self.sess_manager.verify_request(&request)?;
+        let token = self.sess_manager.verify_request(&request)?;
         let list = self
             .get_headers()?
             .into_iter()
@@ -376,7 +399,7 @@ impl PolarsService for BastionLabPolars {
             .collect();
         telemetry::add_event(
             TelemetryEventProps::ListDataFrame {},
-            Some(self.sess_manager.get_client_info(&request)?),
+            Some(self.sess_manager.get_client_info(token)?),
         );
         Ok(Response::new(ReferenceList { list }))
     }
@@ -385,14 +408,14 @@ impl PolarsService for BastionLabPolars {
         &self,
         request: Request<ReferenceRequest>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        self.sess_manager.verify_request(&request)?;
+        let token = self.sess_manager.verify_request(&request)?;
         let identifier = String::from(&request.get_ref().identifier);
         let header = self.get_header(&identifier)?;
         telemetry::add_event(
             TelemetryEventProps::GetDataFrameHeader {
                 dataset_name: Some(identifier.clone()),
             },
-            Some(self.sess_manager.get_client_info(&request)?),
+            Some(self.sess_manager.get_client_info(token)?),
         );
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
