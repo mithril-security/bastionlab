@@ -93,7 +93,8 @@ An additional feature of Attestations, is that the end-user can send some inform
 
 BastionLab's Client performs all of these checks each time it connects to a server. It will warn or block the user from communicating with the server if the checks fail. Since the code is open-source the end-users can also do these checks by themselves, if required.
 
->Side-note on Attestations in BastionLab: As BastionLab uses AMD SEV-SNP, the measurement is a hash of every file in the virtual machine image. This is because, unlike with Intel SGX, in AMD SEV-SNP the entire virtual machine *is the TEE. Any alteration, addition, or deletion of files in the virtual machine would change the measurement returned in the attestation report.
+!!! note "Attestations in BastionLab"
+	 As BastionLab uses AMD SEV-SNP, the measurement is a hash of every file in the virtual machine image. This is because, unlike with Intel SGX, in AMD SEV-SNP the entire virtual machine *is the TEE. Any alteration, addition, or deletion of files in the virtual machine would change the measurement returned in the attestation report.
 
 ![](../../assets/Architecture.png)
 
