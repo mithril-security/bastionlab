@@ -9,6 +9,8 @@ message ChallengeResponse {
 
 message SessionInfo {
     bytes token = 1;
+    uint64 expiry_time = 2;
+
 }
 
 message ClientInfo {

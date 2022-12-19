@@ -207,6 +207,7 @@ impl SessionManager {
                                     );
                                     return Ok(SessionInfo {
                                         token: token.to_vec(),
+                                        expiry_time: self.session_expiry * 1000,
                                     });
                                 } else {
                                     return Err(Status::aborted(
@@ -233,6 +234,7 @@ impl SessionManager {
                 );
                 return Ok(SessionInfo {
                     token: token.to_vec(),
+                    expiry_time: self.session_expiry * 1000,
                 });
             }
         };
