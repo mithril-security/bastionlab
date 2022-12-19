@@ -18,7 +18,6 @@ theme:
     - navigation.instant
     - search.highlight
     - content.tabs.link
-    - navigation.tabs
     - navigation.sections
   logo: assets/logo.png
   favicon: assets/logo.png
@@ -90,9 +89,10 @@ markdown_extensions:
 # Documentation tree
 nav:
 - Home: 'index.md'
-- Quick Tour: 'docs/quick-tour/quick-tour.ipynb'
-- Tutorials:
+- Getting Started:
+  - Quick Tour: 'docs/quick-tour/quick-tour.ipynb'
   - Installation: 'docs/tutorials/installation.md'
+- Tutorials:
   - Authentication: 'docs/tutorials/authentication.ipynb'
   - Combining datasets: 'docs/tutorials/combining_datasets.ipynb'
   - Data cleaning: 'docs/tutorials/data_cleaning.ipynb'

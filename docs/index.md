@@ -38,7 +38,7 @@ ________________________________________________________
 ## How do we organize the documentation?
 ____________________________________________
 
-- [Tutorials](docs/tutorials/installation.md) take you by the hand to install and run BastionLab. We recommend you start with the **[Quick Tour](docs/quick-tour/quick-tour.ipynb)** and then move on to the other tutorials!  
+- [Tutorials](docs/tutorials/authentication.ipynb) take you by the hand to install and run BastionLab. We recommend you start with the **[Quick Tour](docs/quick-tour/quick-tour.ipynb)** and then move on to the other tutorials!  
 
 - [How-to guides](docs/use-cases/covid_use_case.ipynb) are recipes. They guide you through the steps involved in addressing key problems and use cases. They are more advanced than tutorials and assume some knowledge of how BastionLab works.
 
