@@ -28,7 +28,10 @@ theme:
         icon: material/weather-sunny
     - scheme: default
       toggle:
-        icon: material/weather-night
+        icon: material/weather-night*
+  icon:
+    admonition:
+      <type>: <icon>
 
 #Plugins 
 plugins:
