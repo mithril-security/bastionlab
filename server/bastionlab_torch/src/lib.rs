@@ -67,6 +67,10 @@ impl BastionLabTorch {
             .write()
             .unwrap()
             .insert(identifier.clone(), dataset);
+        info!(
+            "Successfully inserted dataset {} in server",
+            identifier.clone()
+        );
 
         Ok((identifier.clone(), name, description, meta))
     }

@@ -105,8 +105,14 @@ class RemoteDataset:
     @staticmethod
     def list_available(client: BastionLabTorch) -> List["RemoteDataset"]:
         """Returns the list of `RemoteDataset`s available on the server."""
+
+        def inner(ref):
+            meta = Meta()
+            meta.ParseFromString(ref.meta)
+            return ref, meta.train_dataset
+
         refs = client.get_available_datasets()
-        ds = [(ref, bulk_deserialize(ref.meta)["train_dataset"]) for ref in refs]
+        ds = [inner(ref) for ref in refs]
         return [RemoteDataset(client, d[1], d[0]) for d in ds if d[1] is not None]
 
     def __str__(self) -> str:

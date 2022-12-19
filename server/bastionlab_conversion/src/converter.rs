@@ -15,7 +15,7 @@ use polars::prelude::{AnyValue, DataFrame, DataType};
 use polars::series::Series;
 use prost::Message;
 use ring::hmac;
-use tokenizers::Tokenizer;
+use tokenizers::{Encoding, PaddingParams, Tokenizer, TokenizerBuilder, TruncationParams};
 use tonic::{Request, Response, Status};
 use uuid::Uuid;
 
@@ -47,6 +47,27 @@ impl Converter {
         let tokenizer =
             Tokenizer::from_pretrained(model, None).map_err(|e| Status::aborted(e.to_string()))?;
 
+        let mut t = TokenizerBuilder::new();
+
+        t = t.with_model(tokenizer.get_model().clone());
+        t = t.with_normalizer(tokenizer.get_normalizer().cloned());
+        t = t.with_pre_tokenizer(tokenizer.get_pre_tokenizer().cloned());
+        t = t.with_post_processor(tokenizer.get_post_processor().cloned());
+        t = t.with_decoder(tokenizer.get_decoder().cloned());
+        t = t.with_truncation(
+            tokenizer
+                .get_truncation()
+                .cloned()
+                .or_else(|| Some(TruncationParams::default())),
+        );
+        t = t.with_padding(
+            tokenizer
+                .get_padding()
+                .cloned()
+                .or_else(|| Some(PaddingParams::default())),
+        );
+        let tokenizer = t.build().map_err(|e| Status::aborted(e.to_string()))?;
+        let tokenizer: Tokenizer = tokenizer.into();
         Ok(tokenizer)
     }
 
@@ -57,45 +78,49 @@ impl Converter {
         model: &str,
     ) -> Result<DataFrame, Status> {
         let tokenizer = self.get_tokenizer(model)?;
-        let mut rows = Vec::new();
+        let mut batched_seqs = Vec::new();
+
+        let to_row = |tokens: &Encoding| {
+            let ids = tokens.get_ids();
+            let mask = tokens.get_attention_mask();
+
+            let to_any_value = |v: &[u32]| -> AnyValue {
+                let mut buf = AnyValueBuffer::new(&DataType::UInt32, v.len());
+                v.iter().for_each(|v| {
+                    buf.add(AnyValue::UInt32(*v));
+                });
+                AnyValue::List(buf.into_series())
+            };
+            let ids = to_any_value(ids);
+            let mask = to_any_value(mask);
+
+            let joined = vec![ids.clone(), mask.clone()];
+
+            let row = Row::new(joined);
+            row
+        };
         for row in s.utf8().unwrap().into_iter() {
-            let row = match row {
+            match row {
                 Some(s) => {
-                    let tokens = tokenizer
-                        .encode(s, false)
-                        .map_err(|_| Status::aborted("Failed to tokenize string"))?;
-                    let ids = tokens.get_ids();
-                    let mask = tokens.get_attention_mask();
-
-                    let to_any_value = |v: &[u32]| -> AnyValue {
-                        let mut buf = AnyValueBuffer::new(&DataType::UInt32, v.len());
-                        v.iter().for_each(|v| {
-                            buf.add(AnyValue::UInt32(*v));
-                        });
-                        AnyValue::List(buf.into_series())
-                    };
-                    let ids = to_any_value(ids);
-                    let mask = to_any_value(mask);
-
-                    let joined = vec![ids.clone(), mask.clone()];
-
-                    let row = Row::new(joined);
-                    row
+                    batched_seqs.push(s.to_string());
                 }
                 None => {
                     return Err(Status::aborted(
-                        "Failed to deserialize string on row".to_string(),
+                        "Failed to convert row to Utf8 string".to_string(),
                     ));
                 }
-            };
-
-            rows.push(row);
+            }
         }
 
+        let tokens_vec = tokenizer
+            .encode_batch(batched_seqs, false)
+            .map_err(|_| Status::aborted("Failed to tokenize string"))?;
+
+        let rows = tokens_vec.iter().map(to_row).collect::<Vec<_>>();
         let mut df = to_status_error(DataFrame::from_rows(&rows[..]))?;
 
-        let ids_names = &format!("{:?}_ids", name);
-        let mask_names = &format!("{:?}_mask", name);
+        let ids_names = &format!("{}_ids", name.to_lowercase());
+        let mask_names = &format!("{}_mask", name.to_lowercase());
 
         let col_names = df.get_column_names_owned();
         to_status_error(df.rename(&col_names[0], &ids_names))?;
@@ -118,8 +143,6 @@ impl Converter {
         let not_utf8_inputs = inputs
             .iter()
             .filter_map(|s| {
-                println!("Series DataType: {:?}", s.dtype());
-
                 if s.dtype().ne(&DataType::Utf8) {
                     Some(s.clone())
                 } else {
@@ -131,7 +154,6 @@ impl Converter {
         let mut utf8_inputs = inputs
             .iter()
             .filter_map(|s| {
-                println!("Series DataType: {:?}", s.dtype());
                 if s.dtype().eq(&DataType::Utf8) {
                     Some((s.clone(), s.name()))
                 } else {
