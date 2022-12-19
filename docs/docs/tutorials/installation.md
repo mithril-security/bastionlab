@@ -47,9 +47,11 @@ ______________________________________________
 
 For **testing purposes only**, BastionLab server can be installed using our pip package.
 
-> ⚠️ This package is meant to quickly setup a running instance of the server and is particularly useful in colab notebooks. It does not provide any mean to configure the server which makes certain features impossible to use (like [authentication](../../../docs/tutorials/authentication/)).
->
-> **For production, please use the Docker image or install the server from source.**
+!!! danger
+
+	This package is meant to quickly setup a running instance of the server and is particularly useful in colab notebooks. It does not provide any mean to configure the server which makes certain features impossible to use (like [authentication](../../../docs/tutorials/authentication/)).
+
+	**For production, please use the Docker image or install the server from source.**
     
 ```bash
 pip install bastionlab-server
