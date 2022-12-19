@@ -18,6 +18,7 @@ message SendChunk {
     bytes data = 1;
     string policy = 2;
     string metadata = 3;
+    bool savable = 4;
 }
 
 message FetchChunk {

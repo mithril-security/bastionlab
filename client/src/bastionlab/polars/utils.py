@@ -32,7 +32,7 @@ def create_byte_chunk(data: bytes) -> Iterator[bytes]:
 
 
 def serialize_dataframe(
-    df: pl.DataFrame, policy: Policy, sanitized_columns: List[str]
+    df: pl.DataFrame, policy: Policy, sanitized_columns: List[str], savable
 ) -> Iterator[SendChunk]:
     #:  Converts Polars `DataFrame` to BastionLab `SendChunk`.
     #:  Receives `polars.internals.dataframe.frame.DataFrame` and uses `__getstate__` to convert `DataFrame`
@@ -92,7 +92,12 @@ def serialize_dataframe(
         cols = ",".join([f'"{col}"' for col in sanitized_columns])
         if first:
             first = False
-            yield SendChunk(data=data, policy=policy.serialize(), metadata=f"[{cols}]")
+            yield SendChunk(
+                data=data,
+                policy=policy.serialize(),
+                metadata=f"[{cols}]",
+                savable=savable,
+            )
         else:
             yield SendChunk(data=data, policy="", metadata="")
 

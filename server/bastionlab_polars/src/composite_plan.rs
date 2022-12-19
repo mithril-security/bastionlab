@@ -32,7 +32,7 @@ impl CompositePlan {
         let mut input_dfs = Vec::new();
         let plan_str = serde_json::to_string(&self.0).unwrap(); // FIX THIS
 
-        let (policy, blacklist) = self.output_policy(state)?;
+        let (policy, blacklist, savable) = self.output_policy(state)?;
         let mut min_agg_size = None;
 
         for seg in self.0 {
@@ -110,24 +110,30 @@ impl CompositePlan {
             fetchable: policy.verify(&context)?,
             policy,
             blacklist,
+            savable,
             query_details: plan_str,
         })
     }
 
-    fn output_policy(&self, state: &BastionLabPolars) -> Result<(Policy, Vec<String>), Status> {
+    fn output_policy(
+        &self,
+        state: &BastionLabPolars,
+    ) -> Result<(Policy, Vec<String>, bool), Status> {
         let mut policy = Policy::allow_by_default();
         let mut blacklist = Vec::new();
+        let mut savable = false;
 
         for seg in &self.0 {
             if let CompositePlanSegment::EntryPointPlanSegment(identifier) = seg {
                 state.with_df_artifact_ref(&identifier, |artifact| {
                     policy = policy.merge(&artifact.policy);
                     blacklist.extend_from_slice(&artifact.blacklist[..]);
+                    savable = artifact.savable || savable;
                 })?;
             }
         }
 
-        Ok((policy, blacklist))
+        Ok((policy, blacklist, savable))
     }
 }
 
