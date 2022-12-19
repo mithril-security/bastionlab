@@ -17,7 +17,7 @@ This wasn’t possible until now for highly regulated fields like health, financ
 
 BastionLab solves this problem by ensuring that only privacy-friendly operations are allowed on the data and aggregated outputs are shown to the data scientist. 
 
-**BastionLab is an open-source project.** Our solution is coded in Rust 🦀 and uses Polars 🐻, a pandas-like library for data exploration. You can check [the code on our GitHub](https://github.com/mithril-security/bastionlab/) and *(very soon)* our roadmap. 
+**BastionLab is an open-source project.** Our solution is coded in Rust 🦀 and uses Polars 🐻, a pandas-like library for data exploration. You can check [the code on our GitHub](https://github.com/mithril-security/bastionlab/) and [our roadmap](https://mithril-security.notion.site/513af0ada2584e0f837776a7f6649ab4?v=cf664187c13149a4b667d9c0ae3ed1c0). 
 
 We’ll update the documentation as new features come in, so dive in!
 
