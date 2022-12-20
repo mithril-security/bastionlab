@@ -24,9 +24,9 @@ We’ll update the documentation as new features come in, so dive in!
 ## Getting started
 ________________________________________________________
 
-- Follow our [“Quick tour”](docs/quick-tour/quick-tour.ipynb) tutorial
-- [Read](docs/concept-guides/threat_model.md) about the technologies we use to ensure privacy
-- Find [our benchmarks](docs/reference-guides/benchmarks/benchmarks.md) documenting BastionLab’s speed
+- Follow our [“Quick tour”](docs/getting-started/quick-tour.ipynb) tutorial
+- [Read](docs/security/threat_model_data_owner_owns_infrastructure.md) about the technologies we use to ensure privacy
+- Find [our benchmarks](docs/advanced/benchmarks/polars_benchmarks.md) documenting BastionLab’s speed
 
 ## Getting help
 ________________________________________________________
@@ -38,18 +38,18 @@ ________________________________________________________
 ## How do we organize the documentation?
 ____________________________________________
 
-- [Tutorials](docs/tutorials/authentication.ipynb) take you by the hand to install and run BastionLab. We recommend you start with the **[Quick tour](docs/quick-tour/quick-tour.ipynb)** and then move on to the other tutorials!  
+- [Tutorials](docs/tutorials/authentication.ipynb) take you by the hand to install and run BastionLab. We recommend you start with the **[Quick tour](docs/getting-started/quick-tour.ipynb)** and then move on to the other tutorials!  
 
-- [How-to guides](docs/use-cases/covid_use_case.ipynb) are recipes. They guide you through the steps involved in addressing key problems and use cases. They are more advanced than tutorials and assume some knowledge of how BastionLab works.
+- [How-to guides](docs/how-to-guides/covid_use_case.ipynb) are recipes. They guide you through the steps involved in addressing key problems and use cases. They are more advanced than tutorials and assume some knowledge of how BastionLab works.
 
-- [Concepts](docs/concept-guides/remote_data_science.md) guides discuss key topics and concepts at a high level. They provide useful background information and explanations, especially on cybersecurity.
+- [Concepts](docs/concepts-guides/remote_data_science.md) guides discuss key topics and concepts at a high level. They provide useful background information and explanations, especially on cybersecurity.
 
 - [API Reference](docs/resources/bastionlab/index.html) contains technical references for BastionLab’s API machinery. They describe how it works and how to use it but assume you have a good understanding of key concepts. 
 
-- [Security](docs/concept-guides/threat_model.md) guides contain technical information for security engineers. They explain the threat models and other cybersecurity topics required to audit BastionLab's security standards.
+- [Security](docs/security/threat_model_data_owner_owns_infrastructure.md) guides contain technical information for security engineers. They explain the threat models and other cybersecurity topics required to audit BastionLab's security standards.
 
-- [Advanced](docs/reference-guides/benchmarks/benchmarks/) guides are destined to developpers wanting to dive deep into BastionLab and eventually collaborate with us to the open-source code. We'll cover in the future exactly how to do so. 
+- [Advanced](docs/advanced/benchmarks/polars_benchmarks.md) guides are destined to developpers wanting to dive deep into BastionLab and eventually collaborate with us to the open-source code. We'll cover in the future exactly how to do so. 
 
 ## Who made BastionLab?
 
-[Mithril Security](https://www.mithrilsecurity.io/) is a startup aiming to make privacy-friendly data science easy so data scientists and data owners can collaborate without friction. Our solutions apply Privacy Enhancing Technologies and security best practices, like [Remote Data Science](docs/concept-guides/remote_data_science.md) and Confidential Computing.
+[Mithril Security](https://www.mithrilsecurity.io/) is a startup aiming to make privacy-friendly data science easy so data scientists and data owners can collaborate without friction. Our solutions apply Privacy Enhancing Technologies and security best practices, like [Remote Data Science](docs/concepts-guides/remote_data_science.md) and Confidential Computing.

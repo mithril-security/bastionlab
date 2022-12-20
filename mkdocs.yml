@@ -90,21 +90,21 @@ markdown_extensions:
 nav:
 - Home: 'index.md'
 - Getting Started:
-  - Quick tour: 'docs/quick-tour/quick-tour.ipynb'
-  - Installation: 'docs/tutorials/installation.md'
+  - Quick tour: 'docs/getting-started/quick-tour.ipynb'
+  - Installation: 'docs/getting-started/installation.md'
 - Tutorials:
   - Authentication: 'docs/tutorials/authentication.ipynb'
   - Combining datasets: 'docs/tutorials/combining_datasets.ipynb'
   - Data cleaning: 'docs/tutorials/data_cleaning.ipynb'
   - Data visualization: 'docs/tutorials/visualization.ipynb'
 - How-to guides:
-  - Covid-19 cleaning and exploration: 'docs/use-cases/covid_use_case.ipynb'
+  - Covid-19 cleaning and exploration: 'docs/how-to-guides/covid_use_case.ipynb'
 - Concepts:
-  - Remote data science: 'docs/concept-guides/remote_data_science.md'
+  - Remote data science: 'docs/concepts-guides/remote_data_science.md'
 - Reference guides: 
   - API Reference: 'docs/resources/bastionlab/index.html'
 - Security: 
-  - Data owner owns the infrastructure: 'docs/concept-guides/threat_model.md'
+  - Data owner owns the infrastructure: 'docs/security/threat_model_data_owner_owns_infrastructure.md'
 - Advanced:
   - Benchmarks:
-    - Polars : 'docs/reference-guides/benchmarks/benchmarks.md'
+    - Polars : 'docs/advanced/benchmarks/polars_benchmarks.md'

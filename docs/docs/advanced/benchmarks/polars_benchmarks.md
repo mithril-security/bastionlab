@@ -1,4 +1,4 @@
-# Benchmarks
+# Polars benchmarks
 _________________________________
 
 We don't want to improve data science privacy at the cost of your performance. This is why we have built BastionLab with speed as one of its main goals. For example, BastionLab uses Polars, a popular data science library coded in Rust, because it is far more efficient than Pandas, an even more popular one coded in Python. 
