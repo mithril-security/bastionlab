@@ -34,9 +34,9 @@ Collaborating remotely and safely when it came to data science wasn’t possible
 
 That is why we built BastionLab with the aim to ensure privacy while fitting easily in the whole data science workflow of both data owners and data scientists.
 
-## 🚀 Quick Tour
+## 🚀 Quick tour
 
-You can go try out our [Quick Tour](https://github.com/mithril-security/bastionlab/tree/master/docs/docs/quick-tour) in the documentation to discover BastionLab with a hands-on example using the famous Titanic dataset. 
+You can go try out our [Quick tour](https://github.com/mithril-security/bastionlab/tree/master/docs/docs/quick-tour) in the documentation to discover BastionLab with a hands-on example using the famous Titanic dataset. 
 
 But here’s a taste of what using BastionLab could look like 🍒
 

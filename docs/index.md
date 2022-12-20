@@ -24,7 +24,7 @@ We’ll update the documentation as new features come in, so dive in!
 ## Getting started
 ________________________________________________________
 
-- Follow our [“Quick Tour”](docs/quick-tour/quick-tour.ipynb) tutorial
+- Follow our [“Quick tour”](docs/quick-tour/quick-tour.ipynb) tutorial
 - [Read](docs/concept-guides/threat_model.md) about the technologies we use to ensure privacy
 - Find [our benchmarks](docs/reference-guides/benchmarks/benchmarks.md) documenting BastionLab’s speed
 
@@ -38,7 +38,7 @@ ________________________________________________________
 ## How do we organize the documentation?
 ____________________________________________
 
-- [Tutorials](docs/tutorials/authentication.ipynb) take you by the hand to install and run BastionLab. We recommend you start with the **[Quick Tour](docs/quick-tour/quick-tour.ipynb)** and then move on to the other tutorials!  
+- [Tutorials](docs/tutorials/authentication.ipynb) take you by the hand to install and run BastionLab. We recommend you start with the **[Quick tour](docs/quick-tour/quick-tour.ipynb)** and then move on to the other tutorials!  
 
 - [How-to guides](docs/use-cases/covid_use_case.ipynb) are recipes. They guide you through the steps involved in addressing key problems and use cases. They are more advanced than tutorials and assume some knowledge of how BastionLab works.
 
