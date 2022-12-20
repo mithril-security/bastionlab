@@ -33,7 +33,6 @@ use composite_plan::*;
 mod visitable;
 
 mod access_control;
-use access_control::Context;
 use access_control::*;
 
 mod utils;
