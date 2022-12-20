@@ -6,7 +6,7 @@ Get started and **install BastionLab Client** and **BastionLab Server**.
 ## Pre-requisites
 ___________________________________________
 
-### Technical Requirements
+### Technical requirements
 
 To install **BastionLab Client and BastionLab Server**, ensure the following are already installed in your system:
 
