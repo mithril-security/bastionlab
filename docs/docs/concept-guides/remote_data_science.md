@@ -1,4 +1,4 @@
-# Remote Data Science
+# Remote ata science
 __________________________________________________________
 
 In this concept guide, we'll explain why current solutions to share data with remote data scientists are not sufficient, how a remote data science framework can answer it, and how BastionLab has implemented it.
