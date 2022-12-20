@@ -1,28 +1,24 @@
-# Remote Data Science
-___________________________________________________________________________
+# Remote data science
+__________________________________________________________
 
 In this concept guide, we'll explain why current solutions to share data with remote data scientists are not sufficient, how a remote data science framework can answer it, and how BastionLab has implemented it.
 
 ## Why we need it
-___________________________________________________________________________
+________________________________________________________________
 
 Data owners often need or wish that remote data scientists would access their datasets - like a hospital might want to valorize their data to external parties, startups, labs, or receive help from external experts, for instance. 
 
 But how can we open data to outsiders while giving a good user-experience for the data scientist and providing a high-enough level of security and privacy for the shared data? 
 
-One of the most popular solutions is to give access to a Jupyter Python notebook installed on the data owner infrastructure. 
-
-![](../../assets/current_solution.png)
-
-This is dangerous, because it exposes the dataset to serious data leakages. Jupyter was *not* made for this task and exfiltrating data can easily be done. For example, rows can be printed little by little until the whole dataset is extracted, or a malicious data scientist could exfiltrate a trained neural network in which the whole dataset has been hidden in the weights.
+One of the most popular solutions is to give access to a Jupyter Python notebook installed on the data owner infrastructure. This is dangerous, because it exposes the dataset to serious data leakages. Jupyter was *not* made for this task and exfiltrating data can easily be done. For example, rows can be printed little by little until the whole dataset is extracted, or a malicious data scientist could exfiltrate a trained neural network in which the whole dataset has been hidden in the weights.
 
 This is possible because the data scientist can run arbitrary Python scripts on the data to perform extraction attacks. It makes it extremely complicated to try to analyze their queries to detect fraudulent behavior: static and dynamic analysis tools would be inefficient because Python code is too dynamic and expressive.
 
-That is why we have built BastionLab, a data science framework to perform remote and secure Exploratory Data Analysis. 
+That is why we have built BastionLab, a data science framework to perform remote and secure Exploratory Data Analysis. The following plan illustrates the architecture of our solution and the workflow we implement:
 
-![](../../assets/proposed_solution.png)
+![](../../assets/BastionLab_Worflow.png)
 
-There are a few key differences between a remotely accessed Jupyter notebook and the use of a remote data science framework.
+There are a few key differences between a remotely accessed Jupyter notebook and the use of our remote data science framework.
 
 In the remotely accessed Jupyter notebook, the data scientist has direct access to the data, can run arbitrary code on it, and can see the results of the output. 
 
@@ -39,7 +35,7 @@ When remotely connecting to a Jupyter notebook
 A remote data science framework comes to solve that problem by ensuring the data scientist can *only* access the dataset and the database through a sanitized interface that allows the data owner to have full control.
 
 ## How it works
-___________________________________________________________________________
+_______________________________________________________
 
 A remote data science framework acts as a filter barrier. In the case of BastionLab, only pre-coded operations approved by the data owner can be run on the data. The results shared with the data scientist are also finely controlled. 
 
@@ -64,7 +60,7 @@ Since remote data science faces terrible consequences in case of leaks, it's cri
 -   That the operations executed during a session are always matched against the privacy policy - to make sure that only allowed operations can be used on the data
 
 ## How we do it
-___________________________________________________________________________
+__________________________________________________
 
 In this part, we'll go over the details of how remote data science is implemented in BastionLab. 
 
@@ -93,7 +89,7 @@ To sanitize outputs, we allow a  limited number of operators to be executed by 
 For example, we could only allow differentially private outputs to be shared, or not allow raw information to be printed on the data scientist interface.
 
 ### Our Solution: the **RemoteLazyFrame**
-_________________________________________________________________________
+___________________________________________________________
 
 The RemoteLazyFrame, a remote privacy-friendly version of a DataFrame, implements all these features:
 

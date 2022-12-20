@@ -1,9 +1,16 @@
+# Website Info
 site_name: BastionLab
-
 site_url: https://www.mithrilsecurity.io/
+site_author: Mithril Security
+site_description: >-
+  Create a simple privacy framework for data science collaboration, 
+  covering data exploration and machine learning.
 
+# Repository
+repo_name: mithril-security/bastionlab
 repo_url: https://github.com/mithril-security/bastionlab
 
+# Configuration
 theme:
   name: material
   custom_dir: docs/material_theme_customization
@@ -11,6 +18,7 @@ theme:
     - navigation.instant
     - search.highlight
     - content.tabs.link
+    - navigation.sections
   logo: assets/logo.png
   favicon: assets/logo.png
   palette:
@@ -20,9 +28,38 @@ theme:
     - scheme: default
       toggle:
         icon: material/weather-night
+  icon:
+    admonition:
+      note: fontawesome/solid/note-sticky
+      abstract: fontawesome/solid/book
+      info: fontawesome/solid/circle-info
+      tip: fontawesome/solid/bullhorn
+      success: fontawesome/solid/check
+      question: fontawesome/solid/circle-question
+      warning: fontawesome/solid/triangle-exclamation
+      failure: fontawesome/solid/bomb
+      danger: fontawesome/solid/skull
+      bug: fontawesome/solid/robot
+      example: fontawesome/solid/flask
+      quote: fontawesome/solid/quote-left
 
+#Plugins 
+plugins:
+- search
+- mkdocs-jupyter
+
+# Customization
 extra:
   homepage: https://mithrilsecurity.io
+  social:
+    - icon: fontawesome/brands/discord
+      link: https://discord.com/invite/TxEHagpWd4
+    - icon: fontawesome/brands/github
+      link: https://github.com/mithril-security/
+    - icon: fontawesome/brands/linkedin
+      link: https://www.linkedin.com/company/mithril-security-company/
+    - icon: fontawesome/brands/twitter
+      link: https://twitter.com/mithrilsecurity
 
 extra_css:
   - stylesheets/extra.css
@@ -30,6 +67,7 @@ extra_css:
 extra_javascript:
   - 'https://code.jquery.com/jquery-3.3.1.min.js'
 
+# Extensions
 markdown_extensions:
   - abbr
   - admonition
@@ -48,25 +86,26 @@ markdown_extensions:
   - pymdownx.tabbed:
       alternate_style: true
 
-plugins:
-- search
-- mkdocs-jupyter
-
+# Documentation tree
 nav:
 - Home: 'index.md'
-- Quick Tour: 'docs/quick-tour/quick-tour.ipynb'
+- Getting Started:
+  - Quick tour: 'docs/quick-tour/quick-tour.ipynb'
+  - Installation: 'docs/getting-started/installation.md'
 - Tutorials:
-  - Installation: 'docs/tutorials/installation.md'
-  - Data visualization: 'docs/tutorials/visualization.ipynb'
-  - Data cleaning: 'docs/tutorials/data_cleaning.ipynb'
   - Authentication: 'docs/tutorials/authentication.ipynb'
   - Combining datasets: 'docs/tutorials/combining_datasets.ipynb'
-- How-to-Guides:
-  - Covid-19 cleaning and exploration: 'docs/use-cases/covid_use_case.ipynb'
+  - Data cleaning: 'docs/tutorials/data_cleaning.ipynb'
+  - Data visualization: 'docs/tutorials/visualization.ipynb'
+- How-to guides:
+  - Covid-19 cleaning and exploration: 'docs/how-to-guides/covid_cleaning_exploration.ipynb'
 - Concepts:
-  - Remote data science: 'docs/concept-guides/remote_data_science.md'
-- Security: 'docs/concept-guides/threat_model.md'
+  - Remote data science: 'docs/concepts-guides/remote_data_science.md'
+- Reference guides: 
+  - API Reference: 'docs/resources/bastionlab/index.html'
+- Security: 
+  - Threat model: 'docs/security/threat_model_data_owner_owns_infrastructure.md'
+  - Authentication specifications: 'docs/security/authenticated_sessions.md'
 - Advanced:
-  - API Reference: "docs/resources/bastionlab/index.html"
   - Benchmarks:
-    - Polars : 'docs/reference-guides/benchmarks/benchmarks.md'
+    - Polars : 'docs/advanced/benchmarks/polars_benchmarks.md'

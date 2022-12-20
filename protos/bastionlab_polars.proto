@@ -40,4 +40,5 @@ service PolarsService {
     rpc FetchDataFrame (ReferenceRequest) returns (stream FetchChunk) {}
     rpc ListDataFrames (Empty) returns (ReferenceList) {}
     rpc GetDataFrameHeader (ReferenceRequest) returns (ReferenceResponse) {}
+    rpc PersistDataFrame (ReferenceRequest) returns (Empty) {}
 }

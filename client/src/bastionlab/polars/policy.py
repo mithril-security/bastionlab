@@ -40,7 +40,7 @@ class UserId(Rule):
     id: str
 
     def serialize(self) -> str:
-        return f'{{"UserId":{self.id}}}'
+        return f'{{"UserId":"{self.id}"}}'
 
 
 @dataclass

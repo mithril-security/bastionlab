@@ -13,6 +13,8 @@ from .pb.bastionlab_pb2_grpc import SessionServiceStub
 import platform
 import socket
 import getpass
+import time
+import logging
 import sys
 
 
@@ -20,7 +22,17 @@ if TYPE_CHECKING:
     from .torch import BastionLabTorch
     from .polars import BastionLabPolars
 
-HEART_BEAT_TICK = 25 * 60
+
+class AuthPlugin(grpc.AuthMetadataPlugin):
+    client: Optional["Client"] = None
+
+    def __call__(self, _, callback):
+        if self.client is not None and self.client._token is not None:
+            callback((("accesstoken-bin", self.client._token),), None)
+        else:
+            callback((), None)
+
+
 UNAME = platform.uname()
 CLIENT_INFO = ClientInfo(
     uid=sha256((socket.gethostname() + "-" + getpass.getuser()).encode("utf-8"))
@@ -53,10 +65,14 @@ class Client:
         None  #: The BastionLabPolars object for accessing the polars functionality.
     )
     _channel: grpc.Channel  #: The underlying gRPC channel used to communicate with the server.
+    __session_expiry_time: float = 0.0  #: Time in seconds
+    _token: Optional[bytes] = None
+    signing_key: Optional[SigningKey]
 
     def __init__(
         self,
         channel: grpc.Channel,
+        signing_key: SigningKey,
     ):
         """
         Initializes the client with a gRPC channel to the BastionLab server.
@@ -65,6 +81,40 @@ class Client:
             channel (grpc.Channel): A gRPC channel to the BastionLab server.
         """
         self._channel = channel
+        self.__session_stub = SessionServiceStub(channel)
+        self.signing_key = signing_key
+
+    def refresh_session_if_needed(self):
+        current_time = time.time()
+
+        if current_time > self.__session_expiry_time:
+            self._token = None
+            self.__create_session()
+
+    def __create_session(self):
+        logging.debug("Refreshing session.")
+
+        metadata = ()
+        if self.signing_key is not None:
+            data: bytes = CLIENT_INFO.SerializeToString()
+            challenge = self.__session_stub.GetChallenge(Empty()).value
+
+            metadata += (("challenge-bin", challenge),)
+            to_sign = b"create-session" + challenge + data
+
+            pubkey_hex = self.signing_key.pubkey.hash.hex()
+            signed = self.signing_key.sign(to_sign)
+            metadata += ((f"signature-{pubkey_hex}-bin", signed),)
+
+        res = self.__session_stub.CreateSession(CLIENT_INFO, metadata=metadata)
+
+        # So, just to be sure, we refresh our token early (30s).
+        adjusted_expiry_delay = max(res.expiry_time - 30_000, 0)
+
+        self.__session_expiry_time = (
+            time.time() + adjusted_expiry_delay / 1000  # convert to seconds
+        )
+        self._token = res.token
 
     @property
     def torch(self) -> "BastionLabTorch":
@@ -85,8 +135,9 @@ class Client:
         if self._bastionlab_polars is None:
             from bastionlab.polars import BastionLabPolars
 
-            self._bastionlab_polars = BastionLabPolars(self._channel)
+            self._bastionlab_polars = BastionLabPolars(self)
         return self._bastionlab_polars
+
 
 
 class AuthPlugin(grpc.AuthMetadataPlugin):
@@ -220,33 +271,28 @@ class Connection:
             server_target, server_creds, connection_options, self.identity
         )
 
+        auth_plugin = AuthPlugin()
+
         channel_cred = (
             server_creds
             if self.identity is None
             else server_creds
             if self.token is None
             else grpc.composite_channel_credentials(
-                server_creds, grpc.metadata_call_credentials(_AuthPlugin(self.token))
+                server_creds, grpc.metadata_call_credentials(auth_plugin)
             )
         )
 
         self.channel = grpc.secure_channel(
             server_target, channel_cred, connection_options
         )
-        stub = SessionServiceStub(self.channel)
 
         self._client = Client(
             self.channel,
+            self.identity,
         )
 
-        if self.token is not None:
-            daemon = Thread(
-                target=self._heart_beat,
-                args=(stub,),
-                daemon=True,
-                name="HeartBeat",
-            )
-            daemon.start()
+        auth_plugin.client = self.client
 
         return self._client
 
