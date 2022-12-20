@@ -90,7 +90,7 @@ markdown_extensions:
 nav:
 - Home: 'index.md'
 - Getting Started:
-  - Quick tour: 'docs/getting-started/quick-tour.ipynb'
+  - Quick tour: 'docs/quick-tour/quick-tour.ipynb'
   - Installation: 'docs/getting-started/installation.md'
 - Tutorials:
   - Authentication: 'docs/tutorials/authentication.ipynb'

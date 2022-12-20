@@ -30,7 +30,7 @@ It acts like an **access control** solution, for data owners to protect the priv
 
 ## 🚀 Quick tour
 
-You can go try out our [Quick tour](https://github.com/mithril-security/bastionlab/tree/master/docs/docs/getting-started/quick-tour) in the documentation to discover BastionLab with a hands-on example using the famous Titanic dataset. 
+You can go try out our [Quick tour](https://github.com/mithril-security/bastionlab/tree/master/docs/docs/quick-tour/quick-tour) in the documentation to discover BastionLab with a hands-on example using the famous Titanic dataset. 
 
 But here’s a taste of what using BastionLab could look like 🍒
 

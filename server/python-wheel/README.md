@@ -36,7 +36,7 @@ That is why we built BastionLab with the aim to ensure privacy while fitting eas
 
 ## 🚀 Quick tour
 
-You can go try out our [Quick tour](https://github.com/mithril-security/bastionlab/tree/master/docs/docs/quick-tour) in the documentation to discover BastionLab with a hands-on example using the famous Titanic dataset. 
+You can go try out our [Quick tour](https://github.com/mithril-security/bastionlab/tree/master/docs/docs/quick-tour/quick-tour.ipynb) in the documentation to discover BastionLab with a hands-on example using the famous Titanic dataset.
 
 But here’s a taste of what using BastionLab could look like 🍒
 
