@@ -48,7 +48,7 @@ ____________________________________________
 
 - [Security](docs/concept-guides/threat_model.md) guides contain technical information for security engineers. They explain the threat models and other cybersecurity topics required to audit BastionLab's security standards.
 
-- [Advanced](docs/reference-guides/benchmarks/benchmarks/) guides are destined to advanced users of BastionLab wanting to dive deep into BastionLab and eventually collaborate with us to the open-source code. We'll cover in the future exactly how to do so. 
+- [Advanced](docs/reference-guides/benchmarks/benchmarks/) guides are destined to developpers wanting to dive deep into BastionLab and eventually collaborate with us to the open-source code. We'll cover in the future exactly how to do so. 
 
 ## Who made BastionLab?
 
