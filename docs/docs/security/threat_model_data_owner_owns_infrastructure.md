@@ -1,4 +1,4 @@
-# The data owner owns the infrastructure
+# Scenario - The data owner owns the infrastructure
 __________________________________________________________________________
 
 We'll address in this security guide the following threat model scenario:
