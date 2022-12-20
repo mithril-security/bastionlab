@@ -1,14 +1,14 @@
 use base64;
-use polars::prelude::*;
+use polars::{lazy::dsl::Expr, prelude::*};
 use serde::{Deserialize, Serialize};
-use std::{io::Cursor, collections::HashMap};
+use std::{collections::HashMap, io::Cursor};
 use tch::CModule;
 use tonic::Status;
 
 use crate::{
     access_control::{Context, Policy, VerificationResult},
     utils::*,
-    visitable::VisitableMut,
+    visitable::{Visitable, VisitableMut},
     BastionLabPolars, DataFrameArtifact,
 };
 
@@ -68,7 +68,8 @@ impl CompositePlan {
                         "Could not apply udf: no input data frame",
                     ))?;
                     for name in columns {
-                        let idx = frame.df
+                        let idx = frame
+                            .df
                             .get_column_names()
                             .iter()
                             .position(|x| x == &&name)
@@ -120,7 +121,7 @@ impl CompositePlan {
         let mut policy = Policy::allow_by_default();
         let mut blacklist = Vec::new();
         let mut fetchable = VerificationResult::Safe;
-        
+
         for (identifier, stats) in stats.0.into_iter() {
             state.with_df_artifact_ref(&identifier, |artifact| -> Result<(), Status> {
                 let check = artifact.policy.verify(&Context {
@@ -128,8 +129,8 @@ impl CompositePlan {
                     user_id: String::new(),
                     df_identifier: identifier.clone(),
                 })?;
-                
-                if let VerificationResult::Unsafe { .. } = check { 
+
+                if let VerificationResult::Unsafe { .. } = check {
                     policy = policy.merge(&artifact.policy);
                 }
                 fetchable.merge(check);
@@ -138,7 +139,6 @@ impl CompositePlan {
                 Ok(())
             })??;
         }
-
 
         Ok(DataFrameArtifact {
             dataframe: df,
@@ -166,12 +166,61 @@ impl CompositePlan {
     // }
 }
 
-fn check_exprs(exprs: &[Expr]) -> bool {
-    exprs.iter().all(|e| match e {
-        Expr::Agg(AggExpr::List(_)) | Expr::Agg(AggExpr::AggGroups(_)) => false,
-        Expr::Agg(_) => true,
-        _ => false,
-    })
+fn expr_agg_check(expr: &Expr) -> Result<bool, Status> {
+    let mut state = Vec::new();
+    expr.visit(&mut state, |expr, state| {
+        match expr {
+            Expr::Column(_)
+            | Expr::Columns(_)
+            | Expr::DtypeColumn(_)
+            | Expr::Literal(_)
+            | Expr::Wildcard
+            | Expr::Count
+            | Expr::Nth(_) => state.push(false),
+            Expr::Agg(AggExpr::List(expr))
+            | Expr::Agg(AggExpr::AggGroups(expr)) => state.push(expr_agg_check(&expr)?),
+            Expr::Agg(_) => state.push(true),
+            Expr::BinaryExpr { .. } => {
+                let right_agg = state.pop().unwrap();
+                let left_agg = state.pop().unwrap();
+                state.push(right_agg && left_agg);
+            }
+            Expr::Take { .. } | Expr::SortBy { .. } | Expr::Filter { .. } | Expr::Window { .. } => {
+                state.pop().unwrap();
+                let expr_agg = state.pop().unwrap();
+                state.push(expr_agg);
+            }
+            Expr::Ternary { .. } => {
+                let falsy_agg = state.pop().unwrap();
+                let truthy_agg = state.pop().unwrap();
+                state.pop().unwrap();
+                state.push(truthy_agg && falsy_agg);
+            }
+            Expr::Slice { .. } => {
+                state.pop().unwrap();
+                state.pop().unwrap();
+                let input_agg = state.pop().unwrap();
+                state.push(input_agg);
+            }
+            _ => (),
+        }
+
+        Ok(())
+    })?;
+
+    Ok(state.pop().unwrap())
+}
+
+fn exprs_agg_check(exprs: &[Expr]) -> Result<bool, Status> {
+    let mut res = true;
+
+    for e in exprs.iter() {
+        let x = expr_agg_check(e)?;
+        println!("{} -> {}", e, x);
+        res = res && x;
+    }
+
+    Ok(res)
 }
 
 // fn aggregation_size(plan: &LogicalPlan, state: &mut HashMap<String, AggStat>) -> Result<(), Status> {
@@ -203,7 +252,7 @@ fn check_exprs(exprs: &[Expr]) -> bool {
 //                     .unwrap()[0]
 //                     .try_extract()
 //                     .unwrap();
-                
+
 //                 if check_exprs(aggs) {
 //                     *state = match *state {
 //                         Some(prev_agg_size) => Some(prev_agg_size.min(agg_size)),
@@ -224,7 +273,7 @@ fn check_exprs(exprs: &[Expr]) -> bool {
 // fn initialize_inputs(plan: &mut LogicalPlan, stack: &mut Vec<StackFrame>) -> Result<HashMap<String, AggStat>, Status> {
 //     let mut state = (stack, HashMap::new());
 //     plan.visit_mut(&mut state, |plan, (stack, agg_stats)| {
-        
+
 //         if let LogicalPlan::DataFrameScan { .. } = plan {
 //             let frame = stack
 //                 .pop()
@@ -252,7 +301,13 @@ fn run_logical_plan(plan: LogicalPlan) -> Result<DataFrame, Status> {
 impl DataFrameStats {
     fn new(identifier: String) -> DataFrameStats {
         let mut stats = HashMap::new();
-        stats.insert(identifier, StatsEntry { agg_size: 1, join_scaling: 1 });
+        stats.insert(
+            identifier,
+            StatsEntry {
+                agg_size: 1,
+                join_scaling: 1,
+            },
+        );
         DataFrameStats(stats)
     }
 
@@ -275,7 +330,7 @@ impl DataFrameStats {
                 stats_left.join_scaling = stats_left.join_scaling.max(stats_right.join_scaling);
             }
         }
-    
+
         for (identifier, stats_right) in other.0.into_iter() {
             if let None = self.0.get(&identifier) {
                 self.0.insert(identifier, stats_right);
@@ -284,46 +339,59 @@ impl DataFrameStats {
     }
 }
 
-fn initialize_plan(plan: &mut LogicalPlan, stack: &mut Vec<StackFrame>) -> Result<DataFrameStats, Status> {
+fn initialize_plan(
+    plan: &mut LogicalPlan,
+    stack: &mut Vec<StackFrame>,
+) -> Result<DataFrameStats, Status> {
     let mut state = (stack, Vec::new());
     plan.visit_mut(&mut state, |plan, (main_stack, stats_stack)| {
         match plan {
             LogicalPlan::DataFrameScan { .. } => {
-                let frame = main_stack
-                    .pop()
-                    .ok_or(Status::invalid_argument(
-                        "Could not run logical plan: not enough input data frames",
-                    ))?;
+                let frame = main_stack.pop().ok_or(Status::invalid_argument(
+                    "Could not run logical plan: not enough input data frames",
+                ))?;
                 stats_stack.push(frame.stats);
-                *plan = frame
-                    .df
-                    .lazy()
-                    .logical_plan;
+                *plan = frame.df.lazy().logical_plan;
             }
-            LogicalPlan::Join { input_left, input_right, left_on, right_on, options, .. } => {
+            LogicalPlan::Join {
+                input_left,
+                input_right,
+                left_on,
+                right_on,
+                options,
+                ..
+            } => {
                 let left_ldf = lazy_frame_from_logical_plan((&**input_left).clone());
                 let right_ldf = lazy_frame_from_logical_plan((&**input_right).clone());
 
                 let joined_ids = left_ldf
                     .cache()
                     .with_row_count("__left_count", None)
-                    .join(right_ldf.cache().with_row_count("__right_count", None), left_on, right_on, options.how.clone())
+                    .join(
+                        right_ldf.cache().with_row_count("__right_count", None),
+                        left_on,
+                        right_on,
+                        options.how.clone(),
+                    )
                     .select([col("__left_count"), col("__right_count")])
                     .cache();
-                
-                let left_join_scaling = usize_item(joined_ids
-                    .clone()
-                    .groupby([col("__left_count")])
-                    .agg([col("__right_count").count()])
-                    .select([col("__right_count").max()])
-                    .collect())?;
-                
-                let right_join_scaling = usize_item(joined_ids
-                    .groupby([col("__right_count")])
-                    .agg([col("__left_count").count()])
-                    .select([col("__left_count").max()])
-                    .collect())?;
 
+                let left_join_scaling = usize_item(
+                    joined_ids
+                        .clone()
+                        .groupby([col("__left_count")])
+                        .agg([col("__right_count").count()])
+                        .select([col("__right_count").max()])
+                        .collect(),
+                )?;
+
+                let right_join_scaling = usize_item(
+                    joined_ids
+                        .groupby([col("__right_count")])
+                        .agg([col("__left_count").count()])
+                        .select([col("__left_count").max()])
+                        .collect(),
+                )?;
 
                 let mut right = stats_stack.pop().unwrap();
                 let mut left = stats_stack.pop().unwrap();
@@ -337,24 +405,31 @@ fn initialize_plan(plan: &mut LogicalPlan, stack: &mut Vec<StackFrame>) -> Resul
             // These are not currently supported
             // LogicalPlan::ExtContext { .. } => *state = false,
             // LogicalPlan::Union { .. } => *state = false,
-            LogicalPlan::Projection {  expr, .. } => if check_exprs(expr) {
-                stats_stack.last_mut().unwrap().update_agg_size(usize::MAX);
-            },
-            LogicalPlan::LocalProjection {  expr, .. } => if check_exprs(expr) {
-                stats_stack.last_mut().unwrap().update_agg_size(usize::MAX);
-            },
-            LogicalPlan::Aggregate { input, keys, aggs, .. } => {
+            LogicalPlan::Projection { expr, .. } => {
+                if exprs_agg_check(expr)? {
+                    stats_stack.last_mut().unwrap().update_agg_size(usize::MAX);
+                }
+            }
+            LogicalPlan::LocalProjection { expr, .. } => {
+                if exprs_agg_check(expr)? {
+                    stats_stack.last_mut().unwrap().update_agg_size(usize::MAX);
+                }
+            }
+            LogicalPlan::Aggregate {
+                input, keys, aggs, ..
+            } => {
                 let keys = &(**keys)[..];
                 let ldf = lazy_frame_from_logical_plan((&**input).clone());
-                let agg_size = usize_item(ldf
-                    .cache()
-                    .with_row_count("__count", None)
-                    .groupby(keys)
-                    .agg([col("__count").count()])
-                    .select([col("__count").min()])
-                    .collect())?;
-                
-                if check_exprs(aggs) {
+                let agg_size = usize_item(
+                    ldf.cache()
+                        .with_row_count("__count", None)
+                        .groupby(keys)
+                        .agg([col("__count").count()])
+                        .select([col("__count").min()])
+                        .collect(),
+                )?;
+
+                if exprs_agg_check(aggs)? {
                     stats_stack.last_mut().unwrap().update_agg_size(agg_size);
                 }
             }
@@ -368,12 +443,7 @@ fn initialize_plan(plan: &mut LogicalPlan, stack: &mut Vec<StackFrame>) -> Resul
 
 fn usize_item(df_res: Result<DataFrame, PolarsError>) -> Result<usize, Status> {
     Ok(df_res
-        .map_err(|e| {
-            Status::internal(format!(
-                "Could not get usize item from DataFrame: {}",
-                e
-            ))
-        })?
+        .map_err(|e| Status::internal(format!("Could not get usize item from DataFrame: {}", e)))?
         .get(0)
         .unwrap()[0]
         .try_extract()
