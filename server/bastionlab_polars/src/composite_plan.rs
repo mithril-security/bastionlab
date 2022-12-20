@@ -131,6 +131,7 @@ impl CompositePlan {
                 })?;
 
                 if let VerificationResult::Unsafe { .. } = check {
+                    println!("{}", identifier);
                     policy = policy.merge(&artifact.policy);
                 }
                 fetchable.merge(check);
@@ -173,10 +174,10 @@ fn expr_agg_check(expr: &Expr) -> Result<bool, Status> {
             Expr::Column(_)
             | Expr::Columns(_)
             | Expr::DtypeColumn(_)
-            | Expr::Literal(_)
             | Expr::Wildcard
-            | Expr::Count
             | Expr::Nth(_) => state.push(false),
+            Expr::Literal(_)
+            | Expr::Count => state.push(true),
             Expr::Agg(AggExpr::List(expr))
             | Expr::Agg(AggExpr::AggGroups(expr)) => state.push(expr_agg_check(&expr)?),
             Expr::Agg(_) => state.push(true),
