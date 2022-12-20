@@ -126,6 +126,8 @@ jobs:
         run: |
           pip install jupyter ipython
           find . -name "*.ipynb" -exec jupyter nbconvert --output-dir='./converted' --to script {} \;
+          wget 'https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv'
+          cp titanic.csv converted/train.csv
           for file in ./converted/*.py; do
             echo -e "get_ipython().system = lambda *args: print('! is disabled!')\n$(cat $file)" > $file
             ipython $file
