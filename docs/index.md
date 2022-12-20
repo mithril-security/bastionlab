@@ -40,7 +40,7 @@ ____________________________________________
 
 - [Tutorials](docs/tutorials/authentication.ipynb) take you by the hand to install and run BastionLab. We recommend you start with the **[Quick tour](docs/getting-started/quick-tour.ipynb)** and then move on to the other tutorials!  
 
-- [How-to guides](docs/how-to-guides/covid_use_case.ipynb) are recipes. They guide you through the steps involved in addressing key problems and use cases. They are more advanced than tutorials and assume some knowledge of how BastionLab works.
+- [How-to guides](docs/how-to-guides/covid_cleaning_exploration.ipynb) are recipes. They guide you through the steps involved in addressing key problems and use cases. They are more advanced than tutorials and assume some knowledge of how BastionLab works.
 
 - [Concepts](docs/concepts-guides/remote_data_science.md) guides discuss key topics and concepts at a high level. They provide useful background information and explanations, especially on cybersecurity.
 
