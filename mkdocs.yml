@@ -104,7 +104,8 @@ nav:
 - Reference guides: 
   - API Reference: 'docs/resources/bastionlab/index.html'
 - Security: 
-  - Data owner owns the infrastructure: 'docs/security/threat_model_data_owner_owns_infrastructure.md'
+  - Threat model: 'docs/security/threat_model_data_owner_owns_infrastructure.md'
+  - Authentication specifications: 'docs/security/authenticated_sessions.md'
 - Advanced:
   - Benchmarks:
     - Polars : 'docs/advanced/benchmarks/polars_benchmarks.md'

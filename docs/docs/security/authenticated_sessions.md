@@ -8,13 +8,16 @@ You can use BastionLab’s Client `Identity.create()` function to generate the k
 
 Here’s how the keys are generated:
 
-We use Python’s cryptography library](https://pypi.org/project/cryptography/) to generate a key pair, using the elliptic curve NIST P-256 algorithm. The Python cryptography library itself uses OpenSSL, a standard library for cryptography.
+We use [Python’s cryptography library](https://pypi.org/project/cryptography/) to generate a key pair, using the elliptic curve NIST P-256 algorithm. The Python cryptography library itself uses OpenSSL, a standard library for cryptography.
 The keys are saved to the bin directory and labeled as `foo` (private key) and `foo.pub` (public key).
 You must share your public key with the server or the data owner so it can be added to the set of trusted keys when the server is initiated.
 
 The transfer of the public key to the data owner is not something we cover. We leave it to you to choose a trusted means of transferring your public key.
 
-**You do not have to generate the key with BastionLab.** You can  do it with any other means (OpenSSL for example), but the keys **must be generated using the NIST P-256 elliptic curve algorithm**. 
+``` note
+
+	**You do not have to generate the key with BastionLab.** You can  do it with any other means (OpenSSL for example), but the keys **must be generated using the NIST P-256 elliptic curve algorithm**. 
+```
 
 ## Key management
 
@@ -66,7 +69,6 @@ Should a session expire, the client will automatically generate a new session wh
 *The session expiry update as mentioned above remains to be merged.
 
 
-### Authentication Flow
+### Authentication flow
 
 ![](../../assets/authentication-flow.png)
-

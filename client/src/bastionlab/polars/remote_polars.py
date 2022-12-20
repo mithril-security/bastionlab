@@ -378,7 +378,7 @@ class RemoteLazyFrame:
             res,
             Metadata(
                 self._meta._client,
-                [*self._meta._prev_segments, *other._meta._prev_segments],
+                [*other._meta._prev_segments, *self._meta._prev_segments],
             ),
         )
 
@@ -438,7 +438,7 @@ class RemoteLazyFrame:
             res,
             Metadata(
                 self._meta._client,
-                [*self._meta._prev_segments, *other._meta._prev_segments],
+                [*other._meta._prev_segments, *self._meta._prev_segments],
             ),
         )
 
@@ -931,6 +931,9 @@ class FetchableLazyFrame(RemoteLazyFrame):
             Polars.DataFrame: returns a Polars DataFrame instance of your FetchableLazyFrame
         """
         return self._meta._client._fetch_df(self._identifier)
+
+    def save(self):
+        return self._meta._client.persist_df(self._identifier)
 
 
 @dataclass
