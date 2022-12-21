@@ -33,7 +33,6 @@ use composite_plan::*;
 mod visitable;
 
 mod access_control;
-use access_control::Context;
 use access_control::*;
 
 mod utils;
@@ -357,10 +356,6 @@ impl PolarsService for BastionLabPolars {
         let token = self.sess_manager.verify_request(&request)?;
 
         let user_id = self.sess_manager.get_user_id(token.clone())?;
-        let context = Context {
-            min_agg_size: None,
-            user_id,
-        };
 
         let composite_plan: CompositePlan = serde_json::from_str(&request.get_ref().composite_plan)
             .map_err(|e| {
@@ -373,7 +368,7 @@ impl PolarsService for BastionLabPolars {
 
         let start_time = Instant::now();
 
-        let res = composite_plan.run(self, context)?;
+        let res = composite_plan.run(self, &user_id)?;
         let dataframe_bytes: Vec<u8> =
             df_to_bytes(&res.dataframe)
                 .iter_mut()
