@@ -25,7 +25,8 @@ if TYPE_CHECKING:
 class BastionLabPolars:
     """Main BastionLabPolars API class.
 
-    This class contains all the endpoints allowed on the BastionLab server.
+    This class contains all the endpoints allowed on the BastionLab server for Polars.
+    It is instantiated by the `bastionlab.Client` class and is accessible through the `bastionlab.Client.polars` property.
 
     Args:
         stub : bastionlab.pb.bastionlab_polars_pb2_grpc.PolarsServiceStub
