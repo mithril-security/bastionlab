@@ -120,7 +120,7 @@ impl CompositePlan {
 
         let mut policy = Policy::allow_by_default();
         let mut blacklist = Vec::new();
-        let mut savable = false;
+        let mut savable = true;
         let mut fetchable = VerificationResult::Safe;
 
         for (identifier, stats) in stats.0.into_iter() {
