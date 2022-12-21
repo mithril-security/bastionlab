@@ -1248,4 +1248,5 @@ class RemoteLazyGroupBy(Generic[LDF]):
     _inner: pl.internals.lazyframe.groupby.LazyGroupBy[LDF]
     _meta: Metadata
 
+
 LOG_DF = "00000000-0000-0000-0000-000000000000"
