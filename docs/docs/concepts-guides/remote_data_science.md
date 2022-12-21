@@ -16,7 +16,7 @@ This is possible because the data scientist can run arbitrary Python scripts on 
 
 That is why we have built BastionLab, a data science framework to perform remote and secure Exploratory Data Analysis. The following plan illustrates the architecture of our solution and the workflow we implement:
 
-![](../../assets/BastionLab_Worflow.png)
+![](https://github.com/mithril-security/bastionlab/blob/master/docs/assets/BastionLab_Workflow.png)
 
 There are a few key differences between a remotely accessed Jupyter notebook and the use of our remote data science framework.
 
