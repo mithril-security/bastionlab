@@ -1,8 +1,12 @@
-use std::{error::Error, i64::MAX, sync::Mutex};
+use std::{error::Error, io::Cursor, sync::Mutex};
 
 use bastionlab_common::utils::array_to_tensor;
-use polars::prelude::*;
-use tch::Tensor;
+use polars::prelude::{
+    row::{AnyValueBuffer, Row},
+    *,
+};
+use tch::{CModule, Tensor};
+use tokenizers::{Encoding, PaddingParams, Tokenizer, TokenizerBuilder, TruncationParams};
 use tonic::Status;
 
 use crate::polars_proto::meta::Shape;
@@ -53,11 +57,10 @@ pub fn series_to_tensor(series: &Series) -> Result<Tensor, Status> {
 
 pub fn vec_series_to_tensor(
     v_series: Vec<&Series>,
-) -> Result<(Vec<Mutex<Tensor>>, Vec<Shape>, Vec<String>, i64), Status> {
+) -> Result<(Vec<Mutex<Tensor>>, Vec<Shape>, Vec<String>, i32), Status> {
     let mut ts = Vec::new();
     let mut shapes = Vec::new();
     let mut dtypes = Vec::new();
-    let mut nb_samples = MAX;
     for s in v_series {
         let t = match s.dtype() {
             DataType::List(_) => {
@@ -69,15 +72,16 @@ pub fn vec_series_to_tensor(
             }
             _ => series_to_tensor(s)?,
         };
-        if nb_samples == MAX {
-            nb_samples = t.size()[0];
-        }
+
         shapes.push(Shape { elem: t.size() });
         dtypes.push(format!("{:?}", t.kind()));
         ts.push(Mutex::new(t));
     }
-
-    Ok((ts, shapes, dtypes, nb_samples))
+    let nb_samples = match shapes.first() {
+        Some(v) => v.elem[0],
+        None => 0,
+    };
+    Ok((ts, shapes, dtypes, nb_samples.try_into().unwrap()))
 }
 
 pub fn lazy_frame_from_logical_plan(plan: LogicalPlan) -> LazyFrame {
@@ -88,4 +92,99 @@ pub fn lazy_frame_from_logical_plan(plan: LogicalPlan) -> LazyFrame {
 
 pub fn to_status_error<T, E: Error>(input: Result<T, E>) -> Result<T, Status> {
     input.map_err(|err| Status::aborted(err.to_string()))
+}
+
+pub fn load_udf(udf: String) -> Result<CModule, Status> {
+    Ok(
+        CModule::load_data(&mut Cursor::new(base64::decode(udf).map_err(|e| {
+            Status::invalid_argument(format!("Could not decode bas64-encoded udf: {}", e))
+        })?))
+        .map_err(|e| {
+            Status::invalid_argument(format!("Could not deserialize udf from bytes: {}", e))
+        })?,
+    )
+}
+
+fn get_tokenizer(model: &str) -> Result<Tokenizer, Status> {
+    let tokenizer =
+        Tokenizer::from_pretrained(model, None).map_err(|e| Status::aborted(e.to_string()))?;
+
+    let mut t = TokenizerBuilder::new();
+
+    t = t.with_model(tokenizer.get_model().clone());
+    t = t.with_normalizer(tokenizer.get_normalizer().cloned());
+    t = t.with_pre_tokenizer(tokenizer.get_pre_tokenizer().cloned());
+    t = t.with_post_processor(tokenizer.get_post_processor().cloned());
+    t = t.with_decoder(tokenizer.get_decoder().cloned());
+    t = t.with_truncation(
+        tokenizer
+            .get_truncation()
+            .cloned()
+            .or_else(|| Some(TruncationParams::default())),
+    );
+    t = t.with_padding(
+        tokenizer
+            .get_padding()
+            .cloned()
+            .or_else(|| Some(PaddingParams::default())),
+    );
+    let tokenizer = t.build().map_err(|e| Status::aborted(e.to_string()))?;
+    let tokenizer: Tokenizer = tokenizer.into();
+    Ok(tokenizer)
+}
+
+pub fn series_to_tokenized_series(
+    s: &Series,
+    name: &str,
+    model: &str,
+) -> Result<DataFrame, Status> {
+    let tokenizer = get_tokenizer(model)?;
+    let mut batched_seqs = Vec::new();
+
+    let to_row = |tokens: &Encoding| {
+        let ids = tokens.get_ids();
+        let mask = tokens.get_attention_mask();
+
+        let to_any_value = |v: &[u32]| -> AnyValue {
+            let mut buf = AnyValueBuffer::new(&DataType::UInt32, v.len());
+            v.iter().for_each(|v| {
+                buf.add(AnyValue::UInt32(*v));
+            });
+            AnyValue::List(buf.into_series())
+        };
+        let ids = to_any_value(ids);
+        let mask = to_any_value(mask);
+
+        let joined = vec![ids.clone(), mask.clone()];
+
+        let row = Row::new(joined);
+        row
+    };
+    for row in s.utf8().unwrap().into_iter() {
+        match row {
+            Some(s) => {
+                batched_seqs.push(s.to_string());
+            }
+            None => {
+                return Err(Status::aborted(
+                    "Failed to convert row to Utf8 string".to_string(),
+                ));
+            }
+        }
+    }
+
+    let tokens_vec = tokenizer
+        .encode_batch(batched_seqs, false)
+        .map_err(|_| Status::aborted("Failed to tokenize string"))?;
+
+    let rows = tokens_vec.iter().map(to_row).collect::<Vec<_>>();
+    let mut df = to_status_error(DataFrame::from_rows(&rows[..]))?;
+
+    let ids_names = &format!("{}_ids", name.to_lowercase());
+    let mask_names = &format!("{}_mask", name.to_lowercase());
+
+    let col_names = df.get_column_names_owned();
+    to_status_error(df.rename(&col_names[0], &ids_names))?;
+    to_status_error(df.rename(&col_names[1], &mask_names))?;
+    Ok(df)
 }

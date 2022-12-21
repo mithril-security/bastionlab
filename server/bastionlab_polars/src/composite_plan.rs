@@ -1,9 +1,10 @@
-use base64;
+use std::sync::Mutex;
+
 use bastionlab_common::utils::tensor_to_series;
-use polars::prelude::*;
+use polars::{functions::hor_concat_df, prelude::*};
 use serde::{Deserialize, Serialize};
-use std::io::Cursor;
-use tch::CModule;
+
+use polars::prelude::concat;
 use tonic::Status;
 
 use crate::{
@@ -20,6 +21,8 @@ pub struct CompositePlan(Vec<CompositePlanSegment>);
 pub enum CompositePlanSegment {
     PolarsPlanSegment(LogicalPlan),
     UdfPlanSegment { columns: Vec<String>, udf: String },
+    StringTransformerPlanSegment { columns: Vec<String>, model: String },
+    UdfTransformerPlanSegment { columns: Vec<String>, udf: String },
     EntryPointPlanSegment(String),
     StackPlanSegment,
 }
@@ -41,19 +44,7 @@ impl CompositePlan {
                     input_dfs.push(df);
                 }
                 CompositePlanSegment::UdfPlanSegment { columns, udf } => {
-                    let module =
-                        CModule::load_data(&mut Cursor::new(base64::decode(udf).map_err(|e| {
-                            Status::invalid_argument(format!(
-                                "Could not decode bas64-encoded udf: {}",
-                                e
-                            ))
-                        })?))
-                        .map_err(|e| {
-                            Status::invalid_argument(format!(
-                                "Could not deserialize udf from bytes: {}",
-                                e
-                            ))
-                        })?;
+                    let module = load_udf(udf)?;
 
                     let mut df = input_dfs.pop().ok_or(Status::invalid_argument(
                         "Could not apply udf: no input data frame",
@@ -68,7 +59,7 @@ impl CompositePlan {
                                 name
                             )))?;
                         let series = df.get_columns_mut().get_mut(idx).unwrap();
-                        let tensor = series_to_tensor(series)?;
+                        let tensor = series_to_tensor(series)?; // -> [list[u32], list[32]]
                         let tensor = module.forward_ts(&[tensor]).map_err(|e| {
                             Status::invalid_argument(format!("Error while running udf: {}", e))
                         })?;
@@ -93,6 +84,34 @@ impl CompositePlan {
                     })?;
                     input_dfs.push(df1);
                 }
+                CompositePlanSegment::StringTransformerPlanSegment { columns, model } => {
+                    let mut df = input_dfs.pop().ok_or(Status::invalid_argument(
+                        "Could not apply udf: no input data frame",
+                    ))?;
+
+                    for name in columns {
+                        let idx = df
+                            .get_column_names()
+                            .iter()
+                            .position(|x| x == &&name)
+                            .ok_or(Status::invalid_argument(format!(
+                                "Could not apply udf: no column `{}` in data frame",
+                                name
+                            )))?;
+                        let series = df.get_columns().get(idx).unwrap();
+                        let out = if series.dtype().eq(&DataType::Utf8) {
+                            series_to_tokenized_series(series, &name, &model)?
+                        } else {
+                            to_status_error(DataFrame::new(vec![series.clone()]))?
+                        };
+                        let _ = to_status_error(df.drop_in_place(&name))?;
+
+                        df = to_status_error(hor_concat_df(&[df, out]))?;
+                    }
+
+                    input_dfs.push(df);
+                }
+                CompositePlanSegment::UdfTransformerPlanSegment { columns, udf } => todo!(), //TODO: Add support for TorchScriptable Tokenizers
             }
         }
 

@@ -13,6 +13,8 @@ pub struct Dataset {
     pub samples_inputs: Vec<Mutex<Tensor>>,
     pub labels: Mutex<Tensor>,
     privacy_context: Arc<RwLock<PrivacyContext>>,
+    pub converted: bool,
+    pub from_dtype: (Vec<String>, String),
 }
 
 /// Simple iterator over [`Dataset`].
@@ -81,10 +83,17 @@ impl<'a> Iterator for DatasetIter<'a> {
 }
 
 impl Dataset {
-    pub fn new(samples_inputs: Vec<Mutex<Tensor>>, labels: Mutex<Tensor>) -> Self {
+    pub fn new(
+        samples_inputs: Vec<Mutex<Tensor>>,
+        labels: Mutex<Tensor>,
+        converted: bool,
+        from_dtype: (Vec<String>, String),
+    ) -> Self {
         Dataset {
             samples_inputs,
             labels,
+            converted,
+            from_dtype,
             privacy_context: Arc::new(RwLock::new(PrivacyContext::new(
                 PrivacyBudget::NotPrivate,
                 0,
@@ -197,6 +206,8 @@ impl TryFrom<SizedObjectsBytes> for Dataset {
                 privacy_limit,
                 nb_samples as usize,
             ))),
+            converted: false,
+            from_dtype: (vec![], String::default()),
         })
     }
 }

@@ -152,6 +152,40 @@ class StackPlanSegment(CompositePlanSegment):
 
 
 @dataclass
+class StringTransformerPlanSegment(CompositePlanSegment):
+    """
+    Accepts a UDF for row-wise DataFrame transformation.
+    """
+
+    model: str
+    _columns: List[str]
+
+    def serialize(self) -> str:
+        """
+        returns serialized string of this plan segment
+
+        Returns:
+            str: serialized string of this plan segment
+        """
+        columns = ",".join([f'"{c}"' for c in self._columns])
+
+        return f'{{"StringTransformerPlanSegment":{{"columns":[{columns}],"model":"{self.model}"}}}}'
+
+
+@dataclass
+class UdfTransformerPlanSegment(CompositePlanSegment):
+    """
+    Accepts a UDF for row-wise DataFrame transformation.
+    """
+
+    _name: str
+    _columns: List[str]
+
+    def serialize(self) -> str:
+        pass
+
+
+@dataclass
 class Metadata:
     """
     A class containing metadata related to your dataframe
@@ -337,6 +371,21 @@ class RemoteLazyFrame:
                     *self._meta._prev_segments,
                     PolarsPlanSegment(self._inner),
                     StackPlanSegment(),
+                ],
+            ),
+        )
+
+    def convert(self, columns: List[str], model: str) -> LDF:
+        df = pl.DataFrame(
+            [pl.Series(k, dtype=v) for k, v in self._inner.schema.items()]
+        )
+        return RemoteLazyFrame(
+            df.lazy(),
+            Metadata(
+                self._meta._client,
+                [
+                    *self._meta._prev_segments,
+                    StringTransformerPlanSegment(model, columns),
                 ],
             ),
         )
@@ -664,9 +713,16 @@ class FetchableLazyFrame(RemoteLazyFrame):
     @staticmethod
     def _from_reference(client: BastionLabPolars, ref: ReferenceResponse) -> LDF:
         header = json.loads(ref.header)["inner"]
-        df = pl.DataFrame(
-            [pl.Series(k, dtype=getattr(pl, v)()) for k, v in header.items()]
-        )
+
+        def get_dtype(v):
+            if isinstance(v, str):
+                return getattr(pl, v)()
+            else:
+                k, v = list(v.items())[0]
+                v = get_dtype(v)
+                return getattr(pl, k)(v)
+
+        df = pl.DataFrame([pl.Series(k, dtype=get_dtype(v)) for k, v in header.items()])
         return FetchableLazyFrame(
             _identifier=ref.identifier,
             _inner=df.lazy(),
@@ -688,10 +744,10 @@ class FetchableLazyFrame(RemoteLazyFrame):
 
     def to_dataset(
         self,
-        inputs: Optional[List[str]] = None,
+        inputs: Optional[Union[str, List[str]]] = None,
         labels: Optional[str] = None,
-        inputs_conv_fn: str = "",
-        labels_conv_fn: str = "",
+        inputs_conv_fn: Optional[Union[str, Callable]] = None,
+        labels_conv_fn: Optional[Union[str, Callable]] = None,
     ) -> "RemoteDataset":
         """Converts BastionLab `FetchableLazy` to a `RemoteDataset`.
 
@@ -711,13 +767,20 @@ class FetchableLazyFrame(RemoteLazyFrame):
         from ..torch.learner import RemoteDataset
         from ..config import CONFIG
 
+        if not isinstance(inputs, list):
+            inputs = [inputs]
+        converted = self.convert(inputs, inputs_conv_fn).collect()
+
+        # Find inputs new columns
+        def find_match(cols: List[str], input: str):
+            return list(filter(lambda a: input.lower() in a, cols))
+
+        inputs = [find_match(converted.columns, input) for input in inputs][0]
         ref = self._meta._client._conv._stub.ConvToDataset(
             ToDataset(
-                identifier=self.identifier,
                 inputs=inputs,
                 labels=labels,
-                inputs_conv_fn=inputs_conv_fn,
-                labels_conv_fn=labels_conv_fn,
+                identifier=converted.identifier,
             )
         )
         return RemoteDataset(client=CONFIG["torch_client"], train_dataset=ref)

@@ -5,9 +5,7 @@ package bastionlab_conversion;
 message ToDataset {
     repeated string inputs = 1;
     string labels = 2;
-    string inputs_conv_fn = 3;
-    string labels_conv_fn = 4;
-    string identifier = 5;
+    string identifier = 3;
 }
 
 message ConvReference {
