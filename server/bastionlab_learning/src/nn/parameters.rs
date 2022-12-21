@@ -270,7 +270,7 @@ impl<'a> Parameters<'a> {
                     let mut update_size = per_sample_grad.size();
                     update_size.remove(0);
                     let grad =
-                        Tensor::f_einsum("i,i...", &[&per_sample_clip_factor, &per_sample_grad])?;
+                        Tensor::f_einsum("i,i...", &[&per_sample_clip_factor, &per_sample_grad], None)?;
                     let mut grad = grad
                         .f_add(&generate_noise_like(&grad, sigma)?)?
                         .f_view(&update_size[..])?;

@@ -211,7 +211,6 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "spki",
- "tch",
  "tokio",
  "tokio-stream",
  "toml",
@@ -2347,9 +2346,9 @@ dependencies = [
 
 [[package]]
 name = "tch"
-version = "0.8.0"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "584cc6a09b0a28a9ebd85b64a74cfe0643d54a724ab649379c4ff5edd59b2356"
+checksum = "f4e8ecac1bcd6c92726de9b1e998aa99b3977af0716992382dfd1171289b9575"
 dependencies = [
  "half",
  "lazy_static",
@@ -2601,9 +2600,9 @@ dependencies = [
 
 [[package]]
 name = "torch-sys"
-version = "0.8.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a097a0fe5fda9773f6515d4eaf692caa77818c8628f1be42b79c31de9473300"
+checksum = "877dbdc2732bdb118a71c94d0004333d29f76ebb5e88f193a3abe068f7bd6de9"
 dependencies = [
  "anyhow",
  "cc",
