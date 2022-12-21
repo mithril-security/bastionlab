@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io::Cursor};
 use tch::CModule;
 use tonic::Status;
+use chrono::{Local, DateTime};
+use log::info;
 
 use crate::{
     access_control::{Context, Policy, VerificationResult},
@@ -11,6 +13,7 @@ use crate::{
     visitable::{Visitable, VisitableMut},
     BastionLabPolars, DataFrameArtifact,
 };
+const LOG_DF: &str = "00000000-0000-0000-0000-000000000000";
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CompositePlan(Vec<CompositePlanSegment>);
@@ -45,6 +48,7 @@ impl CompositePlan {
     ) -> Result<DataFrameArtifact, Status> {
         let mut stack = Vec::new();
         let plan_str = serde_json::to_string(&self.0).unwrap(); // FIX THIS
+        let mut log_inputs = Vec::new();
 
         for seg in self.0 {
             match seg {
@@ -91,6 +95,7 @@ impl CompositePlan {
                     stack.push(frame);
                 }
                 CompositePlanSegment::EntryPointPlanSegment(identifier) => {
+                    log_inputs.push(identifier.clone());
                     let df = state.get_df_unchecked(&identifier)?;
                     let stats = DataFrameStats::new(identifier);
                     stack.push(StackFrame { df, stats });
@@ -118,6 +123,35 @@ impl CompositePlan {
             return Err(Status::invalid_argument(
                 "Wrong number of input data frames",
             ));
+        }
+
+        let mut inputs = String::from("");
+        for i in &log_inputs{
+            let mut _x = false;
+            if _x == true{
+                inputs.push_str(", ");
+            }
+            inputs.push_str(i);
+            _x = true;
+        }
+
+        //LAURA LOG
+        let dt: DateTime<Local> = Local::now();
+        let user_hash = user_id.clone();
+        let new_row = df! [
+        "User"              => [user_hash],
+        "Time"              => [dt.to_string()],
+        "Type"              => ["Run"],
+        "Inputs"            => [inputs.clone()],
+        "Output"            => ["..."],
+        "CompositePlan"     => [plan_str.to_string()],
+        "PolicyViolation"   => ["n/a"]
+        ].unwrap_or(DataFrame::default());
+        if (!inputs.starts_with(LOG_DF)) & (new_row != DataFrame::default()) {
+            match state.update_log(new_row) {
+                Ok(ret2) => ret2,
+                Err(error) => info!("Could not save updated log file: {}", error),
+            };
         }
 
         let StackFrame { df, stats } = stack.pop().unwrap();

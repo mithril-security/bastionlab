@@ -30,6 +30,7 @@ whoami = "1.2.1"
 once_cell = "1.13.1"
 log = "0.4.17"
 bastionlab_common = { path = "../bastionlab_common" }
+chrono = "0.4.23"
 
 [dependencies.polars]
 version = "0.25.1"

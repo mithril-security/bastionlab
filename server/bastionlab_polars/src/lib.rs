@@ -4,6 +4,8 @@ use bastionlab_common::{
     session_proto::ClientInfo,
     telemetry::{self, TelemetryEventProps},
 };
+use UnsafeAction::Log;
+use chrono::{Local, DateTime};
 use polars::prelude::*;
 use ring::digest;
 use serde::{Deserialize, Serialize};
@@ -15,6 +17,8 @@ use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status, Streaming};
 use utils::sanitize_df;
 use uuid::Uuid;
+use crate::Rule::True;
+const LOG_DF: &str = "00000000-0000-0000-0000-000000000000";
 
 pub mod polars_proto {
     tonic::include_proto!("bastionlab_polars");
@@ -85,6 +89,53 @@ impl BastionLabPolars {
             sess_manager,
         }
     }
+
+    fn update_log(
+        self: &BastionLabPolars,
+        new_row: DataFrame,
+        ) -> Result<(), Status> {
+        let mut dfs = self.dataframes.write().unwrap(); 
+        let artifact = dfs.get_mut(LOG_DF);
+        match artifact{
+            Some(artifact) => { //log dataframe exists, append new_row and save
+                artifact.dataframe = artifact.dataframe.vstack(&new_row).unwrap_or(artifact.dataframe.clone());
+                drop(dfs);
+                return self.persist_df(LOG_DF);
+            }
+            None => {
+                let pol = Policy{
+                safe_zone: True,
+                unsafe_handling: Log,
+                };
+                let df = DataFrameArtifact::new(new_row, pol, Vec::new());
+                dfs.insert(LOG_DF.to_string(), df);
+                drop(dfs);
+                return self.persist_df(LOG_DF);
+            }
+        }    
+    }
+
+    fn update_log_value(
+        self: &BastionLabPolars,
+        column: &str,
+        value: &str,
+        ) -> Result<(), Status> {
+        let mut dfs = self.dataframes.write().unwrap();
+        let artifact = dfs.get_mut(LOG_DF);
+        match artifact{
+            Some(artifact) => { //log dataframe exists, append new_row and save
+                artifact.dataframe = artifact.dataframe.clone().lazy().with_column(
+                    when(col(column).eq(lit("..."))).then(lit(value)).otherwise(col(column)).alias(column)
+                ).collect().unwrap_or(artifact.dataframe.clone());
+                drop(dfs);
+                return self.persist_df(LOG_DF);
+            }
+            None => {
+                drop(dfs);
+                Ok(())
+            }
+            }
+        }
 
     fn get_df(
         &self,
@@ -390,8 +441,13 @@ impl PolarsService for BastionLabPolars {
             Some(self.sess_manager.get_client_info(token)?),
         );
 
+        if &identifier != LOG_DF{
+            match self.update_log_value("Output", &identifier) {
+                Ok(ret2) => ret2,
+                Err(error) => info!("Could not save updated log file: {}", error),
+            };
+        }
         info!("Succesfully ran query on {}", identifier.clone());
-
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
 
@@ -403,7 +459,7 @@ impl PolarsService for BastionLabPolars {
 
         let token = self.sess_manager.verify_request(&request)?;
 
-        let client_info = self.sess_manager.get_client_info(token)?;
+        let client_info = self.sess_manager.get_client_info(token.clone())?;
         let df = df_artifact_from_stream(request.into_inner()).await?;
         let dataframe_bytes: Vec<u8> =
             df_to_bytes(&df.dataframe)
@@ -431,6 +487,24 @@ impl PolarsService for BastionLabPolars {
             identifier.clone()
         );
 
+        //LAURA LOG
+        let dt: DateTime<Local> = Local::now();
+        let user_hash= self.sess_manager.get_user_id(token.clone())?;
+        let new_row = df! [
+        "User"              => [user_hash],
+        "Time"              => [dt.to_string()],
+        "Type"              => ["Send"],
+        "Inputs"            => ["n/a"],
+        "Output"            => [identifier.clone()],
+        "CompositePlan"     => ["n/a"],
+        "PolicyViolation"   => ["n/a"],
+        ].unwrap_or(DataFrame::default());
+        if (identifier.clone() != LOG_DF) & (new_row != DataFrame::default()){
+            match self.update_log(new_row) {
+                Ok(ret2) => ret2,
+                Err(error) => info!("Could not save updated log file: {}", error),
+            };
+        }
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
 
@@ -443,11 +517,48 @@ impl PolarsService for BastionLabPolars {
         let fut = {
             let df = self.get_df(
                 &request.get_ref().identifier,
-                Some(self.sess_manager.get_client_info(token)?),
+                Some(self.sess_manager.get_client_info(token.clone())?),
             )?;
             stream_data(df, 32)
         };
-        Ok(fut.await)
+        let ret = fut.await;
+
+        //logging
+        let user_hash= self.sess_manager.get_user_id(token.clone())?;
+        let dt: DateTime<Local> = Local::now();
+        let id = &request.get_ref().identifier[..];
+        
+        //get df
+        let dfs = self.dataframes.read().unwrap();
+        let artifact = dfs.get(id).ok_or(Status::not_found(format!(
+            "Could not find dataframe: identifier={}",
+            id
+        )))?;
+
+        let mut pol = "None";
+        if let VerificationResult::Unsafe { action, reason } = &artifact.fetchable {
+            pol = reason;
+            let _action = action;
+        }
+
+        //log it
+        let new_row = df! [
+        "User"              => [user_hash],
+        "Time"              => [dt.to_string()],
+        "Type"              => ["Fetch"],
+        "Inputs"            => [String::from(id.clone())],
+        "Output"            => ["n/a"],
+        "CompositePlan"     => ["n/a"],
+        "PolicyViolation"   => [pol]
+        ].unwrap_or(DataFrame::default());
+        drop(dfs);
+        if (new_row != DataFrame::default()) & (id.clone() != LOG_DF){
+            match self.update_log(new_row) {
+                Ok(ret2) => ret2,
+                Err(error) => info!("Could not save updated log file: {}", error),
+            };
+        }
+        Ok(ret)
     }
 
     async fn list_data_frames(
