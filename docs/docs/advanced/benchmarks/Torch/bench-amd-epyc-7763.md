@@ -4,7 +4,7 @@ These benchmarks were done by finetuning the EfficientNet B0 model on CIFAR100 d
 For these benchmarks, we set the batch size to be the maximum possible, fitting in 8GB of RAM. 
 
 
-![](../assets/amd_epyc_exec_times.png)
+![](../../../../assets/amd_epyc_exec_times.png)
 
 Here you can have a look at the precise execution times.
 
