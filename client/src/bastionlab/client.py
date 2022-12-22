@@ -119,7 +119,7 @@ class Client:
         if self._bastionlab_torch is None:
             from bastionlab.torch import BastionLabTorch
 
-            self._bastionlab_torch = BastionLabTorch(self._channel)
+            self._bastionlab_torch = BastionLabTorch(self)
         return self._bastionlab_torch
 
     @property
