@@ -135,14 +135,8 @@ impl VerificationResult {
     pub fn merge(&mut self, other: Self) {
         match (self, other) {
             (
-                VerificationResult::Unsafe {
-                    action: left_action,
-                    reason: left_reason,
-                },
-                VerificationResult::Unsafe {
-                    action: right_action,
-                    reason: right_reason,
-                },
+                VerificationResult::Unsafe { action: left_action, reason: left_reason },
+                VerificationResult::Unsafe { action: right_action, reason: right_reason }
             ) => {
                 *left_action = left_action.merge(right_action);
                 if *left_action == right_action {
@@ -150,7 +144,7 @@ impl VerificationResult {
                 }
             }
             (x @ VerificationResult::Safe, y) => *x = y,
-            _ => (),
+            _ => (), 
         }
     }
 }
