@@ -5,12 +5,14 @@ use bastionlab_common::{session::SessionManager, session_proto::ClientInfo};
 use bastionlab_learning::data::Dataset;
 use bastionlab_polars::access_control::{Policy, VerificationResult};
 use bastionlab_polars::polars_proto::Meta;
-use bastionlab_polars::utils::{series_to_tensor, vec_series_to_tensor};
+use bastionlab_polars::utils::{
+    series_to_tensor, tokenized_series_to_series, vec_series_to_tensor,
+};
 use bastionlab_polars::{polars_proto::Reference, utils::to_status_error};
 use bastionlab_polars::{BastionLabPolars, DataFrameArtifact};
 use bastionlab_torch::storage::Artifact;
 use bastionlab_torch::BastionLabTorch;
-use polars::prelude::DataFrame;
+use polars::prelude::{DataFrame, DataType};
 use prost::Message;
 use ring::hmac;
 use tonic::{Request, Response, Status};
@@ -74,12 +76,15 @@ impl Converter {
         };
         let (identifier, name, description, meta) =
             self.torch.insert_dataset(&identifier, dataset)?;
-        Ok(Reference {
-            identifier,
+
+        let train_dataset = Reference {
+            identifier: identifier.clone(),
             name,
             description,
             meta,
-        })
+        };
+
+        Ok(train_dataset)
     }
 }
 
@@ -91,11 +96,12 @@ impl ConversionService for Converter {
     ) -> Result<Response<ConvReferenceResponse>, Status> {
         self.sess_manager.verify_request(&request)?;
 
-        let (inputs_cols_names, labels_col_name, identifier) = {
+        let (inputs_cols_names, labels_col_name, identifier, inputs_conv_fn) = {
             (
                 &request.get_ref().inputs_col_names,
                 &request.get_ref().labels_col_name,
                 &request.get_ref().identifier,
+                &request.get_ref().inputs_conv_fn,
             )
         };
         let identifier = Uuid::parse_str(&identifier)
@@ -117,8 +123,13 @@ impl ConversionService for Converter {
 
         for (inputs, name) in samples_inputs_locks.iter().zip(inputs_cols_names.iter()) {
             let dtype = kind_to_datatype(inputs.kind());
+            println!("Dtype: {}", dtype);
 
-            let series = tensor_to_series(&name, &dtype, inputs.data())?;
+            let series = if inputs.size().len() == 2 {
+                tensor_to_series(&name, &DataType::List(Box::new(dtype)), inputs.data())?
+            } else {
+                tensor_to_series(name, &dtype, inputs.data())?
+            };
             samples_inputs_series.push(series);
         }
 

@@ -16,6 +16,14 @@ pub fn tensor_to_series(name: &str, dtype: &DataType, tensor: Tensor) -> Result<
         DataType::Int32 => Series::from(tensor_to_array::<Int32Type>(&name, tensor)),
         DataType::Int16 => Series::from(tensor_to_array::<Int16Type>(&name, tensor)),
         DataType::Int8 => Series::from(tensor_to_array::<Int8Type>(&name, tensor)),
+        DataType::List(inner) => {
+            let shape = tensor.size();
+            let series = tensor_to_series(name, inner, tensor)?;
+            let series = series
+                .reshape(&shape[..])
+                .map_err(|_| Status::aborted("Failed to reshape series"))?;
+            series
+        }
         d => {
             return Err(Status::invalid_argument(format!(
                 "Unsuported data type in udf: {}",

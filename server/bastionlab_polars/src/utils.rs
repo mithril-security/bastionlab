@@ -46,6 +46,13 @@ pub fn series_to_tensor(series: &Series) -> Result<Tensor, Status> {
             let s = to_status_error(series.cast(&DataType::Int64))?;
             array_to_tensor(s.i64().unwrap())?
         }
+        DataType::List(_) => {
+            let mut out = list_dtype_to_tensor(series)?;
+            for t in out.iter_mut() {
+                *t = t.unsqueeze(0);
+            }
+            Tensor::cat(&out[..], 0)
+        }
         d => {
             return Err(Status::invalid_argument(format!(
                 "Unsuported data type in udf: {}",
@@ -62,17 +69,7 @@ pub fn vec_series_to_tensor(
     let mut shapes = Vec::new();
     let mut dtypes = Vec::new();
     for s in v_series {
-        let t = match s.dtype() {
-            DataType::List(_) => {
-                let mut out = list_dtype_to_tensor(s)?;
-                for t in out.iter_mut() {
-                    *t = t.unsqueeze(0);
-                }
-                Tensor::cat(&out[..], 0)
-            }
-            _ => series_to_tensor(s)?,
-        };
-
+        let t = series_to_tensor(s)?;
         shapes.push(Shape { elem: t.size() });
         dtypes.push(format!("{:?}", t.kind()));
         ts.push(Mutex::new(t));
@@ -187,4 +184,31 @@ pub fn series_to_tokenized_series(
     to_status_error(df.rename(&col_names[0], &ids_names))?;
     to_status_error(df.rename(&col_names[1], &mask_names))?;
     Ok(df)
+}
+
+pub fn tokenized_series_to_series(vs: Vec<Series>, model: &str) -> Result<Series, Status> {
+    let tokenizer = get_tokenizer(model)?;
+
+    let get_list = |v: AnyValue| match v {
+        AnyValue::List(s) => Some(s),
+        _ => None,
+    };
+    for idx in 0..vs[0].len() {
+        let id_tokens = vs[0].get(idx);
+        match get_list(id_tokens) {
+            Some(v) => {
+                println!("{:?}", v);
+            }
+            None => (),
+        }
+        let mask_tokens = vs[1].get(idx);
+        match get_list(mask_tokens) {
+            Some(v) => {
+                println!("{:?}", v);
+            }
+            None => (),
+        }
+    }
+
+    Ok(Series::new_empty("", &DataType::Utf8))
 }

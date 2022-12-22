@@ -23,6 +23,14 @@ message Reference {
     bytes meta = 4;
 }
 
+message UpdateMeta {
+    string identifier = 1;
+    optional string name = 2;
+    optional string description = 3;
+    optional Meta meta = 4;
+
+}
+
 message Meta {
     message Shape {
         repeated int64 elem =1;
@@ -139,6 +147,7 @@ message ToDataFrame {
 
 service TorchService {
     rpc SendDataset (stream Chunk) returns (Reference) {}
+    rpc UpdateDataset(UpdateMeta) returns (Empty) {}
     rpc SendModel (stream Chunk) returns (Reference) {}
     rpc FetchDataset (Reference) returns (stream Chunk) {}
     rpc FetchModule (Reference) returns (stream Chunk) {}

@@ -2,6 +2,8 @@ from typing import Iterator, Tuple, List
 import torch
 import polars as pl
 from ..pb.bastionlab_polars_pb2 import SendChunk
+from ..pb.bastionlab_conversion_pb2 import ConvReference
+from ..pb.bastionlab_torch_pb2 import Reference
 from .policy import Policy
 
 CHUNK_SIZE = 32 * 1024
@@ -161,3 +163,12 @@ class ApplyBins(torch.nn.Module):
     def forward(self, x):
         bins = self.bin_size * torch.ones_like(x)
         return round(x // bins) * bins
+
+
+def to_torch_ref(ref: ConvReference) -> Reference:
+    return Reference(
+        identifier=ref.identifier,
+        name=ref.name,
+        description=ref.description,
+        meta=ref.meta,
+    )

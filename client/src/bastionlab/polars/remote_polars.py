@@ -10,7 +10,7 @@ import torch
 from ..pb.bastionlab_conversion_pb2 import ToDataset
 from ..pb.bastionlab_polars_pb2 import ReferenceResponse
 from .client import BastionLabPolars
-from .utils import ApplyBins
+from .utils import ApplyBins, to_torch_ref
 import matplotlib.pyplot as plt
 from typing import TYPE_CHECKING
 
@@ -783,7 +783,7 @@ class FetchableLazyFrame(RemoteLazyFrame):
                 identifier=converted.identifier,
             )
         )
-        return RemoteDataset(client=CONFIG["torch_client"], train_dataset=ref)
+        return RemoteDataset(client=CONFIG["torch_client"], train_dataset=to_torch_ref(ref))
 
 
 @dataclass

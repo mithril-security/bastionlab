@@ -5,7 +5,7 @@ from grpc import StatusCode
 from torch.nn import Module
 from torch.utils.data import Dataset
 import torch
-from ..pb.bastionlab_torch_pb2 import Metric, Reference, TestConfig, TrainConfig, Meta  # type: ignore [import]
+from ..pb.bastionlab_torch_pb2 import Metric, Reference, TestConfig, TrainConfig, Meta, UpdateMeta  # type: ignore [import]
 from ..pb.bastionlab_conversion_pb2 import ToDataFrame
 from ..pb.bastionlab_polars_pb2 import ReferenceResponse
 from ..errors import GRPCException
@@ -41,24 +41,8 @@ class RemoteDataset:
         description: str = "",
         progress: bool = True,
     ) -> None:
+        self.trace_input, self.meta = RemoteDataset._tracer(train_dataset.meta)
 
-        torch_dtypes = {
-            "Int8": torch.uint8,
-            "UInt8": torch.uint8,
-            "Int16": torch.int16,
-            "Int32": torch.int32,
-            "Int64": torch.int64,
-            "Half": torch.half,
-            "Float": torch.float,
-            "Double": torch.double,
-            "ComplexHalf": torch.complex32,
-            "ComplexFloat": torch.complex64,
-            "ComplexDouble": torch.complex128,
-            "Bool": torch.bool,
-            "QInt8": torch.qint8,
-            "QInt32": torch.qint32,
-            "BFloat16": torch.bfloat16,
-        }
         if isinstance(train_dataset, Dataset):
             self.train_dataset_ref = client.send_dataset(
                 train_dataset,
@@ -76,17 +60,9 @@ class RemoteDataset:
             self.train_dataset_ref = train_dataset
             self.name = self.train_dataset_ref.name
             self.description = self.train_dataset_ref.description
-            meta = Meta()
-            meta.ParseFromString(train_dataset.meta)
-            self.trace_input = [
-                torch.zeros(list(s.elem), dtype=torch_dtypes[dtype])
-                if torch_dtypes[dtype]
-                in [torch.uint8, torch.int8, torch.int16, torch.int32, torch.int64]
-                else torch.randn(list(s.elem), dtype=torch_dtypes[dtype])
-                for s, dtype in zip(meta.input_shape, meta.input_dtype)
-            ]
-            self.nb_samples = meta.nb_samples
-            self.privacy_limit = meta.privacy_limit
+            self.nb_samples = self.meta.nb_samples
+            self.privacy_limit = self.meta.privacy_limit
+            ##
         if test_dataset is not None and isinstance(test_dataset, Dataset):
             self.test_dataset_ref = client.send_dataset(
                 test_dataset,
@@ -99,7 +75,11 @@ class RemoteDataset:
                 progress=progress,
             )
         else:
-            self.test_dataset_ref = test_dataset
+            if self.meta.HasField("train_dataset"):
+                self.test_dataset_ref = self.train_dataset_ref
+                self.train_dataset_ref = self.meta.train_dataset
+            else:
+                self.test_dataset_ref = test_dataset
         self.client = client
 
     @staticmethod
@@ -107,19 +87,66 @@ class RemoteDataset:
         """Returns the list of `RemoteDataset`s available on the server."""
 
         def inner(ref):
-            meta = Meta()
-            meta.ParseFromString(ref.meta)
-            return ref, meta.train_dataset
+            _, meta = RemoteDataset._tracer(ref.meta)
+            return (
+                ref,
+                None if not meta.HasField("train_dataset") else meta.train_dataset,
+            )
 
         refs = client.get_available_datasets()
         ds = [inner(ref) for ref in refs]
-        return [RemoteDataset(client, d[1], d[0]) for d in ds if d[1] is not None]
+        return [RemoteDataset(client, d[0], d[1]) for d in ds]
 
     def __str__(self) -> str:
         return f"{self.name} ({self.train_dataset_ref.identifier}): size={self.nb_samples}, desc={self.description if len(self.description) > 0 else 'N/A'}"
 
     def __format__(self, __format_spec: str) -> str:
         return self.__str__()
+
+    @staticmethod
+    def _tracer(meta_bytes: bytes):
+        meta = Meta()
+        meta.ParseFromString(meta_bytes)
+        torch_dtypes = {
+            "Int8": torch.uint8,
+            "UInt8": torch.uint8,
+            "Int16": torch.int16,
+            "Int32": torch.int32,
+            "Int64": torch.int64,
+            "Half": torch.half,
+            "Float": torch.float,
+            "Double": torch.double,
+            "ComplexHalf": torch.complex32,
+            "ComplexFloat": torch.complex64,
+            "ComplexDouble": torch.complex128,
+            "Bool": torch.bool,
+            "QInt8": torch.qint8,
+            "QInt32": torch.qint32,
+            "BFloat16": torch.bfloat16,
+        }
+        return [
+            torch.zeros(list(s.elem), dtype=torch_dtypes[dtype])
+            if torch_dtypes[dtype]
+            in [torch.uint8, torch.int8, torch.int16, torch.int32, torch.int64]
+            else torch.randn(list(s.elem), dtype=torch_dtypes[dtype])
+            for s, dtype in zip(meta.input_shape, meta.input_dtype)
+        ], meta
+
+    def _update(
+        self,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+        train_dataset: Optional[Reference] = None,
+    ):
+        self.meta.MergeFrom(Meta(train_dataset=train_dataset))
+        self.client.stub.UpdateDataset(
+            UpdateMeta(
+                identifier=self.train_dataset_ref.identifier,
+                description=description,
+                name=name,
+                meta=self.meta,
+            )
+        )
 
     def _set_test_dataset(
         self, test_dataset: Union[Dataset, Reference], progress: bool = True
@@ -165,7 +192,6 @@ class RemoteDataset:
         from ..config import CONFIG
         from ..polars.remote_polars import FetchableLazyFrame
 
-        print(CONFIG["polars_client"])
         ref = self.client._conv._stub.ConvToDataFrame(
             ToDataFrame(
                 inputs_col_names=inputs_col_names,

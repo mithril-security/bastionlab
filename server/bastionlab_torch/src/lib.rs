@@ -4,6 +4,7 @@ use bastionlab_common::session::SessionManager;
 use bastionlab_common::telemetry::{self, TelemetryEventProps};
 use bastionlab_learning::nn::Module;
 use bastionlab_learning::{data::Dataset, nn::CheckPoint};
+use prost::Message;
 use ring::digest;
 use std::time::Instant;
 use tokio_stream::wrappers::ReceiverStream;
@@ -15,7 +16,8 @@ pub mod torch_proto {
 }
 use torch_proto::torch_service_server::TorchService;
 use torch_proto::{
-    Chunk, Devices, Empty, Metric, Optimizers, Reference, References, TestConfig, TrainConfig,
+    Chunk, Devices, Empty, Meta, Metric, Optimizers, Reference, References, TestConfig,
+    TrainConfig, UpdateMeta,
 };
 
 pub mod storage;
@@ -73,6 +75,35 @@ impl BastionLabTorch {
         );
 
         Ok((identifier.clone(), name, description, meta))
+    }
+
+    pub fn update_dataset(
+        &self,
+        identifier: &str,
+        name: Option<String>,
+        meta: Option<Meta>,
+        description: Option<String>,
+    ) -> Result<(), Status> {
+        let mut datasets = self.datasets.write().unwrap();
+
+        let dataset = datasets.get_mut(identifier);
+        match dataset {
+            Some(v) => {
+                if let Some(name) = name {
+                    v.name = name;
+                }
+                if let Some(meta) = meta {
+                    v.meta = meta.encode_to_vec();
+                }
+                if let Some(description) = description {
+                    v.description = description;
+                }
+                Ok(())
+            }
+            None => {
+                return Err(Status::aborted("Dataset not found!"));
+            }
+        }
     }
 }
 
@@ -465,5 +496,20 @@ impl TorchService for BastionLabTorch {
             Run::Ok(m) => Ok(Response::new(m.clone())),
             Run::Error(e) => Err(Status::internal(e.message())),
         }
+    }
+
+    async fn update_dataset(
+        &self,
+        request: Request<UpdateMeta>,
+    ) -> Result<Response<Empty>, Status> {
+        let (identifier, name, description, meta) = (
+            request.get_ref().identifier.clone(),
+            request.get_ref().name.clone(),
+            request.get_ref().description.clone(),
+            request.get_ref().meta.clone(),
+        );
+
+        self.update_dataset(&identifier, name, meta, description)?;
+        Ok(Response::new(Empty {}))
     }
 }
