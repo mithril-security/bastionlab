@@ -16,8 +16,6 @@ import getpass
 import time
 import logging
 import sys
-import time
-import logging
 
 
 if TYPE_CHECKING:
@@ -139,19 +137,6 @@ class Client:
 
             self._bastionlab_polars = BastionLabPolars(self)
         return self._bastionlab_polars
-
-
-class AuthPlugin(grpc.AuthMetadataPlugin):
-    """
-    A gRPC authentication metadata plugin that uses an access token for authentication.
-    """
-
-    def __init__(self, token):
-        # The access token to used for authentication.
-        self._token = token
-
-    def __call__(self, _, callback):
-        callback((("accesstoken-bin", self._token),), None)
 
 
 @dataclass
