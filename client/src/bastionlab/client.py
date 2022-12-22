@@ -140,6 +140,7 @@ class Client:
             self._bastionlab_polars = BastionLabPolars(self)
         return self._bastionlab_polars
 
+
 class AuthPlugin(grpc.AuthMetadataPlugin):
     """
     A gRPC authentication metadata plugin that uses an access token for authentication.
