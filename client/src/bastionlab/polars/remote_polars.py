@@ -301,8 +301,10 @@ class RemoteLazyFrame:
         if len(rdfs) == 0:
             raise Exception("The SQL query must at least use one RemoteLazyFrame")
         if any([rdf._meta._client is not rdfs[0]._meta._client for rdf in rdfs]):
-            raise Exception("Cannot use remote data frames from two different servers in an SQL query")
-        
+            raise Exception(
+                "Cannot use remote data frames from two different servers in an SQL query"
+            )
+
         unique_rdfs = []
         rdfs_refs = []
         for rdf in rdfs:
@@ -318,12 +320,16 @@ class RemoteLazyFrame:
         for i, rdf in enumerate(unique_rdfs):
             ctx.register(f"__{i}", rdf._inner)
         res = ctx.execute(query)
-        
+
         return RemoteLazyFrame(
             res,
             Metadata(
                 rdfs[0]._meta._client,
-                [seg for segs in reversed(unique_rdfs) for seg in segs._meta._prev_segments],
+                [
+                    seg
+                    for segs in reversed(unique_rdfs)
+                    for seg in segs._meta._prev_segments
+                ],
             ),
         )
 
