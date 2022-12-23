@@ -1,7 +1,5 @@
 from dataclasses import dataclass
 import ssl
-from threading import Thread
-from time import sleep
 from typing import Any, TYPE_CHECKING, Optional
 from hashlib import sha256
 import grpc
@@ -88,7 +86,6 @@ class Client:
 
     def __create_session(self):
         logging.debug("Refreshing session.")
-
         metadata = ()
         if self.signing_key is not None:
             data: bytes = CLIENT_INFO.SerializeToString()
@@ -160,42 +157,6 @@ class Connection:
     _client: Optional[Client] = None  # The gRPC client object used to send messages.
     server_name: Optional[str] = "bastionlab-server"
 
-    @staticmethod
-    def _verify_user(
-        server_target, server_creds, options, signing_key: Optional[SigningKey] = None
-    ):
-
-        # Set up initial connection to BastionLab for verification
-        # if pubkey not known:
-        #    Drop connection and fail fast authentication
-
-        # elif known:
-        #    return token and add token to channel metadata
-        # """
-        channel = grpc.secure_channel(server_target, server_creds, options)
-
-        session_stub = SessionServiceStub(channel)
-
-        metadata = ()
-        data: bytes = CLIENT_INFO.SerializeToString()
-
-        if signing_key is not None:
-            challenge = session_stub.GetChallenge(Empty()).value
-
-            metadata += (("challenge-bin", challenge),)
-            to_sign = b"create-session" + challenge + data
-
-            pubkey_hex = signing_key.pubkey.hash.hex()
-            signed = signing_key.sign(to_sign)
-            metadata += ((f"signature-{(pubkey_hex)}-bin", signed),)
-
-            token = session_stub.CreateSession(CLIENT_INFO, metadata=metadata).token
-
-            return token
-        else:
-            session_stub.CreateSession(CLIENT_INFO)
-            return None
-
     @property
     def client(self) -> Client:
         """
@@ -226,21 +187,9 @@ class Connection:
         )
         connection_options = (("grpc.ssl_target_name_override", self.server_name),)
 
-        # Verify user by creating session
-        self.token = Connection._verify_user(
-            server_target, server_creds, connection_options, self.identity
-        )
-
         auth_plugin = AuthPlugin()
-
-        channel_cred = (
-            server_creds
-            if self.identity is None
-            else server_creds
-            if self.token is None
-            else grpc.composite_channel_credentials(
-                server_creds, grpc.metadata_call_credentials(auth_plugin)
-            )
+        channel_cred = grpc.composite_channel_credentials(
+            server_creds, grpc.metadata_call_credentials(auth_plugin)
         )
 
         self.channel = grpc.secure_channel(

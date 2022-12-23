@@ -45,6 +45,10 @@ async fn main() -> Result<()> {
         config
             .session_expiry()
             .context("Parsing the public session_expiry config")?,
+        config
+            .max_saves()
+            .context("Parsing the maximum repeated saves config")?,
+        config.ban_time().context("Parsing the ban time config")?,
     ));
 
     let server_cert =

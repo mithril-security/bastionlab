@@ -38,11 +38,7 @@ struct StackFrame {
 }
 
 impl CompositePlan {
-    pub fn run(
-        self,
-        state: &BastionLabPolars,
-        user_id: &str,
-    ) -> Result<DataFrameArtifact, Status> {
+    pub fn run(self, state: &BastionLabPolars, user_id: &str) -> Result<DataFrameArtifact, Status> {
         let mut stack = Vec::new();
         let plan_str = serde_json::to_string(&self.0).unwrap(); // FIX THIS
 
@@ -164,10 +160,10 @@ fn expr_agg_check(expr: &Expr) -> Result<bool, Status> {
             | Expr::DtypeColumn(_)
             | Expr::Wildcard
             | Expr::Nth(_) => state.push(false),
-            Expr::Literal(_)
-            | Expr::Count => state.push(true),
-            Expr::Agg(AggExpr::List(expr))
-            | Expr::Agg(AggExpr::AggGroups(expr)) => state.push(expr_agg_check(&expr)?),
+            Expr::Literal(_) | Expr::Count => state.push(true),
+            Expr::Agg(AggExpr::List(expr)) | Expr::Agg(AggExpr::AggGroups(expr)) => {
+                state.push(expr_agg_check(&expr)?)
+            }
             Expr::Agg(_) => state.push(true),
             Expr::BinaryExpr { .. } => {
                 let right_agg = state.pop().unwrap();

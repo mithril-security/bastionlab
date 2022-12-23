@@ -4,6 +4,7 @@ use bastionlab_common::{
     session_proto::ClientInfo,
     telemetry::{self, TelemetryEventProps},
 };
+use bytes::Bytes;
 use polars::prelude::*;
 use ring::digest;
 use serde::{Deserialize, Serialize};
@@ -76,6 +77,7 @@ impl DataFrameArtifact {
 pub struct BastionLabPolars {
     dataframes: Arc<RwLock<HashMap<String, DataFrameArtifact>>>,
     sess_manager: Arc<SessionManager>,
+    persist_tracking: Arc<RwLock<HashMap<String, Vec<Instant>>>>,
 }
 
 impl BastionLabPolars {
@@ -83,6 +85,7 @@ impl BastionLabPolars {
         Self {
             dataframes: Arc::new(RwLock::new(HashMap::new())),
             sess_manager,
+            persist_tracking: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -280,7 +283,39 @@ Reason: {}",
         identifier
     }
 
-    fn persist_df(&self, identifier: &str) -> Result<(), Status> {
+    fn persist_df(&self, identifier: &str, token: Option<Bytes>) -> Result<(), Status> {
+        //We only track saves if auth is enabled, otherwise users cannot be identified.
+        if self.sess_manager.auth_enabled() {
+            let mut persist_tracking = self.persist_tracking.write().unwrap();
+            let user_id = self.sess_manager.get_user_id(token.clone())?;
+            let saves = persist_tracking.get(&user_id);
+            let mut saves_vec: Vec<Instant>;
+            match saves {
+                Some(saves) => {
+                    if saves.len() > self.sess_manager.max_saves {
+                        if saves[saves.len() - self.sess_manager.max_saves]
+                            .elapsed()
+                            .as_secs()
+                            < 20
+                        {
+                            self.sess_manager.delete_session(token.unwrap());
+                            self.sess_manager.block_user(user_id, Instant::now());
+                            return Err(Status::unknown(
+                                "DoS attempt detected! Your access is temporarily blocked.",
+                            ));
+                        }
+                    }
+                    saves_vec = saves.to_vec();
+                    saves_vec.push(Instant::now());
+                }
+                None => {
+                    saves_vec = vec![Instant::now()];
+                }
+            }
+            persist_tracking.insert(user_id, saves_vec);
+            drop(persist_tracking);
+        }
+
         let dataframes = self
             .dataframes
             .read()
@@ -489,7 +524,7 @@ impl PolarsService for BastionLabPolars {
     ) -> Result<Response<Empty>, Status> {
         let token = self.sess_manager.verify_request(&request)?;
         let identifier = &request.get_ref().identifier;
-        self.persist_df(identifier)?;
+        self.persist_df(identifier, token.clone())?;
         telemetry::add_event(
             TelemetryEventProps::SaveDataframe {
                 dataset_name: Some(identifier.clone()),

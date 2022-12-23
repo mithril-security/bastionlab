@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::net::SocketAddr;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 use bytes::Bytes;
 use prost::Message;
@@ -8,7 +8,7 @@ use tonic::metadata::KeyRef;
 use tonic::{Request, Response, Status};
 
 use crate::auth::KeyManagement;
-use crate::session_proto::{ClientInfo, SessionInfo};
+use crate::session_proto::{ClientInfo, Empty, SessionInfo};
 use crate::{prelude::*, session_proto};
 
 fn get_message<T: Message>(
@@ -43,7 +43,7 @@ pub fn get_token<T>(req: &Request<T>, auth_enabled: bool) -> Result<Option<Bytes
     })?))
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Session {
     pub pubkey: String,
     pub user_ip: SocketAddr,
@@ -54,18 +54,29 @@ pub struct Session {
 #[derive(Debug)]
 pub struct SessionManager {
     keys: Option<Mutex<KeyManagement>>,
-    pub sessions: Arc<RwLock<HashMap<[u8; 32], Session>>>,
+    sessions: Arc<RwLock<HashMap<[u8; 32], Session>>>,
     session_expiry: u64,
+    pub max_saves: usize,
+    ban_time: u64,
     challenges: Mutex<HashSet<[u8; 32]>>,
+    blocklist: Arc<RwLock<HashMap<String, Instant>>>,
 }
 
 impl SessionManager {
-    pub fn new(keys: Option<KeyManagement>, session_expiry: u64) -> Self {
+    pub fn new(
+        keys: Option<KeyManagement>,
+        session_expiry: u64,
+        max_saves: usize,
+        ban_time: u64,
+    ) -> Self {
         Self {
             keys: keys.map(Mutex::new),
             sessions: Default::default(),
             session_expiry,
+            max_saves,
+            ban_time,
             challenges: Default::default(),
+            blocklist: Default::default(),
         }
     }
 
@@ -188,6 +199,18 @@ impl SessionManager {
                             let key = key_string.strip_suffix(end).unwrap();
                             if key.contains(pat) {
                                 if let Some(key) = key.split(pat).last() {
+                                    let key = key.to_string();
+                                    let mut blocklist = self.blocklist.write().unwrap();
+                                    if let Some(blocked) = blocklist.get(&key) {
+                                        if blocked.elapsed().as_secs() < self.ban_time {
+                                            return Err(Status::aborted(
+                                            "This user is temporarily blocked due to suspicious behaviour. Please try again later.",
+                                        ));
+                                        } else {
+                                            blocklist.remove(&key);
+                                        }
+                                    }
+                                    drop(blocklist);
                                     if let Some(ref keys) = keys_lock {
                                         let lock = keys;
                                         let message = get_message(
@@ -195,8 +218,14 @@ impl SessionManager {
                                             &request,
                                             challenge.clone(),
                                         )?;
+                                        //Existing sessions are deleted before a new session is created
+                                        for (token, session) in sessions.clone().iter() {
+                                            if session.pubkey == key {
+                                                sessions.remove(token.as_ref());
+                                            }
+                                        }
                                         lock.verify_signature(
-                                            key,
+                                            &key,
                                             &message[..],
                                             request.metadata(),
                                         )?;
@@ -213,7 +242,7 @@ impl SessionManager {
                                     sessions.insert(
                                         token.clone(),
                                         Session {
-                                            pubkey: key.to_string(),
+                                            pubkey: key,
                                             user_ip,
                                             expiry,
                                             client_info: request.into_inner(),
@@ -253,6 +282,16 @@ impl SessionManager {
             }
         };
     }
+
+    pub fn delete_session(&self, token: Bytes) -> () {
+        let mut tokens = self.sessions.write().unwrap();
+        tokens.remove(token.as_ref());
+    }
+
+    pub fn block_user(&self, user_id: String, timestamp: Instant) {
+        let mut blocklist = self.blocklist.write().unwrap();
+        blocklist.insert(user_id, timestamp);
+    }
 }
 
 pub struct SessionGrpcService {
@@ -283,5 +322,16 @@ impl session_proto::session_service_server::SessionService for SessionGrpcServic
     ) -> Result<Response<session_proto::SessionInfo>, Status> {
         let session = self.sess_manager.create_session(request)?;
         Ok(Response::new(session))
+    }
+
+    async fn delete_session(
+        &self,
+        request: Request<session_proto::Empty>,
+    ) -> Result<Response<session_proto::Empty>, Status> {
+        if self.sess_manager.auth_enabled() {
+            let token = get_token(&request, true)?;
+            self.sess_manager.delete_session(token.unwrap());
+        }
+        Ok(Response::new(Empty {}))
     }
 }
