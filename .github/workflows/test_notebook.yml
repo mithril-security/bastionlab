@@ -124,11 +124,10 @@ jobs:
         # we replace the get_ipython().system function by a function that prints whatever
         # For shell commands that we would want to run, we use the % prefix
         run: |
-          pip install jupyter ipython
-          find . -name "*.ipynb" -exec jupyter nbconvert --output-dir='./converted' --to script {} \;
+          pip install jupyter nbconvert
+          python .github/scripts/remove_cells.py
           wget 'https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv'
           cp titanic.csv converted/train.csv
-          for file in ./converted/*.py; do
-            echo -e "get_ipython().system = lambda *args: print('! is disabled!')\n$(cat $file)" > $file
-            ipython $file
+          for file in ./converted/*.ipynb; do
+            jupyter nbconvert --execute --to notebook --inplace --ExecutePreprocessor.timeout=600 --output-dir=./converted $file
           done
