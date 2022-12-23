@@ -95,7 +95,7 @@ class RemoteDataset:
 
         refs = client.get_available_datasets()
         ds = [inner(ref) for ref in refs]
-        return [RemoteDataset(client, d[0], d[1]) for d in ds]
+        return [RemoteDataset(client, d[1], d[0]) for d in ds if d[1] is not None]
 
     def __str__(self) -> str:
         return f"{self.name} ({self.train_dataset_ref.identifier}): size={self.nb_samples}, desc={self.description if len(self.description) > 0 else 'N/A'}"
@@ -132,18 +132,14 @@ class RemoteDataset:
             for s, dtype in zip(meta.input_shape, meta.input_dtype)
         ], meta
 
-    def _update(
+    def set_train_dataset(
         self,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
         train_dataset: Optional[Reference] = None,
     ):
         self.meta.MergeFrom(Meta(train_dataset=train_dataset))
         self.client.stub.UpdateDataset(
             UpdateMeta(
                 identifier=self.train_dataset_ref.identifier,
-                description=description,
-                name=name,
                 meta=self.meta,
             )
         )

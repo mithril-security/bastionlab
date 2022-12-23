@@ -168,7 +168,6 @@ class StringTransformerPlanSegment(CompositePlanSegment):
             str: serialized string of this plan segment
         """
         columns = ",".join([f'"{c}"' for c in self._columns])
-
         return f'{{"StringTransformerPlanSegment":{{"columns":[{columns}],"model":"{self.model}"}}}}'
 
 
@@ -746,8 +745,6 @@ class FetchableLazyFrame(RemoteLazyFrame):
         self,
         inputs: Optional[Union[str, List[str]]] = None,
         labels: Optional[str] = None,
-        inputs_conv_fn: Optional[Union[str, Callable]] = None,
-        labels_conv_fn: Optional[Union[str, Callable]] = None,
     ) -> "RemoteDataset":
         """Converts BastionLab `FetchableLazy` to a `RemoteDataset`.
 
@@ -769,18 +766,12 @@ class FetchableLazyFrame(RemoteLazyFrame):
 
         if not isinstance(inputs, list):
             inputs = [inputs]
-        converted = self.convert(inputs, inputs_conv_fn).collect()
 
-        # Find inputs new columns
-        def find_match(cols: List[str], input: str):
-            return list(filter(lambda a: input.lower() in a, cols))
-
-        inputs = [find_match(converted.columns, input) for input in inputs][0]
         ref = self._meta._client._conv._stub.ConvToDataset(
             ToDataset(
                 inputs=inputs,
                 labels=labels,
-                identifier=converted.identifier,
+                identifier=self.identifier,
             )
         )
         return RemoteDataset(client=CONFIG["torch_client"], train_dataset=to_torch_ref(ref))
