@@ -8,7 +8,8 @@ from urllib.error import HTTPError
 from os import path
 from subprocess import Popen
 
-TORCH_VERSION="1.13.1"
+TORCH_VERSION = "1.13.1"
+
 
 class BastionLabServer:
     """Popen object wrapper
