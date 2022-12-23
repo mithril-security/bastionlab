@@ -12,8 +12,7 @@
 /* Dark mode */
 [data-md-color-scheme="slate"] {
     --md-primary-fg-color:#142540; /*header color*/
-	--md-default-bg-color: #0a1423; 
-	/*--md-default-bg-color: #1d232d; background*/
+	--md-default-bg-color:#030e1a; /*background*/
     --md-typeset-a-color:#106ba3; /*clicked link*/
     --md-accent-fg-color: #106ba3; /*hover color*/
 }
