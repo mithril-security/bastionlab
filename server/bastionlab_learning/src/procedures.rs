@@ -74,6 +74,8 @@ impl<'a> Trainer<'a> {
     ) -> Result<(i32, i32, f32, f32), TchError> {
         let inputs = inputs_to_device(inputs, self.device)?;
         let labels = labels.f_to(self.device)?;
+        println!("Inputs: {:?}", inputs);
+        println!("\nlabels: {:?}", labels);
         let outputs = self.forward.forward(inputs)?;
         let loss = self.metric.compute(&outputs, &labels)?;
         self.optimizer.zero_grad()?;

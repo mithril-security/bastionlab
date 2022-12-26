@@ -106,13 +106,13 @@ client = Connection("localhost").client.torch
 remote_learner = client.RemoteLearner(
     model,
     remote_datasets[0],
-    max_batch_size=4,
+    max_batch_size=2,
     loss="cross_entropy",
     optimizer=Adam(lr=5e-5),
     model_name="DistilBERT",
 )
 
-remote_learner.fit(nb_epochs=2, eps=6.0)  # , poll_delay=1.0)
+remote_learner.fit(nb_epochs=1, eps=6.0)  # , poll_delay=1.0)
 remote_learner.test(metric="accuracy")
 
 trained_model = remote_learner.get_model()
