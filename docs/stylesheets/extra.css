@@ -4,7 +4,6 @@
 	Oxford blue: #142540
 	Blue Yonder: #647693
 	Light Steel Blue: #B3C6E5
-	Blue links from Jupyter: #106ba3
 	Orange Yellow: #F0BA2D
 	Black: #000000
 */
@@ -13,14 +12,17 @@
 [data-md-color-scheme="slate"] {
     --md-primary-fg-color:#142540; /*header color*/
 	--md-default-bg-color:#030e1a; /*background*/
-    --md-typeset-a-color:#106ba3; /*clicked link*/
-    --md-accent-fg-color: #106ba3; /*hover color*/
+    --md-typeset-a-color:#F0BA2D; /*clicked link*/
+    --md-accent-fg-color: #F0BA2D; /*hover color*/
 }
 
 /* Light mode */
 [data-md-color-scheme="default"] {
     --md-primary-fg-color: #142540; /*header color*/
-	--md-typeset-a-color:#106ba3; /*clicked link*/
-	--md-accent-fg-color: #106ba3; /*hover color*/
+	--md-typeset-a-color:#5385d5; /*clicked link*/
+	--md-accent-fg-color: #5385d5; /*hover color*/
 }
 
+.md-sidebar--primary h2 {
+	font-weight: bold;
+}

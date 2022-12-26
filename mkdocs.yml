@@ -19,6 +19,7 @@ theme:
     - search.highlight
     - content.tabs.link
     - navigation.sections
+#    - navigation.expand /* to add when we'll have more content */
   logo: assets/logo.png
   favicon: assets/logo.png
   palette:
@@ -85,6 +86,7 @@ markdown_extensions:
   - pymdownx.superfences
   - pymdownx.tabbed:
       alternate_style: true
+  - pymdownx.critic
 
 # Documentation tree
 nav:
@@ -102,8 +104,7 @@ nav:
       - Fine Tuning Distilbert on BastionLab: "docs/how-to-guides/distilbert_example_notebook.ipynb"
   - 💡 Concepts:
       - Remote data science: "docs/concepts-guides/remote_data_science.md"
-  - 🛠️ Reference guides:
-      - API Reference: "docs/resources/bastionlab/index.html"
+  - 🛠️ API Reference: "docs/resources/bastionlab/index.html"
   - 🔒 Security:
       - Threat model: "docs/security/threat_model_data_owner_owns_infrastructure.md"
       - Authentication specifications: "docs/security/authenticated_sessions.md"
