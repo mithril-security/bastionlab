@@ -12,3 +12,27 @@
     })(window, document, 'dataLayer', '82244d82-e27f-4f0e-bb2f-c94a190fd5ab');
   </script>
 {% endblock %}
+
+{% block content %}
+{{ super() }}
+
+<style>
+	#colab_button {
+	border: 1px dotted black;
+	display: flex;
+	flex-direction: row;
+	align-items: flex-start; /* Vertical align the elements to the center */
+	}
+
+	h1 {
+		margin: 0;
+	}
+	
+	a {
+		margin-left: auto; /* Push this element to the right */
+		margin-top: 0.67em;
+		margin-bottom: 0.67em;
+		margin-right: 0;
+	}
+</style>
+{% endblock content %}
