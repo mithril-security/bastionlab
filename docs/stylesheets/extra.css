@@ -25,4 +25,6 @@
 
 .md-sidebar--primary h2 {
 	font-weight: bold;
+	border-bottom: 1px solid;
+	border-color: beige;
 }
