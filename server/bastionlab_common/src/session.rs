@@ -54,7 +54,7 @@ pub struct Session {
 #[derive(Debug)]
 pub struct SessionManager {
     keys: Option<Mutex<KeyManagement>>,
-    sessions: Arc<RwLock<HashMap<[u8; 32], Session>>>,
+    pub sessions: Arc<RwLock<HashMap<[u8; 32], Session>>>,
     session_expiry: u64,
     challenges: Mutex<HashSet<[u8; 32]>>,
 }
@@ -71,6 +71,20 @@ impl SessionManager {
 
     pub fn auth_enabled(&self) -> bool {
         self.keys.is_some()
+    }
+
+    pub fn get_user_id(&self, token: Option<Bytes>) -> Result<String, Status> {
+        let token_bytes = match &token {
+            Some(v) => &v[..],
+            None => &[0u8; 32],
+        };
+        let sessions = self.sessions.read().unwrap();
+        let session = sessions
+            .get(token_bytes)
+            .ok_or(Status::aborted("Session not found!"))?;
+
+        let user_id = session.pubkey.clone();
+        Ok(user_id)
     }
 
     pub fn verify_request<T>(&self, req: &Request<T>) -> Result<Option<Bytes>, Status> {
@@ -207,6 +221,7 @@ impl SessionManager {
                                     );
                                     return Ok(SessionInfo {
                                         token: token.to_vec(),
+                                        expiry_time: self.session_expiry * 1000,
                                     });
                                 } else {
                                     return Err(Status::aborted(
@@ -233,26 +248,10 @@ impl SessionManager {
                 );
                 return Ok(SessionInfo {
                     token: token.to_vec(),
+                    expiry_time: self.session_expiry * 1000,
                 });
             }
         };
-    }
-
-    fn refresh_session<T>(&self, req: &Request<T>) -> Result<(), Status> {
-        if let Some(token) = get_token(req, self.auth_enabled())? {
-            let mut sessions = self.sessions.write().unwrap();
-            let session = sessions
-                .get_mut(&token[..])
-                .ok_or(Status::aborted("Session not found!"))?;
-
-            let e = session
-                .expiry
-                .checked_add(Duration::from_secs(self.session_expiry))
-                .ok_or(Status::aborted("Malformed session expiry time!"))?;
-
-            session.expiry = e;
-        }
-        Ok(())
     }
 }
 
@@ -284,13 +283,5 @@ impl session_proto::session_service_server::SessionService for SessionGrpcServic
     ) -> Result<Response<session_proto::SessionInfo>, Status> {
         let session = self.sess_manager.create_session(request)?;
         Ok(Response::new(session))
-    }
-
-    async fn refresh_session(
-        &self,
-        request: Request<session_proto::Empty>,
-    ) -> Result<Response<session_proto::Empty>, Status> {
-        self.sess_manager.refresh_session(&request)?;
-        Ok(Response::new(session_proto::Empty {}))
     }
 }
