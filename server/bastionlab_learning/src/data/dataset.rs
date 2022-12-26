@@ -89,6 +89,7 @@ impl Dataset {
         converted: bool,
         from_dtype: (Vec<String>, String),
     ) -> Self {
+        let nb_samples = labels.lock().unwrap().size()[0] as usize;
         Dataset {
             samples_inputs,
             labels,
@@ -96,7 +97,7 @@ impl Dataset {
             from_dtype,
             privacy_context: Arc::new(RwLock::new(PrivacyContext::new(
                 PrivacyBudget::NotPrivate,
-                0,
+                nb_samples,
             ))),
         }
     }

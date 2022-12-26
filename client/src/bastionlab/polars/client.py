@@ -5,15 +5,14 @@ import polars as pl
 from colorama import Fore
 from ..pb.bastionlab_polars_pb2 import (
     ReferenceRequest,
-    Query,
     Empty,
-    ToDataset,
 )
 from ..pb.bastionlab_polars_pb2_grpc import PolarsServiceStub
 from ..errors import GRPCException
 from .utils import (
     deserialize_dataframe,
     serialize_dataframe,
+    serialize_query
 )
 from .policy import Policy, DEFAULT_POLICY
 
@@ -172,7 +171,7 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
         from .remote_polars import FetchableLazyFrame
 
         res = GRPCException.map_error(
-            lambda: self.stub.RunQuery(Query(composite_plan=composite_plan))
+            lambda: self.stub.RunQuery(serialize_query(composite_plan))
         )
         return FetchableLazyFrame._from_reference(self, res)
 

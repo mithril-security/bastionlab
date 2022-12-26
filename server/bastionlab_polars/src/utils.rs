@@ -1,4 +1,4 @@
-use std::{error::Error, io::Cursor, str::FromStr, sync::Mutex};
+use std::{error::Error, io::Cursor, ops::Add, sync::Mutex};
 
 use bastionlab_common::utils::array_to_tensor;
 use polars::prelude::{
@@ -6,10 +6,8 @@ use polars::prelude::{
     *,
 };
 use tch::{CModule, Tensor};
-use tokenizers::{Encoding, PaddingParams, Tokenizer, TokenizerBuilder, TruncationParams};
+use tokenizers::{Encoding, Tokenizer};
 use tonic::Status;
-
-use crate::polars_proto::meta::Shape;
 
 pub fn sanitize_df(df: &mut DataFrame, blacklist: &Vec<String>) {
     for name in blacklist {
@@ -47,11 +45,21 @@ pub fn series_to_tensor(series: &Series) -> Result<Tensor, Status> {
             array_to_tensor(s.i64().unwrap())?
         }
         DataType::List(_) => {
-            let mut out = list_dtype_to_tensor(series)?;
-            for t in out.iter_mut() {
-                *t = t.unsqueeze(0);
+            let mut shape = vec![];
+            let first = series.get(0);
+            shape.push(series.len() as i64);
+            if let AnyValue::List(l) = first {
+                shape.push(l.len() as i64);
+            };
+
+            println!("{:?}", shape);
+            let out = list_dtype_to_tensor(series)?;
+            let mut zeroes = Tensor::zeros(&shape[..], (out[0].kind(), out[0].device()));
+            for t in out.iter() {
+                zeroes = zeroes.add(t);
             }
-            Tensor::cat(&out[..], 0)
+            zeroes.print();
+            zeroes
         }
         d => {
             return Err(Status::invalid_argument(format!(
@@ -64,20 +72,20 @@ pub fn series_to_tensor(series: &Series) -> Result<Tensor, Status> {
 
 pub fn vec_series_to_tensor(
     v_series: Vec<&Series>,
-) -> Result<(Vec<Mutex<Tensor>>, Vec<Shape>, Vec<String>, i32), Status> {
+) -> Result<(Vec<Mutex<Tensor>>, Vec<i64>, Vec<String>, i32), Status> {
     let mut ts = Vec::new();
     let mut shapes = Vec::new();
     let mut dtypes = Vec::new();
-    for s in v_series {
-        let t = series_to_tensor(s)?;
-        shapes.push(Shape { elem: t.size() });
-        dtypes.push(format!("{:?}", t.kind()));
-        ts.push(Mutex::new(t));
-    }
-    let nb_samples = match shapes.first() {
-        Some(v) => v.elem[0],
+    let nb_samples = match v_series.first() {
+        Some(v) => v.len(),
         None => 0,
     };
+    for s in v_series {
+        let t = series_to_tensor(s)?;
+        shapes.push(t.size()[1]);
+        dtypes.push(format!("{:?}", t.kind()));
+        ts.push(Mutex::new(t.data()));
+    }
     Ok((ts, shapes, dtypes, nb_samples.try_into().unwrap()))
 }
 
@@ -103,30 +111,11 @@ pub fn load_udf(udf: String) -> Result<CModule, Status> {
 }
 
 fn get_tokenizer(model: &str) -> Result<Tokenizer, Status> {
-    let tokenizer =
-        Tokenizer::from_pretrained(model, None).map_err(|e| Status::aborted(e.to_string()))?;
-
-    let mut t = TokenizerBuilder::new();
-
-    t = t.with_model(tokenizer.get_model().clone());
-    t = t.with_normalizer(tokenizer.get_normalizer().cloned());
-    t = t.with_pre_tokenizer(tokenizer.get_pre_tokenizer().cloned());
-    t = t.with_post_processor(tokenizer.get_post_processor().cloned());
-    t = t.with_decoder(tokenizer.get_decoder().cloned());
-    t = t.with_truncation(
-        tokenizer
-            .get_truncation()
-            .cloned()
-            .or_else(|| Some(TruncationParams::default())),
-    );
-    t = t.with_padding(
-        tokenizer
-            .get_padding()
-            .cloned()
-            .or_else(|| Some(PaddingParams::default())),
-    );
-    let tokenizer = t.build().map_err(|e| Status::aborted(e.to_string()))?;
-    let tokenizer: Tokenizer = tokenizer.into();
+    let model = base64::decode_config(model, base64::STANDARD).map_err(|e| {
+        Status::invalid_argument(format!("Could not decode bas64-encoded udf: {}", e))
+    })?;
+    let tokenizer: Tokenizer = Tokenizer::from_bytes(model)
+        .map_err(|_| Status::invalid_argument("Could not deserialize Hugging Face Tokenizer"))?;
     Ok(tokenizer)
 }
 

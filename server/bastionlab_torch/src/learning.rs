@@ -219,6 +219,8 @@ pub fn module_train(
                     per_epoch_checkpoint,
                     per_n_step_checkpoint,
                 );
+                println!("Built training context and trainer");
+
                 let nb_epochs = trainer.nb_epochs() as i32;
                 let nb_batches = trainer.nb_batches() as i32;
 

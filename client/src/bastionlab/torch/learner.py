@@ -125,11 +125,11 @@ class RemoteDataset:
             "BFloat16": torch.bfloat16,
         }
         return [
-            torch.zeros(list(s.elem), dtype=torch_dtypes[dtype])
+            torch.zeros(torch.Size([shape]), dtype=torch_dtypes[dtype])
             if torch_dtypes[dtype]
             in [torch.uint8, torch.int8, torch.int16, torch.int32, torch.int64]
-            else torch.randn(list(s.elem), dtype=torch_dtypes[dtype])
-            for s, dtype in zip(meta.input_shape, meta.input_dtype)
+            else torch.randn(torch.Size([shape]), dtype=torch_dtypes[dtype])
+            for shape, dtype in zip(meta.input_shape, meta.input_dtype)
         ], meta
 
     def set_train_dataset(

@@ -1,10 +1,7 @@
-use std::sync::Mutex;
-
 use bastionlab_common::utils::tensor_to_series;
 use polars::{functions::hor_concat_df, prelude::*};
 use serde::{Deserialize, Serialize};
 
-use polars::prelude::concat;
 use tonic::Status;
 
 use crate::{

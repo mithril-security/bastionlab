@@ -31,10 +31,6 @@ message FetchChunk {
     }
 }
 
-message Query {
-    string composite_plan = 1;
-}
-
 message Empty {}
 
 message ToDataset {
@@ -46,10 +42,7 @@ message ToDataset {
 }
 
 message Meta {
-    message Shape {
-        repeated int64 elem =1;
-    }
-    repeated Shape input_shape = 1;
+    repeated int64 input_shape = 1;
     repeated string input_dtype = 2;
     int32 nb_samples = 3;
     float privacy_limit = 4;
@@ -64,10 +57,13 @@ message Reference {
     bytes meta = 4;
 }
 
+message QueryBytes {
+    bytes data = 1;
+}
 
 service PolarsService {
     rpc SendDataFrame (stream SendChunk) returns (ReferenceResponse) {}
-    rpc RunQuery (Query) returns (ReferenceResponse) {}
+    rpc RunQuery (stream QueryBytes) returns (ReferenceResponse) {}
     rpc FetchDataFrame (ReferenceRequest) returns (stream FetchChunk) {}
     rpc ListDataFrames (Empty) returns (ReferenceList) {}
     rpc GetDataFrameHeader (ReferenceRequest) returns (ReferenceResponse) {}

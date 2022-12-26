@@ -32,10 +32,7 @@ message UpdateMeta {
 }
 
 message Meta {
-    message Shape {
-        repeated int64 elem =1;
-    }
-    repeated Shape input_shape = 1;
+    repeated int64 input_shape = 1;
     repeated string input_dtype = 2;
     int32 nb_samples = 3;
     float privacy_limit = 4;

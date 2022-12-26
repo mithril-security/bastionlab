@@ -168,7 +168,8 @@ class StringTransformerPlanSegment(CompositePlanSegment):
             str: serialized string of this plan segment
         """
         columns = ",".join([f'"{c}"' for c in self._columns])
-        return f'{{"StringTransformerPlanSegment":{{"columns":[{columns}],"model":"{self.model}"}}}}'
+        model = base64.b64encode(self.model.encode('utf8')).decode('utf8')
+        return f'{{"StringTransformerPlanSegment":{{"columns":[{columns}],"model":"{model}"}}}}'
 
 
 @dataclass
