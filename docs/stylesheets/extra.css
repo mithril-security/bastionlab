@@ -23,8 +23,14 @@
 	--md-accent-fg-color: #5385d5; /*hover color*/
 }
 
-.md-sidebar--primary h2 {
-	font-weight: bold;
-	border-bottom: 1px solid;
-	border-color: beige;
+/* Make the navigation sections bold even if they are just a link only on Desktop */
+
+@media screen and (min-width: 1025px) {
+	nav[data-md-level="0"]>ul>li>.md-nav__link {
+		font-weight: bold; /* makes links in level 0  of the navigation bold, even if they are not a section */
+	}
+
+	nav[data-md-level="1"]>ul>li.md-nav__item--nested>label.md-nav__link {
+		font-weight: bold; /* makes collapsible section in level 1 bold */
+	}
 }
