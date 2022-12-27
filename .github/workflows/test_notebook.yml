@@ -2,10 +2,10 @@ name: Test notebook
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
     paths: ["**/*.ipynb", ".github/**"]
   pull_request:
-    branches: [main]
+    branches: [main, master]
     paths: ["**/*.ipynb", ".github/**"]
 
 jobs:
