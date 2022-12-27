@@ -14,7 +14,8 @@ pub(crate) fn generate_noise_like(tensor: &Tensor, std: f64) -> Result<Tensor, T
         let mut sum = zeros;
         for _ in 0..4 {
             let _ = sum.f_add_(
-                &Tensor::zeros(&tensor.size(), (Kind::Float, tensor.device())).f_normal_functional(0., std)?,
+                &Tensor::zeros(&tensor.size(), (Kind::Float, tensor.device()))
+                    .f_normal_functional(0., std)?,
             );
         }
         let _ = sum.f_div_scalar_(2.);
@@ -374,6 +375,7 @@ impl PrivacyGuard<Tensor> {
                     return Err(TchError::Kind(String::from("Privacy limit violation.")));
                 }
                 let sigma = compute_sigma(eps, context.delta, l2_sensibility);
+                println!("Sigma from get_private_with_std: {:?}\n\tInputs:\n\t\tDelta: {:?}\n\t\tL2 Sensibility: {:?}", sigma, context.delta, l2_sensibility);
                 let res = self
                     .value
                     .f_add(&generate_noise_like(&self.value, sigma as f64)?)?;
