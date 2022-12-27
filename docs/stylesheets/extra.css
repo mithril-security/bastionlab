@@ -26,11 +26,15 @@
 /* Make the navigation sections bold even if they are just a link only on Desktop */
 
 @media screen and (min-width: 1025px) {
+
+	/* rules to style navigation titles */
 	nav[data-md-level="0"]>ul>li>.md-nav__link {
-		font-weight: bold; /* makes links in level 0  of the navigation bold, even if they are not a section */
+		font-weight: bold; 
+		text-transform: uppercase;
 	}
 
+	/* rules to make level 2 collapsible sections titles bold */
 	nav[data-md-level="1"]>ul>li.md-nav__item--nested>label.md-nav__link {
-		font-weight: bold; /* makes collapsible section in level 1 bold */
+		font-weight: bold; 
 	}
 }
