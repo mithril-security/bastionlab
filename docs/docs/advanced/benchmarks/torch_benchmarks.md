@@ -29,10 +29,10 @@ You can have a look at the precise execution times in the following table:
 | PyTorch + Opacus                  | Incomplete |                                           |               6 787,58                |       16       |
 | PyTorch + 2-party Flower          | Incomplete |                                           |                590,24                 |      512       |
 | Pytorch + 2-party Flower + Opacus |     OK     |                                           |               10 280,51               |       16       |
-| BastionAI (no DP, no TEE)         | Incomplete |                                           |                398,08                 |      512       |
-| BastionAI (DP, no TEE)            | Incomplete |                                           |               1 161,47                |      128       |
-| BastionAI (no DP, TEE)            | Incomplete |                  262,22                   |                  N/A                  |       F        |
-| BastionAI (DP & TEE)              |     OK     |                                           |                  N/A                  |       F        |
+| BastionLab Torch (no DP, no TEE)         | Incomplete |                                           |                398,08                 |      512       |
+| BastionLab Torch (DP, no TEE)            | Incomplete |                                           |               1 161,47                |      128       |
+| BastionLab Torch (no DP, TEE)            | Incomplete |                  262,22                   |                  N/A                  |       F        |
+| BastionLab Torch (DP & TEE)              |     OK     |                                           |                  N/A                  |       F        |
 
 ## NVIDIA A100/v100 
 ____________________________
@@ -56,10 +56,10 @@ You can have a look at the precise execution times in the following table:
 | PyTorch + Opacus                  | Incomplete |               197,50                |         32,00          |
 | PyTorch + 2-party Flower          | Incomplete |                26,48                |        4 096,00        |
 | Pytorch + 2-party Flower + Opacus |     OK     |               336,79                |         32,00          |
-| BastionAI (no DP, no TEE)         | Incomplete |                11,81                |        4 096,00        |
-| BastionAI (DP, no TEE)            | Incomplete |               126,15                |         256,00         |
-| BastionAI (no DP, TEE)            | Incomplete |                 N/A                 |        4 096,00        |
-| BastionAI (DP & TEE)              |     OK     |                 N/A                 |         256,00         |
+| BastionLab Torch (no DP, no TEE)         | Incomplete |                11,81                |        4 096,00        |
+| BastionLab Torch (DP, no TEE)            | Incomplete |               126,15                |         256,00         |
+| BastionLab Torch (no DP, TEE)            | Incomplete |                 N/A                 |        4 096,00        |
+| BastionLab Torch (DP & TEE)              |     OK     |                 N/A                 |         256,00         |
 
 
 |                                   |  Privacy   | Nvidia A100 Training Time (s/epoch) | Nvidia A100 Batch size |
@@ -68,9 +68,9 @@ You can have a look at the precise execution times in the following table:
 | PyTorch + Opacus                  | Incomplete |                61,49                |         128,00         |
 | PyTorch + 2-party Flower          | Incomplete |                24,47                |        4 096,00        |
 | Pytorch + 2-party Flower + Opacus |     OK     |               101,19                |         128,00         |
-| BastionAI (no DP, no TEE)         | Incomplete |                6,51                 |        4 096,00        |
-| BastionAI (DP, no TEE)            | Incomplete |                82,60                |         256,00         |
-| BastionAI (no DP, TEE)            | Incomplete |                10,70                |        4 096,00        |
-| BastionAI (DP & TEE)              |     OK     |               105,71                |         256,00         |
+| BastionLab Torch (no DP, no TEE)         | Incomplete |                6,51                 |        4 096,00        |
+| BastionLab Torch (DP, no TEE)            | Incomplete |                82,60                |         256,00         |
+| BastionLab Torch (no DP, TEE)            | Incomplete |                10,70                |        4 096,00        |
+| BastionLab Torch (DP & TEE)              |     OK     |               105,71                |         256,00         |
 
 ***# do a conclusion for those benchmarks IF you have something else to say you haven't said before in the intro =)***
