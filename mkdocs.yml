@@ -116,6 +116,6 @@ nav:
           - Torch:
               - AMD EPY 7763: "docs/advanced/benchmarks/Torch/bench-amd-epyc-7763.md"
               - NVIDIA A100/v100: "docs/advanced/benchmarks/Torch/bench-nvidia-a100-v100.md"
-      - Contributing:
-          - Code of Conduct: "docs/advanced/contributing/code_of_conduct.md"
+      - Open source: 
           - Contributing: "docs/advanced/contributing/contributing.md"
+          - Code of Conduct: "docs/advanced/contributing/code_of_conduct.md"
