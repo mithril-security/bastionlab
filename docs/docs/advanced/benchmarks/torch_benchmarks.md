@@ -1,13 +1,21 @@
 # Torch benchmarks
 _____________________________
 
-## AMD EPYC 7763
-____________________________
+***# Here we need a little intro. Why did we run these benchmarks and why would it be useful to read for the person that's coming here (also, who is the person that might be interested in them? Figuring that out can help with figuring what to say)***
+
+## Technical specifications
+______________________________
 
 These benchmarks were done by finetuning the EfficientNet B0 model on CIFAR100 dataset. You can have a look at the dataset used [here](https://www.cs.toronto.edu/~kriz/cifar.html).
 
+***# why did you implement this process?***
 
-For these benchmarks, we set the batch size to be the maximum possible, fitting in 8GB of RAM. 
+## AMD EPYC 7763
+____________________________
+
+For the AMD benchmarks, we set the batch size to be the maximum possible, fitting in 8GB of RAM. 
+
+***# why?***
 
 
 ![](../../../../assets/amd_epyc_exec_times.png)
@@ -29,13 +37,13 @@ You can have a look at the precise execution times in the following table:
 ## NVIDIA A100/v100 
 ____________________________
 
-The method used here for testing was the same as in the previous benchmark.
-
-We set the batch size to be the maximum possible, fitting in 16GB of GPU RAM, using a NVIDIA V100 GPU.
+For the Nvidia benchmarks, we set the batch size to be the maximum possible, fitting in 16GB of GPU RAM, using a NVIDIA V100 GPU.
 
 ![](../../../../assets/v100_exec_times_16GB.png)
 
 By using 40GB of GPU RAM on a NVIDIA A100 GPU, you can obtain these results:
+
+***# why did you also try with 40GB?***
 
 ![](../../../../assets/a100_exec_times_40GB.png)
 
@@ -64,3 +72,5 @@ You can have a look at the precise execution times in the following table:
 | BastionAI (DP, no TEE)            | Incomplete |                82,60                |         256,00         |
 | BastionAI (no DP, TEE)            | Incomplete |                10,70                |        4 096,00        |
 | BastionAI (DP & TEE)              |     OK     |               105,71                |         256,00         |
+
+***# do a conclusion for those benchmarks IF you have something else to say you haven't said before in the intro =)***
