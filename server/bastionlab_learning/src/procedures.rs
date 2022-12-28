@@ -79,7 +79,6 @@ impl<'a> Trainer<'a> {
         self.optimizer.zero_grad()?;
         loss.backward();
         self.optimizer.step()?;
-        println!("Calculating metric...");
         let (value, std) = self.metric.value(self.metric_budget)?;
         Ok((self.current_epoch as i32, i as i32, value, std))
     }

@@ -54,7 +54,8 @@ impl Converter {
 
         let (inputs, shapes, dtypes, nb_samples) = vec_series_to_tensor(inputs)?;
 
-        let labels = Mutex::new(series_to_tensor(labels)?.data());
+        let labels = Mutex::new(series_to_tensor(labels)?.copy());
+        println!("{:?} {:?}", inputs, labels);
         let identifier = format!("{}", Uuid::new_v4());
 
         let data = Dataset::new(inputs, labels, true, (vec![], "".to_string()));

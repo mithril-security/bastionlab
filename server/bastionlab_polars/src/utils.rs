@@ -5,7 +5,7 @@ use polars::prelude::{
     row::{AnyValueBuffer, Row},
     *,
 };
-use tch::{CModule, Tensor};
+use tch::{CModule, Device, Kind, Tensor};
 use tokenizers::{Encoding, Tokenizer};
 use tonic::Status;
 
@@ -25,7 +25,7 @@ pub fn list_dtype_to_tensor(series: &Series) -> Result<Vec<Tensor>, Status> {
     let mut out = vec![];
     for s in rows.into_iter() {
         match s.as_ref() {
-            Some(s) => out.push(series_to_tensor(s)?),
+            Some(s) => out.push(series_to_tensor(s)?.data()),
             None => return Err(Status::aborted("Could not iterate over series.")),
         }
     }
@@ -52,14 +52,15 @@ pub fn series_to_tensor(series: &Series) -> Result<Tensor, Status> {
                 shape.push(l.len() as i64);
             };
 
-            println!("{:?}", shape);
             let out = list_dtype_to_tensor(series)?;
-            let mut zeroes = Tensor::zeros(&shape[..], (out[0].kind(), out[0].device()));
-            for t in out.iter() {
-                zeroes = zeroes.add(t);
+            let mut zeros = Tensor::zeros(&shape[..], (out[0].kind(), out[0].device()));
+
+            for (i, t) in out.into_iter().enumerate() {
+                let index = Tensor::from(i as i64);
+                zeros = zeros.index_put(&vec![Some(index.copy())][..], &t.copy(), false);
             }
-            zeroes.print();
-            zeroes
+
+            zeros.copy()
         }
         d => {
             return Err(Status::invalid_argument(format!(
@@ -84,7 +85,7 @@ pub fn vec_series_to_tensor(
         let t = series_to_tensor(s)?;
         shapes.push(t.size()[1]);
         dtypes.push(format!("{:?}", t.kind()));
-        ts.push(Mutex::new(t.data()));
+        ts.push(Mutex::new(t.detach()));
     }
     Ok((ts, shapes, dtypes, nb_samples.try_into().unwrap()))
 }
