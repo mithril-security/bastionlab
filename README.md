@@ -36,7 +36,9 @@ You can go try out our [Quick tour](https://bastionlab.readthedocs.io/en/latest/
 
 But here’s a taste of what using BastionLab could look like 🍒
 
-### Data owner's side
+### Data exploration
+
+#### Data owner's side
 ```py
 # Load your dataset using polars.
 >>> import polars as pl
@@ -59,7 +61,7 @@ But here’s a taste of what using BastionLab could look like 🍒
 FetchableLazyFrame(identifier=3a2d15c5-9f9d-4ced-9234-d9465050edb1)
 ```
 
-### Data scientist's side
+#### Data scientist's side
 ```py
 # List the datasets made available by the data owner, select one and get a remote object.
 >>> from bastionlab import Connection
@@ -117,6 +119,14 @@ shape: (3, 2)
 │ 3      ┆ 0.242363 │
 └────────┴──────────┘
 ```
+
+### AI training
+
+***# Can you fill those spots with code Lucas?***
+
+### Data owner's side
+
+### Data scientist's side
 
 ## 🗝️ Key features
 
