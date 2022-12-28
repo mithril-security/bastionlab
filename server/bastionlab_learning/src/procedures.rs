@@ -178,11 +178,8 @@ impl<'a> Tester<'a> {
         let inputs = inputs_to_device(inputs, self.device)?;
         let labels = labels.f_to(self.device)?;
         let outputs = self.forward.forward(inputs)?;
-        println!("Passed forward step...");
         let _ = self.metric.compute(&outputs, &labels)?;
-        println!("Computing metric...");
         let (value, std) = self.metric.value(self.metric_budget)?;
-        println!("Std from test_on_batch: {:?}", std);
         Ok((i as i32, value, std))
     }
 
@@ -310,7 +307,6 @@ impl Metric {
         match &self.value {
             Some(x) => {
                 let (value, std) = x.f_clone()?.get_private_with_std(budget)?;
-                println!("Std from Metric.value: {:?}", std);
                 Ok((
                     (value.f_double_value(&[])? as f32)
                         .clamp(self.clipping.0 as f32, self.clipping.1 as f32),

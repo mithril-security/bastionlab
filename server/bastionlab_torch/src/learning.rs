@@ -335,7 +335,6 @@ pub fn module_test(
                     client_info.clone(),
                 );
                 for res in tester {
-                    println!("Std from module_test: {:?}", res.as_ref().unwrap().2);
                     *run.write().unwrap() =
                         match tcherror_to_status(res.map(|(batch, value, std)| Metric {
                             epoch: 0,

@@ -180,8 +180,6 @@ impl TryFrom<SizedObjectsBytes> for Dataset {
                 "Labels tensor has no dimmensions, cannot infer dataset size.",
             )))
         }?;
-        println!("{:?}", samples_inputs);
-        println!("{:?}", labels);
         Ok(Dataset {
             samples_inputs: samples_inputs.into_iter().map(|opt| opt.unwrap()).collect(),
             labels,
