@@ -33,7 +33,7 @@ class BastionLabTorch:
         client: "Client",
     ):
         self.client = client
-        self.stub = TorchServiceStub(client.channel)
+        self.stub = TorchServiceStub(client._channel)
 
     def send_model(
         self,

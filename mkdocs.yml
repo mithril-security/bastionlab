@@ -47,6 +47,8 @@ theme:
 plugins:
   - search
   - mkdocs-jupyter
+  - search
+  - mkdocs-jupyter
 
 # Customization
 extra:
@@ -65,6 +67,7 @@ extra_css:
   - stylesheets/extra.css
 
 extra_javascript:
+  - "https://code.jquery.com/jquery-3.3.1.min.js"
   - "https://code.jquery.com/jquery-3.3.1.min.js"
 
 # Extensions
