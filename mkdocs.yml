@@ -47,6 +47,7 @@ theme:
 plugins:
   - search
   - mkdocs-jupyter
+  - mkdocstrings
 
 # Customization
 extra:
@@ -104,6 +105,7 @@ nav:
       - Remote data science: "docs/concepts-guides/remote_data_science.md"
   - 🛠️ Reference guides:
       - API Reference: "docs/resources/bastionlab/index.html"
+      - bastionlab.client: "docs/reference/bastionlab_client.md"
   - 🔒 Security:
       - Threat model: "docs/security/threat_model_data_owner_owns_infrastructure.md"
       - Authentication specifications: "docs/security/authenticated_sessions.md"
