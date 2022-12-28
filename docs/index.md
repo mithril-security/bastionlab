@@ -19,7 +19,7 @@ BastionLab solves this problem by ensuring that no information is ever accessibl
 
 **BastionLab is an open-source project.** 
 Our solution is coded in Rust 🦀, uses Polars 🐻, a pandas-like library for data exploration, and Torch 🔥, a popular library for AI training. 
-We also have an option to set-up confidential computing, a hardware-based technology that ensures no one but the processor of the machine can see the data or the model.
+We also have an option to set-up confidential computing 🔒, a hardware-based technology that ensures no one but the processor of the machine can see the data or the model.
  
 You can check [the code on our GitHub](https://github.com/mithril-security/bastionlab/) and [our roadmap](https://mithril-security.notion.site/513af0ada2584e0f837776a7f6649ab4?v=cf664187c13149a4b667d9c0ae3ed1c0). 
 

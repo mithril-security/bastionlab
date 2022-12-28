@@ -28,7 +28,7 @@ It acts like an **access control solution**, for data owners to protect the priv
 
 **BastionLab is an open-source project.**
 Our solution is coded in Rust 🦀, uses Polars 🐻, a pandas-like library for data exploration, and Torch 🔥, a popular library for AI training.
-We also have an option to set-up confidential computing, a hardware-based technology that ensures no one but the processor of the machine can see the data or the model.
+We also have an option to set-up confidential computing 🔒, a hardware-based technology that ensures no one but the processor of the machine can see the data or the model.
 
 ## 🚀 Quick tour
 
