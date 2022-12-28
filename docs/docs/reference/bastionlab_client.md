@@ -1,1 +1,1 @@
-::: client/src/bastionlab/polars/client.py
+::: client.src.bastionlab.polars
