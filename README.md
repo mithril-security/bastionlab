@@ -26,7 +26,9 @@ It acts like an **access control solution**, for data owners to protect the priv
 - Data owners can let external or internal data scientists **explore and extract values from their datasets, according to a strict privacy policy** they'll define in BastionLab.
 - Data scientists can **remotely run queries on data frames and train their models without seeing the original data or intermediary results**.
 
-**BastionLab is an open-source project.** Our solution is coded in Rust 🦀 and uses Polars 🐻, a pandas-like library for data exploration.
+**BastionLab is an open-source project.**
+Our solution is coded in Rust 🦀 and uses Polars 🐻, a pandas-like library for data exploration. 
+We also have an option to set-up confidential computing, a hardware-based technology that ensures no one but the processor of the machine can see the data or the model.
 
 ## 🚀 Quick tour
 
