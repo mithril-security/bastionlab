@@ -6,18 +6,20 @@ ________________________________________________________
 ## What is BastionLab?
 ________________________________________________________
 
-**BastionLab is a simple privacy framework for data science collaboration.** 
+**BastionLab is a simple privacy framework for data science collaboration, covering data exploration and AI traning.** 
 
-It acts like an **access control** solution, for data owners to protect the privacy of their datasets, **and stands as a guard**, to enforce that only privacy-friendly operations are allowed on the data and anonymized outputs are shown to the data scientist. It covers both data exploration and AI training.
+It acts like an **access control solution**, for data owners to protect the privacy of their datasets, and **stands as a guard**, to enforce that only privacy-friendly operations are allowed on the data and anonymized outputs are shown to the data scientist. 
 
-- Data owners can let **external or internal data scientists explore and extract values from their datasets, according to a strict privacy policy they'll define in BastionLab**.
-- Data scientists can **remotely run queries on data frames and train their models without seeing the original data or intermediary results**.
+- Data owners can let external or internal data scientists explore and extract values from their datasets, according to a strict privacy policy they'll define in BastionLab.
+- Data scientists can remotely run queries on data frames and train their models without seeing the original data or intermediary results.
 
 This wasn’t possible until now for highly regulated fields like health, finance, or advertising. When collaborating remotely, data owners had to open their whole dataset, often through a Jupyter notebook. This was dangerous because too many operations were allowed and the data scientist had numerous ways to extract information from the remote infrastructure (print the whole database, save the dataset in the weights, etc).
 
-BastionLab solves this problem by ensuring that only privacy-friendly operations are allowed on the data and that no information is ever accessible locally to the data scientist. 
+BastionLab solves this problem by ensuring that no information is ever accessible locally to the data scientist. 
 
-**BastionLab is an open-source project.** Our solution is coded in Rust 🦀 and uses Polars 🐻, a pandas-like library for data exploration. We also have an option to set-up secure enclaves, a hardware-based technology that ensures no one but the processor of the machine can see the data or the model.
+**BastionLab is an open-source project.** 
+Our solution is coded in Rust 🦀 and uses Polars 🐻, a pandas-like library for data exploration. 
+We also have an option to set-up confidential computing, a hardware-based technology that ensures no one but the processor of the machine can see the data or the model.
  
 You can check [the code on our GitHub](https://github.com/mithril-security/bastionlab/) and [our roadmap](https://mithril-security.notion.site/513af0ada2584e0f837776a7f6649ab4?v=cf664187c13149a4b667d9c0ae3ed1c0). 
 
