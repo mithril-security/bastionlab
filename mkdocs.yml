@@ -43,10 +43,10 @@ theme:
       example: fontawesome/solid/flask
       quote: fontawesome/solid/quote-left
 
-#Plugins 
+#Plugins
 plugins:
-- search
-- mkdocs-jupyter
+  - search
+  - mkdocs-jupyter
 
 # Customization
 extra:
@@ -65,7 +65,7 @@ extra_css:
   - stylesheets/extra.css
 
 extra_javascript:
-  - 'https://code.jquery.com/jquery-3.3.1.min.js'
+  - "https://code.jquery.com/jquery-3.3.1.min.js"
 
 # Extensions
 markdown_extensions:
@@ -88,24 +88,32 @@ markdown_extensions:
 
 # Documentation tree
 nav:
-- Home: 'index.md'
-- Getting Started:
-  - Quick tour: 'docs/quick-tour/quick-tour.ipynb'
-  - Installation: 'docs/getting-started/installation.md'
-- Tutorials:
-  - Authentication: 'docs/tutorials/authentication.ipynb'
-  - Combining datasets: 'docs/tutorials/combining_datasets.ipynb'
-  - Data cleaning: 'docs/tutorials/data_cleaning.ipynb'
-  - Data visualization: 'docs/tutorials/visualization.ipynb'
-- How-to guides:
-  - Covid-19 cleaning and exploration: 'docs/how-to-guides/covid_cleaning_exploration.ipynb'
-- Concepts:
-  - Remote data science: 'docs/concepts-guides/remote_data_science.md'
-- Reference guides: 
-  - API Reference: 'docs/resources/bastionlab/index.html'
-- Security: 
-  - Threat model: 'docs/security/threat_model_data_owner_owns_infrastructure.md'
-  - Authentication specifications: 'docs/security/authenticated_sessions.md'
-- Advanced:
-  - Benchmarks:
-    - Polars : 'docs/advanced/benchmarks/polars_benchmarks.md'
+  - 🏠 Home: "index.md"
+  - 🚀 Getting Started:
+      - Quick tour: "docs/quick-tour/quick-tour.ipynb"
+      - Installation: "docs/getting-started/installation.md"
+  - 📙 Tutorials:
+      - Authentication: "docs/tutorials/authentication.ipynb"
+      - Security logging: "docs/tutorials/security_logs.ipynb"
+      - Combining datasets: "docs/tutorials/combining_datasets.ipynb"
+      - Data cleaning: "docs/tutorials/data_cleaning.ipynb"
+      - Data visualization: "docs/tutorials/visualization.ipynb"
+  - 🌍 How-to guides:
+      - Covid-19 cleaning and exploration: "docs/how-to-guides/covid_cleaning_exploration.ipynb"
+      - Fine Tuning Distilbert on BastionLab: "docs/how-to-guides/distilbert_example_notebook.ipynb"
+  - 💡 Concepts:
+      - Remote data science: "docs/concepts-guides/remote_data_science.md"
+  - 🛠️ Reference guides:
+      - API Reference: "docs/resources/bastionlab/index.html"
+  - 🔒 Security:
+      - Threat model: "docs/security/threat_model_data_owner_owns_infrastructure.md"
+      - Authentication specifications: "docs/security/authenticated_sessions.md"
+  - ⚙️ Advanced:
+      - Benchmarks:
+          - Polars: "docs/advanced/benchmarks/polars_benchmarks.md"
+          - Torch:
+              - AMD EPY 7763: "docs/advanced/benchmarks/Torch/bench-amd-epyc-7763.md"
+              - NVIDIA A100/v100: "docs/advanced/benchmarks/Torch/bench-nvidia-a100-v100.md"
+      - Contributing:
+          - Code of Conduct: "docs/advanced/contributing/code_of_conduct.md"
+          - Contributing: "docs/advanced/contributing/contributing.md"
