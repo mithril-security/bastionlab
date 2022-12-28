@@ -61,10 +61,19 @@ message QueryBytes {
     bytes data = 1;
 }
 
+message SplitRequest {
+    repeated ReferenceRequest rdfs = 1;
+    float train_size = 2;
+    float test_size = 3;
+    bool shuffle = 5;
+    int32 random_state = 6;
+}
+
 service PolarsService {
     rpc SendDataFrame (stream SendChunk) returns (ReferenceResponse) {}
     rpc RunQuery (stream QueryBytes) returns (ReferenceResponse) {}
     rpc FetchDataFrame (ReferenceRequest) returns (stream FetchChunk) {}
     rpc ListDataFrames (Empty) returns (ReferenceList) {}
     rpc GetDataFrameHeader (ReferenceRequest) returns (ReferenceResponse) {}
+    rpc Split(SplitRequest) returns (ReferenceList) {}
 }

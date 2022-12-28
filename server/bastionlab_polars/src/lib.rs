@@ -5,7 +5,9 @@ use bastionlab_common::{
     telemetry::{self, TelemetryEventProps},
 };
 
+use polars::export::ahash::HashSet;
 use polars::prelude::*;
+use polars_proto::SplitRequest;
 use ring::digest;
 use serde_json;
 use std::{future::Future, pin::Pin, time::Instant};
@@ -73,6 +75,16 @@ impl DataFrameArtifact {
     pub fn with_fetchable(mut self, fetchable: VerificationResult) -> Self {
         self.fetchable = fetchable;
         self
+    }
+
+    pub fn inherit(&self, df: DataFrame) -> Self {
+        Self {
+            dataframe: df,
+            policy: self.policy.clone(),
+            blacklist: self.blacklist.clone(),
+            fetchable: self.fetchable.clone(),
+            query_details: self.query_details.clone(),
+        }
     }
 }
 #[derive(Clone)]
@@ -423,5 +435,62 @@ impl PolarsService for BastionLabPolars {
             Some(self.sess_manager.get_client_info(token)?),
         );
         Ok(Response::new(ReferenceResponse { identifier, header }))
+    }
+
+    async fn split(
+        &self,
+        request: Request<SplitRequest>,
+    ) -> Result<Response<ReferenceList>, Status> {
+        let (rdfs, train_size, test_size, shuffle, random_state) = (
+            &request.get_ref().rdfs,
+            request.get_ref().train_size,
+            request.get_ref().test_size,
+            request.get_ref().shuffle,
+            request.get_ref().random_state,
+        );
+
+        let mut dfs = Vec::new();
+
+        for rdf in rdfs {
+            dfs.push(self.get_df_unchecked(&rdf.identifier)?);
+        }
+
+        // Verify that all dfs have equal lengths, if not abort.
+        let set = HashSet::from_iter(dfs.iter().map(|df| df.height()));
+        if set.len() > 1 {
+            return Err(Status::aborted("RDFs should have the same height"));
+        }
+        let mut out_dfs = vec![];
+
+        // Inherit other features (`policy`, `fetachable`, `blacklist`, etc) from parent DataFrame
+        let inherit = |id: &String, df: DataFrame| {
+            self.with_df_artifact_ref(&id, |artifact| artifact.inherit(df.clone()))
+        };
+
+        let make_response = |df: DataFrameArtifact| -> Result<ReferenceResponse, Status> {
+            let identifier = self.insert_df(df);
+            Ok(ReferenceResponse {
+                identifier: identifier.clone(),
+                header: self.get_header(&identifier)?,
+            })
+        };
+        for (df, id) in dfs.iter().zip(rdfs) {
+            let df_height = df.height();
+            let train_size = (df_height as f32 * train_size) as usize;
+            let mut test_size = (df_height as f32 * test_size) as usize;
+            test_size += df_height - (train_size - test_size);
+
+            out_dfs.push(make_response(inherit(
+                &id.identifier,
+                df.head(Some(train_size)),
+            )?)?);
+
+            out_dfs.push(make_response(inherit(
+                &id.identifier,
+                df.tail(Some(test_size)),
+            )?)?);
+        }
+
+        Ok(Response::new(ReferenceList { list: out_dfs }))
     }
 }

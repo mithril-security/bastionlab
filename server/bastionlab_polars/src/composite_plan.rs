@@ -108,6 +108,7 @@ impl CompositePlan {
 
                     input_dfs.push(df);
                 }
+                #[allow(unused)]
                 CompositePlanSegment::UdfTransformerPlanSegment { columns, udf } => todo!(), //TODO: Add support for TorchScriptable Tokenizers
             }
         }

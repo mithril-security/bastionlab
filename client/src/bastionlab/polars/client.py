@@ -1,19 +1,12 @@
-from typing import List, TYPE_CHECKING, Optional, Callable
+from typing import List, TYPE_CHECKING, Optional, Callable, Union
 import grpc
 from grpc import StatusCode
 import polars as pl
 from colorama import Fore
-from ..pb.bastionlab_polars_pb2 import (
-    ReferenceRequest,
-    Empty,
-)
+from ..pb.bastionlab_polars_pb2 import ReferenceRequest, Empty, SplitRequest
 from ..pb.bastionlab_polars_pb2_grpc import PolarsServiceStub
 from ..errors import GRPCException
-from .utils import (
-    deserialize_dataframe,
-    serialize_dataframe,
-    serialize_query
-)
+from .utils import deserialize_dataframe, serialize_dataframe, serialize_query
 from .policy import Policy, DEFAULT_POLICY
 
 

@@ -1,11 +1,11 @@
-use std::{error::Error, io::Cursor, ops::Add, sync::Mutex};
+use std::{error::Error, io::Cursor, sync::Mutex};
 
 use bastionlab_common::utils::array_to_tensor;
 use polars::prelude::{
     row::{AnyValueBuffer, Row},
     *,
 };
-use tch::{CModule, Device, Kind, Tensor};
+use tch::{CModule, Tensor};
 use tokenizers::{Encoding, Tokenizer};
 use tonic::Status;
 
@@ -25,7 +25,7 @@ pub fn list_dtype_to_tensor(series: &Series) -> Result<Vec<Tensor>, Status> {
     let mut out = vec![];
     for s in rows.into_iter() {
         match s.as_ref() {
-            Some(s) => out.push(series_to_tensor(s)?.data()),
+            Some(s) => out.push(series_to_tensor(s)?),
             None => return Err(Status::aborted("Could not iterate over series.")),
         }
     }
@@ -55,12 +55,12 @@ pub fn series_to_tensor(series: &Series) -> Result<Tensor, Status> {
             let out = list_dtype_to_tensor(series)?;
             let mut zeros = Tensor::zeros(&shape[..], (out[0].kind(), out[0].device()));
 
-            for (i, t) in out.into_iter().enumerate() {
+            for (i, t) in out.iter().enumerate() {
                 let index = Tensor::from(i as i64);
-                zeros = zeros.index_put(&vec![Some(index.copy())][..], &t.copy(), false);
+                zeros = zeros.index_put(&vec![Some(index.copy())][..], t, false);
             }
 
-            zeros.copy()
+            zeros
         }
         d => {
             return Err(Status::invalid_argument(format!(
@@ -85,7 +85,7 @@ pub fn vec_series_to_tensor(
         let t = series_to_tensor(s)?;
         shapes.push(t.size()[1]);
         dtypes.push(format!("{:?}", t.kind()));
-        ts.push(Mutex::new(t.detach()));
+        ts.push(Mutex::new(t));
     }
     Ok((ts, shapes, dtypes, nb_samples.try_into().unwrap()))
 }
@@ -176,6 +176,7 @@ pub fn series_to_tokenized_series(
     Ok(df)
 }
 
+#[allow(unused)]
 pub fn tokenized_series_to_series(vs: Vec<Series>, model: &str) -> Result<Series, Status> {
     let tokenizer = get_tokenizer(model)?;
 

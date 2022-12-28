@@ -5,9 +5,7 @@ use bastionlab_common::{session::SessionManager, session_proto::ClientInfo};
 use bastionlab_learning::data::Dataset;
 use bastionlab_polars::access_control::{Policy, VerificationResult};
 use bastionlab_polars::polars_proto::Meta;
-use bastionlab_polars::utils::{
-    series_to_tensor, tokenized_series_to_series, vec_series_to_tensor,
-};
+use bastionlab_polars::utils::{series_to_tensor, vec_series_to_tensor};
 use bastionlab_polars::{polars_proto::Reference, utils::to_status_error};
 use bastionlab_polars::{BastionLabPolars, DataFrameArtifact};
 use bastionlab_torch::storage::Artifact;
@@ -54,8 +52,7 @@ impl Converter {
 
         let (inputs, shapes, dtypes, nb_samples) = vec_series_to_tensor(inputs)?;
 
-        let labels = Mutex::new(series_to_tensor(labels)?.copy());
-        println!("{:?} {:?}", inputs, labels);
+        let labels = Mutex::new(series_to_tensor(labels)?);
         let identifier = format!("{}", Uuid::new_v4());
 
         let data = Dataset::new(inputs, labels, true, (vec![], "".to_string()));
@@ -97,6 +94,7 @@ impl ConversionService for Converter {
     ) -> Result<Response<ConvReferenceResponse>, Status> {
         self.sess_manager.verify_request(&request)?;
 
+        #[allow(unused)]
         let (inputs_cols_names, labels_col_name, identifier, inputs_conv_fn) = {
             (
                 &request.get_ref().inputs_col_names,
@@ -124,7 +122,6 @@ impl ConversionService for Converter {
 
         for (inputs, name) in samples_inputs_locks.iter().zip(inputs_cols_names.iter()) {
             let dtype = kind_to_datatype(inputs.kind());
-            println!("Dtype: {}", dtype);
 
             let series = if inputs.size().len() == 2 {
                 tensor_to_series(&name, &DataType::List(Box::new(dtype)), inputs.data())?

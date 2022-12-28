@@ -8,7 +8,7 @@ import base64
 import json
 import torch
 from ..pb.bastionlab_conversion_pb2 import ToDataset
-from ..pb.bastionlab_polars_pb2 import ReferenceResponse
+from ..pb.bastionlab_polars_pb2 import ReferenceResponse, SplitRequest, ReferenceRequest
 from .client import BastionLabPolars
 from .utils import ApplyBins, to_torch_ref
 import matplotlib.pyplot as plt
@@ -168,7 +168,7 @@ class StringTransformerPlanSegment(CompositePlanSegment):
             str: serialized string of this plan segment
         """
         columns = ",".join([f'"{c}"' for c in self._columns])
-        model = base64.b64encode(self.model.encode('utf8')).decode('utf8')
+        model = base64.b64encode(self.model.encode("utf8")).decode("utf8")
         return f'{{"StringTransformerPlanSegment":{{"columns":[{columns}],"model":"{model}"}}}}'
 
 
@@ -750,13 +750,13 @@ class FetchableLazyFrame(RemoteLazyFrame):
         """Converts BastionLab `FetchableLazy` to a `RemoteDataset`.
 
         Args:
-            inputs: List[str]
+            inputs (List[str]):
                 The list of input columns names to used as `DataFrame` columns.
-            labels: str
+            labels (str):
                 The column name of the labels column in the resulting `DataFrame`
-            inputs_conv_fn: Optional[Callable]
+            inputs_conv_fn (Optional[Callable] = None):
                 Function to convert inputs to `torch.Tensor` dtypes.
-            labels_conv_fn: Optional[Callable]
+            labels_conv_fn (Optional[Callable] = None):
                 Function to convert labels to `torch.Tensor` dtypes.
 
         Returns:
@@ -775,7 +775,9 @@ class FetchableLazyFrame(RemoteLazyFrame):
                 identifier=self.identifier,
             )
         )
-        return RemoteDataset(client=CONFIG["torch_client"], train_dataset=to_torch_ref(ref))
+        return RemoteDataset(
+            client=CONFIG["torch_client"], train_dataset=to_torch_ref(ref)
+        )
 
 
 @dataclass
@@ -1034,3 +1036,60 @@ class Facet:
 class RemoteLazyGroupBy(Generic[LDF]):
     _inner: pl.internals.lazyframe.groupby.LazyGroupBy[LDF]
     _meta: Metadata
+
+
+def train_test_split(
+    *rdfs,
+    train_size: Optional[float] = None,
+    test_size: Optional[float] = 0.25,
+    shuffle: Optional[bool] = False,
+    random_state: Optional[int] = -1,
+) -> List["FetchableLazyFrame"]:
+    """
+    Split RemoteDataFrames into train and test subsets.
+
+    Args:
+        train_size (Optional[float] = None):
+            It should be between 0.0 and 1.0 and represent the proportion of the dataset to include in the train split.
+            If None, the value is automatically set to the complement of the test size.
+        test_size (Optional[float] =0.25):
+            It should be between 0.0 and 1.0 and represent the proportion of the dataset to include in the test split.
+            If None, the value is set to the complement of the train size.
+            If train_size is also None, it will be set to 0.25.
+        shuffle (Optional[bool] = False):
+            Whether or not to shuffle the data before splitting.
+        random_state (Optional[int] = -1):
+            Controls the shuffling applied to the data before applying the split.
+            Pass an int for reproducible output across multiple function calls.
+    """
+
+    # Shuffling is disabled by default because Polars DataFrames don't support shuffling.
+    # We plan on supporting shuffling by defering it to the conversion stage (i.e., when it's
+    # being converted to a dataset (Tensors))
+
+    from .remote_polars import FetchableLazyFrame
+
+    if len(rdfs) == 0:
+        raise ValueError("At least one array required as input")
+
+    _train_rdf = rdfs[0]
+
+    train_size = 1 - test_size if train_size is None else train_size
+    test_size = 1 - train_size if test_size is None else test_size
+
+    rdfs = [ReferenceRequest(identifier=rdf.identifier) for rdf in rdfs]
+
+    res = _train_rdf._meta._client.stub.Split(
+        SplitRequest(
+            rdfs=rdfs,
+            train_size=train_size,
+            test_size=test_size,
+            shuffle=shuffle,
+            random_state=random_state,
+        )
+    )
+    res = [
+        FetchableLazyFrame._from_reference(_train_rdf._meta._client, ref)
+        for ref in res.list
+    ]
+    return res
