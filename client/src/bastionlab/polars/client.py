@@ -239,3 +239,19 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
         res = GRPCException.map_error(
             lambda: self.stub.PersistDataFrame(ReferenceRequest(identifier=identifier))
         )
+    
+    def update_policy(self, identifier: str, new_policy: str):
+        """
+        Updates policy for dataframe
+
+        Args
+        ----
+        new_policy : Policy- the new policy to implement on the dataframe 
+
+        Returns
+        -------
+        Nothing
+        """
+        res = GRPCException.map_error(
+            lambda: self.stub.UpdatePolicy(ReferenceRequest(identifier=identifier, new_policy=new_policy.serialize()))
+        )
