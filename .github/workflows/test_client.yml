@@ -1,6 +1,8 @@
 name: Test client
 
-on: [push, pull_request]
+#on: [push, pull_request]
+on: []
+
 
 jobs:
   testing_client:
