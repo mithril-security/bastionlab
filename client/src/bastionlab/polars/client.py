@@ -252,10 +252,19 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
         -------
         Nothing
         """
-        res = GRPCException.map_error(
-            lambda: self.stub.UpdatePolicy(
-                ReferenceRequest(
-                    identifier=identifier, new_policy=new_policy.serialize()
+        try:
+            res = GRPCException.map_error(
+                lambda: self.stub.UpdatePolicy(
+                    ReferenceRequest(
+                        identifier=identifier, new_policy=new_policy.serialize()
+                    )
                 )
             )
-        )
+        except GRPCException as e:
+            if e.code == StatusCode.PERMISSION_DENIED:
+                print(
+                    f"{Fore.RED}Only the data owner can update the policy when authentication mode is enabled{Fore.WHITE}"
+                )
+                return None
+            else:
+                raise e

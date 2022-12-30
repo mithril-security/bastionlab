@@ -503,31 +503,29 @@ impl PolarsService for BastionLabPolars {
         &self,
         request: Request<ReferenceRequest>,
     ) -> Result<Response<Empty>, Status> {
-        //Laura: change to check if data owner!
         let token = self.sess_manager.verify_request(&request)?;
         let user_hash = self.sess_manager.get_user_id(token.clone())?;
         let owner = self.sess_manager.verify_if_owner(&user_hash.clone());
         if owner == true {
-        let req = &request.get_ref();
-        let new_policy: Policy = serde_json::from_str(req.new_policy.as_ref().unwrap()).map_err(|_| Status::unknown("Failed to deserialize policy."))?;
-        //get dataframe for writing
-        let mut dfs = self.dataframes.write().unwrap(); 
-        let artifact = dfs.get_mut(&request.get_ref().identifier);
-        match artifact{
-            Some(artifact) => {
-                //change policy
-                artifact.policy = new_policy;
-                drop(dfs);
-                info!("Policy updated");
-            }
-            None => {
-                //can't find df
-                drop(dfs);
-            }
-        };
+            let req = &request.get_ref();
+            let new_policy: Policy = serde_json::from_str(req.new_policy.as_ref().unwrap()).map_err(|_| Status::unknown("Failed to deserialize policy."))?;
+            //get dataframe for writing
+            let mut dfs = self.dataframes.write().unwrap(); 
+            let artifact = dfs.get_mut(&request.get_ref().identifier);
+            match artifact{
+                Some(artifact) => {
+                    artifact.policy = new_policy;
+                    drop(dfs);
+                    info!("Policy updated");
+                }
+                None => {
+                    drop(dfs);
+                    return Err(Status::unknown("RemoteLazyFrame not found."));
+                }
+            };
         }
         else{
-            info!("Only data owner can change policy")
+            return Err(Status::permission_denied("Only the data owner can update the policy"));
         }
         Ok(Response::new(Empty {}))
     }

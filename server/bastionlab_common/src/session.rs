@@ -166,8 +166,9 @@ impl SessionManager {
     }
 
     pub fn verify_if_owner(&self, public_hash: &str) -> bool {
-        //let end = "-bin";
-        //let pat = "signature-";
+        if self.auth_enabled() == false{
+            return true;
+        }
         let keys_lock = self.keys.as_ref().map(|l| l.lock().expect("Poisoned lock"));
         if let Some(ref keys) = keys_lock {
             return keys.verify_owner(public_hash);
