@@ -122,6 +122,7 @@ jobs:
           python .github/scripts/remove_cells.py
           wget 'https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv'
           cp titanic.csv converted/train.csv
+          cp titanic.csv converted/titanic.csv
           rm ./converted/distilbert_example_notebook.ipynb
           rm ./converted/resnet_example_notebook.ipynb
           for file in ./converted/*.ipynb; do
