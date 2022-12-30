@@ -122,6 +122,8 @@ jobs:
           python .github/scripts/remove_cells.py
           wget 'https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv'
           cp titanic.csv converted/train.csv
+          rm ./converted/distilbert_example_notebook.ipynb
+          rm ./converted/resnet_example_notebook.ipynb
           for file in ./converted/*.ipynb; do
             jupyter nbconvert --execute --to notebook --inplace --ExecutePreprocessor.timeout=600 --output-dir=./converted $file
           done
