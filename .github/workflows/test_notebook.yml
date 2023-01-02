@@ -91,12 +91,27 @@ jobs:
       #     docker load --input /tmp/${{ matrix.serverImage }}.tar
       #     docker image ls -a
 
+      ## DOWNLOAD SERVER ARTIFACT IF EXISTS ###
+      - name: Download-image
+        id: load-image
+        uses: actions/checkout@v2
+
+      - name: Download-image
+        uses: ishworkh/docker-image-artifact-download@v1
+        with:
+          image: ${{ matrix.serverImage }}:latest
+
       ###### BUILD SERVER OTHERWISE ######
       - name: Build server
         id: build-server-no-download
-        # if: ${{ steps.load-server.outcome == 'failure' }}
+        if: ${{ steps.load-image.outcome == 'failure' }}
         run: |
           docker build -t ${{ matrix.serverImage }}:latest -f server/Dockerfile .
+        - name: Upload image
+          uses: ishworkh/docker-image-artifact-upload@v1
+          with:
+            image: ${{ matrix.serverImage }}:latest
+            retention_days: "2"
 
       ###### CHECK BASTIONLAB IMAGE IS INSTALLED ######
       - name: Check bastionlab image is installed
@@ -111,6 +126,7 @@ jobs:
         run: |
           docker kill -f app > /dev/null 2>&1 || true
           docker run --rm -d -e BASTIONLAB_DISABLE_TELEMETRY=1 -e DISABLE_AUTHENTICATION=1 -p 50056:50056  --name app ${{ matrix.serverImage }}:latest
+      
       ########## TESTING NOTEBOOK ##########
       - name: Testing the notebooks
         # Here we convert the notebooks to python scripts and run them
