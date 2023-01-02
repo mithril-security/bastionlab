@@ -144,9 +144,8 @@ jobs:
           rm ./converted/distilbert_example_notebook.ipynb
           rm ./converted/resnet_example_notebook.ipynb
           for file in ./converted/*.ipynb; do
+            ls | cat
             sed -i 's/"!pip install bastionlab"/"!pip install -e ..\/client"/g' $file
-            echo $ls
             echo "File is: $file"
             jupyter nbconvert --execute --to notebook --inplace --ExecutePreprocessor.timeout=600 --output-dir=./converted $file
-            ls | cat
           done
