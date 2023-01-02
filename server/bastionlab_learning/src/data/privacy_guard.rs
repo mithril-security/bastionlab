@@ -14,7 +14,8 @@ pub(crate) fn generate_noise_like(tensor: &Tensor, std: f64) -> Result<Tensor, T
         let mut sum = zeros;
         for _ in 0..4 {
             let _ = sum.f_add_(
-                &Tensor::zeros(&tensor.size(), (Kind::Float, tensor.device())).f_normal_functional(0., std)?,
+                &Tensor::zeros(&tensor.size(), (Kind::Float, tensor.device()))
+                    .f_normal_functional(0., std)?,
             );
         }
         let _ = sum.f_div_scalar_(2.);
