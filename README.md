@@ -127,7 +127,7 @@ shape: (3, 2)
 ```py
 >>> from torchvision.datasets import CIFAR100
 >>> from torchvision.transforms import ToTensor, Normalize, Compose
->>> from bastionai.client import Connection
+>>> from bastionlab.client import Connection
 
 # Define a transformation pipeline for the CIFAR dataset.
 # The last step is there for shape compatibility reasons.
@@ -139,13 +139,17 @@ shape: (3, 2)
 
 # Define train and test datasets
 >>> train_dataset = CIFAR100("data", train=True, transform=transform, download=True)
+Files already downloaded and verified
 >>> test_dataset = CIFAR100("data", train=False, transform=transform, download=True)
+Files already downloaded and verified
 
 # Send them to the server by instantiating a RemoteDataset.
 >>> with Connection("localhost") as client:
 ...     client.torch.RemoteDataset(train_dataset, test_dataset, name="CIFAR100")
 ...
-RemoteDataset
+Sending CIFAR100: 100%|████████████████████| 615M/615M [00:04<00:00, 150MB/s]  
+Sending CIFAR100 (test): 100%|████████████████████| 123M/123M [00:00<00:00, 150MB/s]
+<bastionlab.torch.learner.RemoteDataset object at 0x7f1220063ac0>
 ```
 
 ### Data scientist's side
@@ -164,20 +168,23 @@ RemoteDataset
 
 # Send the model to the server by instantiating a RemoteLearner
 # The RemoteLearner objects references the RemoteDataset.
->>> remote_learner = client.RemoteLearner(
+>>> remote_learner = connection.client.torch.RemoteLearner(
 ...     model,
 ...     remote_dataset,
 ...     max_batch_size=64,
 ...     loss="cross_entropy",
 ...     model_name="EfficientNet-B0",
-...     device="cuda:0",
+...     device="cpu",
 ... )
+Sending EfficientNet-B0: 100%|████████████████████| 21.7M/21.7M [00:00<00:00, 531MB/s]
 
 # Train the remote model for given amount of epochs
 >>> remote_learner.fit(nb_epochs=1)
+Epoch 1/1 - train: 100%|████████████████████| 781/781 [04:06<00:00,  3.17batch/s, cross_entropy=4.1798 (+/- 0.0000)]
 
 # Test the remote model
 >>> remote_learner.test(metric="accuracy")
+Epoch 1/1 - test: 100%|████████████████████| 156/156 [00:14<00:00, 10.62batch/s, accuracy=0.1123 (+/- 0.0000)]
 ```
 
 ## 🗝️ Key features
