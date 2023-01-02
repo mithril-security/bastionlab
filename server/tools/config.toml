@@ -2,4 +2,5 @@ client_to_enclave_untrusted_url = "https://0.0.0.0:50056"
 public_keys_directory = "keys/"
 session_expiry_in_secs = 1500
 max_consecutive_saves = 10
+max_consecutive_runs = 10
 user_ban_time = 900

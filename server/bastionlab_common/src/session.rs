@@ -57,6 +57,7 @@ pub struct SessionManager {
     sessions: Arc<RwLock<HashMap<[u8; 32], Session>>>,
     session_expiry: u64,
     pub max_saves: usize,
+    pub max_runs: usize,
     ban_time: u64,
     challenges: Mutex<HashSet<[u8; 32]>>,
     blocklist: Arc<RwLock<HashMap<String, Instant>>>,
@@ -67,6 +68,7 @@ impl SessionManager {
         keys: Option<KeyManagement>,
         session_expiry: u64,
         max_saves: usize,
+        max_runs: usize,
         ban_time: u64,
     ) -> Self {
         Self {
@@ -74,6 +76,7 @@ impl SessionManager {
             sessions: Default::default(),
             session_expiry,
             max_saves,
+            max_runs,
             ban_time,
             challenges: Default::default(),
             blocklist: Default::default(),

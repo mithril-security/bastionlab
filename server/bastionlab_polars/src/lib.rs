@@ -78,6 +78,7 @@ pub struct BastionLabPolars {
     dataframes: Arc<RwLock<HashMap<String, DataFrameArtifact>>>,
     sess_manager: Arc<SessionManager>,
     persist_tracking: Arc<RwLock<HashMap<String, Vec<Instant>>>>,
+    dos_tracking: Arc<RwLock<HashMap<String, Vec<Instant>>>>,
 }
 
 impl BastionLabPolars {
@@ -86,6 +87,7 @@ impl BastionLabPolars {
             dataframes: Arc::new(RwLock::new(HashMap::new())),
             sess_manager,
             persist_tracking: Arc::new(RwLock::new(HashMap::new())),
+            dos_tracking: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -299,7 +301,9 @@ Reason: {}",
                             < 20
                         {
                             self.sess_manager.delete_session(token.unwrap());
-                            self.sess_manager.block_user(user_id, Instant::now());
+                            self.sess_manager
+                                .block_user(user_id.clone(), Instant::now());
+                            persist_tracking.remove(&user_id);
                             return Err(Status::unknown(
                                 "DoS attempt detected! Your access is temporarily blocked.",
                             ));
@@ -389,6 +393,39 @@ impl PolarsService for BastionLabPolars {
         let token = self.sess_manager.verify_request(&request)?;
 
         let user_id = self.sess_manager.get_user_id(token.clone())?;
+
+        //We only track runs if auth is enabled, otherwise users cannot be identified.
+        if self.sess_manager.auth_enabled() {
+            let mut dos_tracking = self.dos_tracking.write().unwrap();
+            let runs = dos_tracking.get(&user_id);
+            let mut runs_vec: Vec<Instant>;
+            match runs {
+                Some(runs) => {
+                    if runs.len() > self.sess_manager.max_runs {
+                        if runs[runs.len() - self.sess_manager.max_runs]
+                            .elapsed()
+                            .as_secs()
+                            < 10
+                        {
+                            self.sess_manager.delete_session(token.unwrap());
+                            self.sess_manager
+                                .block_user(user_id.clone(), Instant::now());
+                            dos_tracking.remove(&user_id);
+                            return Err(Status::unknown(
+                                "DoS attempt detected! Your access is temporarily blocked.",
+                            ));
+                        }
+                    }
+                    runs_vec = runs.to_vec();
+                    runs_vec.push(Instant::now());
+                }
+                None => {
+                    runs_vec = vec![Instant::now()];
+                }
+            }
+            dos_tracking.insert(user_id.clone(), runs_vec);
+            drop(dos_tracking);
+        }
 
         let composite_plan: CompositePlan = serde_json::from_str(&request.get_ref().composite_plan)
             .map_err(|e| {

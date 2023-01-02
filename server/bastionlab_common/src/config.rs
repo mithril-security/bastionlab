@@ -27,6 +27,7 @@ pub struct BastionLabConfig {
     pub public_keys_directory: String,
     pub session_expiry_in_secs: u64,
     pub max_consecutive_saves: usize,
+    pub max_consecutive_runs: usize,
     pub user_ban_time: u64,
 }
 
@@ -54,6 +55,10 @@ impl BastionLabConfig {
 
     pub fn max_saves(&self) -> Result<usize> {
         Ok(self.max_consecutive_saves)
+    }
+
+    pub fn max_runs(&self) -> Result<usize> {
+        Ok(self.max_consecutive_runs)
     }
 
     pub fn ban_time(&self) -> Result<u64> {

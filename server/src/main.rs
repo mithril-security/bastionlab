@@ -48,6 +48,9 @@ async fn main() -> Result<()> {
         config
             .max_saves()
             .context("Parsing the maximum repeated saves config")?,
+        config
+            .max_runs()
+            .context("Parsing the maximum repeated runs config")?,
         config.ban_time().context("Parsing the ban time config")?,
     ));
 
