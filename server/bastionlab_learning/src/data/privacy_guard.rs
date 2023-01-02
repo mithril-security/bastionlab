@@ -507,8 +507,8 @@ impl PrivacyGuard<Tensor> {
         f_sub_scalar(self: &Self, other: impl Into<tch::Scalar>) -> Result<Self, TchError> where sensibility = self.sensibility, batch_dependence = self.batch_dependence.clone()
         f_mul_scalar(self: &Self, other: f64) -> Result<Self, TchError> where sensibility = match self.sensibility {
             Sensibility::Unknown => Sensibility::Unknown,
-            Sensibility::LInfinity(s) => Sensibility::LInfinity(other as f32 * s),
-            Sensibility::L2(s) => Sensibility::L2(other as f32 * s),
+            Sensibility::LInfinity(s) => Sensibility::LInfinity(other.abs() as f32 * s),
+            Sensibility::L2(s) => Sensibility::L2(other.abs() as f32 * s),
         }, batch_dependence = self.batch_dependence.clone()
     }
 

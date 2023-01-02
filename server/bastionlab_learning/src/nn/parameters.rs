@@ -238,8 +238,6 @@ impl<'a> Parameters<'a> {
                 let budget_update = *eps * batch_sampling_rate * ((t + 1.0).sqrt() - t.sqrt());
                 let sigma = compute_sigma(*eps, delta, *max_grad_norm) as f64;
 
-                // println!("Sigma = {}", sigma);
-
                 if !dp_sgd_context
                     .read()
                     .unwrap()
