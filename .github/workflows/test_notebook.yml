@@ -94,7 +94,7 @@ jobs:
       ###### BUILD SERVER OTHERWISE ######
       - name: Build server
         id: build-server-no-download
-        if: ${{ steps.load-image.outcome == 'failure' }}
+      #  if: ${{ steps.load-image.outcome == 'failure' }}
         run: |
           docker build -t ${{ matrix.serverImage }}:latest -f ./Dockerfile .
 
