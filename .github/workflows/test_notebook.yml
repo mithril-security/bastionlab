@@ -146,4 +146,5 @@ jobs:
           for file in ./converted/*.ipynb; do
             sed -i 's/"!pip install bastionlab"/"!pip install -e ..\/client"/g' $file
             jupyter nbconvert --execute --to notebook --inplace --ExecutePreprocessor.timeout=600 --output-dir=./converted $file
+            echo "Executed: $file"
           done
