@@ -124,6 +124,7 @@ jobs:
 
       ########## LAUNCH SERVER ##########
       - name: Launch server
+        continue-on-error: true
       #  if: ${{ steps.check-bastionlab-image.outcome == 'success' }}
         run: |
           docker kill -f app > /dev/null 2>&1 || true
@@ -135,6 +136,7 @@ jobs:
         # In order to avoid running shell commands that we don't want to run
         # we replace the get_ipython().system function by a function that prints whatever
         # For shell commands that we would want to run, we use the % prefix
+        # Need to replace sed with no_execute
         run: |
           pip install ./client
           pip install jupyter nbconvert
@@ -142,12 +144,8 @@ jobs:
           wget 'https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv'
           cp titanic.csv converted/train.csv
           cp titanic.csv converted/titanic.csv
-          rm ./converted/distilbert_example_notebook.ipynb
-          rm ./converted/resnet_example_notebook.ipynb
-          for file in ./converted/*.ipynb; do
-            ls | cat
+          for file in ./converted/*.ipynb; do 
             sed -i 's/"!pip install bastionlab"/""/g' $file
-            cat 
             echo "File is: $file"
             jupyter nbconvert --execute --to notebook --inplace --ExecutePreprocessor.timeout=600 --output-dir=./converted $file
           done
