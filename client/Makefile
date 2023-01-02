@@ -1,7 +1,7 @@
-VENV := env
-BASTIONLAB_VERSION := $(shell cat bastionai/version.py | cut -d '"' -f 2)
+.PHONY: all venv build dev-install test clean
 
-.PHONY = all venv build dev-install test clean
+VENV := env
+BASTIONLAB_VERSION := $(shell cat src/bastionlab/version.py | cut -d '"' -f 2)
 
 all: build
 
@@ -33,7 +33,7 @@ clean:
 	rm -rf $(VENV)
 	rm -rf build
 	rm -rf dist
-	rm -rf bastionlab/pb
-	rm -rf bastionlab.egg-info
+	rm -rf src/bastionlab.egg-info
+	find src/bastionlab/pb -type f -name '*.py' ! -name '__init__.py' -delete
 	find . -type f -name '*.pyc' -delete
 	find . -type d -name '__pycache__' -delete

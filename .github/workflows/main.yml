@@ -21,29 +21,20 @@ jobs:
         with:
           driver: docker-container
 
-      # Reuse previous wheels if the client is unchanged
-      - name: Cache Docker server image
-        id: cache-docker-server
-        uses: actions/cache@v3
-        with:
-          path: /tmp/${{ matrix.image }}.tar
-          key: docker-server-${{ runner.os }}-${{ hashFiles('server/') }}
-
       # Build server
       - name: Build server
         uses: docker/build-push-action@v2.10.0
-        if: ${{ steps.cache-docker-server.outputs.cache-hit != 'true' }}
         with:
           push: false
           load: true
           tags: ${{ matrix.image }}
           context: .
-          file: ./server/Dockerfile
+          file: ./Dockerfile
           cache-from: type=gha
           cache-to: type=gha,mode=max
           outputs: type=docker,dest=/tmp/${{ matrix.image }}.tar
 
-      - name: Upload artifact server
+      - name: Upload artifact
         uses: actions/upload-artifact@v2
         with:
           name: ${{ matrix.image }}
@@ -78,7 +69,7 @@ jobs:
       # Build client
       - uses: actions/cache@v2
         if: ${{ steps.cache-wheels.outputs.cache-hit != 'true' }}
-
+        
         with:
           path: |
             ./client/build
@@ -101,7 +92,7 @@ jobs:
 
       # Outputs
 
-      - name: Upload artifact client
+      - name: Upload artifact
         uses: actions/upload-artifact@v2
         with:
           name: client-artifacts
@@ -152,25 +143,25 @@ jobs:
 
   #     - name: Show artifacts
   #       run: |
-  #         ls -l /tmp/client-artifacts
+  #         ls -l /tmp/client-artifacts 
   #         unzip -l /tmp/client-artifacts/bastionlab-*.whl
 
   #     - name: Load package
   #       run: python -m pip install /tmp/client-artifacts/*.whl
 
-  # Run tests
+      # Run tests
 
-  # - name: Launch server
-  #   run: |
-  #     docker kill -f app > /dev/null 2>&1 || true
-  #     docker run --rm -d -e bastionlab_DISABLE_TELEMETRY=1 -p 50051:50051  --name app ${{ matrix.serverImage }}:latest
-  # - name: Run tests
-  #   run: cd tests && python -m unittest || (docker logs app; false)
-  #   env:
-  #     bastionlab_TEST_NO_LAUNCH_SERVER: "true"
+      # - name: Launch server
+      #   run: |
+      #     docker kill -f app > /dev/null 2>&1 || true
+      #     docker run --rm -d -e bastionlab_DISABLE_TELEMETRY=1 -p 50051:50051  --name app ${{ matrix.serverImage }}:latest
+      # - name: Run tests
+      #   run: cd tests && python -m unittest || (docker logs app; false)
+      #   env:
+      #     bastionlab_TEST_NO_LAUNCH_SERVER: "true"
+       
+      # # - name: Install Jupyter and related test tools
+      # #   run: python -m pip install pytest nbmake
 
-  # # - name: Install Jupyter and related test tools
-  # #   run: python -m pip install pytest nbmake
-
-  # # - name: Test Jupyter notebooks
-  # #   run: pytest --nbmake-timeout=40 --nbmake-kernel=python3 --nbmake examples/*.ipynb || (docker logs app; false)
+      # # - name: Test Jupyter notebooks
+      # #   run: pytest --nbmake-timeout=40 --nbmake-kernel=python3 --nbmake examples/*.ipynb || (docker logs app; false)

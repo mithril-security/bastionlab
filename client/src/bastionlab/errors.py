@@ -9,12 +9,25 @@ T = TypeVar("T")
 
 @dataclass
 class GRPCException(Exception):
-    """A NewType arround gRPC errors to get nicer display."""
+    """
+    A custom exception class for wrapping gRPC errors. This allows for better error
+    handling and display.
+
+    Attributes:
+        err (Union[grpc._channel._InactiveRpcError, grpc._channel._MultiThreadedRendezvous]):
+            The gRPC error that was caught and wrapped by this exception.
+    """
 
     err: Union[grpc._channel._InactiveRpcError, grpc._channel._MultiThreadedRendezvous]
 
     @property
     def code(self) -> grpc.StatusCode:
+        """
+        Get the status code of the gRPC error.
+
+        Returns:
+            The status code of the gRPC error.
+        """
         return self.err._state.code
 
     def __str__(self):
@@ -41,6 +54,18 @@ class GRPCException(Exception):
 
     @staticmethod
     def map_error(f: Callable[[], T]) -> T:
+        """
+        Map gRPC errors to `GRPCException` exceptions.
+
+        Args:
+            f: The function to call and map errors from.
+
+        Returns:
+            The result of calling `f`, if no errors were raised.
+
+        Raises:
+            GRPCException: if `f` raised a gRPC error.
+        """
         try:
             return f()
         except _InactiveRpcError as e:

@@ -1,9 +1,17 @@
 [package]
 name = "bastionlab"
-version = "0.1.0"
+version = "0.3.6"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[workspace]
+members = [
+  "bastionlab_common",
+  "bastionlab_torch",
+  "bastionlab_learning",
+  "bastionlab_polars",
+]
+resolver = "2"
 
 [dependencies]
 bytes = "1.3.0"
@@ -11,13 +19,12 @@ tonic = { version = "0.5.2", features = ["tls", "transport"] }
 prost = { version = "0.8", default-features = false, features = [
   "prost-derive",
 ] }
-tokio = { version = "1.19.2", features = ["macros", "rt-multi-thread", "net" ] }
+tokio = { version = "1.19.2", features = ["macros", "rt-multi-thread", "net"] }
 tokio-stream = "0.1"
 bincode = "1.3.3"
 serde = "1.0.147"
 serde_derive = "1.0.147"
 serde_json = "1.0.87"
-tch = "0.8.0"
 base64 = "0.13.1"
 rand = "0.8.5"
 ring = "0.16.20"
@@ -31,67 +38,15 @@ whoami = "1.2.1"
 once_cell = "1.13.1"
 log = "0.4.17"
 env_logger = "0.9.0"
-reqwest = {version = "=0.11.4", default-features = false, features = ["json", "rustls-tls-webpki-roots"]}
-
-[dependencies.polars]
-version = "0.25.1"
-default-features = false
-features = [
-  "dynamic_groupby",
-  "zip_with",
-  "lazy",
-  "strings",
-  "temporal",
-  "random",
-  "fmt",
-  "performant",
-  "dtype-full",
-  "rows",
-  "private",
-  "round_series",
-  "is_first",
-  "dot_product",
-  "concat_str",
-  "row_hash",
-  "reinterpret",
-  "mode",
-  "cum_agg",
-  "rolling_window",
-  "interpolate",
-  "rank",
-  "diff",
-  "moment",
-  "arange",
-  "true_div",
-  "dtype-categorical",
-  "diagonal_concat",
-  "horizontal_concat",
-  "abs",
-  "ewma",
-  "dot_diagram",
-  "dataframe_arithmetic",
-  "string_encoding",
-  "product",
-  "ndarray",
-  "unique_counts",
-  "log",
-  "serde-lazy",
-  "partition_by",
-  "semi_anti_join",
-  "list_eval",
-  "cumulative_eval",
-  "list_to_struct",
-  "to_dummies",
-  "string_justify",
-  "arg_where",
-  "date_offset",
-]
+bastionlab_common = { path = "./bastionlab_common" }
+bastionlab_polars = { path = "./bastionlab_polars" }
+bastionlab_torch = { path = "./bastionlab_torch" }
 
 [dependencies.uuid]
 version = "1.1.2"
 features = [
-  "v4",                # Lets you generate random UUIDs
-  "fast-rng",          # Use a faster (but still sufficiently random) RNG
+  "v4", # Lets you generate random UUIDs
+  "fast-rng", # Use a faster (but still sufficiently random) RNG
   "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs,
   "serde",
 ]

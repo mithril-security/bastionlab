@@ -1,9 +1,16 @@
+# Website Info
 site_name: BastionLab
-
 site_url: https://www.mithrilsecurity.io/
+site_author: Mithril Security
+site_description: >-
+  Create a simple privacy framework for data science collaboration, 
+  covering data exploration and machine learning.
 
+# Repository
+repo_name: mithril-security/bastionlab
 repo_url: https://github.com/mithril-security/bastionlab
 
+# Configuration
 theme:
   name: material
   custom_dir: docs/material_theme_customization
@@ -11,6 +18,7 @@ theme:
     - navigation.instant
     - search.highlight
     - content.tabs.link
+    - navigation.sections
   logo: assets/logo.png
   favicon: assets/logo.png
   palette:
@@ -20,16 +28,46 @@ theme:
     - scheme: default
       toggle:
         icon: material/weather-night
+  icon:
+    admonition:
+      note: fontawesome/solid/note-sticky
+      abstract: fontawesome/solid/book
+      info: fontawesome/solid/circle-info
+      tip: fontawesome/solid/bullhorn
+      success: fontawesome/solid/check
+      question: fontawesome/solid/circle-question
+      warning: fontawesome/solid/triangle-exclamation
+      failure: fontawesome/solid/bomb
+      danger: fontawesome/solid/skull
+      bug: fontawesome/solid/robot
+      example: fontawesome/solid/flask
+      quote: fontawesome/solid/quote-left
 
+#Plugins
+plugins:
+  - search
+  - mkdocs-jupyter
+
+# Customization
 extra:
   homepage: https://mithrilsecurity.io
+  social:
+    - icon: fontawesome/brands/discord
+      link: https://discord.com/invite/TxEHagpWd4
+    - icon: fontawesome/brands/github
+      link: https://github.com/mithril-security/
+    - icon: fontawesome/brands/linkedin
+      link: https://www.linkedin.com/company/mithril-security-company/
+    - icon: fontawesome/brands/twitter
+      link: https://twitter.com/mithrilsecurity
 
 extra_css:
   - stylesheets/extra.css
 
 extra_javascript:
-  - 'https://code.jquery.com/jquery-3.3.1.min.js'
+  - "https://code.jquery.com/jquery-3.3.1.min.js"
 
+# Extensions
 markdown_extensions:
   - abbr
   - admonition
@@ -48,21 +86,33 @@ markdown_extensions:
   - pymdownx.tabbed:
       alternate_style: true
 
-plugins:
-- search
-- mkdocs-jupyter
-
+# Documentation tree
 nav:
-- Getting Started: 'index.md'
-- Quick Tour: 'docs/quick-tour/quick-tour.ipynb'
-- Tutorials:
-  - Data Visualization: 'docs/tutorials/visualization.ipynb'
-- Concept Guides:
-  - Confidential Computing: 'docs/concept-guides/confidential_computing.md'
-  - Threat Model: 'docs/concept-guides/threat_model.md'
-  - Remote Data Science: 'docs/concept-guides/remote_data_science.md'
-- Reference Guides:
-  - Deployment:
-    - On Premise: 'docs/reference-guides/deployment/on_premise.md'
-  - Benchmarks:
-    - Polars : 'docs/reference-guides/benchmarks/polars.md'
+  - 🏠 Home: "index.md"
+  - 🚀 Getting Started:
+      - Quick tour: "docs/quick-tour/quick-tour.ipynb"
+      - Installation: "docs/getting-started/installation.md"
+  - 📙 Tutorials:
+      - Authentication: "docs/tutorials/authentication.ipynb"
+      - Combining datasets: "docs/tutorials/combining_datasets.ipynb"
+      - Data cleaning: "docs/tutorials/data_cleaning.ipynb"
+      - Data visualization: "docs/tutorials/visualization.ipynb"
+  - 🌍 How-to guides:
+      - Covid-19 cleaning and exploration: "docs/how-to-guides/covid_cleaning_exploration.ipynb"
+      - Fine Tuning Distilbert on BastionLab: "docs/how-to-guides/distilbert_example_notebook.ipynb"
+  - 💡 Concepts:
+      - Remote data science: "docs/concepts-guides/remote_data_science.md"
+  - 🛠️ Reference guides:
+      - API Reference: "docs/resources/bastionlab/index.html"
+  - 🔒 Security:
+      - Threat model: "docs/security/threat_model_data_owner_owns_infrastructure.md"
+      - Authentication specifications: "docs/security/authenticated_sessions.md"
+  - ⚙️ Advanced:
+      - Benchmarks:
+          - Polars: "docs/advanced/benchmarks/polars_benchmarks.md"
+          - Torch:
+              - AMD EPY 7763: "docs/advanced/benchmarks/Torch/bench-amd-epyc-7763.md"
+              - NVIDIA A100/v100: "docs/advanced/benchmarks/Torch/bench-nvidia-a100-v100.md"
+      - Contributing:
+          - Code of Conduct: "docs/advanced/contributing/code_of_conduct.md"
+          - Contributing: "docs/advanced/contributing/contributing.md"

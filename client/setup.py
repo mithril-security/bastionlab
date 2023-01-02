@@ -1,5 +1,5 @@
 import os
-from setuptools import find_packages, setup
+from setuptools import setup
 from setuptools.command.build_py import build_py
 import pkg_resources
 import re
@@ -10,7 +10,7 @@ def read(path):
 
 
 DIR = os.path.dirname(__file__) or os.getcwd()
-PROTO_FILES = ["bastionlab.proto"]
+PROTO_FILES = ["bastionlab.proto", "bastionlab_polars.proto", "bastionlab_torch.proto"]
 PROTO_PATH = os.path.join(os.path.dirname(DIR), "protos")
 LONG_DESCRIPTION = read("README.md")
 PKG_NAME = "bastionlab"
@@ -28,20 +28,8 @@ def generate_stub():
 
     proto_include = pkg_resources.resource_filename("grpc_tools", "_proto")
 
-    pb_dir = os.path.join(DIR, "src", PKG_NAME, "pb")
-    if not os.path.exists(pb_dir):
-        module_init = """
-import os
-import sys
-
-sys.path.append(os.path.join(os.path.dirname(__file__), __file__))
-        """
-        os.mkdir(pb_dir)
-        init = open(f"{pb_dir}/__init__.py", "w+")
-        init.write(module_init)
-
     for file in PROTO_FILES:
-        print(PROTO_PATH, PROTO_FILES)
+        print(PROTO_PATH, file)
         res = grpc_tools.protoc.main(
             [
                 "grpc_tools.protoc",
@@ -66,7 +54,6 @@ class BuildPackage(build_py):
 setup(
     name=PKG_NAME,
     version=find_version(),
-    packages=find_packages(where="src"),
     description="Client for BastionLab Confidential Analytics.",
     long_description_content_type="text/markdown",
     keywords="confidential computing training client enclave amd-sev machine learning",
@@ -83,6 +70,11 @@ setup(
         "grpcio-tools==1.47.0",
         "colorama==0.4.6",
         "cryptography==38.0.3",
+        "seaborn==0.12.0",
+        "pyarrow==10.0.0",
+        "protobuf==3.20.2",
+        "six==1.16.0",
+        "numpy==1.23.5",
+        "tqdm==4.64.1",
     ],
-    package_dir={"": "src"},
 )
