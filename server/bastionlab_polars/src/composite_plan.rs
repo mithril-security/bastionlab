@@ -120,7 +120,6 @@ impl CompositePlan {
 
         let mut policy = Policy::allow_by_default();
         let mut blacklist = Vec::new();
-        let mut savable = true;
         let mut fetchable = VerificationResult::Safe;
 
         for (identifier, stats) in stats.0.into_iter() {
@@ -136,7 +135,6 @@ impl CompositePlan {
                 }
                 fetchable.merge(check);
                 blacklist.extend_from_slice(&artifact.blacklist[..]);
-                savable = artifact.savable && savable;
 
                 Ok(())
             })??;
@@ -147,7 +145,6 @@ impl CompositePlan {
             fetchable,
             policy,
             blacklist,
-            savable,
             query_details: plan_str,
         })
     }

@@ -10,7 +10,7 @@ use super::polars_proto::{fetch_chunk, FetchChunk, SendChunk};
 pub async fn df_artifact_from_stream(
     stream: tonic::Streaming<SendChunk>,
 ) -> Result<DataFrameArtifact, Status> {
-    let (df_bytes, policy, metadata, savable) = unstream_data(stream).await?;
+    let (df_bytes, policy, metadata) = unstream_data(stream).await?;
     println!("{}", policy);
     let series = df_bytes
         .iter()
@@ -22,8 +22,7 @@ pub async fn df_artifact_from_stream(
         .map_err(|_| Status::unknown("Failed to deserialize policy."))?;
     let blacklist: Vec<String> = serde_json::from_str(&metadata)
         .map_err(|_| Status::unknown("Failed to deserialize metadata."))?;
-    //let savable: bool = serde_json::from_str(&savable).map_err(|_| Status::unknown("Failed to deserialize savable parameter."))?;
-    Ok(DataFrameArtifact::new(df, policy, blacklist, savable))
+    Ok(DataFrameArtifact::new(df, policy, blacklist))
 }
 
 pub fn df_to_bytes(df: &DataFrame) -> Vec<Vec<u8>> {
@@ -37,18 +36,16 @@ pub fn df_to_bytes(df: &DataFrame) -> Vec<Vec<u8>> {
 
 pub async fn unstream_data(
     mut stream: tonic::Streaming<SendChunk>,
-) -> Result<(Vec<Vec<u8>>, String, String, bool), Status> {
+) -> Result<(Vec<Vec<u8>>, String, String), Status> {
     let mut columns: Vec<u8> = Vec::new();
     let mut policy = String::new();
     let mut metadata = String::new();
-    let mut savable = false;
 
     while let Some(chunk) = stream.next().await {
         let mut chunk = chunk?;
         columns.append(&mut chunk.data);
         policy.push_str(&chunk.policy);
         metadata.push_str(&chunk.metadata);
-        savable = chunk.savable;
     }
 
     let pattern = b"[end]";
@@ -83,7 +80,7 @@ pub async fn unstream_data(
             columns[start..end].to_vec()
         })
         .collect::<Vec<Vec<u8>>>();
-    Ok((output, policy, metadata, savable))
+    Ok((output, policy, metadata))
 }
 
 /// Converts a raw artifact (a header and a binary object) into a stream of chunks to be sent over gRPC.

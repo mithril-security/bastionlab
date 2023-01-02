@@ -54,12 +54,11 @@ pub struct DataFrameArtifact {
     policy: Policy,
     fetchable: VerificationResult,
     blacklist: Vec<String>,
-    savable: bool,
     query_details: String,
 }
 
 impl DataFrameArtifact {
-    pub fn new(df: DataFrame, policy: Policy, blacklist: Vec<String>, savable: bool) -> Self {
+    pub fn new(df: DataFrame, policy: Policy, blacklist: Vec<String>) -> Self {
         DataFrameArtifact {
             dataframe: df,
             policy,
@@ -68,7 +67,6 @@ impl DataFrameArtifact {
                 reason: String::from("DataFrames uploaded by the Data Owner are protected."),
             },
             blacklist,
-            savable,
             query_details: String::from("uploaded dataframe"),
         }
     }
@@ -293,7 +291,7 @@ Reason: {}",
             .ok_or("")
             .map_err(|_| Status::not_found("Unable to find dataframe!"))?;
 
-        if df_artifact.savable != true {
+        if df_artifact.policy.check_savable() != true {
             return Err(Status::unknown("Dataframe is not savable"));
         }
 

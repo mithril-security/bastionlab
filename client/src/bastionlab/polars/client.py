@@ -46,7 +46,6 @@ class BastionLabPolars:
         df: pl.DataFrame,
         policy: Policy = DEFAULT_POLICY,
         sanitized_columns: List[str] = [],
-        savable: bool = False,
     ) -> "FetchableLazyFrame":
         """
         This method is used to send `polars.internals.dataframe.frame.DataFrame` to the BastionLab server.
@@ -96,7 +95,7 @@ class BastionLabPolars:
 
         res = GRPCException.map_error(
             lambda: self.stub.SendDataFrame(
-                serialize_dataframe(df, policy, sanitized_columns, savable)
+                serialize_dataframe(df, policy, sanitized_columns)
             )
         )
         return FetchableLazyFrame._from_reference(self, res)
