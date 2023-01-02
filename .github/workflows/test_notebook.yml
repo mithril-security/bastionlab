@@ -59,7 +59,6 @@ jobs:
           cd client
           make dev-install
           source env/bin/activate
-          pip install ./client
 
       # ########### GET SERVER ##########
       # - name: Wait for build of server to finish
@@ -137,6 +136,7 @@ jobs:
         # we replace the get_ipython().system function by a function that prints whatever
         # For shell commands that we would want to run, we use the % prefix
         run: |
+          pip install ./client
           pip install jupyter nbconvert
           python .github/scripts/remove_cells.py
           wget 'https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv'
