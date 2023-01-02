@@ -132,7 +132,6 @@ impl CompositePlan {
                 })?;
 
                 if let VerificationResult::Unsafe { .. } = check {
-                    println!("{}", identifier);
                     policy = policy.merge(&artifact.policy);
                 }
                 fetchable.merge(check);
@@ -204,7 +203,6 @@ fn exprs_agg_check(exprs: &[Expr]) -> Result<bool, Status> {
 
     for e in exprs.iter() {
         let x = expr_agg_check(e)?;
-        println!("{} -> {}", e, x);
         res = res && x;
     }
 
@@ -283,40 +281,45 @@ fn initialize_plan(
                 let left_ldf = lazy_frame_from_logical_plan((&**input_left).clone());
                 let right_ldf = lazy_frame_from_logical_plan((&**input_right).clone());
 
-                let joined_ids = left_ldf
-                    .cache()
-                    .with_row_count("__left_count", None)
-                    .join(
-                        right_ldf.cache().with_row_count("__right_count", None),
-                        left_on,
-                        right_on,
-                        options.how.clone(),
-                    )
-                    .select([col("__left_count"), col("__right_count")])
-                    .cache();
-
-                let left_join_scaling = usize_item(
-                    joined_ids
-                        .clone()
-                        .groupby([col("__left_count")])
-                        .agg([col("__right_count").count()])
-                        .select([col("__right_count").max()])
-                        .collect(),
-                )?;
-
-                let right_join_scaling = usize_item(
-                    joined_ids
-                        .groupby([col("__right_count")])
-                        .agg([col("__left_count").count()])
-                        .select([col("__left_count").max()])
-                        .collect(),
-                )?;
-
                 let mut right = stats_stack.pop().unwrap();
                 let mut left = stats_stack.pop().unwrap();
 
-                right.update_join_scaling(right_join_scaling);
-                left.update_join_scaling(left_join_scaling);
+                match options.how {
+                    JoinType::Anti | JoinType::Semi => right.update_join_scaling(0),
+                    _ => {
+                        let joined_ids = left_ldf
+                            .cache()
+                            .with_row_count("__left_count", None)
+                            .join(
+                                right_ldf.cache().with_row_count("__right_count", None),
+                                left_on,
+                                right_on,
+                                options.how.clone(),
+                            )
+                            .select([col("__left_count"), col("__right_count")])
+                            .cache();
+
+                        let left_join_scaling = usize_item(
+                            joined_ids
+                                .clone()
+                                .groupby([col("__left_count")])
+                                .agg([col("__right_count").count()])
+                                .select([col("__right_count").max()])
+                                .collect(),
+                        )?;
+
+                        let right_join_scaling = usize_item(
+                            joined_ids
+                                .groupby([col("__right_count")])
+                                .agg([col("__left_count").count()])
+                                .select([col("__left_count").max()])
+                                .collect(),
+                        )?;
+
+                        right.update_join_scaling(right_join_scaling);
+                        left.update_join_scaling(left_join_scaling);
+                    }
+                }
 
                 left.merge(right);
                 stats_stack.push(left);
