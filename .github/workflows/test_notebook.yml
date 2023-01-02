@@ -99,12 +99,12 @@ jobs:
           docker build -t ${{ matrix.serverImage }}:latest -f ./Dockerfile .
 
       ##### TEST MAKING A FILE #####
-      - name: test make a file
-        continue-on-error: true
-        id: file-test
-        run: |
-          touch "my-file.txt"
-          echo "hello!" > my-file.txt
+      # - name: test make a file
+      #   continue-on-error: true
+      #   id: file-test
+      #   run: |
+      #     touch "my-file.txt"
+      #     echo "hello!" > my-file.txt
       
       ##### TEST MAKING A FILE #####
       - name: test make a file
