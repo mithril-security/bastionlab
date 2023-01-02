@@ -122,11 +122,63 @@ shape: (3, 2)
 
 ### AI training
 
-***# Can you fill those spots with code Lucas?***
-
 ### Data owner's side
 
+```py
+>>> from torchvision.datasets import CIFAR100
+>>> from torchvision.transforms import ToTensor, Normalize, Compose
+>>> from bastionai.client import Connection
+
+# Define a transformation pipeline for the CIFAR dataset.
+# The last step is there for shape compatibility reasons.
+>>> transform = Compose([
+...     ToTensor(),
+...     Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+...     lambda x: [x.squeeze(0)],
+... ])
+
+# Define train and test datasets
+>>> train_dataset = CIFAR100("data", train=True, transform=transform, download=True)
+>>> test_dataset = CIFAR100("data", train=False, transform=transform, download=True)
+
+# Send them to the server by instantiating a RemoteDataset.
+>>> with Connection("localhost") as client:
+...     client.torch.RemoteDataset(train_dataset, test_dataset, name="CIFAR100")
+...
+RemoteDataset
+```
+
 ### Data scientist's side
+
+```py
+>>> from torchvision.models import efficientnet_b0
+>>> from bastionai.client import Connection
+
+# Define the model
+>>> model = efficientnet_b0()
+
+# List the datasets made available by the data owner, select one and get a remote object.
+>>> connection = Connection("localhost")
+>>> remote_datasets = connection.client.torch.list_remote_datasets()
+>>> remote_dataset = remote_datasets[0]
+
+# Send the model to the server by instantiating a RemoteLearner
+# The RemoteLearner objects references the RemoteDataset.
+>>> remote_learner = client.RemoteLearner(
+...     model,
+...     remote_dataset,
+...     max_batch_size=64,
+...     loss="cross_entropy",
+...     model_name="EfficientNet-B0",
+...     device="cuda:0",
+... )
+
+# Train the remote model for given amount of epochs
+>>> remote_learner.fit(nb_epochs=1)
+
+# Test the remote model
+>>> remote_learner.test(metric="accuracy")
+```
 
 ## 🗝️ Key features
 
