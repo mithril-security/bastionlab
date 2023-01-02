@@ -92,11 +92,11 @@ jobs:
       #     docker image ls -a
 
       ###### BUILD SERVER OTHERWISE ######
-      - name: Build server
-        id: build-server-no-download
+      #- name: Build server
+      #  id: build-server-no-download
       #  if: ${{ steps.load-image.outcome == 'failure' }}
-        run: |
-          docker build -t ${{ matrix.serverImage }}:latest -f ./Dockerfile .
+       # run: |
+       #   docker build -t ${{ matrix.serverImage }}:latest -f ./Dockerfile .
 
       ##### TEST MAKING A FILE #####
       # - name: test make a file
@@ -120,14 +120,14 @@ jobs:
         id: check-bastionlab-image
         run: |
           docker image ls -a
-          docker image inspect ${{ matrix.serverImage }}:latest
+          docker image inspect mithrilsecuritysas/bastionlab
 
       ########## LAUNCH SERVER ##########
       - name: Launch server
         if: ${{ steps.check-bastionlab-image.outcome == 'success' }}
         run: |
           docker kill -f app > /dev/null 2>&1 || true
-          docker run --rm -d -e BASTIONLAB_DISABLE_TELEMETRY=1 -e DISABLE_AUTHENTICATION=1 -p 50056:50056  --name app ${{ matrix.serverImage }}:latest
+          docker run --rm -d -e BASTIONLAB_DISABLE_TELEMETRY=1 -e DISABLE_AUTHENTICATION=1 -p 50056:50056  --name app mithrilsecuritysas/bastionlab:latest
       
       ########## TESTING NOTEBOOK ##########
       - name: Testing the notebooks
@@ -145,6 +145,7 @@ jobs:
           rm ./converted/resnet_example_notebook.ipynb
           for file in ./converted/*.ipynb; do
             sed -i 's/"!pip install bastionlab"/"!pip install -e ..\/client"/g' $file
+            echo "File is: $file"
             jupyter nbconvert --execute --to notebook --inplace --ExecutePreprocessor.timeout=600 --output-dir=./converted $file
             echo "Executed: $file"
           done
