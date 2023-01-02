@@ -94,13 +94,10 @@ jobs:
       ## DOWNLOAD SERVER ARTIFACT IF EXISTS ###
       - name: Download-image
         id: load-image
-        uses: actions/checkout@v2
-
-      - name: Download-image
+        continue-on-error: true
         uses: ishworkh/docker-image-artifact-download@v1
         with:
           image: ${{ matrix.serverImage }}:latest
-          if_no_artifact_found: ignore
 
       ###### BUILD SERVER OTHERWISE ######
       - name: Build server
