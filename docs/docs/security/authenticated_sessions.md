@@ -68,9 +68,8 @@ The session tokens are generated exactly as the challenges are, producing a 32-b
 
 Session token validation includes matching the client IP for which the session token was generated.
 
-The session tokens have a lifetime of 1500 seconds. 
-Should a session expire, the client will automatically generate a new session when a request is sent (this will require authentication to happen again with a challenge being issued and verified, but it is silent and automatic requiring no interaction from the client). 
-*The session expiry update as mentioned above remains to be merged.
+The session tokens have a lifetime of 1500 seconds. The lifetime can be changed by the data owner in the config.toml.
+Should a session expire, the client will automatically generate a new session when a request is sent (this will require authentication to happen again with a challenge being issued and verified, but it is silent and automatic requiring no interaction from the client).
 
 
 ### Flow
