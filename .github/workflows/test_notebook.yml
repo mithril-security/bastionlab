@@ -100,6 +100,7 @@ jobs:
         uses: ishworkh/docker-image-artifact-download@v1
         with:
           image: ${{ matrix.serverImage }}:latest
+          if_no_artifact_found: ignore
 
       ###### BUILD SERVER OTHERWISE ######
       - name: Build server
