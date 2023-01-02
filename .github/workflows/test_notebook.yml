@@ -61,35 +61,35 @@ jobs:
           source env/bin/activate
 
       ########### GET SERVER ##########
-      - name: Wait for build of server to finish
-        uses: lewagon/wait-on-check-action@v1.2.0
-        id: wait-on-check-action-server
-        with:
-          ref: ${{ github.ref }}
-          check-name: "build-server (bastionlab)"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          wait-interval: 10
+      # - name: Wait for build of server to finish
+      #   uses: lewagon/wait-on-check-action@v1.2.0
+      #   id: wait-on-check-action-server
+      #   with:
+      #     ref: ${{ github.ref }}
+      #     check-name: "build-server (bastionlab)"
+      #     repo-token: ${{ secrets.GITHUB_TOKEN }}
+      #     wait-interval: 10
          # check_artifacts: true
 
       ########### DOWNLOAD SERVER ###########
-      - name: Download artifact
-        id: download-artifact-server
-        if: ${{ steps.wait-on-check-action-server.outcome == 'success' }}
-        uses: dawidd6/action-download-artifact@v2
-        with:
-          github_token: ${{secrets.GITHUB_TOKEN}}
-          workflow: main.yml
-          name: ${{ matrix.serverImage }}
-          workflow_conclusion: success
-          path: /tmp
+      # - name: Download artifact
+      #   id: download-artifact-server
+      #   if: ${{ steps.wait-on-check-action-server.outcome == 'success' }}
+      #   uses: dawidd6/action-download-artifact@v2
+      #   with:
+      #     github_token: ${{secrets.GITHUB_TOKEN}}
+      #     workflow: main.yml
+      #     name: ${{ matrix.serverImage }}
+      #     workflow_conclusion: success
+      #     path: /tmp
 
       ########### LOAD SERVER ###########
-      - name: Load image
-        id: load-server
-        if: ${{ steps.download-artifact-server.outcome == 'success' }}
-        run: |
-          docker load --input /tmp/${{ matrix.serverImage }}.tar
-          docker image ls -a
+      # - name: Load image
+      #   id: load-server
+      #   if: ${{ steps.download-artifact-server.outcome == 'success' }}
+      #   run: |
+      #     docker load --input /tmp/${{ matrix.serverImage }}.tar
+      #     docker image ls -a
 
       ###### BUILD SERVER OTHERWISE ######
       - name: Build server
@@ -107,7 +107,7 @@ jobs:
 
       ########## LAUNCH SERVER ##########
       - name: Launch server
-        if: ${{ steps.check-bastionlab-image.outcome == 'success' }}
+        #if: ${{ steps.check-bastionlab-image.outcome == 'success' }}
         run: |
           docker kill -f app > /dev/null 2>&1 || true
           docker run --rm -d -e BASTIONLAB_DISABLE_TELEMETRY=1 -e DISABLE_AUTHENTICATION=1 -p 50056:50056  --name app ${{ matrix.serverImage }}:latest
