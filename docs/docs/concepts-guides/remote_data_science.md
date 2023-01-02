@@ -1,7 +1,40 @@
-# Remote data science
+# Fortified data science
 __________________________________________________________
 
-In this concept guide, we'll explain why current solutions to share data with remote data scientists are not sufficient, how a remote data science framework can answer it, and how BastionLab has implemented it.
+How to keep data science collaboration interactive, efficient, private and secure, when working with remote third-parties? This question isn't easy to answer because ensuring one of those four elements often come at the cost of another with the present technology. As a result, collaborations are either dropped before they can ever happen - especially in fields dealing with very sensitive data like health, finance, advertising -, or they happen... with no proper privacy garantees.
+
+In this guide we'll talk about fortified data science, a technique we came up with to solve this problem and offer an overall good experience across the board. It is the theory behind BastionLab flow and architecture, as well as its main API object: the RemoteLazyFrame. 
+
+But before diving into the specifics of fortified data science, let's talk about the current solutions and why they pose many threats to data privacy. 
+
+## Current methods and their risks
+_______________________________________________________________
+
+### Opening remote access to a Jupyter notebook
+
+In this first case, the data owner doesn't know much about data science in general. They just have a big quantity of data they want to explore and ask a data scientist to analyse it. To do so, they'll give the data scientist access to a remote jupyter notebook, that has access to the patient data. They'll ask the data scientist to NOT download the data on their computer, and tell them they are only allowed to use it via the Jupyter notebook.
+
+This approach technically works - the data scientist can efficiently and easily do their job with it - but it relies entirely on trust and poses big privacy and security risks. The data scientist has **direct** access to the data. They can see it, download it, or do whatever they want with it. The only thing preventing them to do so is a promise that they won't. 
+
+That's already a big problem, but there is worse: the data owner will never know that their data might have been tampered with. There is no native solution to track the operations done by the data scientist on their data, which means it is almost impossible for the data owner to prosecute anyone exploiting the data: they can’t even prove it's been misused.
+
+### Sending Python scripts 
+
+In this other case, the data owner has an IT department with expert python programmers. Instead of letting the data scientist access the data directly, they want to do everything through python scripts sent by email that they'll review and run themselves before sending the results. 
+
+This approach is a good step forward in terms of security and privacy, but it operates at the cost of interactivity and efficiency. Actually, in many cases, it won't even be possible because the data owner needs to have an expert Python programmer to audit the data scientist's code before running it, which is very rare. 
+
+But let's say the data owner has a Python expert: there are countless ways to hide malicious code in a python script, that even them won’t notice. For example, it is very easy to hide code that downloads the whole dataset! 
+
+Finally, data science is an interactive process. You'll often need to try a quick piece of code, submit it, get the answer you need ; then try another quick piece of code, submit it, get the answer you need ; then repeat that process many, many times. This is the whole reason Jupyter notebooks exist in the first place and why the Python script method probably doesn't have a promising future.
+
+### Database anonymization
+
+In any case, data owners need to anonymize the data they'll give access to through a Jupyter notebook or execute Python scripts on. There are many techniques to do so (*data masking, pseudonymization, generalization, data swapping, data perturbation, synthetic data...*) but they often have to be done manually. Not only will the process lack efficiency, the risk of human error will always be looming over the results.
+
+It is quite easy to deanonymise databases (*the reverse action which often consists of cross-referencing the informations from the data owner's dataset with public databases*), because informations like age or sex, for example, can be used to identify a person by name. To avoid this, techniques exist like showing only aggregated results or using differential privacy.
+
+## 
 
 ## Why we need it
 ________________________________________________________________
