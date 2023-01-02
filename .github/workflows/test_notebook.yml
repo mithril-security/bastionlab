@@ -92,26 +92,26 @@ jobs:
       #     docker image ls -a
 
       ## DOWNLOAD SERVER ARTIFACT IF EXISTS ###
-      - name: Download-image
-        id: load-image
-        uses: actions/checkout@v2
+      # - name: Download-image
+      #   id: load-image
+      #   uses: actions/checkout@v2
 
-      - name: Download-image
-        uses: ishworkh/docker-image-artifact-download@v1
-        with:
-          image: ${{ matrix.serverImage }}:latest
+      # - name: Download-image
+      #   uses: ishworkh/docker-image-artifact-download@v1
+      #   with:
+      #     image: ${{ matrix.serverImage }}:latest
 
       ###### BUILD SERVER OTHERWISE ######
       - name: Build server
         id: build-server-no-download
-        if: ${{ steps.load-image.outcome == 'failure' }}
+        #if: ${{ steps.load-image.outcome == 'failure' }}
         run: |
           docker build -t ${{ matrix.serverImage }}:latest -f server/Dockerfile .
-        - name: Upload image
-          uses: ishworkh/docker-image-artifact-upload@v1
-          with:
-            image: ${{ matrix.serverImage }}:latest
-            retention_days: "2"
+        # - name: Upload image
+        #   uses: ishworkh/docker-image-artifact-upload@v1
+        #   with:
+        #     image: ${{ matrix.serverImage }}:latest
+        #     retention_days: "2"
 
       ###### CHECK BASTIONLAB IMAGE IS INSTALLED ######
       - name: Check bastionlab image is installed
@@ -142,6 +142,6 @@ jobs:
           rm ./converted/distilbert_example_notebook.ipynb
           rm ./converted/resnet_example_notebook.ipynb
           for file in ./converted/*.ipynb; do
-            sed -i 's/!pip install bastionlab/!pip install -e ..\/..\/..\/client/g' file
+            sed -i 's/!pip install bastionlab/!pip install -e ..\/..\/..\/client/g' $file
             jupyter nbconvert --execute --to notebook --inplace --ExecutePreprocessor.timeout=600 --output-dir=./converted $file
           done
