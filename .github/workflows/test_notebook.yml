@@ -146,6 +146,7 @@ jobs:
           cp titanic.csv converted/titanic.csv
           rm ./converted/quick-tour.ipynb
           rm ./converted/resnet_example_notebook.ipynb
+          rm ./converted/titanic.ipynb
           for file in ./converted/*.ipynb; do 
             sed -i 's/"!pip install bastionlab"/""/g' $file
             echo "File is: $file"
