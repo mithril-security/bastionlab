@@ -25,7 +25,7 @@ class AtLeastNof(Rule):
 
     def serialize(self) -> str:
         of_repr = ",".join([x.serialize() for x in self.of])
-        return f'{{"AtLeastNof":[{self.n},[{of_repr}]]}}'
+        return f'{{"AtLeastNOf":[{self.n},[{of_repr}]]}}'
 
 
 @dataclass
