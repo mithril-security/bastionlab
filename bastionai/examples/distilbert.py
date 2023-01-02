@@ -5,13 +5,13 @@ from sklearn.model_selection import train_test_split
 from transformers import DistilBertForSequenceClassification, DistilBertTokenizer
 from torch.utils.data import DataLoader
 
-from bastionai.client import Connection
-from bastionai.optimizer_config import Adam
-from bastionai.utils import MultipleOutputWrapper, TensorDataset
+from bastionlab import Connection
+from bastionlab.torch.optimizer_config import Adam
+from bastionlab.torch.utils import MultipleOutputWrapper, TensorDataset
 
 ##########################################################################################
 
-file_path = "./data/SMSSpamCollection"
+file_path = "./SMSSpamCollection"
 
 labels = []
 texts = []
@@ -53,6 +53,9 @@ train_idx, test_idx = train_test_split(
     np.arange(len(labels)), test_size=val_ratio, shuffle=True, stratify=labels
 )
 
+print(token_id[train_idx])
+
+
 train_set = TensorDataset(
     [token_id[train_idx], attention_masks[train_idx]], labels[train_idx]
 )
@@ -81,15 +84,16 @@ model = MultipleOutputWrapper(model, 0)
 ###############################################################################################
 
 # The Data Owner privately uploads their model online
-with Connection("localhost", 50051) as client:
-    remote_dataset = client.RemoteDataset(train_set, test_set, name="SMSSpamCollection")
+client = Connection("localhost").client.torch
+remote_dataset = client.RemoteDataset(train_set, test_set, name="SMSSpamCollection")
 
 ################################################################################################
 
-with Connection("localhost", 50051) as client:
-    remote_datasets = client.list_remote_datasets()
+client = Connection("localhost").client.torch
+remote_datasets = client.list_remote_datasets()
 
 print([str(ds) for ds in remote_datasets])
+print(remote_datasets[0].trace_input)
 
 #################################################################################################
 
@@ -98,17 +102,17 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # The Data Scientist discovers available datasets and use one of them to train their model
-with Connection("localhost", 50051) as client:
-    remote_learner = client.RemoteLearner(
-        model,
-        remote_datasets[0],
-        max_batch_size=4,
-        loss="cross_entropy",
-        optimizer=Adam(lr=5e-5),
-        model_name="DistilBERT",
-    )
+client = Connection("localhost").client.torch
+remote_learner = client.RemoteLearner(
+    model,
+    remote_datasets[0],
+    max_batch_size=2,
+    loss="cross_entropy",
+    optimizer=Adam(lr=5e-5),
+    model_name="DistilBERT",
+)
 
-    remote_learner.fit(nb_epochs=2, eps=6.0)  # , poll_delay=1.0)
-    remote_learner.test(metric="accuracy")
+remote_learner.fit(nb_epochs=1, eps=6.0)  # , poll_delay=1.0)
+remote_learner.test(metric="accuracy")
 
-    trained_model = remote_learner.get_model()
+trained_model = remote_learner.get_model()

@@ -28,13 +28,13 @@ It acts like an **access control** solution, for data owners to protect the priv
 
 **BastionLab is an open-source project.** Our solution is coded in Rust 🦀 and uses Polars 🐻, a pandas-like library for data exploration.
 
-## 🚀 Quick Tour
+## 🚀 Quick tour
 
-You can go try out our [Quick Tour](https://github.com/mithril-security/bastionlab/tree/master/docs/docs/quick-tour) in the documentation to discover BastionLab with a hands-on example using the famous Titanic dataset. 
+You can go try out our [Quick tour](https://bastionlab.readthedocs.io/en/latest/docs/quick-tour/quick-tour/) in the documentation to discover BastionLab with a hands-on example using the famous Titanic dataset. 
 
 But here’s a taste of what using BastionLab could look like 🍒
 
-### Data Owner's side
+### Data owner's side
 ```py
 # Load your dataset using polars.
 >>> import polars as pl
@@ -57,7 +57,7 @@ But here’s a taste of what using BastionLab could look like 🍒
 FetchableLazyFrame(identifier=3a2d15c5-9f9d-4ced-9234-d9465050edb1)
 ```
 
-### Data Scientist's side
+### Data scientist's side
 ```py
 # List the datasets made available by the data owner, select one and get a remote object.
 >>> from bastionlab import Connection
@@ -116,13 +116,13 @@ shape: (3, 2)
 └────────┴──────────┘
 ```
 
-## 🗝️ Key Features
+## 🗝️ Key features
 
 - **Access control**: data owners can define an interactive privacy policy that will filter the data scientist queries. They do not have to open unrestricted access to their datasets anymore. 
 - **Limited expressivity**: BastionLab limits the type of operations that can be executed by the data scientists to avoid arbitrary code execution.
 - **Transparent remote access**: the data scientists never access the dataset directly. They only manipulate a local object that contains metadata to interact with a remotely hosted dataset. Calls can always be seen by data owners.
 
-## 🙋 Getting Help
+## 🙋 Getting help
 
 - Go to our [Discord](https://discord.com/invite/TxEHagpWd4) #support channel
 - Report bugs by [opening an issue on our BastionLab Github](https://github.com/mithril-security/bastionlab/issues)

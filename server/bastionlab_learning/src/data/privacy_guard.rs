@@ -11,11 +11,11 @@ pub(crate) fn generate_noise_like(tensor: &Tensor, std: f64) -> Result<Tensor, T
     if std == 0. {
         Ok(zeros)
     } else {
-        let _ = Tensor::zeros(&[1, 1], (Kind::Float, tensor.device())).f_normal(0., std);
         let mut sum = zeros;
         for _ in 0..4 {
             let _ = sum.f_add_(
-                &Tensor::zeros(&tensor.size(), (Kind::Float, tensor.device())).f_normal(0., std)?,
+                &Tensor::zeros(&tensor.size(), (Kind::Float, tensor.device()))
+                    .f_normal_functional(0., std)?,
             );
         }
         let _ = sum.f_div_scalar_(2.);
@@ -339,14 +339,14 @@ macro_rules! defer_loss_fn_to_inner_with_clipping {
             };
 
             let non_clipped = PrivacyGuard {
-                value: unreduced.f_sum_dim_intlist(&[0], false, Kind::Float)?,
+                value: unreduced.f_sum_dim_intlist(Some(&[0i64] as &[_]), false, Kind::Float)?,
                 sensibility: Sensibility::Unknown,
                 batch_dependence: batch_dependence.clone(),
                 context: Arc::clone(&$self.context),
             };
 
             let clipped = PrivacyGuard {
-                value: clipped.f_sum_dim_intlist(&[0], false, Kind::Float)?,
+                value: clipped.f_sum_dim_intlist(Some(&[0i64] as &[_]), false, Kind::Float)?,
                 sensibility,
                 batch_dependence,
                 context: Arc::clone(&$self.context),
@@ -507,8 +507,8 @@ impl PrivacyGuard<Tensor> {
         f_sub_scalar(self: &Self, other: impl Into<tch::Scalar>) -> Result<Self, TchError> where sensibility = self.sensibility, batch_dependence = self.batch_dependence.clone()
         f_mul_scalar(self: &Self, other: f64) -> Result<Self, TchError> where sensibility = match self.sensibility {
             Sensibility::Unknown => Sensibility::Unknown,
-            Sensibility::LInfinity(s) => Sensibility::LInfinity(other as f32 * s),
-            Sensibility::L2(s) => Sensibility::L2(other as f32 * s),
+            Sensibility::LInfinity(s) => Sensibility::LInfinity(other.abs() as f32 * s),
+            Sensibility::L2(s) => Sensibility::L2(other.abs() as f32 * s),
         }, batch_dependence = self.batch_dependence.clone()
     }
 

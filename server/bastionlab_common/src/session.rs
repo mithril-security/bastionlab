@@ -221,6 +221,7 @@ impl SessionManager {
                                     );
                                     return Ok(SessionInfo {
                                         token: token.to_vec(),
+                                        expiry_time: self.session_expiry * 1000,
                                     });
                                 } else {
                                     return Err(Status::aborted(
@@ -247,26 +248,10 @@ impl SessionManager {
                 );
                 return Ok(SessionInfo {
                     token: token.to_vec(),
+                    expiry_time: self.session_expiry * 1000,
                 });
             }
         };
-    }
-
-    fn refresh_session<T>(&self, req: &Request<T>) -> Result<(), Status> {
-        if let Some(token) = get_token(req, self.auth_enabled())? {
-            let mut sessions = self.sessions.write().unwrap();
-            let session = sessions
-                .get_mut(&token[..])
-                .ok_or(Status::aborted("Session not found!"))?;
-
-            let e = session
-                .expiry
-                .checked_add(Duration::from_secs(self.session_expiry))
-                .ok_or(Status::aborted("Malformed session expiry time!"))?;
-
-            session.expiry = e;
-        }
-        Ok(())
     }
 }
 
@@ -298,13 +283,5 @@ impl session_proto::session_service_server::SessionService for SessionGrpcServic
     ) -> Result<Response<session_proto::SessionInfo>, Status> {
         let session = self.sess_manager.create_session(request)?;
         Ok(Response::new(session))
-    }
-
-    async fn refresh_session(
-        &self,
-        request: Request<session_proto::Empty>,
-    ) -> Result<Response<session_proto::Empty>, Status> {
-        self.sess_manager.refresh_session(&request)?;
-        Ok(Response::new(session_proto::Empty {}))
     }
 }
