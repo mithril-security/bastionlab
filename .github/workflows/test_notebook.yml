@@ -104,7 +104,7 @@ jobs:
         id: build-server-no-download
         if: ${{ steps.load-image.outcome == 'failure' }}
         run: |
-          docker build -t ${{ matrix.serverImage }}:latest -f server/Dockerfile .
+          docker build -t ${{ matrix.serverImage }}:latest -f ./Dockerfile .
       
       - name: Upload image
         if: ${{ steps.load-image.outcome == 'failure' }}
