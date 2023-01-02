@@ -69,7 +69,7 @@ jobs:
           check-name: "build-server (bastionlab)"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           wait-interval: 10
-          check_artifacts: true
+         # check_artifacts: true
 
       ########### DOWNLOAD SERVER ###########
       - name: Download artifact
