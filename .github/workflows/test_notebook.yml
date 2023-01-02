@@ -59,6 +59,7 @@ jobs:
           cd client
           make dev-install
           source env/bin/activate
+          pip install ./client
 
       # ########### GET SERVER ##########
       # - name: Wait for build of server to finish
@@ -145,7 +146,8 @@ jobs:
           rm ./converted/resnet_example_notebook.ipynb
           for file in ./converted/*.ipynb; do
             ls | cat
-            sed -i 's/"!pip install bastionlab"/"!pip install -e ..\/client"/g' $file
+            sed -i 's/"!pip install bastionlab"/""/g' $file
+            cat 
             echo "File is: $file"
             jupyter nbconvert --execute --to notebook --inplace --ExecutePreprocessor.timeout=600 --output-dir=./converted $file
           done
