@@ -1,6 +1,6 @@
 name: Test notebook
 
-on: [push, pull_request]
+on: [push]
 
 jobs:
   testing_notebook:
@@ -91,27 +91,29 @@ jobs:
       #     docker load --input /tmp/${{ matrix.serverImage }}.tar
       #     docker image ls -a
 
-      ## DOWNLOAD SERVER ARTIFACT IF EXISTS ###
-      - name: Download-image
-        id: load-image
-        continue-on-error: true
-        uses: ishworkh/docker-image-artifact-download@v1
-        with:
-          image: ${{ matrix.serverImage }}:latest
-
       ###### BUILD SERVER OTHERWISE ######
       - name: Build server
         id: build-server-no-download
         if: ${{ steps.load-image.outcome == 'failure' }}
         run: |
           docker build -t ${{ matrix.serverImage }}:latest -f ./Dockerfile .
+
+      ##### TEST MAKING A FILE #####
+      - name: test make a file
+        continue-on-error: true
+        id: file-test
+        run: |
+          touch "my-file.txt"
+          echo "hello!" > my-file.txt
       
-      # - name: Upload image
-      #   if: ${{ steps.load-image.outcome == 'failure' }}
-      #   uses: ishworkh/docker-image-artifact-upload@v1
-      #   with:
-      #     image: ${{ matrix.serverImage }}:latest
-      #     retention_days: "1"
+      ##### TEST MAKING A FILE #####
+      - name: test make a file
+        continue-on-error: true
+        id: file-test
+        run: |
+          cat "my-file.txt"
+          cat "tmp/my-file.txt"
+
 
       ###### CHECK BASTIONLAB IMAGE IS INSTALLED ######
       - name: Check bastionlab image is installed
