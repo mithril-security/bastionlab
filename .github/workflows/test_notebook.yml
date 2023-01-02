@@ -116,15 +116,15 @@ jobs:
 
 
       ###### CHECK BASTIONLAB IMAGE IS INSTALLED ######
-      - name: Check bastionlab image is installed
-        id: check-bastionlab-image
-        run: |
-          docker image ls -a
-          docker image inspect mithrilsecuritysas/bastionlab
+      # - name: Check bastionlab image is installed
+      #   id: check-bastionlab-image
+      #   run: |
+      #     docker image ls -a
+      #     docker image inspect mithrilsecuritysas/bastionlab
 
       ########## LAUNCH SERVER ##########
       - name: Launch server
-        if: ${{ steps.check-bastionlab-image.outcome == 'success' }}
+      #  if: ${{ steps.check-bastionlab-image.outcome == 'success' }}
         run: |
           docker kill -f app > /dev/null 2>&1 || true
           docker run --rm -d -e BASTIONLAB_DISABLE_TELEMETRY=1 -e DISABLE_AUTHENTICATION=1 -p 50056:50056  --name app mithrilsecuritysas/bastionlab:latest
