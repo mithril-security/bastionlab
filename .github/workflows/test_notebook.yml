@@ -111,7 +111,7 @@ jobs:
         run: |
           docker kill -f app > /dev/null 2>&1 || true
           docker run --rm -d -e BASTIONLAB_DISABLE_TELEMETRY=1 -e DISABLE_AUTHENTICATION=1 -p 50056:50056  --name app ${{ matrix.serverImage }}:latest
-          
+
       ########## TESTING NOTEBOOK ##########
       - name: Testing the notebooks
         # Here we convert the notebooks to python scripts and run them
@@ -127,5 +127,6 @@ jobs:
           rm ./converted/distilbert_example_notebook.ipynb
           rm ./converted/resnet_example_notebook.ipynb
           for file in ./converted/*.ipynb; do
+            sed -i 's/!pip install bastionlab/!pip install -e ..\/..\/..\/client/g' file
             jupyter nbconvert --execute --to notebook --inplace --ExecutePreprocessor.timeout=600 --output-dir=./converted $file
           done
