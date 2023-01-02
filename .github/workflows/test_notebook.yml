@@ -109,7 +109,7 @@ jobs:
       ##### TEST MAKING A FILE #####
       - name: test make a file
         continue-on-error: true
-        id: file-test
+        id: file-test2
         run: |
           cat "my-file.txt"
           cat "tmp/my-file.txt"
