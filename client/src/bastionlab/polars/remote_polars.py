@@ -1070,7 +1070,7 @@ def train_test_split(
     from .remote_polars import FetchableLazyFrame
 
     if len(rdfs) == 0:
-        raise ValueError("At least one array required as input")
+        raise ValueError("At least one RemoteDataFrame required as input")
 
     _train_rdf = rdfs[0]
 

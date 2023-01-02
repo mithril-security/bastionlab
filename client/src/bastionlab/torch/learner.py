@@ -237,7 +237,7 @@ class RemoteLearner:
         metric_eps_per_batch: Optional[float] = None,
         model_name: Optional[str] = None,
         model_description: str = "",
-        expand: bool = True,
+        expand: bool = False,
         progress: bool = True,
     ) -> None:
         if isinstance(model, Module):
