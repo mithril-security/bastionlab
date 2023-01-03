@@ -6,6 +6,12 @@ import polars as pl
 import logging
 import unittest
 from bastionlab import Connection
+from bastionlab.polars.policy import (
+    Policy,
+    Aggregation,
+    Log,
+)
+
 from server import launch_server
 
 logging.basicConfig(level=logging.INFO)
@@ -25,7 +31,8 @@ class TestingConnection(unittest.TestCase):
         # for now
         connection = Connection("localhost", 50056)
         client = connection.client
-        rdf = client.polars.send_df(df)
+        policy = Policy(safe_zone=Aggregation(min_agg_size=1), unsafe_handling=Log())
+        rdf = client.polars.send_df(df, policy)
         self.assertNotEqual(rdf, None)
         connection.close()
 
@@ -33,7 +40,8 @@ class TestingConnection(unittest.TestCase):
         df = pl.read_csv("train.csv").limit(50)
         connection = Connection("localhost", 50056)
         client = connection.client
-        rdf = client.polars.send_df(df)
+        policy = Policy(safe_zone=Aggregation(min_agg_size=1), unsafe_handling=Log())
+        rdf = client.polars.send_df(df, policy)
         per_class_rates = (
             rdf.select([pl.col("Pclass"), pl.col("Survived")])
             .groupby(pl.col("Pclass"))
@@ -42,13 +50,14 @@ class TestingConnection(unittest.TestCase):
             .collect()
             .fetch()
         )
-        self.assertNotEqual(per_class_rates, None)
+        self.assertNotEqual(per_class_rates.is_empty(), True)
 
     def testingquery2(self):
         df = pl.read_csv("train.csv").limit(50)
         connection = Connection("localhost", 50056)
         client = connection.client
-        rdf = client.polars.send_df(df)
+        policy = Policy(safe_zone=Aggregation(1), unsafe_handling=Log())
+        rdf = client.polars.send_df(df, policy)
         per_sex_rates = (
             rdf.select([pl.col("Sex"), pl.col("Survived")])
             .groupby(pl.col("Sex"))
@@ -57,7 +66,8 @@ class TestingConnection(unittest.TestCase):
             .collect()
             .fetch()
         )
-        self.assertNotEqual(per_sex_rates, None)
+        self.assertNotEqual(per_sex_rates.is_empty(), True)
+
 
 
 def setUpModule():
