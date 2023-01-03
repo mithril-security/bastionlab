@@ -65,6 +65,5 @@ jobs:
           rm ./converted/nbagg_uat.ipynb
           for file in ./converted/*.ipynb; do 
             sed -i 's/"!pip install bastionlab"/""/g' $file
-            echo "File is: $file"
             jupyter nbconvert --execute --to notebook --inplace --ExecutePreprocessor.timeout=600 --output-dir=./converted $file
           done
