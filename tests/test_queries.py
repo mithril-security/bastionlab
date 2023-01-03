@@ -69,7 +69,6 @@ class TestingConnection(unittest.TestCase):
         self.assertNotEqual(per_sex_rates.is_empty(), True)
 
 
-
 def setUpModule():
     launch_server()
 
