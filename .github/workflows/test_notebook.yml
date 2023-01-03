@@ -44,13 +44,13 @@ jobs:
         id: check-bastionlab-image
         run: |
           docker image ls -a
-          docker image inspect mithrilsecuritysas/bastionlab
+          docker image inspect ${{ matrix.serverImage }}:latest
 
       ########## LAUNCH SERVER ##########
       - name: Launch server
         run: |
           docker kill -f app > /dev/null 2>&1 || true
-          docker run --rm -d -e BASTIONLAB_DISABLE_TELEMETRY=1 -e DISABLE_AUTHENTICATION=1 -p 50056:50056  --name app mithrilsecuritysas/bastionlab:latest
+          docker run --rm -d -e BASTIONLAB_DISABLE_TELEMETRY=1 -e DISABLE_AUTHENTICATION=1 -p 50056:50056  --name app ${{ matrix.serverImage }}:latest
 
       ########## CLEANUP NOTEBOOK ##########
       - name: Cleanup the notebooks
