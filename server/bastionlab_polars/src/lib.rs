@@ -336,6 +336,12 @@ Reason: {}",
         }
         Ok(())
     }
+
+    fn delete_dfs(&self, identifier: &str) -> Result<(), Error> {
+        let mut dfs = self.dataframes.write().unwrap();
+        dfs.remove(identifier);
+        Ok(())
+    }
 }
 
 fn get_df_header(df: &DataFrame) -> Result<String, Status> {
@@ -496,6 +502,31 @@ impl PolarsService for BastionLabPolars {
             },
             Some(self.sess_manager.get_client_info(token)?),
         );
+        Ok(Response::new(Empty {}))
+    }
+
+    async fn delete_data_frame(
+        &self,
+        request: Request<ReferenceRequest>,
+    ) -> Result<Response<Empty>, Status> {
+        let token = self.sess_manager.verify_request(&request)?;
+        let identifier = &request.get_ref().identifier;
+        let user_id = self.sess_manager.get_user_id(token.clone())?;
+        let owners_keys = self.sess_manager.get_owner_keys();
+        match owners_keys {
+            Ok(owners_keys) => {
+                if owners_keys.contains_key(&user_id) {
+                    self.delete_dfs(identifier);
+                } else {
+                    return Err(Status::internal("Only data owners can delete dataframes."));
+                }
+            }
+            Err(_) => {
+                return Err(Status::internal(
+                    "Authentication must be enabled to delete dataframes.",
+                ));
+            }
+        }
         Ok(Response::new(Empty {}))
     }
 }

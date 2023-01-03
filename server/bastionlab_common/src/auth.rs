@@ -17,6 +17,10 @@ pub struct KeyManagement {
 }
 
 impl KeyManagement {
+    pub fn clone_owner_keys(&self) -> HashMap<String, Vec<u8>> {
+        return self.owners.clone();
+    }
+
     fn read_from_file(path: &Path) -> Result<(String, PubKey)> {
         let file = &fs::read(path).with_context(|| anyhow!("Reading file: {path:?}"))?;
         let (_, Pem { contents, .. }) = x509_parser::pem::parse_x509_pem(&file[..])
