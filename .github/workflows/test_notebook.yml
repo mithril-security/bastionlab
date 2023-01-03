@@ -10,8 +10,6 @@ jobs:
       matrix:
         include:
           - serverImage: bastionlab
-            clientImage: bastionlab
-            client-wheel: client-artifacts
             os: ubuntu-latest
         python-version: [3.9]
 
@@ -22,47 +20,48 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python-version }}
+      
+      - name: Install utilities
+        run: |
+          pip install jupyter nbconvert
 
       ######### INSTALL CLIENT FROM SOURCE OTHERWISE ##########
       - name: Install bastionlab client from source
-        # if: ${{ steps.install-client-wheel.outcome == 'failure' }}
         run: |
           cd client
           make dev-install
           source env/bin/activate
+          pip install .
 
-      ###### BUILD SERVER OTHERWISE ######
-      #- name: Build server
-      #  id: build-server-no-download
-      #  if: ${{ steps.load-image.outcome == 'failure' }}
-       # run: |
-       #   docker build -t ${{ matrix.serverImage }}:latest -f ./Dockerfile .
+      ##### BUILD SERVER OTHERWISE ######
+      - name: Build server
+       id: build-server-no-download
+       run: |
+         docker build -t ${{ matrix.serverImage }}:latest -f ./Dockerfile .
 
-      ###### CHECK BASTIONLAB IMAGE IS INSTALLED ######
-      # - name: Check bastionlab image is installed
-      #   id: check-bastionlab-image
-      #   run: |
-      #     docker image ls -a
-      #     docker image inspect mithrilsecuritysas/bastionlab
+      ##### CHECK BASTIONLAB IMAGE IS INSTALLED ######
+      - name: Check bastionlab image is installed
+        id: check-bastionlab-image
+        run: |
+          docker image ls -a
+          docker image inspect mithrilsecuritysas/bastionlab
 
       ########## LAUNCH SERVER ##########
       - name: Launch server
-      #  if: ${{ steps.check-bastionlab-image.outcome == 'success' }}
         run: |
           docker kill -f app > /dev/null 2>&1 || true
           docker run --rm -d -e BASTIONLAB_DISABLE_TELEMETRY=1 -e DISABLE_AUTHENTICATION=1 -p 50056:50056  --name app mithrilsecuritysas/bastionlab:latest
+
+      ########## CLEANUP NOTEBOOK ##########
+      - name: Cleanup the notebooks
+        run: |
+          python .github/scripts/remove_cells.py
+      
+
       
       ########## TESTING NOTEBOOK ##########
       - name: Testing the notebooks
-        # Here we convert the notebooks to python scripts and run them
-        # In order to avoid running shell commands that we don't want to run
-        # we replace the get_ipython().system function by a function that prints whatever
-        # For shell commands that we would want to run, we use the % prefix
-        # Need to replace sed with no_execute
         run: |
-          pip install ./client
-          pip install jupyter nbconvert
-          python .github/scripts/remove_cells.py
           wget 'https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv'
           cp titanic.csv converted/train.csv
           cp titanic.csv converted/titanic.csv
