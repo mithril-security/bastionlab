@@ -31,7 +31,9 @@ class TestingConnection(unittest.TestCase):
         # for now
         connection = Connection("localhost", 50056)
         client = connection.client
-        policy = Policy(safe_zone=Aggregation(min_agg_size=1), unsafe_handling=Log(), savable=False)
+        policy = Policy(
+            safe_zone=Aggregation(min_agg_size=1), unsafe_handling=Log(), savable=False
+        )
         rdf = client.polars.send_df(df, policy)
         self.assertNotEqual(rdf, None)
         connection.close()
@@ -40,7 +42,9 @@ class TestingConnection(unittest.TestCase):
         df = pl.read_csv("titanic.csv").limit(50)
         connection = Connection("localhost", 50056)
         client = connection.client
-        policy = Policy(safe_zone=Aggregation(min_agg_size=1), unsafe_handling=Log(), savable=False)
+        policy = Policy(
+            safe_zone=Aggregation(min_agg_size=1), unsafe_handling=Log(), savable=False
+        )
         rdf = client.polars.send_df(df, policy)
         per_class_rates = (
             rdf.select([pl.col("Pclass"), pl.col("Survived")])
@@ -71,6 +75,7 @@ class TestingConnection(unittest.TestCase):
 
 def setUpModule():
     print("hello!")
+
 
 if __name__ == "__main__":
     unittest.main()
