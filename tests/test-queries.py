@@ -25,7 +25,7 @@ class TestingConnection(unittest.TestCase):
         # for now
         connection = Connection("localhost", 50056)
         client = connection.client
-        rdf = client.send_df(df)
+        rdf = client.polars.send_df(df)
         self.assertNotEqual(rdf, None)
         connection.close()
 
@@ -33,7 +33,7 @@ class TestingConnection(unittest.TestCase):
         df = pl.read_csv("train.csv").limit(50)
         connection = Connection("localhost", 50056)
         client = connection.client
-        rdf = client.send_df(df)
+        rdf = client.polars.send_df(df)
         per_class_rates = (
             rdf.select([pl.col("Pclass"), pl.col("Survived")])
             .groupby(pl.col("Pclass"))
@@ -48,7 +48,7 @@ class TestingConnection(unittest.TestCase):
         df = pl.read_csv("train.csv").limit(50)
         connection = Connection("localhost", 50056)
         client = connection.client
-        rdf = client.send_df(df)
+        rdf = client.polars.send_df(df)
         per_sex_rates = (
             rdf.select([pl.col("Sex"), pl.col("Survived")])
             .groupby(pl.col("Sex"))
