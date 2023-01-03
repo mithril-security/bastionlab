@@ -1,7 +1,6 @@
 name: Test client
 
-#on: [push, pull_request]
-on: [fork]
+on: [push]
 
 jobs:
   testing_client:
@@ -22,34 +21,7 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python-version }}
-      # ########### WAIT BUILD CLIENT ##########
-      # - name: Wait for build of client to finish
-      #   uses: lewagon/wait-on-check-action@v1.2.0
-      #   id: wait-on-check-action-client
-      #   with:
-      #     ref: ${{ github.ref }}
-      #     check-name: "build-client (ubuntu-latest)"
-      #     repo-token: ${{ secrets.GITHUB_TOKEN }}
-      #     wait-interval: 10
-      #     check_artifacts: true
-      #     continue-on-error: true
-      # ########### DOWNLOAD WHEEL CLIENT ##########
-      # - name: Download artifact client wheel
-      #   id: download-artifact-client
-      #   uses: dawidd6/action-download-artifact@v2
-      #   if: ${{ steps.wait-on-check-action-client.outcome == 'success' }}
-      #   with:
-      #     github_token: ${{secrets.GITHUB_TOKEN}}
-      #     workflow: main.yml
-      #     name: ${{ matrix.client-wheel }}
-      #     workflow_conclusion: success
-      #     path: /tmp
-      # ########### INSTALL CLIENT WHEEL ##########
-      # - name: Install client wheel
-      #   id: install-client-wheel
-      #   if: ${{ steps.download-artifact-client.outcome == 'success' }}
-      #   run: |
-      #     python -m pip install /tmp/*.whl
+     
       ######### INSTALL CLIENT FROM SOURCE OTHERWISE ##########
       - name: Install bastionlab client from source
         # if: ${{ steps.install-client-wheel.outcome == 'failure' }}
@@ -58,43 +30,11 @@ jobs:
           make dev-install
           source env/bin/activate
 
-      # ########### GET SERVER ##########
-      # - name: Wait for build of server to finish
-      #   uses: lewagon/wait-on-check-action@v1.2.0
-      #   id: wait-on-check-action-server
-      #   with:
-      #     ref: ${{ github.ref }}
-      #     check-name: "build-server (bastionlab)"
-      #     repo-token: ${{ secrets.GITHUB_TOKEN }}
-      #     wait-interval: 10
-      #     check_artifacts: true
-
-      # ########### DOWNLOAD SERVER ###########
-      # - name: Download artifact server
-      #   id: download-artifact-server
-      #   if: ${{ steps.wait-on-check-action-server.outcome == 'success' }}
-      #   uses: dawidd6/action-download-artifact@v2
-      #   with:
-      #     github_token: ${{secrets.GITHUB_TOKEN}}
-      #     workflow: main.yml
-      #     name: ${{ matrix.serverImage }}
-      #     workflow_conclusion: success
-      #     path: /tmp
-
-      # ########### LOAD SERVER ###########
-      # - name: Load image server
-      #   id: load-server
-      #   if: ${{ steps.download-artifact-server.outcome == 'success' }}
-      #   run: |
-      #     docker load --input /tmp/bastionlab.tar
-      #     docker image ls -a
-
       ###### BUILD SERVER OTHERWISE ######
-      - name: Build server image
-        id: build-server-no-download
-        # if: ${{ steps.download-artifact.outcome == 'failure' }}
-        run: |
-          docker build -t ${{ matrix.serverImage }}:latest -f server/Dockerfile .
+      # - name: Build server image
+      #   id: build-server-no-download
+      #   run: |
+      #     docker build -t ${{ matrix.serverImage }}:latest -f server/Dockerfile .
 
       ###### CHECK BASTIONLAB IMAGE IS INSTALLED ######
       - name: Check bastionlab image is installed
@@ -109,7 +49,8 @@ jobs:
         if: ${{ steps.check-bastionlab-image.outcome == 'success' }}
         run: |
           docker kill -f app > /dev/null 2>&1 || true
-          docker run --rm -d -e BASTIONLAB_DISABLE_TELEMETRY=1 -p 50056:50056  --name app ${{ matrix.serverImage }}:latest
+          docker run --rm -d -e BASTIONLAB_DISABLE_TELEMETRY=1 -e DISABLE_AUTHENTICATION=1 -p 50056:50056  --name app mithrilsecuritysas/bastionlab:latest
+        #  docker run --rm -d -e BASTIONLAB_DISABLE_TELEMETRY=1 -e DISABLE_AUTHENTICATION=1 -p 50056:50056  --name app mithrilsecuritysas/bastionlab:latest
 
       ########## TESTING CLIENT ##########
       - name: Install dependencies for testing
