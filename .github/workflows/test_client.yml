@@ -21,7 +21,7 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python-version }}
-     
+
       ######### INSTALL CLIENT FROM SOURCE OTHERWISE ##########
       - name: Install bastionlab client from source
         # if: ${{ steps.install-client-wheel.outcome == 'failure' }}
@@ -62,7 +62,7 @@ jobs:
 
       - name: Test with pytest
         id: test-client
-      #  if: ${{ steps.check-bastionlab-image.outcome == 'success' }}
+        if: always()
         run: |
           ls | cat
           pytest --cov --cov-report=xml
@@ -72,7 +72,7 @@ jobs:
 
       - name: Pytest Coverage report
         uses: orgoro/coverage@v2
-      #  if: ${{ steps.check-bastionlab-image.outcome == 'success' }}
+        #  if: ${{ steps.check-bastionlab-image.outcome == 'success' }}
         with:
           coverageFile: client/coverage.xml
           token: ${{ secrets.GITHUB_TOKEN }}
