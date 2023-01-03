@@ -1,6 +1,6 @@
 name: Test client
 
-on: [push]
+on: [pull_request]
 
 jobs:
   testing_client:
@@ -25,29 +25,27 @@ jobs:
 
       ######### INSTALL CLIENT FROM SOURCE OTHERWISE ##########
       - name: Install bastionlab client from source
-        # if: ${{ steps.install-client-wheel.outcome == 'failure' }}
         run: |
           cd client
           make dev-install
           source env/bin/activate
 
-      ###### BUILD SERVER OTHERWISE ######
-      # - name: Build server image
-      #   id: build-server-no-download
-      #   run: |
-      #     docker build -t ${{ matrix.serverImage }}:latest -f ./Dockerfile .
+      ##### BUILD SERVER OTHERWISE ######
+      - name: Build server image
+        id: build-server-no-download
+        run: |
+          docker build -t ${{ matrix.serverImage }}:latest -f ./Dockerfile .
 
-      ###### CHECK BASTIONLAB IMAGE IS INSTALLED ######
-      # - name: Check bastionlab image is installed
-      #   id: check-bastionlab-image
-      #   run: |
-      #     docker image ls -a
-      #     docker image inspect ${{ matrix.serverImage }}:latest
+      ##### CHECK BASTIONLAB IMAGE IS INSTALLED ######
+      - name: Check bastionlab image is installed
+        id: check-bastionlab-image
+        run: |
+          docker image ls -a
+          docker image inspect ${{ matrix.serverImage }}:latest
 
       ###### RUNNING SERVER ######
       - name: Run server
         id: run-server
-      #  if: ${{ steps.check-bastionlab-image.outcome == 'success' }}
         run: |
           docker kill -f app > /dev/null 2>&1 || true
           docker run --rm -d -e BASTIONLAB_DISABLE_TELEMETRY=1 -e DISABLE_AUTHENTICATION=1 -p 50056:50056  --name app mithrilsecuritysas/bastionlab:latest
@@ -74,8 +72,6 @@ jobs:
 
       - name: Pytest Coverage report
         uses: orgoro/coverage@v2
-      #   #  if: ${{ steps.check-bastionlab-image.outcome == 'success' }}
-      #   #  if: ${{ steps.check-bastionlab-image.outcome == 'success' }}
         with:
           coverageFile: client/coverage.xml
           token: ${{ secrets.GITHUB_TOKEN }}
