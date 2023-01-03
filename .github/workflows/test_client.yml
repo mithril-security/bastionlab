@@ -50,7 +50,6 @@ jobs:
         run: |
           docker kill -f app > /dev/null 2>&1 || true
           docker run --rm -d -e BASTIONLAB_DISABLE_TELEMETRY=1 -e DISABLE_AUTHENTICATION=1 -p 50056:50056  --name app mithrilsecuritysas/bastionlab:latest
-        #  docker run --rm -d -e BASTIONLAB_DISABLE_TELEMETRY=1 -e DISABLE_AUTHENTICATION=1 -p 50056:50056  --name app mithrilsecuritysas/bastionlab:latest
 
       ########## TESTING CLIENT ##########
       - name: Install dependencies for testing
@@ -63,7 +62,7 @@ jobs:
 
       - name: Test with pytest
         id: test-client
-        if: ${{ steps.check-bastionlab-image.outcome == 'success' }}
+      #  if: ${{ steps.check-bastionlab-image.outcome == 'success' }}
         run: pytest --cov --cov-report=xml
         env:
           bastionlab_TEST_NO_LAUNCH_SERVER: "true"
@@ -71,7 +70,7 @@ jobs:
 
       - name: Pytest Coverage report
         uses: orgoro/coverage@v2
-        if: ${{ steps.check-bastionlab-image.outcome == 'success' }}
+      #  if: ${{ steps.check-bastionlab-image.outcome == 'success' }}
         with:
           coverageFile: client/coverage.xml
           token: ${{ secrets.GITHUB_TOKEN }}
