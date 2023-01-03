@@ -63,6 +63,8 @@ jobs:
       - name: Test with pytest
         id: test-client
       #  if: ${{ steps.check-bastionlab-image.outcome == 'success' }}
+        run: ls | cat
+        run: cd ..
         run: pytest --cov --cov-report=xml --ignore="./bastionai"
         env:
           bastionlab_TEST_NO_LAUNCH_SERVER: "true"
