@@ -12,8 +12,8 @@ from .policy import Policy, DEFAULT_POLICY
 
 if TYPE_CHECKING:
     from .remote_polars import FetchableLazyFrame
-    from ..torch import BastionLabTorch
     from ..converter import BastionLabConverter
+    from ..client import Client
 
 
 class BastionLabPolars:
@@ -28,9 +28,12 @@ class BastionLabPolars:
         The gRPC service for BastionLab Polars. This define all the API calls for BastionLab Polars.
     """
 
-    def __init__(self, channel: grpc.Channel, conv: "BastionLabConverter"):
+    def __init__(
+        self, channel: grpc.Channel, conv: "BastionLabConverter", client: "Client"
+    ):
         self.stub = PolarsServiceStub(channel)
         self._conv = conv
+        self.client = client
 
     def send_df(
         self,

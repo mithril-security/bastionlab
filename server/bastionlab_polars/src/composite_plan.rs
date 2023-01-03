@@ -44,12 +44,15 @@ struct StackFrame {
 impl CompositePlan {
     pub fn run(self, state: &BastionLabPolars, user_id: &str) -> Result<DataFrameArtifact, Status> {
         let mut stack = Vec::new();
-        let plan_str = serde_json::to_string(&self.0).unwrap(); // FIX THIS
+        let plan_str = serde_json::to_string(&self.0)
+            .map_err(|e| Status::aborted(format!("Could not deserialize CompositePlan: {}", e)))?;
 
         for seg in self.0 {
             match seg {
                 CompositePlanSegment::PolarsPlanSegment(mut plan) => {
+                    println!("{:?}", plan);
                     let stats = initialize_plan(&mut plan, &mut stack)?;
+                    println!("Stats created!");
                     let df = run_logical_plan(plan)?;
                     stack.push(StackFrame { df, stats });
                 }

@@ -7,7 +7,7 @@ from torch.jit import ScriptFunction
 import base64
 import json
 import torch
-from ..pb.bastionlab_conversion_pb2 import ToDataset
+from ..pb.bastionlab_conversion_pb2 import ToDataset, ToTensor
 from ..pb.bastionlab_polars_pb2 import ReferenceResponse, SplitRequest, ReferenceRequest
 from .client import BastionLabPolars
 from .utils import ApplyBins, to_torch_ref
@@ -18,6 +18,7 @@ LDF = TypeVar("LDF", bound="pl.LazyFrame")
 
 if TYPE_CHECKING:
     from ..torch.learner import RemoteDataset
+    from ..torch.remote_torch import RemoteTensor
 
 
 def delegate(
@@ -53,11 +54,11 @@ def delegate(
     return inner
 
 
-def delegate_properties(*names: str) -> Callable[[Callable], Callable]:
+def delegate_properties(*names: str, target: str) -> Callable[[Callable], Callable]:
     def inner(cls: Callable) -> Callable:
         def prop(name):
             def f(_self):
-                return getattr(_self._inner, name)
+                return getattr(getattr(_self, target), name)
 
             return property(f)
 
@@ -200,11 +201,7 @@ class Metadata:
 # cleared
 # Map
 # Joins
-@delegate_properties(
-    "columns",
-    "dtypes",
-    "schema",
-)
+@delegate_properties("columns", "dtypes", "schema", target="_inner")
 @delegate(
     target_cls=pl.LazyFrame,
     target_attr="_inner",
@@ -325,7 +322,11 @@ class RemoteLazyFrame:
         Returns:
             FetchableLazyFrame: FetchableLazyFrame of datarame after any queries have been performed
         """
+        print(self.composite_plan)
         return self._meta._client._run_query(self.composite_plan)
+
+    def column(self: LDF, column: str) -> RemoteSeries:
+        return RemoteSeries(self.select(column).collect())
 
     def apply_udf(self: LDF, columns: List[str], udf: Callable) -> LDF:
         """Applied user-defined function to selected columns of RemoteLazyFrame and returns result
@@ -1402,3 +1403,22 @@ def train_test_split(
         for ref in res.list
     ]
     return res
+
+
+class RemoteSeries(RemoteLazyFrame):
+    def __init__(self, rdf: "RemoteLazyFrame") -> None:
+        self._inner = rdf._inner
+        self._meta = rdf._meta
+        self.identifier = rdf.identifier
+
+    def to_tensor(self) -> "RemoteTensor":
+        res = self._meta._client._conv._stub.ConvToTensor(
+            ToTensor(identifier=self.identifier)
+        )
+        return res
+
+    def __str__(self) -> str:
+        return f"RemoteSeries(identifier={self.identifier})"
+
+    def __repr__(self) -> str:
+        return str(self)

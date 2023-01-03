@@ -64,7 +64,7 @@ pub fn series_to_tensor(series: &Series) -> Result<Tensor, Status> {
         }
         d => {
             return Err(Status::invalid_argument(format!(
-                "Unsuported data type in udf: {}",
+                "Unsuported data type in series: {}",
                 d
             )))
         }

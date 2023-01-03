@@ -8,6 +8,10 @@ message ToDataset {
     string identifier = 3;
 }
 
+message ToTensor {
+    string identifier = 1;
+}
+
 message ConvReference {
     // BastionAI reference object. 
     string identifier = 1;
@@ -31,5 +35,6 @@ message ToDataFrame {
 
 service ConversionService {
     rpc ConvToDataset(ToDataset) returns (ConvReference) {}
+    rpc ConvToTensor(ToTensor) returns (ConvReference) {}
     rpc ConvToDataFrame (ToDataFrame) returns (ConvReferenceResponse) {}
 }

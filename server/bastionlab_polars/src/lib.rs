@@ -354,6 +354,11 @@ Reason: {}",
         }
         Ok(())
     }
+    fn delete_dfs(&self, identifier: &str) -> Result<(), Error> {
+        let mut dfs = self.dataframes.write().unwrap();
+        dfs.remove(identifier);
+        Ok(())
+    }
 }
 
 fn get_df_header(df: &DataFrame) -> Result<String, Status> {

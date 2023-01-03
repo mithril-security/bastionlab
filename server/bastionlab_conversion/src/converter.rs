@@ -18,7 +18,7 @@ use uuid::Uuid;
 
 use crate::conversion_proto::{
     conversion_service_server::ConversionService, ConvReference, ConvReferenceResponse,
-    ToDataFrame, ToDataset,
+    ToDataFrame, ToDataset, ToTensor,
 };
 
 pub struct Converter {
@@ -176,6 +176,29 @@ impl ConversionService for Converter {
             name,
             description,
             meta,
+        }))
+    }
+    async fn conv_to_tensor(
+        &self,
+        request: Request<ToTensor>,
+    ) -> Result<Response<ConvReference>, Status> {
+        self.sess_manager.verify_request(&request)?;
+        let identifier = &request.get_ref().identifier;
+
+        let df = self.polars.get_df_unchecked(&identifier)?;
+        let tensor = {
+            let cols = df.get_column_names();
+            let series = to_status_error(df.column(cols[0]))?;
+            series_to_tensor(series)?
+        };
+
+        let identifier = self.torch.insert_tensor(tensor);
+
+        Ok(Response::new(ConvReference {
+            identifier,
+            name: String::new(),
+            description: String::new(),
+            meta: Vec::new(),
         }))
     }
 }

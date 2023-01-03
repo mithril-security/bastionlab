@@ -7,6 +7,7 @@ use bastionlab_learning::{data::Dataset, nn::CheckPoint};
 use prost::Message;
 use ring::digest;
 use std::time::Instant;
+use tch::Tensor;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status, Streaming};
 use uuid::Uuid;
@@ -42,6 +43,7 @@ pub struct BastionLabTorch {
     pub datasets: Arc<RwLock<HashMap<String, Artifact<Dataset>>>>,
     runs: Arc<RwLock<HashMap<Uuid, Arc<RwLock<Run>>>>>,
     sess_manager: Arc<SessionManager>,
+    tensors: Arc<RwLock<HashMap<String, Mutex<Tensor>>>>,
 }
 
 impl BastionLabTorch {
@@ -51,6 +53,7 @@ impl BastionLabTorch {
             checkpoints: Arc::new(RwLock::new(HashMap::new())),
             datasets: Arc::new(RwLock::new(HashMap::new())),
             runs: Arc::new(RwLock::new(HashMap::new())),
+            tensors: Arc::new(RwLock::new(HashMap::new())),
             sess_manager,
         }
     }
@@ -75,6 +78,17 @@ impl BastionLabTorch {
         );
 
         Ok((identifier.clone(), name, description, meta))
+    }
+
+    pub fn insert_tensor(&self, tensor: Tensor) -> String {
+        let identifier = Uuid::new_v4();
+        self.tensors
+            .write()
+            .unwrap()
+            .insert(identifier.to_string(), Mutex::new(tensor));
+
+        info!("Successfully inserted tensor!");
+        identifier.to_string()
     }
 
     pub fn update_dataset(
@@ -511,5 +525,26 @@ impl TorchService for BastionLabTorch {
 
         self.update_dataset(&identifier, name, meta, description)?;
         Ok(Response::new(Empty {}))
+    }
+
+    async fn send_tensor(
+        &self,
+        request: Request<Streaming<Chunk>>,
+    ) -> Result<Response<Reference>, Status> {
+        let res = unstream_data(request.into_inner()).await?;
+
+        let tensor = {
+            let data = res.data.read().unwrap();
+            let data: Tensor = (&*data).try_into().unwrap();
+            data
+        };
+
+        let identifier = self.insert_tensor(tensor);
+        Ok(Response::new(Reference {
+            identifier,
+            name: String::new(),
+            description: String::new(),
+            meta: Vec::new(),
+        }))
     }
 }

@@ -144,6 +144,7 @@ message ToDataFrame {
 
 service TorchService {
     rpc SendDataset (stream Chunk) returns (Reference) {}
+    rpc SendTensor (stream Chunk) returns (Reference) {}
     rpc UpdateDataset(UpdateMeta) returns (Empty) {}
     rpc SendModel (stream Chunk) returns (Reference) {}
     rpc FetchDataset (Reference) returns (stream Chunk) {}
