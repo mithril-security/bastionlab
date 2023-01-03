@@ -67,7 +67,7 @@ jobs:
           cp titanic.csv converted/train.csv
           cp titanic.csv converted/titanic.csv
           rm ./converted/resnet_example_notebook.ipynb
-          rm ./converted/distilbert distilbert_example_notebook.ipynb
+          rm ./converted/distilbert_example_notebook.ipynb
           rm ./converted/nbagg_uat.ipynb
           for file in ./converted/*.ipynb; do 
             sed -i 's/"!pip install bastionlab"/""/g' $file
