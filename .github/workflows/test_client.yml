@@ -37,11 +37,11 @@ jobs:
       #     docker build -t ${{ matrix.serverImage }}:latest -f server/Dockerfile .
 
       ###### CHECK BASTIONLAB IMAGE IS INSTALLED ######
-      - name: Check bastionlab image is installed
-        id: check-bastionlab-image
-        run: |
-          docker image ls -a
-          docker image inspect ${{ matrix.serverImage }}:latest
+      # - name: Check bastionlab image is installed
+      #   id: check-bastionlab-image
+      #   run: |
+      #     docker image ls -a
+      #     docker image inspect ${{ matrix.serverImage }}:latest
 
       ###### RUNNING SERVER ######
       - name: Run server
