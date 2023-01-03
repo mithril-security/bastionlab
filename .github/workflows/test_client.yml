@@ -47,7 +47,7 @@ jobs:
       ###### RUNNING SERVER ######
       - name: Run server
         id: run-server
-        if: ${{ steps.check-bastionlab-image.outcome == 'success' }}
+      #  if: ${{ steps.check-bastionlab-image.outcome == 'success' }}
         run: |
           docker kill -f app > /dev/null 2>&1 || true
           docker run --rm -d -e BASTIONLAB_DISABLE_TELEMETRY=1 -e DISABLE_AUTHENTICATION=1 -p 50056:50056  --name app mithrilsecuritysas/bastionlab:latest
