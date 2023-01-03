@@ -12,7 +12,7 @@ from bastionlab.polars.policy import (
     Log,
 )
 
-from server import launch_server
+# from server import launch_server
 
 logging.basicConfig(level=logging.INFO)
 
@@ -70,7 +70,8 @@ class TestingConnection(unittest.TestCase):
 
 
 def setUpModule():
-    launch_server()
+    print("hello!")
+#     launch_server()
 
 
 if __name__ == "__main__":
