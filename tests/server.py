@@ -21,7 +21,7 @@ def launch_server():
             and os.getenv("BASTIONLAB_TEST_NO_LAUNCH_SERVER") is None
         ):
             server_dir = os.path.join(os.path.dirname(__file__), "../server")
-            bin_dir = os.path.join(server_dir, "bin")
+            bin_dir = os.path.join("../server/", "bin")
             server_process = subprocess.Popen(
                 [f"{server_name}"],
                 cwd=bin_dir,
@@ -41,7 +41,7 @@ def launch_server():
             try:
                 sock = socket.socket()
                 sock.settimeout(end - now())
-                sock.connect(("localhost", 50056))
+                sock.connect(("localhost, 50056"))
                 success = True
                 sock.close()
                 break
