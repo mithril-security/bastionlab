@@ -66,6 +66,7 @@ jobs:
         if: always()
         run: |
           ls | cat
+          pip install polars
           pytest --cov --cov-report=xml tests
         env:
           bastionlab_TEST_NO_LAUNCH_SERVER: "true"
