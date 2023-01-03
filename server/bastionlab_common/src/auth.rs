@@ -117,4 +117,18 @@ impl KeyManagement {
             ))),
         }
     }
+
+    pub fn verify_owner(
+        &self,
+        public_key_hash: &str,
+    ) -> bool {
+        /*
+            For authentication, we check if the provided public key exists in the list of owner public keys provided at start-up.
+        */
+        let keys = &mut self.owners.iter();
+        if let Some((_, _raw_pub)) = keys.find(|&(k, _v)| public_key_hash.to_string().eq(k)){
+            return true;
+        }
+        return false;
+}
 }

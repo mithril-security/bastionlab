@@ -1,6 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Callable, Generic, List, Optional, TypeVar, Sequence, Union
+from bastionlab.polars.policy import Policy
 import seaborn as sns
 import polars as pl
 from torch.jit import ScriptFunction
@@ -888,6 +889,9 @@ class RemoteLazyFrame:
                     raise ValueError("Column ", x, " not found in dataframe")
         return Facet(inner_rdf=self, col=col, row=row, kwargs=kwargs)
 
+    def update_policy(self, new_policy: Policy):
+        return self._meta._client.update_policy(self._identifier, new_policy)
+
 
 @dataclass
 class FetchableLazyFrame(RemoteLazyFrame):
@@ -934,6 +938,9 @@ class FetchableLazyFrame(RemoteLazyFrame):
 
     def save(self):
         return self._meta._client.persist_df(self._identifier)
+
+    def update_policy(self, new_policy: Policy):
+        return self._meta._client.update_policy(self._identifier, new_policy)
 
 
 @dataclass
