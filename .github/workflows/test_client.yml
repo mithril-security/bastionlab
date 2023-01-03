@@ -74,12 +74,11 @@ jobs:
 
       - name: Pytest Coverage report
         uses: orgoro/coverage@v2
-        #  if: ${{ steps.check-bastionlab-image.outcome == 'success' }}
-        #  if: ${{ steps.check-bastionlab-image.outcome == 'success' }}
+      #   #  if: ${{ steps.check-bastionlab-image.outcome == 'success' }}
+      #   #  if: ${{ steps.check-bastionlab-image.outcome == 'success' }}
         with:
           coverageFile: client/coverage.xml
           token: ${{ secrets.GITHUB_TOKEN }}
-          retention-days: 5
 
       - name: Lint with flake8
         continue-on-error: True
