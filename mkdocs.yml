@@ -97,6 +97,8 @@ nav:
       - Combining datasets: "docs/tutorials/combining_datasets.ipynb"
       - Data cleaning: "docs/tutorials/data_cleaning.ipynb"
       - Data visualization: "docs/tutorials/visualization.ipynb"
+      - Defining a privacy policy: "docs/tutorials/defining_policy_privacy.ipynb"
+      - Saving DataFrames: "docs/tutorials/saving_dataframes.ipynb"
   - 🌍 How-to guides:
       - Covid-19 cleaning and exploration: "docs/how-to-guides/covid_cleaning_exploration.ipynb"
       - Fine Tuning Distilbert on BastionLab: "docs/how-to-guides/distilbert_example_notebook.ipynb"
@@ -110,9 +112,7 @@ nav:
   - ⚙️ Advanced:
       - Benchmarks:
           - Polars: "docs/advanced/benchmarks/polars_benchmarks.md"
-          - Torch:
-              - AMD EPY 7763: "docs/advanced/benchmarks/Torch/bench-amd-epyc-7763.md"
-              - NVIDIA A100/v100: "docs/advanced/benchmarks/Torch/bench-nvidia-a100-v100.md"
+          - Torch: "docs/advanced/benchmarks/torch_benchmarks.md"
       - Contributing:
           - Code of Conduct: "docs/advanced/contributing/code_of_conduct.md"
           - Contributing: "docs/advanced/contributing/contributing.md"
