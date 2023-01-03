@@ -145,7 +145,7 @@ class RemoteLearner:
         metric_eps_per_batch: Optional[float] = None,
         model_name: Optional[str] = None,
         model_description: str = "",
-        expand: bool = True,
+        expand: bool = False,
         progress: bool = True,
     ) -> None:
         if isinstance(model, Module):
@@ -335,7 +335,7 @@ class RemoteLearner:
     def fit(
         self,
         nb_epochs: int,
-        eps: Optional[float],
+        eps: Optional[float] = None,
         batch_size: Optional[int] = None,
         max_grad_norm: Optional[float] = None,
         lr: Optional[float] = None,
