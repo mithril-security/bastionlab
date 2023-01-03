@@ -130,7 +130,9 @@ impl CompositePlan {
                     df_identifier: identifier.clone(),
                 })?;
 
-                policy = policy.merge(&artifact.policy);
+                if let VerificationResult::Unsafe { .. } = check {
+                    policy = policy.merge(&artifact.policy);
+                }
                 fetchable.merge(check);
                 blacklist.extend_from_slice(&artifact.blacklist[..]);
 
