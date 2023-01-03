@@ -92,7 +92,11 @@ def serialize_dataframe(
         cols = ",".join([f'"{col}"' for col in sanitized_columns])
         if first:
             first = False
-            yield SendChunk(data=data, policy=policy.serialize(), metadata=f"[{cols}]")
+            yield SendChunk(
+                data=data,
+                policy=policy.serialize(),
+                metadata=f"[{cols}]",
+            )
         else:
             yield SendChunk(data=data, policy="", metadata="")
 
