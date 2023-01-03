@@ -73,7 +73,7 @@ jobs:
       - name: Pytest Coverage report
         uses: orgoro/coverage@v2
         with:
-          coverageFile: client/coverage.xml
+          coverageFile: ./coverage.xml
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Lint with flake8
