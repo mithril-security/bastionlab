@@ -25,7 +25,7 @@ class TestingConnection(unittest.TestCase):
         connection.close()
 
     def testingdf(self):
-        df = pl.read_csv("train.csv").limit(50)
+        df = pl.read_csv("titanic.csv").limit(50)
         # The file train.csv is not included in the repository
         # But it is download from the execution of a jupyter notebook
         # for now
@@ -37,7 +37,7 @@ class TestingConnection(unittest.TestCase):
         connection.close()
 
     def testingquery(self):
-        df = pl.read_csv("train.csv").limit(50)
+        df = pl.read_csv("titanic.csv").limit(50)
         connection = Connection("localhost", 50056)
         client = connection.client
         policy = Policy(safe_zone=Aggregation(min_agg_size=1), unsafe_handling=Log())
@@ -53,7 +53,7 @@ class TestingConnection(unittest.TestCase):
         self.assertNotEqual(per_class_rates.is_empty(), True)
 
     def testingquery2(self):
-        df = pl.read_csv("train.csv").limit(50)
+        df = pl.read_csv("titanic.csv").limit(50)
         connection = Connection("localhost", 50056)
         client = connection.client
         policy = Policy(safe_zone=Aggregation(1), unsafe_handling=Log())
