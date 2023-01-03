@@ -1,7 +1,6 @@
 name: formatting
 
-# on: [push, pull_request]
-on: [fork]
+on: [push]
 
 jobs:
   formatting:
