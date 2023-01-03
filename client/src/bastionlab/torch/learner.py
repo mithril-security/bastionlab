@@ -427,7 +427,7 @@ class RemoteLearner:
     def fit(
         self,
         nb_epochs: int,
-        eps: Optional[float],
+        eps: Optional[float] = None,
         batch_size: Optional[int] = None,
         max_grad_norm: Optional[float] = None,
         lr: Optional[float] = None,

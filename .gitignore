@@ -180,7 +180,7 @@ ex.c
 **/examples/data
 **/examples/models
 **/pb
-**/libtorch
+**/libtorch*
 *.pem
 *.key.pem
 *.html

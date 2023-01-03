@@ -76,4 +76,5 @@ service PolarsService {
     rpc ListDataFrames (Empty) returns (ReferenceList) {}
     rpc GetDataFrameHeader (ReferenceRequest) returns (ReferenceResponse) {}
     rpc Split(SplitRequest) returns (ReferenceList) {}
+    rpc PersistDataFrame (ReferenceRequest) returns (Empty) {}
 }

@@ -94,10 +94,17 @@ async fn main() -> Result<()> {
         builder.add_service(TorchServiceServer::new(torch_svc.clone()))
     };
 
-    let polars_svc = BastionLabPolars::new(sess_manager.clone());
     // Polars
+    let polars_svc = BastionLabPolars::new(sess_manager.clone());
     let builder = {
-        use bastionlab_polars::polars_proto::polars_service_server::PolarsServiceServer;
+        use bastionlab_polars::{
+            polars_proto::polars_service_server::PolarsServiceServer, BastionLabPolars,
+        };
+        let svc = BastionLabPolars::new(sess_manager.clone());
+        match BastionLabPolars::load_dfs(&svc) {
+            Ok(_) => info!("Successfully loaded saved dataframes"),
+            Err(_) => info!("There was an error loading saved dataframes"),
+        };
         builder.add_service(PolarsServiceServer::new(polars_svc.clone()))
     };
 

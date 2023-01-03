@@ -12,8 +12,8 @@ RUN rustup component add rustfmt \
 
 WORKDIR /app
 
-RUN wget 'https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.12.1%2Bcpu.zip' \
-    && unzip 'libtorch-cxx11-abi-shared-with-deps-1.12.1+cpu.zip'
+RUN wget 'https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.13.1%2Bcpu.zip' \
+    && unzip 'libtorch-cxx11-abi-shared-with-deps-1.13.1+cpu.zip'
 
 COPY ./server /app/server
 COPY ./protos /app/protos
