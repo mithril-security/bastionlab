@@ -62,7 +62,6 @@ jobs:
         id: test-client
         if: always()
         run: |
-          ls | cat
           pip install polars
           pip install ./client
           pytest --cov --cov-report=xml tests
