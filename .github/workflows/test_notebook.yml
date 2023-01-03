@@ -35,9 +35,9 @@ jobs:
 
       ##### BUILD SERVER OTHERWISE ######
       - name: Build server
-       id: build-server-no-download
-       run: |
-         docker build -t ${{ matrix.serverImage }}:latest -f ./Dockerfile .
+        id: build-server-no-download
+        run: |
+          docker build -t ${{ matrix.serverImage }}:latest -f ./Dockerfile .
 
       ##### CHECK BASTIONLAB IMAGE IS INSTALLED ######
       - name: Check bastionlab image is installed
