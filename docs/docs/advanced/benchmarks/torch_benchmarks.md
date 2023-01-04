@@ -18,7 +18,7 @@ For the AMD benchmarks, we set the batch size to be the maximum possible, fittin
 ***# why?***
 
 
-![](../../../../assets/amd_epyc_exec_times.png)
+![](../../../assets/amd_epyc_exec_times.png)
 
 You can have a look at the precise execution times in the following table:
 
@@ -39,13 +39,11 @@ ____________________________
 
 For the Nvidia benchmarks, we set the batch size to be the maximum possible, fitting in 16GB of GPU RAM, using a NVIDIA V100 GPU.
 
-![](../../../../assets/v100_exec_times_16GB.png)
+![](../../../assets/v100_exec_times_16GB.png)
 
-By using 40GB of GPU RAM on a NVIDIA A100 GPU, you can obtain these results:
+By using 40GB of GPU RAM on a NVIDIA A100 GPU, you obtain these results:
 
-***# why did you also try with 40GB?***
-
-![](../../../../assets/a100_exec_times_40GB.png)
+![](../../../assets/a100_exec_times_40GB.png)
 
 You can have a look at the precise execution times in the following table:
 
