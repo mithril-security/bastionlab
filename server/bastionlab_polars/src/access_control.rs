@@ -5,8 +5,9 @@ use crate::composite_plan::StatsEntry;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Policy {
-    pub safe_zone: Rule,
-    pub unsafe_handling: UnsafeAction,
+    safe_zone: Rule,
+    unsafe_handling: UnsafeAction,
+    savable: bool,
 }
 
 impl Policy {
@@ -24,6 +25,7 @@ impl Policy {
         Policy {
             safe_zone: Rule::AtLeastNOf(2, vec![self.safe_zone.clone(), other.safe_zone.clone()]),
             unsafe_handling: self.unsafe_handling.merge(other.unsafe_handling),
+            savable: self.savable && other.savable,
         }
     }
 
@@ -31,7 +33,12 @@ impl Policy {
         Policy {
             safe_zone: Rule::True,
             unsafe_handling: UnsafeAction::Log,
+            savable: true,
         }
+    }
+
+    pub fn check_savable(&self) -> bool {
+        return self.savable;
     }
 }
 
