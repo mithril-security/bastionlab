@@ -3,7 +3,7 @@ name: Test client
 on:
   pull_request:
     branches: [ master ]
-    paths: ['client/**', 'server/**', '.github/**']
+    paths: ['client/**', 'server/**', '.github/**', 'tests/**']
 
 jobs:
   testing_client:
