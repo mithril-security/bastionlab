@@ -50,9 +50,7 @@ impl CompositePlan {
         for seg in self.0 {
             match seg {
                 CompositePlanSegment::PolarsPlanSegment(mut plan) => {
-                    println!("{:?}", plan);
                     let stats = initialize_plan(&mut plan, &mut stack)?;
-                    println!("Stats created!");
                     let df = run_logical_plan(plan)?;
                     stack.push(StackFrame { df, stats });
                 }
@@ -140,6 +138,10 @@ impl CompositePlan {
                         df = to_status_error(hor_concat_df(&[df, out]))?;
                     }
 
+                    let lazy = df.clone().lazy().select(&[col("text_ids")]);
+                    let plan = lazy.logical_plan;
+
+                    let serialized = serde_json::to_string(&plan).unwrap();
                     stack.push(StackFrame {
                         df,
                         stats: frame.stats,

@@ -533,10 +533,15 @@ impl TorchService for BastionLabTorch {
     ) -> Result<Response<Reference>, Status> {
         let res = unstream_data(request.into_inner()).await?;
 
-        let tensor = {
+        let (tensor, meta) = {
             let data = res.data.read().unwrap();
             let data: Tensor = (&*data).try_into().unwrap();
-            data
+            let meta = Meta {
+                input_dtype: vec![format!("{:?}", data.kind())],
+                input_shape: data.size(),
+                ..Default::default()
+            };
+            (data, meta)
         };
 
         let identifier = self.insert_tensor(tensor);
@@ -544,7 +549,7 @@ impl TorchService for BastionLabTorch {
             identifier,
             name: String::new(),
             description: String::new(),
-            meta: Vec::new(),
+            meta: meta.encode_to_vec(),
         }))
     }
 }

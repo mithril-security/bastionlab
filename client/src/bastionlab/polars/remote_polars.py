@@ -322,7 +322,6 @@ class RemoteLazyFrame:
         Returns:
             FetchableLazyFrame: FetchableLazyFrame of datarame after any queries have been performed
         """
-        print(self.composite_plan)
         return self._meta._client._run_query(self.composite_plan)
 
     def column(self: LDF, column: str) -> RemoteSeries:
@@ -1412,10 +1411,13 @@ class RemoteSeries(RemoteLazyFrame):
         self.identifier = rdf.identifier
 
     def to_tensor(self) -> "RemoteTensor":
+        from ..torch.remote_torch import RemoteTensor
+
         res = self._meta._client._conv._stub.ConvToTensor(
             ToTensor(identifier=self.identifier)
         )
-        return res
+        res = to_torch_ref(res)
+        return RemoteTensor._from_reference(res)
 
     def __str__(self) -> str:
         return f"RemoteSeries(identifier={self.identifier})"

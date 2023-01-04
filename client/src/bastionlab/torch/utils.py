@@ -406,3 +406,29 @@ def bulk_deserialize(b: bytes) -> Any:
     buff.write(b)
     buff.seek(0)
     return torch.load(buff)
+
+
+def to_torch_meta(meta_bytes: bytes):
+    meta = Meta()
+    meta.ParseFromString(meta_bytes)
+    torch_dtypes = {
+        "Int8": torch.uint8,
+        "UInt8": torch.uint8,
+        "Int16": torch.int16,
+        "Int32": torch.int32,
+        "Int64": torch.int64,
+        "Half": torch.half,
+        "Float": torch.float,
+        "Double": torch.double,
+        "ComplexHalf": torch.complex32,
+        "ComplexFloat": torch.complex64,
+        "ComplexDouble": torch.complex128,
+        "Bool": torch.bool,
+        "QInt8": torch.qint8,
+        "QInt32": torch.qint32,
+        "BFloat16": torch.bfloat16,
+    }
+
+    return [torch_dtypes[dt] for dt in meta.input_dtype], [
+        torch.Size([shape]) for shape in meta.input_shape
+    ]
