@@ -341,7 +341,7 @@ Reason: {}",
         let mut dfs = self.dataframes.write().unwrap();
         dfs.remove(identifier);
 
-        let path = "data_frames/".to_owned()+identifier+".json";
+        let path = "data_frames/".to_owned() + identifier + ".json";
         std::fs::remove_file(path).unwrap_or(());
         Ok(())
     }
