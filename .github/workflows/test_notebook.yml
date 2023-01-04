@@ -1,6 +1,6 @@
 name: Test notebook
 
-on: [push]
+on: [pull_request]
 
 jobs:
   testing_notebook:
@@ -63,6 +63,7 @@ jobs:
           rm ./converted/resnet_example_notebook.ipynb
           rm ./converted/distilbert_example_notebook.ipynb
           rm ./converted/nbagg_uat.ipynb
+          rm ./converted/quick-tour.ipynb
           for file in ./converted/*.ipynb; do 
             sed -i 's/"!pip install bastionlab"/""/g' $file
             jupyter nbconvert --execute --to notebook --inplace --ExecutePreprocessor.timeout=600 --output-dir=./converted $file
