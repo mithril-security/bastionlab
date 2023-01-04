@@ -340,6 +340,9 @@ Reason: {}",
     fn delete_dfs(&self, identifier: &str) -> Result<(), Error> {
         let mut dfs = self.dataframes.write().unwrap();
         dfs.remove(identifier);
+
+        let path = "data_frames/".to_owned()+identifier+".json";
+        std::fs::remove_file(path).unwrap_or(());
         Ok(())
     }
 }
@@ -516,7 +519,7 @@ impl PolarsService for BastionLabPolars {
         match owners_keys {
             Ok(owners_keys) => {
                 if owners_keys.contains_key(&user_id) {
-                    self.delete_dfs(identifier);
+                    self.delete_dfs(identifier)?;
                 } else {
                     return Err(Status::internal("Only data owners can delete dataframes."));
                 }
