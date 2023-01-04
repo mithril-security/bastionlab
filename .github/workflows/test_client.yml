@@ -86,4 +86,4 @@ jobs:
         continue-on-error: True
         if: always()
         run: |
-          mypy ./client
+          mypy ./client/src/bastionlab/
