@@ -113,9 +113,7 @@ nav:
   - ⚙️ Advanced:
       - Benchmarks:
           - Polars: "docs/advanced/benchmarks/polars_benchmarks.md"
-          - Torch:
-              - AMD EPY 7763: "docs/advanced/benchmarks/Torch/bench-amd-epyc-7763.md"
-              - NVIDIA A100/v100: "docs/advanced/benchmarks/Torch/bench-nvidia-a100-v100.md"
-      - Open source: 
+          - Torch: "docs/advanced/benchmarks/torch_benchmarks.md"
+      - Open source:
           - Contributing: "docs/advanced/contributing/contributing.md"
           - Code of Conduct: "docs/advanced/contributing/code_of_conduct.md"
