@@ -4,6 +4,7 @@ use bastionlab_common::{
     auth::KeyManagement,
     session::SessionManager,
     telemetry::{self, TelemetryEventProps},
+    tracking::Tracking,
 };
 use std::collections::hash_map::DefaultHasher;
 use std::fs;
@@ -45,13 +46,17 @@ async fn main() -> Result<()> {
         config
             .session_expiry()
             .context("Parsing the public session_expiry config")?,
+        config.ban_time().context("Parsing the ban time config")?,
+    ));
+
+    let tracking = Arc::new(Tracking::new(
+        sess_manager.clone(),
         config
             .max_saves()
             .context("Parsing the maximum repeated saves config")?,
         config
             .max_runs()
             .context("Parsing the maximum repeated runs config")?,
-        config.ban_time().context("Parsing the ban time config")?,
     ));
 
     let server_cert =
@@ -98,7 +103,7 @@ async fn main() -> Result<()> {
         use bastionlab_polars::{
             polars_proto::polars_service_server::PolarsServiceServer, BastionLabPolars,
         };
-        let svc = BastionLabPolars::new(sess_manager.clone());
+        let svc = BastionLabPolars::new(sess_manager.clone(), tracking.clone());
         match BastionLabPolars::load_dfs(&svc) {
             Ok(_) => info!("Successfully loaded saved dataframes"),
             Err(_) => info!("There was an error loading saved dataframes"),
@@ -111,7 +116,7 @@ async fn main() -> Result<()> {
         use bastionlab_torch::{
             torch_proto::torch_service_server::TorchServiceServer, BastionLabTorch,
         };
-        let svc = BastionLabTorch::new(sess_manager.clone());
+        let svc = BastionLabTorch::new(sess_manager.clone(), tracking);
         builder.add_service(TorchServiceServer::new(svc))
     };
 

@@ -56,27 +56,17 @@ pub struct SessionManager {
     keys: Option<Mutex<KeyManagement>>,
     sessions: Arc<RwLock<HashMap<[u8; 32], Session>>>,
     session_expiry: u64,
-    pub max_saves: usize,
-    pub max_runs: usize,
     ban_time: u64,
     challenges: Mutex<HashSet<[u8; 32]>>,
     blocklist: Arc<RwLock<HashMap<String, Instant>>>,
 }
 
 impl SessionManager {
-    pub fn new(
-        keys: Option<KeyManagement>,
-        session_expiry: u64,
-        max_saves: usize,
-        max_runs: usize,
-        ban_time: u64,
-    ) -> Self {
+    pub fn new(keys: Option<KeyManagement>, session_expiry: u64, ban_time: u64) -> Self {
         Self {
             keys: keys.map(Mutex::new),
             sessions: Default::default(),
             session_expiry,
-            max_saves,
-            max_runs,
             ban_time,
             challenges: Default::default(),
             blocklist: Default::default(),
@@ -203,17 +193,18 @@ impl SessionManager {
                             if key.contains(pat) {
                                 if let Some(key) = key.split(pat).last() {
                                     let key = key.to_string();
-                                    let mut blocklist = self.blocklist.write().unwrap();
-                                    if let Some(blocked) = blocklist.get(&key) {
-                                        if blocked.elapsed().as_secs() < self.ban_time {
-                                            return Err(Status::aborted(
-                                            "This user is temporarily blocked due to suspicious behaviour. Please try again later.",
-                                        ));
-                                        } else {
-                                            blocklist.remove(&key);
+                                    {
+                                        let mut blocklist = self.blocklist.write().unwrap();
+                                        if let Some(blocked) = blocklist.get(&key) {
+                                            if blocked.elapsed().as_secs() < self.ban_time {
+                                                return Err(Status::aborted(
+                                                "This user is temporarily blocked due to suspicious behaviour. Please try again later.",
+                                            ));
+                                            } else {
+                                                blocklist.remove(&key);
+                                            }
                                         }
                                     }
-                                    drop(blocklist);
                                     if let Some(ref keys) = keys_lock {
                                         let lock = keys;
                                         let message = get_message(

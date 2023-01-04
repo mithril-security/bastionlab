@@ -3,6 +3,7 @@ use bastionlab_common::{
     session::SessionManager,
     session_proto::ClientInfo,
     telemetry::{self, TelemetryEventProps},
+    tracking::Tracking,
 };
 use bytes::Bytes;
 use polars::prelude::*;
@@ -77,17 +78,15 @@ impl DataFrameArtifact {
 pub struct BastionLabPolars {
     dataframes: Arc<RwLock<HashMap<String, DataFrameArtifact>>>,
     sess_manager: Arc<SessionManager>,
-    persist_tracking: Arc<RwLock<HashMap<String, Vec<Instant>>>>,
-    dos_tracking: Arc<RwLock<HashMap<String, Vec<Instant>>>>,
+    tracking: Arc<Tracking>,
 }
 
 impl BastionLabPolars {
-    pub fn new(sess_manager: Arc<SessionManager>) -> Self {
+    pub fn new(sess_manager: Arc<SessionManager>, tracking: Arc<Tracking>) -> Self {
         Self {
             dataframes: Arc::new(RwLock::new(HashMap::new())),
             sess_manager,
-            persist_tracking: Arc::new(RwLock::new(HashMap::new())),
-            dos_tracking: Arc::new(RwLock::new(HashMap::new())),
+            tracking,
         }
     }
 
@@ -288,7 +287,7 @@ Reason: {}",
     fn persist_df(&self, identifier: &str, token: Option<Bytes>) -> Result<(), Status> {
         if self.sess_manager.auth_enabled() {
             let user_id = self.sess_manager.get_user_id(token.clone())?;
-            self.dos_check(20, user_id, token, "save")?;
+            self.tracking.dos_check(20, user_id, token, "save")?;
         }
 
         let dataframes = self
@@ -346,52 +345,6 @@ Reason: {}",
         }
         Ok(())
     }
-
-    fn dos_check(
-        &self,
-        timer: u64,
-        user_id: String,
-        token: Option<Bytes>,
-        operation: &str,
-    ) -> Result<(), Status> {
-        let mut dos_tracking = if operation == "run" {
-            self.dos_tracking.write().unwrap()
-        } else {
-            self.persist_tracking.write().unwrap()
-        };
-
-        let max = if operation == "run" {
-            self.sess_manager.max_runs
-        } else {
-            self.sess_manager.max_saves
-        };
-
-        let runs = dos_tracking.get(&user_id);
-        let mut runs_vec: Vec<Instant>;
-        match runs {
-            Some(runs) => {
-                if runs.len() > max {
-                    if runs[runs.len() - max].elapsed().as_secs() < timer {
-                        self.sess_manager.delete_session(token.unwrap());
-                        self.sess_manager
-                            .block_user(user_id.clone(), Instant::now());
-                        dos_tracking.remove(&user_id);
-                        return Err(Status::unknown(
-                            "DoS attempt detected! Your access is temporarily blocked.",
-                        ));
-                    }
-                }
-                runs_vec = runs.to_vec();
-                runs_vec.push(Instant::now());
-            }
-            None => {
-                runs_vec = vec![Instant::now()];
-            }
-        }
-        dos_tracking.insert(user_id.clone(), runs_vec);
-        drop(dos_tracking);
-        Ok(())
-    }
 }
 
 fn get_df_header(df: &DataFrame) -> Result<String, Status> {
@@ -411,7 +364,8 @@ impl PolarsService for BastionLabPolars {
         let user_id = self.sess_manager.get_user_id(token.clone())?;
 
         if self.sess_manager.auth_enabled() {
-            self.dos_check(10, user_id.clone(), token.clone(), "run")?;
+            self.tracking
+                .dos_check(10, user_id.clone(), token.clone(), "run")?;
         }
 
         let composite_plan: CompositePlan = serde_json::from_str(&request.get_ref().composite_plan)
@@ -464,7 +418,7 @@ impl PolarsService for BastionLabPolars {
 
         if self.sess_manager.auth_enabled() {
             let user_id = self.sess_manager.get_user_id(token.clone())?;
-            self.dos_check(10, user_id, token.clone(), "run")?;
+            self.tracking.dos_check(10, user_id, token.clone(), "run")?;
         }
 
         let client_info = self.sess_manager.get_client_info(token)?;

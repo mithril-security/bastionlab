@@ -2,6 +2,7 @@ use bastionlab_common::prelude::*;
 use bastionlab_common::session::get_token;
 use bastionlab_common::session::SessionManager;
 use bastionlab_common::telemetry::{self, TelemetryEventProps};
+use bastionlab_common::tracking::Tracking;
 use bastionlab_learning::nn::Module;
 use bastionlab_learning::{data::Dataset, nn::CheckPoint};
 use ring::digest;
@@ -39,16 +40,18 @@ pub struct BastionLabTorch {
     datasets: RwLock<HashMap<String, Artifact<Dataset>>>,
     runs: RwLock<HashMap<Uuid, Arc<RwLock<Run>>>>,
     sess_manager: Arc<SessionManager>,
+    tracking: Arc<Tracking>,
 }
 
 impl BastionLabTorch {
-    pub fn new(sess_manager: Arc<SessionManager>) -> Self {
+    pub fn new(sess_manager: Arc<SessionManager>, tracking: Arc<Tracking>) -> Self {
         BastionLabTorch {
             binaries: RwLock::new(HashMap::new()),
             checkpoints: RwLock::new(HashMap::new()),
             datasets: RwLock::new(HashMap::new()),
             runs: RwLock::new(HashMap::new()),
             sess_manager,
+            tracking,
         }
     }
 }
@@ -63,6 +66,12 @@ impl TorchService for BastionLabTorch {
         request: Request<Streaming<Chunk>>,
     ) -> Result<Response<Reference>, Status> {
         let token = get_token(&request, self.sess_manager.auth_enabled())?;
+        let user_id = self.sess_manager.get_user_id(token.clone())?;
+
+        if self.sess_manager.auth_enabled() {
+            self.tracking.dos_check(10, user_id, token.clone(), "run")?;
+        }
+
         let client_info = self.sess_manager.get_client_info(token)?;
         let start_time = Instant::now();
 
@@ -109,10 +118,17 @@ impl TorchService for BastionLabTorch {
         &self,
         request: Request<Streaming<Chunk>>,
     ) -> Result<Response<Reference>, Status> {
+        let token = get_token(&request, self.sess_manager.auth_enabled())?;
+        let user_id = self.sess_manager.get_user_id(token.clone())?;
+
+        if self.sess_manager.auth_enabled() {
+            self.tracking.dos_check(10, user_id, token.clone(), "run")?;
+        }
+
+        let client_info = self.sess_manager.get_client_info(token)?;
+
         let start_time = Instant::now();
 
-        let token = get_token(&request, self.sess_manager.auth_enabled())?;
-        let client_info = self.sess_manager.get_client_info(token)?;
         let artifact: Artifact<SizedObjectsBytes> = unstream_data(request.into_inner()).await?;
 
         let (model_hash, model_size) = {
