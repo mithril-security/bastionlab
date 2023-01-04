@@ -19,6 +19,7 @@ theme:
     - search.highlight
     - content.tabs.link
     - navigation.sections
+    - navigation.expand
   logo: assets/logo.png
   favicon: assets/logo.png
   palette:
@@ -30,18 +31,18 @@ theme:
         icon: material/weather-night
   icon:
     admonition:
-      note: fontawesome/solid/note-sticky
-      abstract: fontawesome/solid/book
-      info: fontawesome/solid/circle-info
-      tip: fontawesome/solid/bullhorn
-      success: fontawesome/solid/check
-      question: fontawesome/solid/circle-question
-      warning: fontawesome/solid/triangle-exclamation
-      failure: fontawesome/solid/bomb
-      danger: fontawesome/solid/skull
-      bug: fontawesome/solid/robot
-      example: fontawesome/solid/flask
-      quote: fontawesome/solid/quote-left
+      note: octicons/tag-16
+      abstract: octicons/checklist-16
+      info: octicons/info-16
+      tip: octicons/squirrel-16
+      success: octicons/check-16
+      question: octicons/question-16
+      warning: octicons/alert-16
+      failure: octicons/x-circle-16
+      danger: octicons/zap-16
+      bug: octicons/bug-16
+      example: octicons/beaker-16
+      quote: octicons/quote-16
 
 #Plugins
 plugins:
@@ -85,11 +86,12 @@ markdown_extensions:
   - pymdownx.superfences
   - pymdownx.tabbed:
       alternate_style: true
+  - pymdownx.critic
 
 # Documentation tree
 nav:
   - 🏠 Home: "index.md"
-  - 🚀 Getting Started:
+  - 🚀 Getting started:
       - Quick tour: "docs/quick-tour/quick-tour.ipynb"
       - Installation: "docs/getting-started/installation.md"
   - 📙 Tutorials:
@@ -97,15 +99,14 @@ nav:
       - Combining datasets: "docs/tutorials/combining_datasets.ipynb"
       - Data cleaning: "docs/tutorials/data_cleaning.ipynb"
       - Data visualization: "docs/tutorials/visualization.ipynb"
-      - Defining a privacy policy: "docs/tutorials/defining_policy_privacy.ipynb"
-      - Saving DataFrames: "docs/tutorials/saving_dataframes.ipynb"
-  - 🌍 How-to guides:
-      - Covid-19 cleaning and exploration: "docs/how-to-guides/covid_cleaning_exploration.ipynb"
-      - Fine Tuning Distilbert on BastionLab: "docs/how-to-guides/distilbert_example_notebook.ipynb"
+  - 🌍 How-to-guides:
+      - Data exploration:
+        - Covid-19 cleaning and exploration: "docs/how-to-guides/covid_cleaning_exploration.ipynb"
+      - Deep learning:
+        - Fine Tuning Distilbert on BastionLab: "docs/how-to-guides/distilbert_example_notebook.ipynb"
+  - 🛠️ API reference: "docs/resources/bastionlab/index.html"
   - 💡 Concepts:
       - Remote data science: "docs/concepts-guides/remote_data_science.md"
-  - 🛠️ Reference guides:
-      - API Reference: "docs/resources/bastionlab/index.html"
   - 🔒 Security:
       - Threat model: "docs/security/threat_model_data_owner_owns_infrastructure.md"
       - Authentication specifications: "docs/security/authenticated_sessions.md"
@@ -113,6 +114,6 @@ nav:
       - Benchmarks:
           - Polars: "docs/advanced/benchmarks/polars_benchmarks.md"
           - Torch: "docs/advanced/benchmarks/torch_benchmarks.md"
-      - Contributing:
-          - Code of Conduct: "docs/advanced/contributing/code_of_conduct.md"
+      - Open source:
           - Contributing: "docs/advanced/contributing/contributing.md"
+          - Code of Conduct: "docs/advanced/contributing/code_of_conduct.md"
