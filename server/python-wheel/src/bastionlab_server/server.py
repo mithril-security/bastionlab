@@ -8,6 +8,8 @@ from urllib.error import HTTPError
 from os import path
 from subprocess import Popen
 
+TORCH_VERSION = "1.13.1"
+
 
 class BastionLabServer:
     """Popen object wrapper
@@ -71,6 +73,7 @@ def start_server(bastionlab_path: str, libtorch_path: str) -> BastionLabServer:
     os.chmod(bastionlab_path, 0o755)
     os.chdir(os.getcwd() + "/bin")
     os.environ["LD_LIBRARY_PATH"] = libtorch_path + "/lib"
+    os.environ["DISABLE_AUTHENTICATION"] = "1"
     process = subprocess.Popen([bastionlab_path], env=os.environ)
     os.chdir("..")
     print("Bastionlab server is now running on port 50056")
@@ -122,20 +125,18 @@ def start() -> BastionLabServer:
     """
     libtorch_path = os.getcwd() + "/libtorch"
     bastionlab_path = os.getcwd() + "/bin/bastionlab"
-    bastion_url = "https://github.com/mithril-security/bastionlab/releases/download/v{}/bastionlab-{}-linux.zip".format(
-        app_version, app_version
-    )
-    libtorch_url = "https://download.pytorch.org/libtorch/cpu/libtorch-shared-with-deps-1.12.1%2Bcpu.zip"  # Required to be pre cpp11, colab does not support the cpp11 version
+    bastion_url = f"https://github.com/mithril-security/bastionlab/releases/download/v{app_version}/bastionlab-{app_version}-linux.zip"
+    libtorch_url = f"https://download.pytorch.org/libtorch/cpu/libtorch-shared-with-deps-{TORCH_VERSION}%2Bcpu.zip"  # Required to be pre cpp11, colab does not support the cpp11 version
     handle_download(
         bastionlab_path,
         bastion_url,
-        "BastionLab server (version {})".format(app_version),
+        f"BastionLab server (version {app_version})",
         "The release might not be available yet for the current version",
     )
     handle_download(
         libtorch_path,
         libtorch_url,
-        "Libtorch (version 1.12.1)",
+        f"Libtorch (version {TORCH_VERSION})",
         "Unable to download Libtorch",
     )
     tls_certificates()

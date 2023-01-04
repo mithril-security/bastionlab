@@ -13,15 +13,16 @@ if TYPE_CHECKING:
     from ..polars import FetchableLazyFrame, BastionLabPolars
     from .trainers import Trainer
     from .remote_linfa import FittedModel
+    from ..client import Client
 
 
 class BastionLabLinfa:
     def __init__(
         self,
-        channel: grpc.Channel,
+        client: "Client",
         polars: "BastionLabPolars",
     ) -> None:
-        self.stub = LinfaServiceStub(channel)
+        self.stub = LinfaServiceStub(client._channel)
         self.polars = polars
 
     def train(

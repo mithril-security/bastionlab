@@ -28,6 +28,9 @@ pub enum TelemetryEventProps {
     GetDataFrameHeader {
         dataset_name: Option<String>,
     },
+    SaveDataframe {
+        dataset_name: Option<String>,
+    },
     // Torch
     SendModel {
         model_name: Option<String>,
@@ -66,6 +69,7 @@ impl TelemetryEventProps {
             TelemetryEventProps::SendDataFrame { .. } => "send_data_frame",
             TelemetryEventProps::ListDataFrame { .. } => "list_data_frame",
             TelemetryEventProps::GetDataFrameHeader { .. } => "get_data_frame_header",
+            TelemetryEventProps::SaveDataframe { .. } => "save_data_frame",
             // torch
             TelemetryEventProps::SendModel { .. } => "send_model",
             TelemetryEventProps::SendDataset { .. } => "send_dataset",
@@ -107,6 +111,7 @@ struct RequestUserProperties<'a> {
     client_platform_release: Option<&'a str>,
     client_user_agent: Option<&'a str>,
     client_user_agent_version: Option<&'a str>,
+    is_colab: bool,
 }
 
 pub fn setup(platform: String, uid: String, tee: String) -> Result<()> {
@@ -147,6 +152,7 @@ pub fn setup(platform: String, uid: String, tee: String) -> Result<()> {
                         user_properties.client_user_agent = Some(client_info.user_agent.as_ref());
                         user_properties.client_user_agent_version =
                             Some(client_info.user_agent_version.as_ref());
+                        user_properties.is_colab = client_info.is_colab;
                     }
 
                     let event_type = properties.event_type;

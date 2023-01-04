@@ -408,6 +408,7 @@ pub fn predict(
     Ok(prediction)
 }
 
+#[allow(unused)]
 pub fn inner_cross_validate(
     model: &SupportedModels,
     test_set: (DataFrame, DataFrame),

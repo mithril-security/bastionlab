@@ -1,5 +1,12 @@
 # Installation
-______________________________________________________________________________
+____________________________________________
+
+Get started and **install BastionLab Client** and **BastionLab Server**.
+
+## Pre-requisites
+___________________________________________
+
+### Technical requirements
 
 To install **BastionLab Client and BastionLab Server**, ensure the following are already installed in your system:
 
@@ -13,7 +20,7 @@ To install **BastionLab Server**, you'll also need:
 *Here's the [Docker official tutorial](https://docker-curriculum.com/) to set it up on your computer.*
 
 ## Installing BastionLab Client
-____________________________________________________________________________
+_____________________________________________
 
 ### From PyPI
 
@@ -34,7 +41,34 @@ make dev-install
 ```
 
 ## Installing BastionLab Server
-_______________________________________________________________________________
+______________________________________________
+
+### From PyPI
+
+For **testing purposes only**, BastionLab server can be installed using our pip package.
+
+!!! warning
+
+	This package is meant to quickly setup a running instance of the server and is particularly useful in colab notebooks. It does not provide any mean to configure the server which makes certain features impossible to use (like [authentication](../../../docs/tutorials/authentication/)).
+
+	**For production, please use the Docker image or install the server from source.**
+    
+```bash
+pip install bastionlab-server
+```
+
+Once installed, the server can be launched using the following script:
+
+```py
+import bastionlab_server
+srv = bastionlab_server.start()
+```
+
+And stoped this way:
+
+```py
+bastionlab_server.stop(srv)
+```
 
 ### Using the official Docker image
 
