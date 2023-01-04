@@ -354,6 +354,7 @@ Reason: {}",
         }
         Ok(())
     }
+
     fn delete_dfs(&self, identifier: &str) -> Result<(), Error> {
         let mut dfs = self.dataframes.write().unwrap();
         dfs.remove(identifier);
@@ -377,6 +378,7 @@ impl PolarsService for BastionLabPolars {
         let token = self.sess_manager.verify_request(&request)?;
 
         let plan = unstream_query_request(request.into_inner()).await?;
+
         let composite_plan: CompositePlan = serde_json::from_str(&plan).map_err(|e| {
             Status::invalid_argument(format!(
                 "Could not deserialize composite plan: {}{}",

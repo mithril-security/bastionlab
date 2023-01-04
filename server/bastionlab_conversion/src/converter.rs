@@ -186,10 +186,17 @@ impl ConversionService for Converter {
         let identifier = &request.get_ref().identifier;
 
         let df = self.polars.get_df_unchecked(&identifier)?;
-        let tensor = {
+        let (tensor, meta) = {
             let cols = df.get_column_names();
             let series = to_status_error(df.column(cols[0]))?;
-            series_to_tensor(series)?
+            let data = series_to_tensor(series)?;
+            let meta = Meta {
+                input_dtype: vec![format!("{:?}", data.kind())],
+                input_shape: data.size(),
+                ..Default::default()
+            };
+
+            (data, meta)
         };
 
         let identifier = self.torch.insert_tensor(tensor);
@@ -198,7 +205,7 @@ impl ConversionService for Converter {
             identifier,
             name: String::new(),
             description: String::new(),
-            meta: Vec::new(),
+            meta: meta.encode_to_vec(),
         }))
     }
 }

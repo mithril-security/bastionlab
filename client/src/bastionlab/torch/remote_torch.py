@@ -3,8 +3,8 @@ from typing import Iterator, TYPE_CHECKING, Tuple, List
 import io
 from dataclasses import dataclass
 from ..polars.utils import create_byte_chunk
-from ..pb.bastionlab_torch_pb2 import Chunk, Reference
-from .utils import DataWrapper
+from ..pb.bastionlab_torch_pb2 import Chunk, Reference, Meta
+from .utils import DataWrapper, to_torch_meta
 
 if TYPE_CHECKING:
     from tokenizers import Tokenizer
@@ -23,6 +23,8 @@ def get_client():
 @dataclass
 class RemoteTensor:
     _identifier: str
+    _dtype: torch.dtype
+    _shape: torch.Size
 
     @property
     def identifier(self) -> str:
@@ -47,13 +49,22 @@ class RemoteTensor:
 
     @staticmethod
     def _from_reference(ref: Reference) -> "RemoteTensor":
-        return RemoteTensor(ref.identifier)
+        dtypes, shape = to_torch_meta(ref.meta)
+        return RemoteTensor(ref.identifier, dtypes[0], shape[0])
 
     def __str__(self) -> str:
-        return f"RemoteTensor(identifier={self._identifier})"
+        return f"RemoteTensor(identifier={self._identifier}, dtype={self._dtype}, shape={self._shape})"
 
     def __repr__(self) -> str:
         return str(self)
+
+    @property
+    def dtype(self):
+        return self._dtype
+
+    @property
+    def shape(self):
+        return self._shape
 
     def run_script(self, script: torch.ScriptFunction):
         pass
