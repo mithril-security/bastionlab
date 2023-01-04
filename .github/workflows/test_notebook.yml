@@ -1,6 +1,9 @@
 name: Test notebook
 
-on: [pull_request]
+on:
+  pull_request:
+    branches: [ master ]
+    paths: ['client/**', 'server/**', '.github/**', 'docs/**']
 
 jobs:
   testing_notebook:
