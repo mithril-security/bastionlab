@@ -66,5 +66,7 @@ jobs:
           rm ./converted/quick-tour.ipynb
           for file in ./converted/*.ipynb; do 
             sed -i 's/"!pip install bastionlab"/""/g' $file
+            sed -i 's/"srv = bastionlab_server.start()"/""/g' $file
+            sed -i 's/"bastionlab_server.stop(srv)"/""/g' $file
             jupyter nbconvert --execute --to notebook --inplace --ExecutePreprocessor.timeout=600 --output-dir=./converted $file
           done
