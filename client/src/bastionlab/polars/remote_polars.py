@@ -322,7 +322,6 @@ class RemoteLazyFrame:
         Returns:
             FetchableLazyFrame: FetchableLazyFrame of datarame after any queries have been performed
         """
-        print(self.composite_plan)
         return self._meta._client._run_query(self.composite_plan)
 
     def column(self: LDF, column: str) -> RemoteSeries:

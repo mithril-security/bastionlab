@@ -1,5 +1,5 @@
 import torch
-from typing import Iterator, TYPE_CHECKING, Tuple
+from typing import Iterator, TYPE_CHECKING, Tuple, List
 import io
 from dataclasses import dataclass
 from ..polars.utils import create_byte_chunk
@@ -60,3 +60,11 @@ class RemoteTensor:
 
     def fetch_tensor(self) -> torch.Tensor:
         pass
+
+
+@dataclass
+class RemoteDataset:
+    inputs: List[RemoteTensor]
+    label: RemoteTensor
+
+    # def
