@@ -530,6 +530,12 @@ impl PolarsService for BastionLabPolars {
                 ));
             }
         }
+        telemetry::add_event(
+            TelemetryEventProps::DeleteDataframe {
+                dataset_name: Some(identifier.clone()),
+            },
+            Some(self.sess_manager.get_client_info(token)?),
+        );
         Ok(Response::new(Empty {}))
     }
 }
