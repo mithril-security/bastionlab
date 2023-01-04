@@ -19,22 +19,26 @@ Where data owners and data scientists can securely collaborate without exposing 
 
 ## ⚙️ What is BastionLab?
 
-**BastionLab is a simple privacy framework for data science collaboration.** 
+**BastionLab is a simple privacy framework for data science collaboration, covering data exploration and AI traning.** 
 
-It acts like an **access control** solution, for data owners to protect the privacy of their datasets, **and stands as a guard**, to enforce that only privacy-friendly operations are allowed on the data and anonymized outputs are shown to the data scientist. 
+It acts like an **access control solution**, for data owners to protect the privacy of their datasets, and **stands as a guard**, to enforce that only privacy-friendly operations are allowed on the data and anonymized outputs are shown to the data scientist. 
 
-- Data owners can let **external or internal data scientists explore and extract values from their datasets, according to a strict privacy policy they'll define in BastionLab**.
-- Data scientists can **remotely run queries on data frames without seeing the original data or intermediary results**.
+- Data owners can let external or internal data scientists **explore and extract values from their datasets, according to a strict privacy policy** they'll define in BastionLab.
+- Data scientists can **remotely run queries on data frames and train their models without seeing the original data or intermediary results**.
 
-**BastionLab is an open-source project.** Our solution is coded in Rust 🦀 and uses Polars 🐻, a pandas-like library for data exploration.
+**BastionLab is an open-source project.**
+Our solution is coded in Rust 🦀, uses Polars 🐻, a pandas-like library for data exploration, and Torch 🔥, a popular library for AI training.
+We also have an option to set-up confidential computing 🔒, a hardware-based technology that ensures no one but the processor of the machine can see the data or the model.
 
-## 🚀 Quick Tour
+## 🚀 Quick tour
 
-You can go try out our [Quick Tour](https://github.com/mithril-security/bastionlab/tree/master/docs/docs/quick-tour) in the documentation to discover BastionLab with a hands-on example using the famous Titanic dataset. 
+You can go try out our [Quick tour](https://bastionlab.readthedocs.io/en/latest/docs/quick-tour/quick-tour/) in the documentation to discover BastionLab with a hands-on example using the famous Titanic dataset. 
 
 But here’s a taste of what using BastionLab could look like 🍒
 
-### Data Owner's side
+### Data exploration
+
+#### Data owner's side
 ```py
 # Load your dataset using polars.
 >>> import polars as pl
@@ -57,7 +61,7 @@ But here’s a taste of what using BastionLab could look like 🍒
 FetchableLazyFrame(identifier=3a2d15c5-9f9d-4ced-9234-d9465050edb1)
 ```
 
-### Data Scientist's side
+#### Data scientist's side
 ```py
 # List the datasets made available by the data owner, select one and get a remote object.
 >>> from bastionlab import Connection
@@ -116,13 +120,80 @@ shape: (3, 2)
 └────────┴──────────┘
 ```
 
-## 🗝️ Key Features
+### AI training
+
+### Data owner's side
+
+```py
+>>> from torchvision.datasets import CIFAR100
+>>> from torchvision.transforms import ToTensor, Normalize, Compose
+>>> from bastionlab.client import Connection
+
+# Define a transformation pipeline for the CIFAR dataset.
+# The last step is there for shape compatibility reasons.
+>>> transform = Compose([
+...     ToTensor(),
+...     Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+...     lambda x: [x.squeeze(0)],
+... ])
+
+# Define train and test datasets
+>>> train_dataset = CIFAR100("data", train=True, transform=transform, download=True)
+Files already downloaded and verified
+>>> test_dataset = CIFAR100("data", train=False, transform=transform, download=True)
+Files already downloaded and verified
+
+# Send them to the server by instantiating a RemoteDataset.
+>>> with Connection("localhost") as client:
+...     client.torch.RemoteDataset(train_dataset, test_dataset, name="CIFAR100")
+...
+Sending CIFAR100: 100%|████████████████████| 615M/615M [00:04<00:00, 150MB/s]  
+Sending CIFAR100 (test): 100%|████████████████████| 123M/123M [00:00<00:00, 150MB/s]
+<bastionlab.torch.learner.RemoteDataset object at 0x7f1220063ac0>
+```
+
+### Data scientist's side
+
+```py
+>>> from torchvision.models import efficientnet_b0
+>>> from bastionai.client import Connection
+
+# Define the model
+>>> model = efficientnet_b0()
+
+# List the datasets made available by the data owner, select one and get a remote object.
+>>> connection = Connection("localhost")
+>>> remote_datasets = connection.client.torch.list_remote_datasets()
+>>> remote_dataset = remote_datasets[0]
+
+# Send the model to the server by instantiating a RemoteLearner
+# The RemoteLearner objects references the RemoteDataset.
+>>> remote_learner = connection.client.torch.RemoteLearner(
+...     model,
+...     remote_dataset,
+...     max_batch_size=64,
+...     loss="cross_entropy",
+...     model_name="EfficientNet-B0",
+...     device="cpu",
+... )
+Sending EfficientNet-B0: 100%|████████████████████| 21.7M/21.7M [00:00<00:00, 531MB/s]
+
+# Train the remote model for given amount of epochs
+>>> remote_learner.fit(nb_epochs=1)
+Epoch 1/1 - train: 100%|████████████████████| 781/781 [04:06<00:00,  3.17batch/s, cross_entropy=4.1798 (+/- 0.0000)]
+
+# Test the remote model
+>>> remote_learner.test(metric="accuracy")
+Epoch 1/1 - test: 100%|████████████████████| 156/156 [00:14<00:00, 10.62batch/s, accuracy=0.1123 (+/- 0.0000)]
+```
+
+## 🗝️ Key features
 
 - **Access control**: data owners can define an interactive privacy policy that will filter the data scientist queries. They do not have to open unrestricted access to their datasets anymore. 
 - **Limited expressivity**: BastionLab limits the type of operations that can be executed by the data scientists to avoid arbitrary code execution.
 - **Transparent remote access**: the data scientists never access the dataset directly. They only manipulate a local object that contains metadata to interact with a remotely hosted dataset. Calls can always be seen by data owners.
 
-## 🙋 Getting Help
+## 🙋 Getting help
 
 - Go to our [Discord](https://discord.com/invite/TxEHagpWd4) #support channel
 - Report bugs by [opening an issue on our BastionLab Github](https://github.com/mithril-security/bastionlab/issues)

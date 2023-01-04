@@ -9,6 +9,8 @@ message ChallengeResponse {
 
 message SessionInfo {
     bytes token = 1;
+    uint64 expiry_time = 2;
+
 }
 
 message ClientInfo {
@@ -25,5 +27,4 @@ message ClientInfo {
 service SessionService {
     rpc GetChallenge (Empty) returns (ChallengeResponse) {}
     rpc CreateSession (ClientInfo) returns (SessionInfo) {}
-    rpc RefreshSession (Empty) returns (Empty) {}
 }

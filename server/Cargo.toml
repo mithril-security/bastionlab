@@ -1,6 +1,6 @@
 [package]
 name = "bastionlab"
-version = "0.3.5"
+version = "0.3.6"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -10,7 +10,9 @@ members = [
   "bastionlab_torch",
   "bastionlab_learning",
   "bastionlab_polars",
+  "bastionlab_conversion",
 ]
+
 resolver = "2"
 
 [dependencies]
@@ -25,7 +27,6 @@ bincode = "1.3.3"
 serde = "1.0.147"
 serde_derive = "1.0.147"
 serde_json = "1.0.87"
-tch = "0.8.0"
 base64 = "0.13.1"
 rand = "0.8.5"
 ring = "0.16.20"
@@ -42,12 +43,12 @@ env_logger = "0.9.0"
 bastionlab_common = { path = "./bastionlab_common" }
 bastionlab_polars = { path = "./bastionlab_polars" }
 bastionlab_torch = { path = "./bastionlab_torch" }
-
+bastionlab_conversion = { path = "./bastionlab_conversion" }
 [dependencies.uuid]
 version = "1.1.2"
 features = [
-  "v4", # Lets you generate random UUIDs
-  "fast-rng", # Use a faster (but still sufficiently random) RNG
+  "v4",                # Lets you generate random UUIDs
+  "fast-rng",          # Use a faster (but still sufficiently random) RNG
   "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs,
   "serde",
 ]

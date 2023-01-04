@@ -10,9 +10,11 @@ use tch::{Device, IndexOp, TchError, Tensor};
 /// Simple in-memory dataset that keeps track of its usage in terms of privacy budget
 #[derive(Debug)]
 pub struct Dataset {
-    samples_inputs: Vec<Mutex<Tensor>>,
-    labels: Mutex<Tensor>,
+    pub samples_inputs: Vec<Mutex<Tensor>>,
+    pub labels: Mutex<Tensor>,
     privacy_context: Arc<RwLock<PrivacyContext>>,
+    pub converted: bool,
+    pub from_dtype: (Vec<String>, String),
 }
 
 /// Simple iterator over [`Dataset`].
@@ -81,6 +83,24 @@ impl<'a> Iterator for DatasetIter<'a> {
 }
 
 impl Dataset {
+    pub fn new(
+        samples_inputs: Vec<Mutex<Tensor>>,
+        labels: Mutex<Tensor>,
+        converted: bool,
+        from_dtype: (Vec<String>, String),
+    ) -> Self {
+        let nb_samples = labels.lock().unwrap().size()[0] as usize;
+        Dataset {
+            samples_inputs,
+            labels,
+            converted,
+            from_dtype,
+            privacy_context: Arc::new(RwLock::new(PrivacyContext::new(
+                PrivacyBudget::NotPrivate,
+                nb_samples,
+            ))),
+        }
+    }
     /// Returns an iterator over this dataset.
     pub fn iter_shuffle<'a>(&'a self, batch_size: usize) -> DatasetIter<'a> {
         let mut rng = thread_rng();
@@ -187,6 +207,8 @@ impl TryFrom<SizedObjectsBytes> for Dataset {
                 privacy_limit,
                 nb_samples as usize,
             ))),
+            converted: false,
+            from_dtype: (vec![], String::default()),
         })
     }
 }

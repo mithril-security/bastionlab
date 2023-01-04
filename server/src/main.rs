@@ -5,6 +5,8 @@ use bastionlab_common::{
     session::SessionManager,
     telemetry::{self, TelemetryEventProps},
 };
+use bastionlab_polars::BastionLabPolars;
+use bastionlab_torch::BastionLabTorch;
 use std::collections::hash_map::DefaultHasher;
 use std::fs;
 use std::path::Path;
@@ -46,7 +48,6 @@ async fn main() -> Result<()> {
             .session_expiry()
             .context("Parsing the public session_expiry config")?,
     ));
-
     let server_cert =
         fs::read("tls/host_server.pem").context("Reading the tls/host_server.pem file")?;
     let server_key =
@@ -86,22 +87,38 @@ async fn main() -> Result<()> {
         builder.add_service(SessionServiceServer::new(svc))
     };
 
+    let torch_svc = BastionLabTorch::new(sess_manager.clone());
+    // Torch
+    let builder = {
+        use bastionlab_torch::torch_proto::torch_service_server::TorchServiceServer;
+        builder.add_service(TorchServiceServer::new(torch_svc.clone()))
+    };
+
     // Polars
+    let polars_svc = BastionLabPolars::new(sess_manager.clone());
     let builder = {
         use bastionlab_polars::{
             polars_proto::polars_service_server::PolarsServiceServer, BastionLabPolars,
         };
         let svc = BastionLabPolars::new(sess_manager.clone());
-        builder.add_service(PolarsServiceServer::new(svc))
+        match BastionLabPolars::load_dfs(&svc) {
+            Ok(_) => info!("Successfully loaded saved dataframes"),
+            Err(_) => info!("There was an error loading saved dataframes"),
+        };
+        builder.add_service(PolarsServiceServer::new(polars_svc.clone()))
     };
 
-    // Torch
+    // Conversion
     let builder = {
-        use bastionlab_torch::{
-            torch_proto::torch_service_server::TorchServiceServer, BastionLabTorch,
+        use bastionlab_conversion::{
+            conversion_proto::conversion_service_server::ConversionServiceServer,
+            converter::Converter,
         };
-        let svc = BastionLabTorch::new(sess_manager.clone());
-        builder.add_service(TorchServiceServer::new(svc))
+        builder.add_service(ConversionServiceServer::new(Converter::new(
+            Arc::new(torch_svc.clone()),
+            Arc::new(polars_svc.clone()),
+            sess_manager.clone(),
+        )))
     };
 
     let addr = config

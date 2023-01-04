@@ -3,7 +3,10 @@ use tokio::sync::mpsc;
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use tonic::{Response, Status};
 
-use crate::{access_control::Policy, DataFrameArtifact, DelayedDataFrame, FetchStatus};
+use crate::{
+    access_control::Policy, polars_proto::QueryBytes, DataFrameArtifact, DelayedDataFrame,
+    FetchStatus,
+};
 
 use super::polars_proto::{fetch_chunk, FetchChunk, SendChunk};
 
@@ -11,7 +14,6 @@ pub async fn df_artifact_from_stream(
     stream: tonic::Streaming<SendChunk>,
 ) -> Result<DataFrameArtifact, Status> {
     let (df_bytes, policy, metadata) = unstream_data(stream).await?;
-    println!("{}", policy);
     let series = df_bytes
         .iter()
         .map(|v| bincode::deserialize(&v[..]).unwrap())
@@ -137,4 +139,19 @@ pub async fn stream_data(
     });
 
     Response::new(ReceiverStream::new(rx))
+}
+
+pub async fn unstream_query_request(
+    mut stream: tonic::Streaming<QueryBytes>,
+) -> Result<String, Status> {
+    let mut bytes: Vec<u8> = Vec::new();
+
+    while let Some(chunk) = stream.next().await {
+        let mut query = chunk?;
+        bytes.append(&mut query.data);
+    }
+
+    let query = String::from_utf8(bytes)
+        .map_err(|_| Status::invalid_argument(format!("Could not decode composite plan string")))?;
+    Ok(query)
 }

@@ -1,5 +1,8 @@
 syntax = "proto3";
+
 package bastionlab_polars;
+
+import "bastionlab.proto";
 
 message ReferenceRequest {
     string identifier = 1;
@@ -28,16 +31,50 @@ message FetchChunk {
     }
 }
 
-message Query {
-    string composite_plan = 1;
+message Empty {}
+
+message ToDataset {
+    repeated string inputs = 1;
+    string labels = 2;
+    bytes inputs_conv_fn = 3;
+    bytes labels_conv_fn = 4;
+    string identifier = 5;
 }
 
-message Empty {}
+message Meta {
+    repeated int64 input_shape = 1;
+    repeated string input_dtype = 2;
+    int32 nb_samples = 3;
+    float privacy_limit = 4;
+    optional Reference train_dataset = 5;
+}
+
+message Reference {
+    // BastionAI reference object. 
+    string identifier = 1;
+    string name = 2;
+    string description = 3;
+    bytes meta = 4;
+}
+
+message QueryBytes {
+    bytes data = 1;
+}
+
+message SplitRequest {
+    repeated ReferenceRequest rdfs = 1;
+    float train_size = 2;
+    float test_size = 3;
+    bool shuffle = 5;
+    int32 random_state = 6;
+}
 
 service PolarsService {
     rpc SendDataFrame (stream SendChunk) returns (ReferenceResponse) {}
-    rpc RunQuery (Query) returns (ReferenceResponse) {}
+    rpc RunQuery (stream QueryBytes) returns (ReferenceResponse) {}
     rpc FetchDataFrame (ReferenceRequest) returns (stream FetchChunk) {}
     rpc ListDataFrames (Empty) returns (ReferenceList) {}
     rpc GetDataFrameHeader (ReferenceRequest) returns (ReferenceResponse) {}
+    rpc Split(SplitRequest) returns (ReferenceList) {}
+    rpc PersistDataFrame (ReferenceRequest) returns (Empty) {}
 }

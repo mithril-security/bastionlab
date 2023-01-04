@@ -4,9 +4,15 @@ use bastionlab_common::{
     session_proto::ClientInfo,
     telemetry::{self, TelemetryEventProps},
 };
+
+use polars::export::ahash::HashSet;
 use polars::prelude::*;
+use polars_proto::SplitRequest;
 use ring::digest;
+use serde::{Deserialize, Serialize};
 use serde_json;
+use std::fs::{create_dir, read_dir, OpenOptions};
+use std::io::{Error, ErrorKind};
 use std::{future::Future, pin::Pin, time::Instant};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status, Streaming};
@@ -16,8 +22,9 @@ use uuid::Uuid;
 pub mod polars_proto {
     tonic::include_proto!("bastionlab_polars");
 }
+
 use polars_proto::{
-    polars_service_server::PolarsService, Empty, FetchChunk, Query, ReferenceList,
+    polars_service_server::PolarsService, Empty, FetchChunk, QueryBytes, ReferenceList,
     ReferenceRequest, ReferenceResponse, SendChunk,
 };
 
@@ -29,10 +36,10 @@ use composite_plan::*;
 
 mod visitable;
 
-mod access_control;
+pub mod access_control;
 use access_control::*;
 
-mod utils;
+pub mod utils;
 
 pub enum FetchStatus {
     Ok,
@@ -45,7 +52,7 @@ pub struct DelayedDataFrame {
     fetch_status: FetchStatus,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataFrameArtifact {
     dataframe: DataFrame,
     policy: Policy,
@@ -67,9 +74,23 @@ impl DataFrameArtifact {
             query_details: String::from("uploaded dataframe"),
         }
     }
-}
 
-#[derive(Debug)]
+    pub fn with_fetchable(mut self, fetchable: VerificationResult) -> Self {
+        self.fetchable = fetchable;
+        self
+    }
+
+    pub fn inherit(&self, df: DataFrame) -> Self {
+        Self {
+            dataframe: df,
+            policy: self.policy.clone(),
+            blacklist: self.blacklist.clone(),
+            fetchable: self.fetchable.clone(),
+            query_details: self.query_details.clone(),
+        }
+    }
+}
+#[derive(Clone)]
 pub struct BastionLabPolars {
     dataframes: Arc<RwLock<HashMap<String, DataFrameArtifact>>>,
     sess_manager: Arc<SessionManager>,
@@ -221,7 +242,7 @@ Reason: {}",
         })
     }
 
-    fn get_df_unchecked(&self, identifier: &str) -> Result<DataFrame, Status> {
+    pub fn get_df_unchecked(&self, identifier: &str) -> Result<DataFrame, Status> {
         let dfs = self.dataframes.read().unwrap();
         Ok(dfs
             .get(identifier)
@@ -245,7 +266,7 @@ Reason: {}",
         )))?))
     }
 
-    fn get_header(&self, identifier: &str) -> Result<String, Status> {
+    pub fn get_header(&self, identifier: &str) -> Result<String, Status> {
         Ok(get_df_header(
             &self
                 .dataframes
@@ -270,11 +291,73 @@ Reason: {}",
         Ok(res)
     }
 
-    fn insert_df(&self, df: DataFrameArtifact) -> String {
+    pub fn insert_df(&self, df: DataFrameArtifact) -> String {
         let mut dfs = self.dataframes.write().unwrap();
         let identifier = format!("{}", Uuid::new_v4());
         dfs.insert(identifier.clone(), df);
         identifier
+    }
+
+    fn persist_df(&self, identifier: &str) -> Result<(), Status> {
+        let dataframes = self
+            .dataframes
+            .read()
+            .map_err(|_| Status::not_found("Unable to read dataframes!"))?;
+
+        let df_artifact = dataframes
+            .get(identifier)
+            .ok_or("")
+            .map_err(|_| Status::not_found("Unable to find dataframe!"))?;
+
+        if df_artifact.fetchable != VerificationResult::Safe {
+            return Err(Status::failed_precondition("Dataframe is not fetchable"));
+        }
+
+        let error = create_dir("data_frames");
+        match error {
+            Ok(_) => {}
+            Err(err) => {
+                if err.kind() != ErrorKind::AlreadyExists {
+                    return Err(Status::failed_precondition(err.kind().to_string()));
+                }
+            }
+        }
+
+        let path = format!("data_frames/{}.json", identifier);
+        let df_store = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(path)
+            .map_err(|_| Status::not_found("Unable to find or create storage file!"))?;
+
+        serde_json::to_writer(df_store, df_artifact)
+            .map_err(|_| Status::unknown("Could not serialize dataframe artifact!"))?;
+
+        Ok(())
+    }
+
+    pub fn load_dfs(&self) -> Result<(), Error> {
+        let files = read_dir("data_frames")?;
+
+        for file in files {
+            let file = file?;
+            let identifier = file.file_name().to_str().unwrap().replace(".json", "");
+
+            let file = std::fs::OpenOptions::new()
+                .read(true)
+                .open(file.path().to_str().unwrap())?;
+            let reader = std::io::BufReader::new(file);
+            let df: DataFrameArtifact = serde_json::from_reader(reader)?;
+
+            let mut dfs = self.dataframes.write().unwrap();
+            dfs.insert(identifier, df);
+        }
+        Ok(())
+    }
+    fn delete_dfs(&self, identifier: &str) -> Result<(), Error> {
+        let mut dfs = self.dataframes.write().unwrap();
+        dfs.remove(identifier);
+        Ok(())
     }
 }
 
@@ -289,22 +372,22 @@ impl PolarsService for BastionLabPolars {
 
     async fn run_query(
         &self,
-        request: Request<Query>,
+        request: Request<Streaming<QueryBytes>>,
     ) -> Result<Response<ReferenceResponse>, Status> {
         let token = self.sess_manager.verify_request(&request)?;
 
-        let composite_plan: CompositePlan = serde_json::from_str(&request.get_ref().composite_plan)
-            .map_err(|e| {
-                Status::invalid_argument(format!(
-                    "Could not deserialize composite plan: {}{}",
-                    e,
-                    &request.get_ref().composite_plan
-                ))
-            })?;
+        let plan = unstream_query_request(request.into_inner()).await?;
+        let composite_plan: CompositePlan = serde_json::from_str(&plan).map_err(|e| {
+            Status::invalid_argument(format!(
+                "Could not deserialize composite plan: {}{}",
+                e, plan
+            ))
+        })?;
+        let user_id = self.sess_manager.get_user_id(token.clone())?;
 
         let start_time = Instant::now();
 
-        let res = composite_plan.run(self)?;
+        let res = composite_plan.run(self, &user_id)?;
         let dataframe_bytes: Vec<u8> =
             df_to_bytes(&res.dataframe)
                 .iter_mut()
@@ -318,6 +401,7 @@ impl PolarsService for BastionLabPolars {
 
         let elapsed = start_time.elapsed();
         let hash = hex::encode(digest::digest(&digest::SHA256, &dataframe_bytes).as_ref());
+
         telemetry::add_event(
             TelemetryEventProps::RunQuery {
                 dataset_name: Some(identifier.clone()),
@@ -418,5 +502,77 @@ impl PolarsService for BastionLabPolars {
             Some(self.sess_manager.get_client_info(token)?),
         );
         Ok(Response::new(ReferenceResponse { identifier, header }))
+    }
+
+    async fn split(
+        &self,
+        request: Request<SplitRequest>,
+    ) -> Result<Response<ReferenceList>, Status> {
+        let (rdfs, train_size, test_size, shuffle, random_state) = (
+            &request.get_ref().rdfs,
+            request.get_ref().train_size,
+            request.get_ref().test_size,
+            request.get_ref().shuffle,
+            request.get_ref().random_state,
+        );
+
+        let mut dfs = Vec::new();
+
+        for rdf in rdfs {
+            dfs.push(self.get_df_unchecked(&rdf.identifier)?);
+        }
+
+        // Verify that all dfs have equal lengths, if not abort.
+        let set = HashSet::from_iter(dfs.iter().map(|df| df.height()));
+        if set.len() > 1 {
+            return Err(Status::aborted("RDFs should have the same height"));
+        }
+        let mut out_dfs = vec![];
+
+        // Inherit other features (`policy`, `fetachable`, `blacklist`, etc) from parent DataFrame
+        let inherit = |id: &String, df: DataFrame| {
+            self.with_df_artifact_ref(&id, |artifact| artifact.inherit(df.clone()))
+        };
+
+        let make_response = |df: DataFrameArtifact| -> Result<ReferenceResponse, Status> {
+            let identifier = self.insert_df(df);
+            Ok(ReferenceResponse {
+                identifier: identifier.clone(),
+                header: self.get_header(&identifier)?,
+            })
+        };
+        for (df, id) in dfs.iter().zip(rdfs) {
+            let df_height = df.height();
+            let train_size = (df_height as f32 * train_size) as usize;
+            let mut test_size = (df_height as f32 * test_size) as usize;
+            test_size += df_height - (train_size - test_size);
+
+            out_dfs.push(make_response(inherit(
+                &id.identifier,
+                df.head(Some(train_size)),
+            )?)?);
+
+            out_dfs.push(make_response(inherit(
+                &id.identifier,
+                df.tail(Some(test_size)),
+            )?)?);
+        }
+
+        Ok(Response::new(ReferenceList { list: out_dfs }))
+    }
+    async fn persist_data_frame(
+        &self,
+        request: Request<ReferenceRequest>,
+    ) -> Result<Response<Empty>, Status> {
+        let token = self.sess_manager.verify_request(&request)?;
+        let identifier = &request.get_ref().identifier;
+        self.persist_df(identifier)?;
+        telemetry::add_event(
+            TelemetryEventProps::SaveDataframe {
+                dataset_name: Some(identifier.clone()),
+            },
+            Some(self.sess_manager.get_client_info(token)?),
+        );
+        Ok(Response::new(Empty {}))
     }
 }

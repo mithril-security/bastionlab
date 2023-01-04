@@ -10,7 +10,12 @@ def read(path):
 
 
 DIR = os.path.dirname(__file__) or os.getcwd()
-PROTO_FILES = ["bastionlab.proto", "bastionlab_polars.proto", "bastionlab_torch.proto"]
+PROTO_FILES = [
+    "bastionlab.proto",
+    "bastionlab_polars.proto",
+    "bastionlab_torch.proto",
+    "bastionlab_conversion.proto",
+]
 PROTO_PATH = os.path.join(os.path.dirname(DIR), "protos")
 LONG_DESCRIPTION = read("README.md")
 PKG_NAME = "bastionlab"

@@ -1,17 +1,22 @@
-from typing import Optional, Union, List
+from typing import Optional, Union, List, Callable, TYPE_CHECKING
 from time import sleep
 from tqdm import tqdm  # type: ignore [import]
 from grpc import StatusCode
 from torch.nn import Module
 from torch.utils.data import Dataset
 import torch
-from ..pb.bastionlab_torch_pb2 import Metric, Reference, TestConfig, TrainConfig  # type: ignore [import]
+from ..pb.bastionlab_torch_pb2 import Metric, Reference, TestConfig, TrainConfig, Meta, UpdateMeta  # type: ignore [import]
+from ..pb.bastionlab_conversion_pb2 import ToDataFrame
+from ..pb.bastionlab_polars_pb2 import ReferenceResponse
 from ..errors import GRPCException
 from .psg import expand_weights
 from .client import BastionLabTorch
 from .optimizer_config import *
 
 from .utils import bulk_deserialize
+
+if TYPE_CHECKING:
+    from ..polars.remote_polars import FetchableLazyFrame
 
 
 class RemoteDataset:
@@ -36,6 +41,8 @@ class RemoteDataset:
         description: str = "",
         progress: bool = True,
     ) -> None:
+        self.trace_input, self.meta = RemoteDataset._tracer(train_dataset.meta)
+
         if isinstance(train_dataset, Dataset):
             self.train_dataset_ref = client.send_dataset(
                 train_dataset,
@@ -53,16 +60,9 @@ class RemoteDataset:
             self.train_dataset_ref = train_dataset
             self.name = self.train_dataset_ref.name
             self.description = self.train_dataset_ref.description
-            meta = bulk_deserialize(train_dataset.meta)
-            self.trace_input = [
-                torch.zeros(s, dtype=dtype)
-                if dtype
-                in [torch.uint8, torch.int8, torch.int16, torch.int32, torch.int64]
-                else torch.randn(s, dtype=dtype)
-                for s, dtype in zip(meta["input_shape"], meta["input_dtype"])
-            ]
-            self.nb_samples = meta["nb_samples"]
-            self.privacy_limit = meta["privacy_limit"]
+            self.nb_samples = self.meta.nb_samples
+            self.privacy_limit = self.meta.privacy_limit
+            ##
         if test_dataset is not None and isinstance(test_dataset, Dataset):
             self.test_dataset_ref = client.send_dataset(
                 test_dataset,
@@ -75,14 +75,26 @@ class RemoteDataset:
                 progress=progress,
             )
         else:
-            self.test_dataset_ref = test_dataset
+            if self.meta.HasField("train_dataset"):
+                self.test_dataset_ref = self.train_dataset_ref
+                self.train_dataset_ref = self.meta.train_dataset
+            else:
+                self.test_dataset_ref = test_dataset
         self.client = client
 
     @staticmethod
     def list_available(client: BastionLabTorch) -> List["RemoteDataset"]:
         """Returns the list of `RemoteDataset`s available on the server."""
+
+        def inner(ref):
+            _, meta = RemoteDataset._tracer(ref.meta)
+            return (
+                ref,
+                None if not meta.HasField("train_dataset") else meta.train_dataset,
+            )
+
         refs = client.get_available_datasets()
-        ds = [(ref, bulk_deserialize(ref.meta)["train_dataset"]) for ref in refs]
+        ds = [inner(ref) for ref in refs]
         return [RemoteDataset(client, d[1], d[0]) for d in ds if d[1] is not None]
 
     def __str__(self) -> str:
@@ -90,6 +102,47 @@ class RemoteDataset:
 
     def __format__(self, __format_spec: str) -> str:
         return self.__str__()
+
+    @staticmethod
+    def _tracer(meta_bytes: bytes):
+        meta = Meta()
+        meta.ParseFromString(meta_bytes)
+        torch_dtypes = {
+            "Int8": torch.uint8,
+            "UInt8": torch.uint8,
+            "Int16": torch.int16,
+            "Int32": torch.int32,
+            "Int64": torch.int64,
+            "Half": torch.half,
+            "Float": torch.float,
+            "Double": torch.double,
+            "ComplexHalf": torch.complex32,
+            "ComplexFloat": torch.complex64,
+            "ComplexDouble": torch.complex128,
+            "Bool": torch.bool,
+            "QInt8": torch.qint8,
+            "QInt32": torch.qint32,
+            "BFloat16": torch.bfloat16,
+        }
+        return [
+            torch.zeros(torch.Size([shape]), dtype=torch_dtypes[dtype])
+            if torch_dtypes[dtype]
+            in [torch.uint8, torch.int8, torch.int16, torch.int32, torch.int64]
+            else torch.randn(torch.Size([shape]), dtype=torch_dtypes[dtype])
+            for shape, dtype in zip(meta.input_shape, meta.input_dtype)
+        ], meta
+
+    def set_train_dataset(
+        self,
+        train_dataset: Optional[Reference] = None,
+    ):
+        self.meta.MergeFrom(Meta(train_dataset=train_dataset))
+        self.client.stub.UpdateDataset(
+            UpdateMeta(
+                identifier=self.train_dataset_ref.identifier,
+                meta=self.meta,
+            )
+        )
 
     def _set_test_dataset(
         self, test_dataset: Union[Dataset, Reference], progress: bool = True
@@ -107,6 +160,45 @@ class RemoteDataset:
             )
         else:
             self.test_dataset_ref = test_dataset
+
+    def to_df(
+        self,
+        inputs_col_names: List[str],
+        labels_col_name: str,
+        inputs_conv_fn: str = "",
+        labels_conv_fn: str = "",
+    ) -> "FetchableLazyFrame":
+        """Converts BastionLabTorch `RemoteDataset` to a `FetchableLazyFrame`.
+
+        Args
+        ----
+            inputs_col_names: List[str]
+                The list of input columns names to used as `DataFrame` columns.
+            labels_col_name: str
+                The column name of the labels column in the resulting `DataFrame`
+            inputs_conv_fn: str
+                Function to convert inputs to `DataFrame` dtypes.
+            labels_conv_fn: str
+                Function to convert labels to `DataFrame` dtypes.
+
+        Returns
+        -------
+            FetchableLazyFrame
+        """
+        from ..config import CONFIG
+        from ..polars.remote_polars import FetchableLazyFrame
+
+        ref = self.client._conv._stub.ConvToDataFrame(
+            ToDataFrame(
+                inputs_col_names=inputs_col_names,
+                labels_col_name=labels_col_name,
+                inputs_conv_fn=inputs_conv_fn,
+                labels_conv_fn=labels_conv_fn,
+                identifier=self.train_dataset_ref.identifier,
+            )
+        )
+        ref = ReferenceResponse(identifier=ref.identifier, header=ref.header)
+        return FetchableLazyFrame._from_reference(CONFIG["polars_client"], ref)
 
 
 class RemoteLearner:
@@ -145,7 +237,7 @@ class RemoteLearner:
         metric_eps_per_batch: Optional[float] = None,
         model_name: Optional[str] = None,
         model_description: str = "",
-        expand: bool = True,
+        expand: bool = False,
         progress: bool = True,
     ) -> None:
         if isinstance(model, Module):
@@ -335,7 +427,7 @@ class RemoteLearner:
     def fit(
         self,
         nb_epochs: int,
-        eps: Optional[float],
+        eps: Optional[float] = None,
         batch_size: Optional[int] = None,
         max_grad_norm: Optional[float] = None,
         lr: Optional[float] = None,
