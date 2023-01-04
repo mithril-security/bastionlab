@@ -13,7 +13,7 @@ class GRPCException(Exception):
     A custom exception class for wrapping gRPC errors. This allows for better error
     handling and display.
 
-    Attributes:
+    Args:
         err (Union[grpc._channel._InactiveRpcError, grpc._channel._MultiThreadedRendezvous]):
             The gRPC error that was caught and wrapped by this exception.
     """

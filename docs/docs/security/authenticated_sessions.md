@@ -16,10 +16,9 @@ You must share your public key with the server or the data owner so it can be ad
 
 The transfer of the public key to the data owner is not something we cover. We leave it to you to choose a trusted means of transferring your public key.
 
-``` note
+!!! important
 
-	**You do not have to generate the key with BastionLab.** You can  do it with any other means (OpenSSL for example), but the keys **must be generated using the NIST P-256 elliptic curve algorithm**. 
-```
+	You do not have to generate the key with BastionLab. You can  do it with any other means (OpenSSL for example), but the keys **must be generated using the NIST P-256 elliptic curve algorithm**. 
 
 ## Key management
 ___________________________________
