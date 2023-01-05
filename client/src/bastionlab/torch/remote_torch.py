@@ -1,6 +1,7 @@
 import torch
-from typing import Iterator, TYPE_CHECKING, Tuple
+import hashlib
 import io
+from typing import Iterator, TYPE_CHECKING, List, Optional
 from dataclasses import dataclass
 from ..polars.utils import create_byte_chunk
 from ..pb.bastionlab_torch_pb2 import Chunk, Reference, Meta
@@ -71,3 +72,14 @@ class RemoteTensor:
 
     def fetch_tensor(self) -> torch.Tensor:
         pass
+
+
+@dataclass
+class RemoteDataset:
+    inputs: List[RemoteTensor]
+    label: RemoteTensor
+    name: Optional[str] = "RemoteDataset-" + hashlib.sha256().hexdigest()[:5]
+    privacy_limit: Optional[float] = -1.0
+
+    def __str__(self) -> str:
+        return f"RemoteDataset(name={self.name}, privacy_limit={self.privacy_limit}, inputs={str(self.inputs)}, label={str(self.label)})"
