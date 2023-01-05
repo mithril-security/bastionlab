@@ -5,9 +5,9 @@ use crate::composite_plan::StatsEntry;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Policy {
-    safe_zone: Rule,
-    unsafe_handling: UnsafeAction,
-    savable: bool,
+    pub safe_zone: Rule,
+    pub unsafe_handling: UnsafeAction,
+    pub savable: bool,
 }
 
 impl Policy {

@@ -4,8 +4,6 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io::Cursor, ops::Deref};
 use tch::CModule;
 use tonic::Status;
-use chrono::{Local, DateTime};
-use log::info;
 
 use crate::{
     access_control::{Context, Policy, VerificationResult},
@@ -13,7 +11,6 @@ use crate::{
     visitable::{Visitable, VisitableMut},
     BastionLabPolars, DataFrameArtifact,
 };
-const LOG_DF: &str = "00000000-0000-0000-0000-000000000000";
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CompositePlan(Vec<CompositePlanSegment>);
