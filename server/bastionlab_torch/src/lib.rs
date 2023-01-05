@@ -87,7 +87,7 @@ impl BastionLabTorch {
             .unwrap()
             .insert(identifier.to_string(), Mutex::new(tensor));
 
-        info!("Successfully inserted tensor!");
+        info!("Successfully inserted tensor {}", identifier);
         identifier.to_string()
     }
 
@@ -536,6 +536,7 @@ impl TorchService for BastionLabTorch {
         let (tensor, meta) = {
             let data = res.data.read().unwrap();
             let data: Tensor = (&*data).try_into().unwrap();
+            println!("{:?}", data.size());
             let meta = Meta {
                 input_dtype: vec![format!("{:?}", data.kind())],
                 input_shape: data.size(),

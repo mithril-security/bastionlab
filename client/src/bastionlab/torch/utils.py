@@ -430,5 +430,5 @@ def to_torch_meta(meta_bytes: bytes):
     }
 
     return [torch_dtypes[dt] for dt in meta.input_dtype], [
-        torch.Size([shape]) for shape in meta.input_shape
+        torch.Size(list(meta.input_shape))
     ]
