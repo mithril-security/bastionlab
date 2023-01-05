@@ -889,7 +889,7 @@ class RemoteLazyFrame:
                     raise ValueError("Column ", x, " not found in dataframe")
         return Facet(inner_rdf=self, col=col, row=row, kwargs=kwargs)
 
-    def update_policy(new_policy: Policy):
+    def update_policy(self, new_policy: Policy):
         return self._meta._client.update_policy(self._identifier, new_policy)
 
 
@@ -938,9 +938,6 @@ class FetchableLazyFrame(RemoteLazyFrame):
 
     def save(self):
         return self._meta._client.persist_df(self._identifier)
-
-    def update_policy(self, new_policy: Policy):
-        return self._meta._client.update_policy(self._identifier, new_policy)
 
 
 @dataclass
