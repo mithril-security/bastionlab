@@ -284,15 +284,15 @@ Reason: {}",
         let dataframes = self
             .dataframes
             .read()
-            .map_err(|_| Status::not_found("Unable to read dataframes!"))?;
+            .map_err(|_| Status::internal("Unable to read dataframes!"))?;
 
         let df_artifact = dataframes
             .get(identifier)
             .ok_or("")
             .map_err(|_| Status::not_found("Unable to find dataframe!"))?;
 
-        if df_artifact.fetchable != VerificationResult::Safe {
-            return Err(Status::failed_precondition("Dataframe is not fetchable"));
+        if df_artifact.policy.check_savable() != true {
+            return Err(Status::unknown("Dataframe is not savable"));
         }
 
         let error = create_dir("data_frames");
@@ -300,7 +300,7 @@ Reason: {}",
             Ok(_) => {}
             Err(err) => {
                 if err.kind() != ErrorKind::AlreadyExists {
-                    return Err(Status::failed_precondition(err.kind().to_string()));
+                    return Err(Status::unknown(err.kind().to_string()));
                 }
             }
         }
@@ -310,10 +310,10 @@ Reason: {}",
             .write(true)
             .create(true)
             .open(path)
-            .map_err(|_| Status::not_found("Unable to find or create storage file!"))?;
+            .map_err(|_| Status::internal("Unable to find or create storage file!"))?;
 
         serde_json::to_writer(df_store, df_artifact)
-            .map_err(|_| Status::unknown("Could not serialize dataframe artifact!"))?;
+            .map_err(|_| Status::internal("Could not serialize dataframe artifact!"))?;
 
         Ok(())
     }
