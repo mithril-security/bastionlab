@@ -184,3 +184,4 @@ ex.c
 *.pem
 *.key.pem
 *.html
+docs/docs/resources/bastionlab/**/*.md
