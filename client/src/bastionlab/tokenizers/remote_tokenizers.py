@@ -45,10 +45,15 @@ class RemoteTokenizer:
 
         return RemoteTokenizer(Tokenizer.from_pretrained(model))
 
-    def encode(self, series: "RemoteSeries") -> Tuple[RemoteTensor, RemoteTensor]:
+    def encode(
+        self, series: "RemoteSeries", return_tensors: bool = True
+    ) -> Tuple[RemoteTensor, RemoteTensor]:
         res = series.convert(series.columns, self._tokenizer.to_str()).collect()
         input_ids = res.column(res.columns[0])
         attention_mask = res.column(res.columns[1])
+
+        if return_tensors:
+            return input_ids.to_tensor(), attention_mask.to_tensor()
         return input_ids, attention_mask
 
     def __str__(self) -> str:

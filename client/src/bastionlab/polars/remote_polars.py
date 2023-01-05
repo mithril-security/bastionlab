@@ -973,7 +973,13 @@ class FetchableLazyFrame(RemoteLazyFrame):
                 v = get_dtype(v)
                 return getattr(pl, k)(v)
 
-        df = pl.DataFrame([pl.Series(k, dtype=get_dtype(v)) for k, v in header.items()])
+        def get_series(name, dtype):
+            if isinstance(dtype, str):
+                return pl.Series(name, dtype=get_dtype(dtype))
+            else:
+                return pl.Series(name, values=[[]], dtype=get_dtype(dtype))
+
+        df = pl.DataFrame([get_series(k, v) for k, v in header.items()])
         return FetchableLazyFrame(
             _identifier=ref.identifier,
             _inner=df.lazy(),
