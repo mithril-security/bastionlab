@@ -212,6 +212,27 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
         -------
         Nothing
         """
+        self.client.refresh_session_if_needed()
+
         res = GRPCException.map_error(
             lambda: self.stub.PersistDataFrame(ReferenceRequest(identifier=identifier))
+        )
+
+    def delete_df(self, identifier: str):
+        """
+        Deletes a Dataframe on the server from a BastionLab DataFrame identifier.
+
+        Args
+        ----
+        identifier : str
+            A unique identifier for the Remote DataFrame.
+
+        Returns
+        -------
+        Nothing
+        """
+        self.client.refresh_session_if_needed()
+
+        res = GRPCException.map_error(
+            lambda: self.stub.DeleteDataFrame(ReferenceRequest(identifier=identifier))
         )

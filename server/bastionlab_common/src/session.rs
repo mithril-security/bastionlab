@@ -73,6 +73,14 @@ impl SessionManager {
         self.keys.is_some()
     }
 
+    pub fn get_owner_keys(&self) -> Result<HashMap<String, Vec<u8>>, Status> {
+        if self.auth_enabled() {
+            let keys = self.keys.as_ref().unwrap().lock().unwrap();
+            return Ok(keys.clone_owner_keys());
+        }
+        return Err(Status::internal("Authentication is disabled."));
+    }
+
     pub fn get_user_id(&self, token: Option<Bytes>) -> Result<String, Status> {
         let token_bytes = match &token {
             Some(v) => &v[..],
