@@ -31,6 +31,9 @@ class RemoteTensor:
     def identifier(self) -> str:
         return self._identifier
 
+    def serialize(self) -> str:
+        return f'{{"identifier": "{self.identifier}"}}'
+
     @staticmethod
     def send_tensor(tensor: torch.Tensor) -> "RemoteTensor":
         client = get_client()
@@ -74,12 +77,35 @@ class RemoteTensor:
         pass
 
 
+def _tracer(dtypes: List[torch.dtype], shapes: List[torch.Size]):
+    return [
+        torch.zeros(shape[1], dtype=dtype)
+        if dtype in [torch.uint8, torch.int8, torch.int16, torch.int32, torch.int64]
+        else torch.randn(shape[1], dtype=dtype)
+        for shape, dtype in zip(shapes, dtypes)
+    ]
+
+
 @dataclass
 class RemoteDataset:
     inputs: List[RemoteTensor]
     label: RemoteTensor
     name: Optional[str] = "RemoteDataset-" + hashlib.sha256().hexdigest()[:5]
     privacy_limit: Optional[float] = -1.0
+
+    @property
+    def trace_input(self):
+        dtypes = [input.dtype for input in self.inputs]
+        shapes = [input.shape for input in self.inputs]
+        return _tracer(dtypes, shapes)
+
+    @property
+    def nb_samples(self):
+        return self.label.shape[0]
+
+    def serialize(self):
+        inputs = ",".join([input.serialize() for input in self.inputs])
+        return f'{{"inputs": [{inputs}], "label": {self.label.serialize()}, "nb_samples": {self.nb_samples}, "privacy_limit": {self.privacy_limit}}}'
 
     def __str__(self) -> str:
         return f"RemoteDataset(name={self.name}, privacy_limit={self.privacy_limit}, inputs={str(self.inputs)}, label={str(self.label)})"

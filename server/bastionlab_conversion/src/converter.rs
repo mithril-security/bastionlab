@@ -55,7 +55,7 @@ impl Converter {
         let labels = Mutex::new(series_to_tensor(labels)?);
         let identifier = format!("{}", Uuid::new_v4());
 
-        let data = Dataset::new(inputs, labels, true, (vec![], "".to_string()));
+        let data = Dataset::new(inputs, labels, -1.0);
         let meta = Meta {
             input_shape: shapes,
             input_dtype: dtypes,

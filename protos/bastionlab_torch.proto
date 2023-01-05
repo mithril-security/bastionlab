@@ -54,7 +54,7 @@ message Empty {
 message TrainConfig {
     // Configuration for training sent to BastionAI.
     Reference model = 1;
-    Reference dataset = 2;
+    string dataset = 2;
     int32 batch_size = 3;
     int32 epochs = 4;
     string device = 5;

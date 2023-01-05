@@ -12,193 +12,196 @@ from ..errors import GRPCException
 from .psg import expand_weights
 from .client import BastionLabTorch
 from .optimizer_config import *
+from ..torch.remote_torch import RemoteDataset
+
 
 from .utils import bulk_deserialize
 
 if TYPE_CHECKING:
     from ..polars.remote_polars import FetchableLazyFrame
+    from ..torch.remote_torch import RemoteDataset
 
 
-class RemoteDataset:
-    """Represents a remote dataloader on the BlindAI server encapsulating a training
-    and optional testing datasets along with dataloading parameters.
+# class RemoteDataset:
+#     """Represents a remote dataloader on the BlindAI server encapsulating a training
+#     and optional testing datasets along with dataloading parameters.
 
-    Args:
-        client: A BastionAI client to be used to access server resources.
-        train_dataset: A `torch.utils.data.Dataset` instance for training that will be uploaded on the server.
-        test_dataset: An optional `torch.utils.data.Dataset` instance for testing that will be uploaded on the server.
-        name: A name for the uploaded dataset.
-        description: A string description of the dataset being uploaded.
-    """
+#     Args:
+#         client: A BastionAI client to be used to access server resources.
+#         train_dataset: A `torch.utils.data.Dataset` instance for training that will be uploaded on the server.
+#         test_dataset: An optional `torch.utils.data.Dataset` instance for testing that will be uploaded on the server.
+#         name: A name for the uploaded dataset.
+#         description: A string description of the dataset being uploaded.
+#     """
 
-    def __init__(
-        self,
-        client: BastionLabTorch,
-        train_dataset: Union[Dataset, Reference],
-        test_dataset: Optional[Union[Dataset, Reference]] = None,
-        privacy_limit: Optional[float] = None,
-        name: Optional[str] = None,
-        description: str = "",
-        progress: bool = True,
-    ) -> None:
-        self.trace_input, self.meta = RemoteDataset._tracer(train_dataset.meta)
+#     def __init__(
+#         self,
+#         client: BastionLabTorch,
+#         train_dataset: Union[Dataset, Reference],
+#         test_dataset: Optional[Union[Dataset, Reference]] = None,
+#         privacy_limit: Optional[float] = None,
+#         name: Optional[str] = None,
+#         description: str = "",
+#         progress: bool = True,
+#     ) -> None:
+#         self.trace_input, self.meta = RemoteDataset._tracer(train_dataset.meta)
 
-        if isinstance(train_dataset, Dataset):
-            self.train_dataset_ref = client.send_dataset(
-                train_dataset,
-                name=name if name is not None else type(train_dataset).__name__,
-                description=description,
-                privacy_limit=privacy_limit,
-                progress=progress,
-            )
-            self.name = name
-            self.description = description
-            self.trace_input = [input.unsqueeze(0) for input in train_dataset[0][0]]
-            self.nb_samples = len(train_dataset)  # type: ignore [arg-type]
-            self.privacy_limit = privacy_limit
-        else:
-            self.train_dataset_ref = train_dataset
-            self.name = self.train_dataset_ref.name
-            self.description = self.train_dataset_ref.description
-            self.nb_samples = self.meta.nb_samples
-            self.privacy_limit = self.meta.privacy_limit
-            ##
-        if test_dataset is not None and isinstance(test_dataset, Dataset):
-            self.test_dataset_ref = client.send_dataset(
-                test_dataset,
-                name=f"{name} (test)"
-                if name is not None
-                else type(test_dataset).__name__,
-                description=description,
-                privacy_limit=privacy_limit,
-                train_dataset=self.train_dataset_ref,
-                progress=progress,
-            )
-        else:
-            if self.meta.HasField("train_dataset"):
-                self.test_dataset_ref = self.train_dataset_ref
-                self.train_dataset_ref = self.meta.train_dataset
-            else:
-                self.test_dataset_ref = test_dataset
-        self.client = client
+#         if isinstance(train_dataset, Dataset):
+#             self.train_dataset_ref = client.send_dataset(
+#                 train_dataset,
+#                 name=name if name is not None else type(train_dataset).__name__,
+#                 description=description,
+#                 privacy_limit=privacy_limit,
+#                 progress=progress,
+#             )
+#             self.name = name
+#             self.description = description
+#             self.trace_input = [input.unsqueeze(0) for input in train_dataset[0][0]]
+#             self.nb_samples = len(train_dataset)  # type: ignore [arg-type]
+#             self.privacy_limit = privacy_limit
+#         else:
+#             self.train_dataset_ref = train_dataset
+#             self.name = self.train_dataset_ref.name
+#             self.description = self.train_dataset_ref.description
+#             self.nb_samples = self.meta.nb_samples
+#             self.privacy_limit = self.meta.privacy_limit
+#             ##
+#         if test_dataset is not None and isinstance(test_dataset, Dataset):
+#             self.test_dataset_ref = client.send_dataset(
+#                 test_dataset,
+#                 name=f"{name} (test)"
+#                 if name is not None
+#                 else type(test_dataset).__name__,
+#                 description=description,
+#                 privacy_limit=privacy_limit,
+#                 train_dataset=self.train_dataset_ref,
+#                 progress=progress,
+#             )
+#         else:
+#             if self.meta.HasField("train_dataset"):
+#                 self.test_dataset_ref = self.train_dataset_ref
+#                 self.train_dataset_ref = self.meta.train_dataset
+#             else:
+#                 self.test_dataset_ref = test_dataset
+#         self.client = client
 
-    @staticmethod
-    def list_available(client: BastionLabTorch) -> List["RemoteDataset"]:
-        """Returns the list of `RemoteDataset`s available on the server."""
+#     @staticmethod
+#     def list_available(client: BastionLabTorch) -> List["RemoteDataset"]:
+#         """Returns the list of `RemoteDataset`s available on the server."""
 
-        def inner(ref):
-            _, meta = RemoteDataset._tracer(ref.meta)
-            return (
-                ref,
-                None if not meta.HasField("train_dataset") else meta.train_dataset,
-            )
+#         def inner(ref):
+#             _, meta = RemoteDataset._tracer(ref.meta)
+#             return (
+#                 ref,
+#                 None if not meta.HasField("train_dataset") else meta.train_dataset,
+#             )
 
-        refs = client.get_available_datasets()
-        ds = [inner(ref) for ref in refs]
-        return [RemoteDataset(client, d[1], d[0]) for d in ds if d[1] is not None]
+#         refs = client.get_available_datasets()
+#         ds = [inner(ref) for ref in refs]
+#         return [RemoteDataset(client, d[1], d[0]) for d in ds if d[1] is not None]
 
-    def __str__(self) -> str:
-        return f"{self.name} ({self.train_dataset_ref.identifier}): size={self.nb_samples}, desc={self.description if len(self.description) > 0 else 'N/A'}"
+#     def __str__(self) -> str:
+#         return f"{self.name} ({self.train_dataset_ref.identifier}): size={self.nb_samples}, desc={self.description if len(self.description) > 0 else 'N/A'}"
 
-    def __format__(self, __format_spec: str) -> str:
-        return self.__str__()
+#     def __format__(self, __format_spec: str) -> str:
+#         return self.__str__()
 
-    @staticmethod
-    def _tracer(meta_bytes: bytes):
-        meta = Meta()
-        meta.ParseFromString(meta_bytes)
-        torch_dtypes = {
-            "Int8": torch.uint8,
-            "UInt8": torch.uint8,
-            "Int16": torch.int16,
-            "Int32": torch.int32,
-            "Int64": torch.int64,
-            "Half": torch.half,
-            "Float": torch.float,
-            "Double": torch.double,
-            "ComplexHalf": torch.complex32,
-            "ComplexFloat": torch.complex64,
-            "ComplexDouble": torch.complex128,
-            "Bool": torch.bool,
-            "QInt8": torch.qint8,
-            "QInt32": torch.qint32,
-            "BFloat16": torch.bfloat16,
-        }
-        return [
-            torch.zeros(torch.Size([shape]), dtype=torch_dtypes[dtype])
-            if torch_dtypes[dtype]
-            in [torch.uint8, torch.int8, torch.int16, torch.int32, torch.int64]
-            else torch.randn(torch.Size([shape]), dtype=torch_dtypes[dtype])
-            for shape, dtype in zip(meta.input_shape, meta.input_dtype)
-        ], meta
+#     @staticmethod
+#     def _tracer(meta_bytes: bytes):
+#         meta = Meta()
+#         meta.ParseFromString(meta_bytes)
+#         torch_dtypes = {
+#             "Int8": torch.uint8,
+#             "UInt8": torch.uint8,
+#             "Int16": torch.int16,
+#             "Int32": torch.int32,
+#             "Int64": torch.int64,
+#             "Half": torch.half,
+#             "Float": torch.float,
+#             "Double": torch.double,
+#             "ComplexHalf": torch.complex32,
+#             "ComplexFloat": torch.complex64,
+#             "ComplexDouble": torch.complex128,
+#             "Bool": torch.bool,
+#             "QInt8": torch.qint8,
+#             "QInt32": torch.qint32,
+#             "BFloat16": torch.bfloat16,
+#         }
+#         return [
+#             torch.zeros(torch.Size([shape]), dtype=torch_dtypes[dtype])
+#             if torch_dtypes[dtype]
+#             in [torch.uint8, torch.int8, torch.int16, torch.int32, torch.int64]
+#             else torch.randn(torch.Size([shape]), dtype=torch_dtypes[dtype])
+#             for shape, dtype in zip(meta.input_shape, meta.input_dtype)
+#         ], meta
 
-    def set_train_dataset(
-        self,
-        train_dataset: Optional[Reference] = None,
-    ):
-        self.meta.MergeFrom(Meta(train_dataset=train_dataset))
-        self.client.stub.UpdateDataset(
-            UpdateMeta(
-                identifier=self.train_dataset_ref.identifier,
-                meta=self.meta,
-            )
-        )
+#     def set_train_dataset(
+#         self,
+#         train_dataset: Optional[Reference] = None,
+#     ):
+#         self.meta.MergeFrom(Meta(train_dataset=train_dataset))
+#         self.client.stub.UpdateDataset(
+#             UpdateMeta(
+#                 identifier=self.train_dataset_ref.identifier,
+#                 meta=self.meta,
+#             )
+#         )
 
-    def _set_test_dataset(
-        self, test_dataset: Union[Dataset, Reference], progress: bool = True
-    ) -> None:
-        if not type(test_dataset) == Reference:
-            self.test_dataset_ref = self.client.send_dataset(
-                test_dataset,
-                name=f"{self.name} (test)"
-                if self.description is not None
-                else type(test_dataset).__name__,
-                description=self.description,
-                privacy_limit=self.privacy_limit,
-                train_dataset=self.train_dataset_ref,
-                progress=progress,
-            )
-        else:
-            self.test_dataset_ref = test_dataset
+#     def _set_test_dataset(
+#         self, test_dataset: Union[Dataset, Reference], progress: bool = True
+#     ) -> None:
+#         if not type(test_dataset) == Reference:
+#             self.test_dataset_ref = self.client.send_dataset(
+#                 test_dataset,
+#                 name=f"{self.name} (test)"
+#                 if self.description is not None
+#                 else type(test_dataset).__name__,
+#                 description=self.description,
+#                 privacy_limit=self.privacy_limit,
+#                 train_dataset=self.train_dataset_ref,
+#                 progress=progress,
+#             )
+#         else:
+#             self.test_dataset_ref = test_dataset
 
-    def to_df(
-        self,
-        inputs_col_names: List[str],
-        labels_col_name: str,
-        inputs_conv_fn: str = "",
-        labels_conv_fn: str = "",
-    ) -> "FetchableLazyFrame":
-        """Converts BastionLabTorch `RemoteDataset` to a `FetchableLazyFrame`.
+#     def to_df(
+#         self,
+#         inputs_col_names: List[str],
+#         labels_col_name: str,
+#         inputs_conv_fn: str = "",
+#         labels_conv_fn: str = "",
+#     ) -> "FetchableLazyFrame":
+#         """Converts BastionLabTorch `RemoteDataset` to a `FetchableLazyFrame`.
 
-        Args
-        ----
-            inputs_col_names: List[str]
-                The list of input columns names to used as `DataFrame` columns.
-            labels_col_name: str
-                The column name of the labels column in the resulting `DataFrame`
-            inputs_conv_fn: str
-                Function to convert inputs to `DataFrame` dtypes.
-            labels_conv_fn: str
-                Function to convert labels to `DataFrame` dtypes.
+#         Args
+#         ----
+#             inputs_col_names: List[str]
+#                 The list of input columns names to used as `DataFrame` columns.
+#             labels_col_name: str
+#                 The column name of the labels column in the resulting `DataFrame`
+#             inputs_conv_fn: str
+#                 Function to convert inputs to `DataFrame` dtypes.
+#             labels_conv_fn: str
+#                 Function to convert labels to `DataFrame` dtypes.
 
-        Returns
-        -------
-            FetchableLazyFrame
-        """
-        from ..config import CONFIG
-        from ..polars.remote_polars import FetchableLazyFrame
+#         Returns
+#         -------
+#             FetchableLazyFrame
+#         """
+#         from ..config import CONFIG
+#         from ..polars.remote_polars import FetchableLazyFrame
 
-        ref = self.client._conv._stub.ConvToDataFrame(
-            ToDataFrame(
-                inputs_col_names=inputs_col_names,
-                labels_col_name=labels_col_name,
-                inputs_conv_fn=inputs_conv_fn,
-                labels_conv_fn=labels_conv_fn,
-                identifier=self.train_dataset_ref.identifier,
-            )
-        )
-        ref = ReferenceResponse(identifier=ref.identifier, header=ref.header)
-        return FetchableLazyFrame._from_reference(CONFIG["polars_client"], ref)
+#         ref = self.client._conv._stub.ConvToDataFrame(
+#             ToDataFrame(
+#                 inputs_col_names=inputs_col_names,
+#                 labels_col_name=labels_col_name,
+#                 inputs_conv_fn=inputs_conv_fn,
+#                 labels_conv_fn=labels_conv_fn,
+#                 identifier=self.train_dataset_ref.identifier,
+#             )
+#         )
+#         ref = ReferenceResponse(identifier=ref.identifier, header=ref.header)
+#         return FetchableLazyFrame._from_reference(CONFIG["polars_client"], ref)
 
 
 class RemoteLearner:
@@ -228,7 +231,7 @@ class RemoteLearner:
         self,
         client: BastionLabTorch,
         model: Union[Module, Reference],
-        remote_dataset: Union[RemoteDataset, Reference],
+        remote_dataset: "RemoteDataset",
         loss: str,
         max_batch_size: int,
         optimizer: OptimizerConfig = Adam(),
@@ -260,13 +263,11 @@ class RemoteLearner:
                 description=model_description,
                 progress=True,
             )
+            print(self.model_ref)
         else:
             self.model_ref = model
-        self.remote_dataset = (
-            remote_dataset
-            if type(remote_dataset) == RemoteDataset
-            else RemoteDataset(client, remote_dataset)
-        )
+
+        self.remote_dataset = remote_dataset
         self.client = client
         self.loss = loss
         self.optimizer = optimizer
@@ -294,10 +295,11 @@ class RemoteLearner:
         per_n_steps_checkpoint: int = 0,
         resume: bool = False,
     ) -> TrainConfig:
+        print(self.remote_dataset.serialize())
         batch_size = batch_size if batch_size is not None else self.max_batch_size
         return TrainConfig(
             model=self.model_ref,
-            dataset=self.remote_dataset.train_dataset_ref,
+            dataset=self.remote_dataset.serialize(),
             batch_size=batch_size,
             epochs=nb_epochs,
             device=self.device,
@@ -448,7 +450,7 @@ class RemoteLearner:
             metric_eps: Global privacy budget for loss disclosure for the whole training that overrides
                         the default per-batch budget.
             timeout: Timeout in seconds between two updates of the loss on the server side. When elapsed without updates,
-                     polling ends and the progress bar is terminated.
+                        polling ends and the progress bar is terminated.
             poll_delay: Delay in seconds between two polling requests for the loss.
         """
         run = self.client.train(
@@ -489,7 +491,7 @@ class RemoteLearner:
             metric_eps: Global privacy budget for metric disclosure for the whole testing procedure that overrides
                         the default per-batch budget.
             timeout: Timeout in seconds between two updates of the metric on the server side. When elapsed without updates,
-                     polling ends and the progress bar is terminated.
+                        polling ends and the progress bar is terminated.
             poll_delay: Delay in seconds between two polling requests for the metric.
         """
         if test_dataset is not None:
