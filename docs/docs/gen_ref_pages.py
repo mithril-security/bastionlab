@@ -1,7 +1,7 @@
 import markdownify
 import os
 
-PATH = "./docs/resources/bastionlab/"
+PATH = "./docs/docs/resources/bastionlab/"
 
 # create html
 for files in os.listdir(PATH):
