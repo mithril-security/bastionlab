@@ -1,7 +1,7 @@
 use base64;
 use polars::{lazy::dsl::Expr, prelude::*};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, io::Cursor};
+use std::{collections::HashMap, io::Cursor, ops::Deref};
 use tch::CModule;
 use tonic::Status;
 use chrono::{Local, DateTime};
@@ -44,7 +44,6 @@ impl CompositePlan {
     pub fn run(self, state: &BastionLabPolars, user_id: &str) -> Result<DataFrameArtifact, Status> {
         let mut stack = Vec::new();
         let plan_str = serde_json::to_string(&self.0).unwrap(); // FIX THIS
-        let mut log_inputs = Vec::new();
 
         for seg in self.0 {
             match seg {
@@ -91,7 +90,6 @@ impl CompositePlan {
                     stack.push(frame);
                 }
                 CompositePlanSegment::EntryPointPlanSegment(identifier) => {
-                    log_inputs.push(identifier.clone());
                     let df = state.get_df_unchecked(&identifier)?;
                     let stats = DataFrameStats::new(identifier);
                     stack.push(StackFrame { df, stats });
@@ -119,35 +117,6 @@ impl CompositePlan {
             return Err(Status::invalid_argument(
                 "Wrong number of input data frames",
             ));
-        }
-
-        let mut inputs = String::from("");
-        for i in &log_inputs{
-            let mut _x = false;
-            if _x == true{
-                inputs.push_str(", ");
-            }
-            inputs.push_str(i);
-            _x = true;
-        }
-
-        //LAURA LOG
-        let dt: DateTime<Local> = Local::now();
-        let user_hash = user_id.clone();
-        let new_row = df! [
-        "User"              => [user_hash],
-        "Time"              => [dt.to_string()],
-        "Type"              => ["Run"],
-        "Inputs"            => [inputs.clone()],
-        "Output"            => ["..."],
-        "CompositePlan"     => [plan_str.to_string()],
-        "PolicyViolation"   => ["n/a"]
-        ].unwrap_or(DataFrame::default());
-        if (!inputs.starts_with(LOG_DF)) & (new_row != DataFrame::default()) {
-            match state.update_log(new_row) {
-                Ok(ret2) => ret2,
-                Err(error) => info!("Could not save updated log file: {}", error),
-            };
         }
 
         let StackFrame { df, stats } = stack.pop().unwrap();
@@ -181,6 +150,14 @@ impl CompositePlan {
             blacklist,
             query_details: plan_str,
         })
+    }
+}
+
+impl Deref for CompositePlan {
+    type Target = Vec<CompositePlanSegment>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 

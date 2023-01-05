@@ -90,6 +90,32 @@ impl BastionLabPolars {
         }
     }
 
+    fn build_log(
+        self: &BastionLabPolars,
+        user_hash: String,
+        op_type: &str,
+        inputs: String,
+        output: String,
+        cp: String,
+        pv: String,
+    ) -> Result<(), Status>
+    {
+        let dt: DateTime<Local> = Local::now();
+        let new_row = df! [
+        "User"              => [user_hash],
+        "Time"              => [dt.to_string()],
+        "Type"              => [op_type],
+        "Inputs"            => [inputs],
+        "Output"            => [output],
+        "CompositePlan"     => [cp],
+        "PolicyViolation"   => [pv],
+        ].unwrap_or(DataFrame::default());
+        if (!inputs.starts_with(LOG_DF)) & (new_row != DataFrame::default()) {
+            return self.update_log(new_row);
+        }
+        return Ok(());    
+    }
+
     fn update_log(
         self: &BastionLabPolars,
         new_row: DataFrame,
@@ -106,6 +132,7 @@ impl BastionLabPolars {
                 let pol = Policy{
                 safe_zone: True,
                 unsafe_handling: Log,
+                savable: true,
                 };
                 let df = DataFrameArtifact::new(new_row, pol, Vec::new());
                 dfs.insert(LOG_DF.to_string(), df);
@@ -115,27 +142,51 @@ impl BastionLabPolars {
         }    
     }
 
-    fn update_log_value(
+    fn log_get_inputs(
         self: &BastionLabPolars,
-        column: &str,
-        value: &str,
-        ) -> Result<(), Status> {
-        let mut dfs = self.dataframes.write().unwrap();
-        let artifact = dfs.get_mut(LOG_DF);
+        composite_plan: CompositePlan,
+    ) -> String {
+        let mut log_inputs = Vec::new();
+            for segment in composite_plan.iter() {
+                match segment {
+                    CompositePlanSegment::EntryPointPlanSegment(identifier) => {
+                        log_inputs.push(identifier.clone());
+                    }
+                    _ => {}
+                }
+            }
+            let mut inputs = String::from("");
+            for i in &log_inputs{
+                let mut _x = false;
+                if _x == true{
+                    inputs.push_str(", ");
+                }
+                inputs.push_str(i);
+                _x = true;
+            }
+        return inputs;
+    }
+
+    fn log_get_pol(
+        self: &BastionLabPolars,
+        id: &str,
+    ) -> String {
+        let dfs = self.dataframes.read().unwrap();
+        let artifact = dfs.get(id);
         match artifact{
             Some(artifact) => { //log dataframe exists, append new_row and save
-                artifact.dataframe = artifact.dataframe.clone().lazy().with_column(
-                    when(col(column).eq(lit("..."))).then(lit(value)).otherwise(col(column)).alias(column)
-                ).collect().unwrap_or(artifact.dataframe.clone());
-                drop(dfs);
-                return self.persist_df(LOG_DF);
+                let mut pol = "None";
+                if let VerificationResult::Unsafe { action, reason } = &artifact.fetchable {
+                    pol = reason;
+                    let _action = action;
+                }
+                return pol;
             }
             None => {
-                drop(dfs);
-                Ok(())
+                return "Error retrieving policy".to_string();
             }
-            }
-        }
+        } 
+    }
 
     fn get_df(
         &self,
@@ -415,8 +466,10 @@ impl PolarsService for BastionLabPolars {
                 ))
             })?;
 
-        let start_time = Instant::now();
+        //For log: get idenitifers and put them into inputs string
+        let inputs = self.log_get_inputs(composite_plan);
 
+        let start_time = Instant::now();
         let res = composite_plan.run(self, &user_id)?;
         let dataframe_bytes: Vec<u8> =
             df_to_bytes(&res.dataframe)
@@ -441,12 +494,11 @@ impl PolarsService for BastionLabPolars {
             Some(self.sess_manager.get_client_info(token)?),
         );
 
+        //update log
         if &identifier != LOG_DF{
-            match self.update_log_value("Output", &identifier) {
-                Ok(ret2) => ret2,
-                Err(error) => info!("Could not save updated log file: {}", error),
-            };
+            self.build_log(user_id.clone(), "Run", inputs.clone(), identifier, request.get_ref().composite_plan, "n/a".to_string());
         }
+
         info!("Succesfully ran query on {}", identifier.clone());
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
@@ -481,30 +533,10 @@ impl PolarsService for BastionLabPolars {
             },
             Some(client_info),
         );
-
         info!(
             "Succesfully sent dataframe {} to server",
             identifier.clone()
         );
-
-        //LAURA LOG
-        let dt: DateTime<Local> = Local::now();
-        let user_hash= self.sess_manager.get_user_id(token.clone())?;
-        let new_row = df! [
-        "User"              => [user_hash],
-        "Time"              => [dt.to_string()],
-        "Type"              => ["Send"],
-        "Inputs"            => ["n/a"],
-        "Output"            => [identifier.clone()],
-        "CompositePlan"     => ["n/a"],
-        "PolicyViolation"   => ["n/a"],
-        ].unwrap_or(DataFrame::default());
-        if (identifier.clone() != LOG_DF) & (new_row != DataFrame::default()){
-            match self.update_log(new_row) {
-                Ok(ret2) => ret2,
-                Err(error) => info!("Could not save updated log file: {}", error),
-            };
-        }
         Ok(Response::new(ReferenceResponse { identifier, header }))
     }
 
@@ -525,39 +557,10 @@ impl PolarsService for BastionLabPolars {
 
         //logging
         let user_hash= self.sess_manager.get_user_id(token.clone())?;
-        let dt: DateTime<Local> = Local::now();
         let id = &request.get_ref().identifier[..];
-        
-        //get df
-        let dfs = self.dataframes.read().unwrap();
-        let artifact = dfs.get(id).ok_or(Status::not_found(format!(
-            "Could not find dataframe: identifier={}",
-            id
-        )))?;
-
-        let mut pol = "None";
-        if let VerificationResult::Unsafe { action, reason } = &artifact.fetchable {
-            pol = reason;
-            let _action = action;
-        }
-
-        //log it
-        let new_row = df! [
-        "User"              => [user_hash],
-        "Time"              => [dt.to_string()],
-        "Type"              => ["Fetch"],
-        "Inputs"            => [String::from(id.clone())],
-        "Output"            => ["n/a"],
-        "CompositePlan"     => ["n/a"],
-        "PolicyViolation"   => [pol]
-        ].unwrap_or(DataFrame::default());
-        drop(dfs);
-        if (new_row != DataFrame::default()) & (id.clone() != LOG_DF){
-            match self.update_log(new_row) {
-                Ok(ret2) => ret2,
-                Err(error) => info!("Could not save updated log file: {}", error),
-            };
-        }
+        let pol = self.log_get_pol(id);
+        self.build_log(user_hash, "Fetch",  String::from(id), "n/a".to_string(), "n/a".to_string(), pol);
+        // drop(dfs);
         Ok(ret)
     }
 
