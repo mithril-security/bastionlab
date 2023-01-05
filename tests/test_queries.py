@@ -26,9 +26,6 @@ class TestingConnection(unittest.TestCase):
 
     def testingdf(self):
         df = pl.read_csv("titanic.csv").limit(50)
-        # The file train.csv is not included in the repository
-        # But it is download from the execution of a jupyter notebook
-        # for now
         connection = Connection("localhost", 50056)
         client = connection.client
         policy = Policy(
@@ -74,7 +71,7 @@ class TestingConnection(unittest.TestCase):
 
 
 def setUpModule():
-    print("hello!")
+    print("Hello world")
 
 
 if __name__ == "__main__":
