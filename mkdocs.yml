@@ -49,7 +49,7 @@ plugins:
   - mkdocs-jupyter
   - gen-files:
     scripts:
-    - docs/gen_ref_pages.py 
+      - docs/gen_ref_pages.py
   - mkdocstrings
 
 # Customization
