@@ -515,11 +515,9 @@ impl PolarsService for BastionLabPolars {
             match artifact{
                 Some(artifact) => {
                     artifact.policy = new_policy;
-                    drop(dfs);
                     info!("Policy updated");
                 }
                 None => {
-                    drop(dfs);
                     return Err(Status::unknown("RemoteLazyFrame not found."));
                 }
             };
