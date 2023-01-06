@@ -1276,11 +1276,7 @@ class Facet:
                         + ": "
                         + str(cols[col_count])
                     )
-                    tmp = (
-                        df.select([pl.col(x) for x in selects])
-                        .collect()
-                        .fetch()
-                    )
+                    tmp = df.select([pl.col(x) for x in selects]).collect().fetch()
                     if tmp is None:
                         return
                     sea_df = tmp.to_pandas()
@@ -1294,11 +1290,7 @@ class Facet:
             for count in range(max_len):
                 df = self.inner_rdf.clone().filter((pl.col(t) == my_list[count]))
                 t1 = t + ": " + str(my_list[count])
-                tmp = (
-                    df.select([pl.col(x) for x in selects])
-                    .collect()
-                    .fetch()
-                )
+                tmp = df.select([pl.col(x) for x in selects]).collect().fetch()
                 if tmp is None:
                     return
                 sea_df = tmp.to_pandas()
