@@ -153,7 +153,7 @@ impl BastionLabTorch {
 
         let label = Mutex::new(self.get_tensor(&dataset.label.identifier)?);
         let limit = dataset.privacy_limit;
-
+        
         let data = Dataset::new(samples_inputs, label, limit);
 
         Ok((Arc::new(RwLock::new(data)), hash))

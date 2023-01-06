@@ -263,7 +263,6 @@ class RemoteLearner:
                 description=model_description,
                 progress=True,
             )
-            print(self.model_ref)
         else:
             self.model_ref = model
 
@@ -295,7 +294,6 @@ class RemoteLearner:
         per_n_steps_checkpoint: int = 0,
         resume: bool = False,
     ) -> TrainConfig:
-        print(self.remote_dataset.serialize())
         batch_size = batch_size if batch_size is not None else self.max_batch_size
         return TrainConfig(
             model=self.model_ref,
