@@ -505,7 +505,7 @@ impl PolarsService for BastionLabPolars {
     ) -> Result<Response<Empty>, Status> {
         let token = self.sess_manager.verify_request(&request)?;
         let user_hash = self.sess_manager.get_user_id(token.clone())?;
-        let owner = self.sess_manager.verify_if_owner(&user_hash.clone());
+        let owner = self.sess_manager.verify_if_owner(&user_hash.clone())?;
         if owner == true {
             let new_policy: Policy =
                 serde_json::from_str(request.get_ref().new_policy.as_ref().unwrap())
