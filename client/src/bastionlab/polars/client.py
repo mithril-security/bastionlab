@@ -199,7 +199,7 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
         )
         return FetchableLazyFrame._from_reference(self, res)
 
-    def persist_df(self, identifier: str):
+    def _persist_df(self, identifier: str):
         """
         Saves a Dataframe on the server from a BastionLab DataFrame identifier.
 
@@ -218,7 +218,7 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
             lambda: self.stub.PersistDataFrame(ReferenceRequest(identifier=identifier))
         )
 
-    def delete_df(self, identifier: str):
+    def _delete_df(self, identifier: str):
         """
         Deletes a Dataframe on the server from a BastionLab DataFrame identifier.
 

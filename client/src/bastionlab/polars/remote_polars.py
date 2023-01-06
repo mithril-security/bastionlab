@@ -933,7 +933,10 @@ class FetchableLazyFrame(RemoteLazyFrame):
         return self._meta._client._fetch_df(self._identifier)
 
     def save(self):
-        return self._meta._client.persist_df(self._identifier)
+        return self._meta._client._persist_df(self._identifier)
+
+    def delete(self):
+        return self._meta._client._delete_df(self._identifier)
 
 
 @dataclass
