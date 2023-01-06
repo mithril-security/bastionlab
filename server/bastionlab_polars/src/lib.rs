@@ -355,7 +355,7 @@ Reason: {}",
         Ok(())
     }
 
-    fn delete_dfs(&self, identifier: &str) -> Result<(), Error> {
+    pub fn delete_dfs(&self, identifier: &str) -> Result<(), Error> {
         let mut dfs = self.dataframes.write().unwrap();
         dfs.remove(identifier);
         Ok(())

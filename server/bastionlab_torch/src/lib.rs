@@ -6,6 +6,7 @@ use bastionlab_learning::nn::Module;
 use bastionlab_learning::{data::Dataset, nn::CheckPoint};
 use prost::Message;
 use ring::digest;
+use ring::hmac;
 use std::time::Instant;
 use tch::Tensor;
 use tokio_stream::wrappers::ReceiverStream;
@@ -91,6 +92,19 @@ impl BastionLabTorch {
         identifier.to_string()
     }
 
+    fn get_tensor(&self, identifier: &str) -> Result<Tensor, Status> {
+        let tensors = self.tensors.read().unwrap();
+        let tensor = tensors
+            .get(identifier)
+            .ok_or(Status::aborted("Could not find tensor on BastionLab Torch"))?;
+
+        let tensor = tensor.lock().unwrap();
+
+        let tensor = { tensor.data() };
+
+        Ok(tensor)
+    }
+
     pub fn update_dataset(
         &self,
         identifier: &str,
@@ -118,6 +132,31 @@ impl BastionLabTorch {
                 return Err(Status::aborted("Dataset not found!"));
             }
         }
+    }
+
+    fn convert_from_remote_dataset(
+        &self,
+        serialized_dataset: &str,
+    ) -> Result<(Arc<RwLock<Dataset>>, String), Status> {
+        let dataset: RemoteDataset = serde_json::from_str(&serialized_dataset).map_err(|e| {
+            Status::invalid_argument(format!("Could not deserialize RemoteDataset: {}", e))
+        })?;
+
+        let hash =
+            hex::encode(digest::digest(&digest::SHA256, serialized_dataset.as_bytes()).as_ref());
+
+        let mut samples_inputs = vec![];
+
+        for input in dataset.inputs {
+            samples_inputs.push(Mutex::new(self.get_tensor(&input.identifier)?));
+        }
+
+        let label = Mutex::new(self.get_tensor(&dataset.label.identifier)?);
+        let limit = dataset.privacy_limit;
+        
+        let data = Dataset::new(samples_inputs, label, limit);
+
+        Ok((Arc::new(RwLock::new(data)), hash))
     }
 }
 
@@ -299,17 +338,26 @@ impl TorchService for BastionLabTorch {
         let token = get_token(&request, self.sess_manager.auth_enabled())?;
         let client_info = self.sess_manager.get_client_info(token)?;
         let config = request.into_inner();
-        let dataset_id = config
-            .dataset
-            .clone()
-            .ok_or(Status::invalid_argument("Invalid dataset reference"))?
-            .identifier;
+        // let d = RemoteDataset {
+        //     inputs: vec![RemoteTensor {
+        //         identifier: "".to_string(),
+        //     }],
+        //     label: RemoteTensor {
+        //         identifier: "".to_string(),
+        //     },
+        //     nb_samples: 1,
+        //     privacy_limit: -1.0,
+        // };
+
+        let (dataset, dataset_id) = self.convert_from_remote_dataset(&config.dataset)?;
+
         let binary_id = config
             .model
             .clone()
             .ok_or(Status::invalid_argument("Invalid module reference"))?
             .identifier;
         let device = parse_device(&config.device)?;
+
         let (binary, chkpt) = {
             let binaries = self.binaries.read().unwrap();
             let binary: &Artifact<BinaryModule> = binaries
@@ -337,13 +385,6 @@ impl TorchService for BastionLabTorch {
                 chkpt
             };
             (Arc::clone(&binary.data), Arc::clone(&chkpt.data))
-        };
-        let dataset = {
-            let datasets = self.datasets.read().unwrap();
-            let dataset = datasets
-                .get(&dataset_id)
-                .ok_or(Status::not_found("Dataset not found"))?;
-            Arc::clone(&dataset.data)
         };
 
         let identifier = Uuid::new_v4();

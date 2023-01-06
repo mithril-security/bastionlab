@@ -55,7 +55,7 @@ impl Converter {
         let labels = Mutex::new(series_to_tensor(labels)?);
         let identifier = format!("{}", Uuid::new_v4());
 
-        let data = Dataset::new(inputs, labels, true, (vec![], "".to_string()));
+        let data = Dataset::new(inputs, labels, -1.0);
         let meta = Meta {
             input_shape: shapes,
             input_dtype: dtypes,
@@ -200,10 +200,13 @@ impl ConversionService for Converter {
             (data, meta)
         };
 
-        let identifier = self.torch.insert_tensor(tensor);
+        let tensor_id = self.torch.insert_tensor(tensor);
+
+        // Here, a dataframe has been converted and can be cleared from the Polars storage.
+        self.polars.delete_dfs(identifier)?;
 
         Ok(Response::new(ConvReference {
-            identifier,
+            identifier: tensor_id,
             name: String::new(),
             description: String::new(),
             meta: meta.encode_to_vec(),
