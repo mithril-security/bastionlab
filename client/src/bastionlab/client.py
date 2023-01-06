@@ -51,7 +51,12 @@ CLIENT_INFO = ClientInfo(
 
 class Client:
     """
-    A BastionLab client class that provides access to the BastionLab machine learning platform.
+    The Client class provides access to the BastionLab machine learning platform through several attributes.
+
+    Attributes:
+    _bastionlab_torch is an object that provides access to the platform's torch functionality, which is a machine learning library based on PyTorch.
+    _bastionlab_polars is an object that provides access to the platform's polars functionality, which is a library for data analysis and visualization.
+    _channel is the underlying gRPC channel used to communicate with the server. gRPC is a high-performance RPC (remote procedure call) framework that is used for communication between services.
     """
 
     _bastionlab_torch: "BastionLabTorch" = (
@@ -152,8 +157,7 @@ class Client:
 
 @dataclass
 class Connection:
-    """
-    This class represents a connection to a remote server. It holds the necessary
+    """This class represents a connection to a remote server. It holds the necessary
     information to establish and manage the connection, such as the hostname, port,
     identity (signing key), and token (if applicable).
 
@@ -163,6 +167,7 @@ class Connection:
         identity (SigningKey, optional): The signing key to use for authentication.
             If not provided, the connection will not be authenticated.
         channel (Any): The underlying channel object used to send and receive messages.
+            It does not need to be provided by the user.
         token (bytes, optional): The authentication token to use for the connection.
             If not provided, the connection will not be authenticated.
         server_name (str, optional): The name of the remote server. Defaults to "bastionlab-server".
@@ -181,13 +186,24 @@ class Connection:
         server_target, server_creds, options, signing_key: Optional[SigningKey] = None
     ):
 
-        # Set up initial connection to BastionLab for verification
-        # if pubkey not known:
-        #    Drop connection and fail fast authentication
+        """Set up initial connection to BastionLab for verification
+        if pubkey not known:
+           Drop connection and fail fast authentication
 
-        # elif known:
-        #    return token and add token to channel metadata
-        # """
+        elif known:
+           return token and add token to channel metadata
+
+        Args:
+            server_target {str} -- The hostname or IP address of the remote server.
+            server_creds {grpc.ChannelCredentials} -- The credentials to use for the connection.
+            options {Any} -- The options to use for the connection.
+
+        Keyword Args:
+            signing_key {Optional[SigningKey]} -- The signing key to use for authentication. (default: {None})
+
+        Returns:
+            bytes -- The authentication token to use for the connection.
+        """
         channel = grpc.secure_channel(server_target, server_creds, options)
 
         session_stub = SessionServiceStub(channel)
@@ -231,10 +247,11 @@ class Connection:
             self.__exit__(None, None, None)
 
     def __enter__(self) -> Client:
-        # """Establishes a secure channel to the server and returns a `Client` object that can be used to interact with the server.
-        # This method is called automatically when the `Connection` object is used in a `with` statement.
-        # Returns:
-        #    A `Client` object that can be used to interact with the server.
+        """Establishes a secure channel to the server and returns a `Client` object that can be used to interact with the server.
+        This method is called automatically when the `Connection` object is used in a `with` statement.
+        Returns:
+           A `Client` object that can be used to interact with the server.
+        """
         server_target = f"{self.host}:{self.port}"
         server_cert = ssl.get_server_certificate((self.host, self.port))
         server_creds = grpc.ssl_channel_credentials(
@@ -273,7 +290,12 @@ class Connection:
         return self._client
 
     def __exit__(self, exc_type: Any, exc_value: Any, exc_traceback: Any) -> None:
-        # """Closes the connection to the server and cleans up any resources being used by the `Client` object.
-        # This method is called automatically when the `with` statement is exited.
+        """Closes the connection to the server and cleans up any resources being used by the `Client` object.
+        This method is called automatically when the `with` statement is exited.
+        Args:
+           exc_type: The type of the exception that caused the `with` statement to exit.
+           exc_value: The value of the exception that caused the `with` statement to exit.
+           exc_traceback: The traceback of the exception that caused the `with` statement to exit.
+        """
         self._client = None
         self.channel.close()

@@ -148,20 +148,21 @@ impl SessionManager {
     }
 
     fn check_challenge<T: Message>(&self, request: &Request<T>) -> Result<Bytes, Status> {
-        let mut lock = self.challenges.lock().unwrap();
         if let Some(challenge) = request.metadata().get_bin("challenge-bin") {
             let challenge_bytes = challenge.to_bytes().map_err(|_| {
                 Status::invalid_argument(format!("Could not decode challenge {:?}", challenge))
             })?;
             let challenge = challenge_bytes.as_ref();
-
-            if !lock.remove(challenge) {
-                return Err(Status::permission_denied("Challenge not found!"));
+            {
+                let mut lock = self.challenges.lock().unwrap();
+                if !lock.remove(challenge) {
+                    return Err(Status::permission_denied("Challenge not found!"));
+                }
             }
 
             Ok(challenge_bytes)
         } else {
-            return Err(Status::permission_denied("No challenge in request!"));
+            return Err(Status::unauthenticated("You must be authenticated to perform this action. Please reconnect with an identity."));
         }
     }
 
