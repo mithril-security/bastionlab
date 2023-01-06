@@ -20,4 +20,16 @@ sed -i 's+bastionlab.polars.utils+[bastionlab.polars.utils](utils.md)+g' docs/do
 sed -i 's+bastionlab.torch.client+[bastionlab.torch.client](client.md)+g' docs/docs/resources/bastionlab/torch/index.md
 sed -i 's+bastionlab.torch.learner+[bastionlab.torch.learner](learner.md)+g' docs/docs/resources/bastionlab/torch/index.md
 sed -i 's+bastionlab.torch.optimizer_config+[bastionlab.torch.optimizer_config](optimizer_config.md)+g' docs/docs/resources/bastionlab/torch/index.md
+sed -i 's+bastionlab.torch.psg+[bastionlab.torch.psg](psg/index.md)+g' docs/docs/resources/bastionlab/torch/index.md
 sed -i 's+bastionlab.torch.utils+[bastionlab.torch.utils](utils.md)+g' docs/docs/resources/bastionlab/torch/index.md
+
+sed -i 's+bastionlab.torch.psg.convert+[bastionlab.torch.psg.convert](convert.md)+g' docs/docs/resources/bastionlab/torch/psg/index.md
+sed -i 's+bastionlab.torch.psg.nn+[bastionlab.torch.psg.nn](nn.md)+g' docs/docs/resources/bastionlab/torch/psg/index.md
+
+
+# sed -i 's+* bastionlab.pb.bastionlab_pb2++g' docs/docs/resources/bastionlab/pb/index.md
+# sed -i 's+bastionlab.pb.bastionlab_pb2_grpc+[bastionlab.pb.bastionlab_pb2_grpc](pb/bastionlab_pb2_grpc.md)+g' docs/docs/resources/bastionlab/pb/index.md
+# sed -i 's+* bastionlab.pb.bastionlab_polars_pb2++g' docs/docs/resources/bastionlab/pb/index.md
+# sed -i 's+bastionlab.pb.bastionlab_polars_pb2_grpc+[bastionlab.pb.bastionlab_polars_pb2_grpc](pb/bastionlab_polars_pb2_grpc.md)+g' docs/docs/resources/bastionlab/pb/index.md
+# sed -i 's+* bastionlab.pb.bastionlab_torch_pb2++g' docs/docs/resources/bastionlab/pb/index.md
+# sed -i 's+bastionlab.pb.bastionlab_torch_pb2_grpc+[bastionlab.pb.bastionlab_torch_pb2_grpc](pb/bastionlab_torch_pb2_grpc.md)+g' docs/docs/resources/bastionlab/pb/index.md
