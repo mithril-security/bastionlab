@@ -238,8 +238,6 @@ impl<'a> Parameters<'a> {
                 let budget_update = *eps * batch_sampling_rate * ((t + 1.0).sqrt() - t.sqrt());
                 let sigma = compute_sigma(*eps, delta, *max_grad_norm) as f64;
 
-                // println!("Sigma = {}", sigma);
-
                 if !dp_sgd_context
                     .read()
                     .unwrap()
@@ -269,8 +267,11 @@ impl<'a> Parameters<'a> {
                     let per_sample_grad = param.grad();
                     let mut update_size = per_sample_grad.size();
                     update_size.remove(0);
-                    let grad =
-                        Tensor::f_einsum("i,i...", &[&per_sample_clip_factor, &per_sample_grad], None)?;
+                    let grad = Tensor::f_einsum(
+                        "i,i...",
+                        &[&per_sample_clip_factor, &per_sample_grad],
+                        None,
+                    )?;
                     let mut grad = grad
                         .f_add(&generate_noise_like(&grad, sigma)?)?
                         .f_view(&update_size[..])?;
