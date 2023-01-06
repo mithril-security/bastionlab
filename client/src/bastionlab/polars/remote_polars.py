@@ -1369,7 +1369,7 @@ def train_test_split(
     train_size: Optional[float] = None,
     test_size: Optional[float] = 0.25,
     shuffle: Optional[bool] = False,
-    random_state: Optional[int] = -1,
+    random_state: Optional[int] = None,
 ) -> List["FetchableLazyFrame"]:
     """
     Split RemoteDataFrames into train and test subsets.
@@ -1388,10 +1388,6 @@ def train_test_split(
             Controls the shuffling applied to the data before applying the split.
             Pass an int for reproducible output across multiple function calls.
     """
-
-    # Shuffling is disabled by default because Polars DataFrames don't support shuffling.
-    # We plan on supporting shuffling by defering it to the conversion stage (i.e., when it's
-    # being converted to a dataset (Tensors))
 
     from .remote_polars import FetchableLazyFrame
 

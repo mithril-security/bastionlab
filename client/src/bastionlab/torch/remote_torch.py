@@ -80,10 +80,10 @@ class RemoteTensor:
         return RemoteTensor._from_reference(res)
 
     def run_script(self, script: torch.ScriptFunction):
-        pass
+        raise Exception("run_script is unimplemented")
 
     def fetch_tensor(self) -> torch.Tensor:
-        pass
+        raise Exception("fetch_tensor is unimplemented")
 
 
 def _tracer(dtypes: List[torch.dtype], shapes: List[torch.Size]):

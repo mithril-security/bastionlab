@@ -16,7 +16,7 @@ use std::io::{Error, ErrorKind};
 use std::{future::Future, pin::Pin, time::Instant};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status, Streaming};
-use utils::sanitize_df;
+use utils::{sanitize_df, to_status_error};
 use uuid::Uuid;
 
 pub mod polars_proto {
@@ -544,21 +544,28 @@ impl PolarsService for BastionLabPolars {
                 header: self.get_header(&identifier)?,
             })
         };
+
+        let shuffle_df = |df: DataFrame| -> Result<DataFrame, Status> {
+            if shuffle {
+                to_status_error(df.sample_n(df.height(), true, true, random_state))
+            } else {
+                Ok(df)
+            }
+        };
         for (df, id) in dfs.iter().zip(rdfs) {
             let df_height = df.height();
             let train_size = (df_height as f32 * train_size) as usize;
             let mut test_size = (df_height as f32 * test_size) as usize;
             test_size += df_height - (train_size - test_size);
 
-            out_dfs.push(make_response(inherit(
-                &id.identifier,
-                df.head(Some(train_size)),
-            )?)?);
+            let train_df = shuffle_df(df.head(Some(train_size)))?;
+            let test_df = shuffle_df(df.tail(Some(test_size)))?;
 
-            out_dfs.push(make_response(inherit(
-                &id.identifier,
-                df.tail(Some(test_size)),
-            )?)?);
+            // Push train_df either shuffled or not.
+            out_dfs.push(make_response(inherit(&id.identifier, train_df)?)?);
+
+            // Push train_df either shuffled or not.
+            out_dfs.push(make_response(inherit(&id.identifier, test_df)?)?);
         }
 
         Ok(Response::new(ReferenceList { list: out_dfs }))
