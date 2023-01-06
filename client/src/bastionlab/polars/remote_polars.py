@@ -1,8 +1,9 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Callable, Generic, List, Optional, TypeVar, Sequence, Union
+from typing import Callable, Generic, List, Optional, TypeVar, Sequence, Union, Dict
 import seaborn as sns
 import polars as pl
+from polars.internals.sql.context import SQLContext
 from torch.jit import ScriptFunction
 import base64
 import json
@@ -287,6 +288,50 @@ class RemoteLazyFrame:
             FetchableLazyFrame: FetchableLazyFrame of datarame after any queries have been performed
         """
         return self._meta._client._run_query(self.composite_plan)
+
+    @staticmethod
+    def sql(query: str, *rdfs: LDF) -> LDF:
+        """Parses given SQL query and interpolates {} placeholders with given RemoteLazyFrames.
+        Args:
+            query (str): the SQL query
+            rdfs (RemoteLazyFrame): DataFrames used in the SQL query
+        Returns:
+            RemoteLazyFrame: The resulting RemoteLazyFrame
+        """
+        if len(rdfs) == 0:
+            raise Exception("The SQL query must at least use one RemoteLazyFrame")
+        if any([rdf._meta._client is not rdfs[0]._meta._client for rdf in rdfs]):
+            raise Exception(
+                "Cannot use remote data frames from two different servers in an SQL query"
+            )
+
+        unique_rdfs = []
+        rdfs_refs = []
+        for rdf in rdfs:
+            try:
+                rdfs_refs.append(unique_rdfs.index(rdf))
+            except ValueError:
+                rdfs_refs.append(len(unique_rdfs))
+                unique_rdfs.append(rdf)
+
+        query = query.format(*(f"__{i}" for i in rdfs_refs))
+
+        ctx = SQLContext()
+        for i, rdf in enumerate(unique_rdfs):
+            ctx.register(f"__{i}", rdf._inner)
+        res = ctx.execute(query)
+
+        return RemoteLazyFrame(
+            res,
+            Metadata(
+                rdfs[0]._meta._client,
+                [
+                    seg
+                    for segs in reversed(unique_rdfs)
+                    for seg in segs._meta._prev_segments
+                ],
+            ),
+        )
 
     def apply_udf(self: LDF, columns: List[str], udf: Callable) -> LDF:
         """Applied user-defined function to selected columns of RemoteLazyFrame and returns result
