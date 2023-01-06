@@ -125,10 +125,9 @@ impl KeyManagement {
         /*
             For authentication, we check if the provided public key exists in the list of owner public keys provided at start-up.
         */
-        let keys = &mut self.owners.iter();
-        if let Some((_, _raw_pub)) = keys.find(|&(k, _v)| public_key_hash.to_string().eq(k)){
+        if self.owners.contains_key(public_key_hash) {
             return true;
-        }
+        } 
         return false;
-}
+    }
 }

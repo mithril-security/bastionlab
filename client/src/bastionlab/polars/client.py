@@ -212,6 +212,8 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
         -------
         Nothing
         """
+        self.client.refresh_session_if_needed()
+
         res = GRPCException.map_error(
             lambda: self.stub.PersistDataFrame(ReferenceRequest(identifier=identifier))
         )
@@ -228,6 +230,8 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
         -------
         Nothing
         """
+        self.client.refresh_session_if_needed()
+        
         try:
             res = GRPCException.map_error(
                 lambda: self.stub.UpdatePolicy(
