@@ -167,7 +167,7 @@ impl SessionManager {
     }
 
     pub fn verify_if_owner(&self, public_hash: &str) -> bool {
-        if self.auth_enabled() == false{
+        if self.auth_enabled() == false {
             return true;
         }
         let keys_lock = self.keys.as_ref().map(|l| l.lock().expect("Poisoned lock"));
@@ -175,7 +175,7 @@ impl SessionManager {
             return keys.verify_owner(public_hash);
         }
         return false;
-}
+    }
 
     // TODO: move grpc specific things to the grpc service and not the session manager
     fn create_session(&self, request: Request<ClientInfo>) -> Result<SessionInfo, Status> {

@@ -118,16 +118,13 @@ impl KeyManagement {
         }
     }
 
-    pub fn verify_owner(
-        &self,
-        public_key_hash: &str,
-    ) -> bool {
+    pub fn verify_owner(&self, public_key_hash: &str) -> bool {
         /*
             For authentication, we check if the provided public key exists in the list of owner public keys provided at start-up.
         */
         if self.owners.contains_key(public_key_hash) {
             return true;
-        } 
+        }
         return false;
     }
 }

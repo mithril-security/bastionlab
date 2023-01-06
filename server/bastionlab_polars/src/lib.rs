@@ -507,12 +507,13 @@ impl PolarsService for BastionLabPolars {
         let user_hash = self.sess_manager.get_user_id(token.clone())?;
         let owner = self.sess_manager.verify_if_owner(&user_hash.clone());
         if owner == true {
-            let req = &request.get_ref();
-            let new_policy: Policy = serde_json::from_str(req.new_policy.as_ref().unwrap()).map_err(|_| Status::unknown("Failed to deserialize policy."))?;
+            let new_policy: Policy =
+                serde_json::from_str(request.get_ref().new_policy.as_ref().unwrap())
+                    .map_err(|_| Status::unknown("Failed to deserialize policy."))?;
             //get dataframe for writing
-            let mut dfs = self.dataframes.write().unwrap(); 
+            let mut dfs = self.dataframes.write().unwrap();
             let artifact = dfs.get_mut(&request.get_ref().identifier);
-            match artifact{
+            match artifact {
                 Some(artifact) => {
                     artifact.policy = new_policy;
                     info!("Policy updated");
@@ -521,9 +522,10 @@ impl PolarsService for BastionLabPolars {
                     return Err(Status::unknown("RemoteLazyFrame not found."));
                 }
             };
-        }
-        else{
-            return Err(Status::permission_denied("Only the data owner can update the policy"));
+        } else {
+            return Err(Status::permission_denied(
+                "Only the data owner can update the policy",
+            ));
         }
         Ok(Response::new(Empty {}))
     }
