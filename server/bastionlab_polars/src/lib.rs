@@ -515,20 +515,11 @@ impl PolarsService for BastionLabPolars {
         let token = self.sess_manager.verify_request(&request)?;
         let identifier = &request.get_ref().identifier;
         let user_id = self.sess_manager.get_user_id(token.clone())?;
-        let owners_keys = self.sess_manager.get_owner_keys();
-        match owners_keys {
-            Ok(owners_keys) => {
-                if owners_keys.contains_key(&user_id) {
-                    self.delete_dfs(identifier)?;
-                } else {
-                    return Err(Status::internal("Only data owners can delete dataframes."));
-                }
-            }
-            Err(_) => {
-                return Err(Status::internal(
-                    "Authentication must be enabled to delete dataframes.",
-                ));
-            }
+        let owner_check = self.sess_manager.verify_if_owner(&user_id)?;
+        if owner_check {
+            self.delete_dfs(identifier)?;
+        } else {
+            return Err(Status::internal("Only data owners can delete dataframes."));
         }
         telemetry::add_event(
             TelemetryEventProps::DeleteDataframe {

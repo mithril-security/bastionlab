@@ -73,14 +73,6 @@ impl SessionManager {
         self.keys.is_some()
     }
 
-    pub fn get_owner_keys(&self) -> Result<HashMap<String, Vec<u8>>, Status> {
-        if self.auth_enabled() {
-            let keys = self.keys.as_ref().unwrap().lock().unwrap();
-            return Ok(keys.clone_owner_keys());
-        }
-        return Err(Status::internal("Authentication is disabled."));
-    }
-
     pub fn get_user_id(&self, token: Option<Bytes>) -> Result<String, Status> {
         let token_bytes = match &token {
             Some(v) => &v[..],
@@ -171,6 +163,19 @@ impl SessionManager {
         } else {
             return Err(Status::permission_denied("No challenge in request!"));
         }
+    }
+
+    pub fn verify_if_owner(&self, public_hash: &str) -> Result<bool, Status> {
+        if self.auth_enabled() == false {
+            return Err(Status::permission_denied(
+                "This operation requires authentication to be enabled.",
+            ));
+        }
+        let keys_lock = self.keys.as_ref().map(|l| l.lock().expect("Poisoned lock"));
+        if let Some(ref keys) = keys_lock {
+            return Ok(keys.verify_owner(public_hash));
+        }
+        return Ok(false);
     }
 
     // TODO: move grpc specific things to the grpc service and not the session manager
