@@ -168,7 +168,7 @@ impl SessionManager {
 
     pub fn verify_if_owner(&self, public_hash: &str) -> Result<bool, Status> {
         if self.auth_enabled() == false {
-            return Err(Status::permission_denied("Authentication must be enabled to update policies."));
+            return Err(Status::permission_denied("This operation requires authentication to be enabled."));
         }
         let keys_lock = self.keys.as_ref().map(|l| l.lock().expect("Poisoned lock"));
         if let Some(ref keys) = keys_lock {
