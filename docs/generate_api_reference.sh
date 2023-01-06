@@ -10,7 +10,7 @@ sed -i 's/bastionlab.keys/[bastionlab.keys](keys.md)/g' docs/docs/resources/bast
 sed -i 's+bastionlab.pb+[bastionlab.pb](pb/index.md)+g' docs/docs/resources/bastionlab/index.md
 sed -i 's+bastionlab.polars+[bastionlab.polars](polars/index.md)+g' docs/docs/resources/bastionlab/index.md
 sed -i 's+bastionlab.torch+[bastionlab.torch](torch/index.md)+g' docs/docs/resources/bastionlab/index.md
-sed -i 's+bastionlab.version++g' docs/docs/resources/bastionlab/index.md
+sed -i 's+* bastionlab.version++g' docs/docs/resources/bastionlab/index.md
 
 sed -i 's+bastionlab.polars.client+[bastionlab.polars.client](client.md)+g' docs/docs/resources/bastionlab/polars/index.md
 sed -i 's+bastionlab.polars.policy+[bastionlab.polars.policy](policy.md)+g' docs/docs/resources/bastionlab/polars/index.md
