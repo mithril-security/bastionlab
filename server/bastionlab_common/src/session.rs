@@ -168,7 +168,7 @@ impl SessionManager {
 
     pub fn verify_if_owner(&self, public_hash: &str) -> bool {
         if self.auth_enabled() == false {
-            return true;
+            return false;
         }
         let keys_lock = self.keys.as_ref().map(|l| l.lock().expect("Poisoned lock"));
         if let Some(ref keys) = keys_lock {
