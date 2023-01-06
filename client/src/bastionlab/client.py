@@ -128,7 +128,7 @@ class Client:
         if self._bastionlab_torch is None:
             from bastionlab.torch import BastionLabTorch
 
-            self._bastionlab_torch = BastionLabTorch(self._channel, self.converter)
+            self._bastionlab_torch = BastionLabTorch(self._channel, self.converter, self)
         return self._bastionlab_torch
 
     @property
@@ -139,7 +139,7 @@ class Client:
         if self._bastionlab_polars is None:
             from bastionlab.polars import BastionLabPolars
 
-            self._bastionlab_polars = BastionLabPolars(self._channel, self.converter)
+            self._bastionlab_polars = BastionLabPolars(self._channel, self.converter, self)
 
         return self._bastionlab_polars
 
