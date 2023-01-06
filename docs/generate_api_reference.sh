@@ -31,12 +31,11 @@ while read line; do
             elif [[ $filepath == 'version' ]]; then
                 # Delete the entire line as it is not needed
                 sed -i "/$line2/d" $line
-            # Check for regex bastionlab_pb2*
-            elif [[ $filepath =~ ^bastionlab_pb2.* ]] || [[ $filepath =~ ^bastionlab_polars_pb2.* ]] || [[ $filepath =~ ^bastionlab_torch_pb2.* ]]; then
-                continue
             else
-                sed -i "s+$line2+[$line2]($filepath.md)+g" $line
+                sed -i "s+\<$line2\>+[$line2]($filepath.md)+g" $line
             fi
         fi
     done
 done < list_path.txt
+
+rm list_path.txt
