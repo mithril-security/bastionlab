@@ -48,9 +48,9 @@ class RemoteTokenizer:
     def encode(
         self, series: "RemoteSeries", return_tensors: bool = True
     ) -> Tuple[Union[RemoteTensor, RemoteSeries], Union[RemoteTensor, RemoteSeries]]:
-        res = series.convert(series.columns, self._tokenizer.to_str()).collect()
-        input_ids = res.column(res.columns[0])
-        attention_mask = res.column(res.columns[1])
+        res = series.convert(series.column_names, self._tokenizer.to_str()).collect()
+        input_ids = res.column(res.column_names[0])
+        attention_mask = res.column(res.column_names[1])
 
         if return_tensors:
             return input_ids.to_tensor(), attention_mask.to_tensor()
