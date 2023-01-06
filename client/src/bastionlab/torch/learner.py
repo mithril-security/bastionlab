@@ -324,7 +324,7 @@ class RemoteLearner:
         batch_size = batch_size if batch_size is not None else self.max_batch_size
         return TestConfig(
             model=self.model_ref,
-            dataset=self.remote_dataset.test_dataset_ref,
+            dataset=self.remote_dataset.serialize(),
             batch_size=batch_size,
             device=self.device,
             metric=metric if metric is not None else self.loss,
@@ -492,8 +492,6 @@ class RemoteLearner:
                         polling ends and the progress bar is terminated.
             poll_delay: Delay in seconds between two polling requests for the metric.
         """
-        if test_dataset is not None:
-            self.remote_dataset._set_test_dataset(test_dataset)
         run = self.client.test(self._test_config(batch_size, metric, metric_eps))
         self._poll_metric(
             run,

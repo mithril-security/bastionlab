@@ -416,6 +416,8 @@ torch_dtypes = {
     "Int64": torch.int64,
     "Half": torch.half,
     "Float": torch.float,
+    "Float32": torch.float32,
+    "Float64": torch.float64,
     "Double": torch.double,
     "ComplexHalf": torch.complex32,
     "ComplexFloat": torch.complex64,
@@ -425,6 +427,8 @@ torch_dtypes = {
     "QInt32": torch.qint32,
     "BFloat16": torch.bfloat16,
 }
+
+tch_kinds = {v: k for k, v in torch_dtypes.items()}
 
 
 def to_torch_meta(meta_bytes: bytes):

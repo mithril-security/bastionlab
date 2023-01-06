@@ -4,7 +4,7 @@ import io
 from typing import Iterator, TYPE_CHECKING, List, Optional
 from dataclasses import dataclass
 from ..polars.utils import create_byte_chunk
-from ..pb.bastionlab_torch_pb2 import Chunk, Reference, Meta
+from ..pb.bastionlab_torch_pb2 import Chunk, Reference, Meta, UpdateTensor
 from .utils import DataWrapper, to_torch_meta
 
 if TYPE_CHECKING:
@@ -70,6 +70,15 @@ class RemoteTensor:
     def shape(self):
         return self._shape
 
+    def to(self, dtype: torch.dtype):
+        from .utils import tch_kinds
+
+        client = get_client()
+        res = client.stub.ModifyTensor(
+            UpdateTensor(identifier=self.identifier, dtype=tch_kinds[dtype])
+        )
+        return RemoteTensor._from_reference(res)
+
     def run_script(self, script: torch.ScriptFunction):
         pass
 
@@ -79,9 +88,9 @@ class RemoteTensor:
 
 def _tracer(dtypes: List[torch.dtype], shapes: List[torch.Size]):
     return [
-        torch.zeros(shape[1], dtype=dtype)
+        torch.zeros(shape[-1], dtype=dtype)
         if dtype in [torch.uint8, torch.int8, torch.int16, torch.int32, torch.int64]
-        else torch.randn(shape[1], dtype=dtype)
+        else torch.randn(shape[-1], dtype=dtype)
         for shape, dtype in zip(shapes, dtypes)
     ]
 

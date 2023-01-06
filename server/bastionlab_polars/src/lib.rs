@@ -510,6 +510,7 @@ impl PolarsService for BastionLabPolars {
         &self,
         request: Request<SplitRequest>,
     ) -> Result<Response<ReferenceList>, Status> {
+        #[allow(unused)]
         let (rdfs, train_size, test_size, shuffle, random_state) = (
             &request.get_ref().rdfs,
             request.get_ref().train_size,

@@ -1,11 +1,10 @@
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::Arc;
 
 use bastionlab_common::utils::{kind_to_datatype, tensor_to_series};
 use bastionlab_common::{session::SessionManager, session_proto::ClientInfo};
-use bastionlab_learning::data::Dataset;
 use bastionlab_polars::access_control::{Policy, VerificationResult};
 use bastionlab_polars::polars_proto::Meta;
-use bastionlab_polars::utils::{series_to_tensor, vec_series_to_tensor};
+use bastionlab_polars::utils::{df_to_tensor, series_to_tensor};
 use bastionlab_polars::{polars_proto::Reference, utils::to_status_error};
 use bastionlab_polars::{BastionLabPolars, DataFrameArtifact};
 use bastionlab_torch::storage::Artifact;
@@ -47,42 +46,43 @@ impl Converter {
         labels: &str,
         client_info: Option<ClientInfo>,
     ) -> Result<Reference, Status> {
-        let inputs = to_status_error(df.columns(&inputs[..]))?;
-        let labels = to_status_error(df.column(labels))?;
+        unimplemented!()
+        // let inputs = to_status_error(df.columns(&inputs[..]))?;
+        // let labels = to_status_error(df.column(labels))?;
 
-        let (inputs, shapes, dtypes, nb_samples) = vec_series_to_tensor(inputs)?;
+        // let (inputs, shapes, dtypes, nb_samples) = vec_series_to_tensor(inputs)?;
 
-        let labels = Mutex::new(series_to_tensor(labels)?);
-        let identifier = format!("{}", Uuid::new_v4());
+        // let labels = Mutex::new(series_to_tensor(labels)?);
+        // let identifier = format!("{}", Uuid::new_v4());
 
-        let data = Dataset::new(inputs, labels, -1.0);
-        let meta = Meta {
-            input_shape: shapes,
-            input_dtype: dtypes,
-            nb_samples,
-            privacy_limit: 0.0,
-            train_dataset: None,
-        };
+        // let data = Dataset::new(inputs, labels, -1.0);
+        // let meta = Meta {
+        //     input_shape: shapes,
+        //     input_dtype: dtypes,
+        //     nb_samples,
+        //     privacy_limit: 0.0,
+        //     train_dataset: None,
+        // };
 
-        let dataset = Artifact {
-            data: Arc::new(RwLock::new(data)),
-            name: String::default(),
-            description: String::default(),
-            secret: hmac::Key::new(ring::hmac::HMAC_SHA256, &[0]),
-            meta: meta.encode_to_vec(),
-            client_info,
-        };
-        let (identifier, name, description, meta) =
-            self.torch.insert_dataset(&identifier, dataset)?;
+        // let dataset = Artifact {
+        //     data: Arc::new(RwLock::new(data)),
+        //     name: String::default(),
+        //     description: String::default(),
+        //     secret: hmac::Key::new(ring::hmac::HMAC_SHA256, &[0]),
+        //     meta: meta.encode_to_vec(),
+        //     client_info,
+        // };
+        // let (identifier, name, description, meta) =
+        //     self.torch.insert_dataset(&identifier, dataset)?;
 
-        let train_dataset = Reference {
-            identifier: identifier.clone(),
-            name,
-            description,
-            meta,
-        };
+        // let train_dataset = Reference {
+        //     identifier: identifier.clone(),
+        //     name,
+        //     description,
+        //     meta,
+        // };
 
-        Ok(train_dataset)
+        // Ok(train_dataset)
     }
 }
 
@@ -187,17 +187,23 @@ impl ConversionService for Converter {
         let identifier = &request.get_ref().identifier;
 
         let df = self.polars.get_df_unchecked(&identifier)?;
-        let (tensor, meta) = {
-            let cols = df.get_column_names();
-            let series = to_status_error(df.column(cols[0]))?;
-            let data = series_to_tensor(series)?;
-            let meta = Meta {
-                input_dtype: vec![format!("{:?}", data.kind())],
-                input_shape: data.size(),
-                ..Default::default()
-            };
 
-            (data, meta)
+        let tensor = {
+            let cols = df.get_column_names();
+            if cols.len() == 1 {
+                let series = to_status_error(df.column(cols[0]))?;
+                let data = series_to_tensor(series)?;
+
+                data
+            } else {
+                let tensor = df_to_tensor(&df)?;
+                tensor
+            }
+        };
+        let meta = Meta {
+            input_dtype: vec![format!("{:?}", tensor.kind())],
+            input_shape: tensor.size(),
+            ..Default::default()
         };
 
         let tensor_id = self.torch.insert_tensor(tensor);

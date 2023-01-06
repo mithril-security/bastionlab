@@ -305,6 +305,7 @@ dependencies = [
  "hex",
  "http",
  "log",
+ "ndarray",
  "once_cell",
  "polars",
  "prost 0.8.0",

@@ -97,7 +97,7 @@ message TrainConfig {
 
 message TestConfig {
     Reference model = 1;
-    Reference dataset = 2;
+    string dataset = 2;
     int32 batch_size = 3;
     string device = 4;
     string metric = 5;
@@ -142,9 +142,15 @@ message ToDataFrame {
     string identifier = 5;
 }
 
+message UpdateTensor {
+    string identifier = 1;
+    string dtype = 2;
+}
+
 service TorchService {
     rpc SendDataset (stream Chunk) returns (Reference) {}
     rpc SendTensor (stream Chunk) returns (Reference) {}
+    rpc ModifyTensor(UpdateTensor) returns (Reference) {}
     rpc UpdateDataset(UpdateMeta) returns (Empty) {}
     rpc SendModel (stream Chunk) returns (Reference) {}
     rpc FetchDataset (Reference) returns (stream Chunk) {}

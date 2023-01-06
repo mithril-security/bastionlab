@@ -112,6 +112,7 @@ impl CompositePlan {
                     stats.merge(frame2.stats);
                     stack.push(StackFrame { df, stats });
                 }
+                #[allow(unused)]
                 CompositePlanSegment::StringTransformerPlanSegment { columns, model } => {
                     let frame = stack.pop().ok_or(Status::invalid_argument(
                         "Could not apply udf: no input data frame",

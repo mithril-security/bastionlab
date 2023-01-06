@@ -1,11 +1,15 @@
-use std::{error::Error, io::Cursor, sync::Mutex};
+use std::{error::Error, io::Cursor};
 
 use bastionlab_common::utils::array_to_tensor;
-use polars::prelude::{
-    row::{AnyValueBuffer, Row},
-    *,
+use ndarray::{ArrayBase, CowRepr, Data, Dimension, Ix2, RawData};
+use polars::{
+    export::ahash::HashSet,
+    prelude::{
+        row::{AnyValueBuffer, Row},
+        *,
+    },
 };
-use tch::{CModule, Tensor};
+use tch::{kind::Element, CModule, Tensor};
 use tokenizers::{Encoding, Tokenizer};
 use tonic::Status;
 
@@ -73,7 +77,7 @@ pub fn series_to_tensor(series: &Series) -> Result<Tensor, Status> {
 
 pub fn vec_series_to_tensor(
     v_series: Vec<&Series>,
-) -> Result<(Vec<Mutex<Tensor>>, Vec<i64>, Vec<String>, i32), Status> {
+) -> Result<(Vec<Tensor>, Vec<i64>, Vec<String>, i32), Status> {
     let mut ts = Vec::new();
     let mut shapes = Vec::new();
     let mut dtypes = Vec::new();
@@ -85,9 +89,82 @@ pub fn vec_series_to_tensor(
         let t = series_to_tensor(s)?;
         shapes.push(t.size()[1]);
         dtypes.push(format!("{:?}", t.kind()));
-        ts.push(Mutex::new(t));
+        ts.push(t);
     }
     Ok((ts, shapes, dtypes, nb_samples.try_into().unwrap()))
+}
+
+fn ndarray_to_tensor<T: RawData, D: Dimension>(
+    data: &ArrayBase<T, D>,
+) -> Result<tch::Tensor, Status>
+where
+    T: Data,
+    T::Elem: Element,
+{
+    let tensor = Tensor::try_from(data)
+        .map_err(|e| Status::aborted(format!("Could not convert ArrayBase to Tensor: {}", e)))?;
+
+    Ok(tensor)
+}
+
+pub fn df_to_tensor(df: &DataFrame) -> Result<Tensor, Status> {
+    // Make sure all the dtypes are same.
+    let set = HashSet::from_iter(df.dtypes().iter().map(|dtype| dtype.to_string()));
+    if set.len() > 1 {
+        return Err(Status::aborted(
+            "DataTypes for all columns should be the same",
+        ));
+    }
+
+    let dtype = &df.dtypes()[0];
+
+    match dtype {
+        DataType::Float32 => ndarray_to_tensor::<CowRepr<f32>, Ix2>(
+            &df.to_ndarray::<Float32Type>()
+                .map_err(|e| {
+                    Status::aborted(format!("Cound not convert DataFrame to ndarray: {}", e))
+                })?
+                .as_standard_layout(),
+        ),
+        DataType::Float64 => ndarray_to_tensor::<CowRepr<f64>, Ix2>(
+            &df.to_ndarray::<Float64Type>()
+                .map_err(|e| {
+                    Status::aborted(format!("Cound not convert DataFrame to ndarray: {}", e))
+                })?
+                .as_standard_layout(),
+        ),
+        DataType::Int64 => ndarray_to_tensor::<CowRepr<i64>, Ix2>(
+            &df.to_ndarray::<Int64Type>()
+                .map_err(|e| {
+                    Status::aborted(format!("Cound not convert DataFrame to ndarray: {}", e))
+                })?
+                .as_standard_layout(),
+        ),
+        DataType::Int32 => ndarray_to_tensor::<CowRepr<i32>, Ix2>(
+            &df.to_ndarray::<Int32Type>()
+                .map_err(|e| {
+                    Status::aborted(format!("Cound not convert DataFrame to ndarray: {}", e))
+                })?
+                .as_standard_layout(),
+        ),
+        DataType::Int16 => ndarray_to_tensor::<CowRepr<i16>, Ix2>(
+            &df.to_ndarray::<Int16Type>()
+                .map_err(|e| {
+                    Status::aborted(format!("Cound not convert DataFrame to ndarray: {}", e))
+                })?
+                .as_standard_layout(),
+        ),
+        DataType::Int8 => ndarray_to_tensor::<CowRepr<i8>, Ix2>(
+            &df.to_ndarray::<Int8Type>()
+                .map_err(|e| {
+                    Status::aborted(format!("Cound not convert DataFrame to ndarray: {}", e))
+                })?
+                .as_standard_layout(),
+        ),
+        _ => {
+            return Err(Status::aborted(format!("Unsupported datatype {}", dtype)));
+        }
+    }
 }
 
 pub fn lazy_frame_from_logical_plan(plan: LogicalPlan) -> LazyFrame {

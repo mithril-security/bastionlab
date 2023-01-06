@@ -201,7 +201,7 @@ class Metadata:
 # cleared
 # Map
 # Joins
-@delegate_properties("columns", "dtypes", "schema", target="_inner")
+@delegate_properties("dtypes", "schema", target="_inner")
 @delegate(
     target_cls=pl.LazyFrame,
     target_attr="_inner",
@@ -273,7 +273,6 @@ class RemoteLazyFrame:
     A class to represent a RemoteLazyFrame.
 
     Delegate attributes:
-        columns (str): Get column names.
         dtypes: Get dtypes of columns in LazyFrame.
         schema (dict[column name, DataType]): Get dataframe's schema
 
@@ -326,6 +325,9 @@ class RemoteLazyFrame:
 
     def column(self: LDF, column: str) -> RemoteSeries:
         return RemoteSeries(self.select(column).collect())
+
+    def columns(self: LDF, column_names: List[str]) -> List[RemoteSeries]:
+        return RemoteSeries(self.select(column_names).collect())
 
     def apply_udf(self: LDF, columns: List[str], udf: Callable) -> LDF:
         """Applied user-defined function to selected columns of RemoteLazyFrame and returns result
@@ -389,6 +391,15 @@ class RemoteLazyFrame:
                 ],
             ),
         )
+
+    @property
+    def column_names(self) -> List[str]:
+        """Gets the column names of the RemoteDataFrame
+
+        Returns:
+            List[str]: List of column names in the RemoteDataFrame
+        """
+        return self._inner.columns
 
     def join(
         self: LDF,
