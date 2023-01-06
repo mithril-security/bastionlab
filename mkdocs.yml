@@ -119,11 +119,8 @@ nav:
       - bastionlab.errors: "docs/resources/bastionlab/errors.md"
       - bastionlab.keys: "docs/resources/bastionlab/keys.md"
       - bastionlab.pb:
-          - bastionlab.pb.bastion_pb2: "docs/resources/bastionlab/pb/bastionlab_pb2.md"
           - bastionlab.pb.bastion_pb2_grpc: "docs/resources/bastionlab/pb/bastionlab_pb2_grpc.md"
-          - bastionlab.pb.bastionlab_polars_pb2: "docs/resources/bastionlab/pb/bastionlab_polars_pb2.md"
           - bastionlab.pb.bastionlab_polars_pb2_grpc: "docs/resources/bastionlab/pb/bastionlab_polars_pb2_grpc.md"
-          - bastionlab.pb.bastionlab_torch_pb2: "docs/resources/bastionlab/pb/bastionlab_torch_pb2.md"
           - bastionlab.pb.bastionlab_torch_pb2_grpc: "docs/resources/bastionlab/pb/bastionlab_torch_pb2_grpc.md"
       - bastionlab.polars:
           - bastionlab.polars.client: "docs/resources/bastionlab/polars/client.md"
@@ -138,7 +135,6 @@ nav:
           - bastionlab.torch.psg:
               - bastionlab.torch.psg.convert: "docs/resources/bastionlab/torch/psg/convert.md"
               - bastionlab.torch.psg.nn: docs/resources/bastionlab/torch/psg/nn.md
-      - bastionlab.version: "docs/resources/bastionlab/version.md"
   - 🔒 Security:
       - Threat model: "docs/security/threat_model_data_owner_owns_infrastructure.md"
       - Authentication specifications: "docs/security/authenticated_sessions.md"
