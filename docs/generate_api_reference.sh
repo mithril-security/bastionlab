@@ -25,8 +25,6 @@ while read line; do
                 # Check if it is just psg or torch.psg
                 if [[ $line2 == 'bastionlab.torch.psg' ]]; then
                     sed -i "s+$line2+[$line2]($filepath/index.md)+g" $line
-                else
-                    sed -i "s+$line2+[$line2](torch/$filepath/index.md)+g" $line
                 fi
             elif [[ $filepath == 'pb' ]] || [[ $filepath == 'polars' ]] || [[ $filepath == 'torch' ]]; then
                 sed -i "s+$line2+[$line2]($filepath/index.md)+g" $line
