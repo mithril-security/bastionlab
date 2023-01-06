@@ -1,7 +1,7 @@
 use base64;
 use polars::{lazy::dsl::Expr, prelude::*};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, io::Cursor, ops::Deref};
+use std::{collections::HashMap, io::Cursor};
 use tch::CModule;
 use tonic::Status;
 
@@ -148,14 +148,31 @@ impl CompositePlan {
             query_details: plan_str,
         })
     }
-}
 
-impl Deref for CompositePlan {
-    type Target = Vec<CompositePlanSegment>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
+    pub fn get_inputs_as_string(
+        self_copy: &CompositePlan,
+    ) -> String {
+        let mut log_inputs = Vec::new();
+            for segment in &self_copy.0 {
+                match segment {
+                    CompositePlanSegment::EntryPointPlanSegment(identifier) => {
+                        log_inputs.push(identifier.clone());
+                    }
+                    _ => {}
+                }
+            }
+            let mut inputs = String::from("");
+            for i in &log_inputs{
+                let mut _x = false;
+                if _x == true{
+                    inputs.push_str(", ");
+                }
+                inputs.push_str(i);
+                _x = true;
+            }
+        return inputs;
     }
+
 }
 
 fn expr_agg_check(expr: &Expr) -> Result<bool, Status> {
