@@ -97,11 +97,11 @@ nav:
   - 📙 Tutorials:
       - Authentication: "docs/tutorials/authentication.ipynb"
       - Combining datasets: "docs/tutorials/combining_datasets.ipynb"
-      - SQL queries: "docs/tutorials/SQL_queries.ipynb"
       - Data cleaning: "docs/tutorials/data_cleaning.ipynb"
       - Data visualization: "docs/tutorials/visualization.ipynb"
       - Defining a privacy policy: "docs/tutorials/defining_policy_privacy.ipynb"
       - Saving DataFrames: "docs/tutorials/saving_dataframes.ipynb"
+      - SQL queries: "docs/tutorials/SQL_queries.ipynb"
   - 🌍 How-to-guides:
       - Data exploration:
         - Covid-19 cleaning and exploration: "docs/how-to-guides/covid_cleaning_exploration.ipynb"
