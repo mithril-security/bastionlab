@@ -26,5 +26,4 @@ message ClientInfo {
 service SessionService {
     rpc GetChallenge (Empty) returns (ChallengeResponse) {}
     rpc CreateSession (ClientInfo) returns (SessionInfo) {}
-    rpc DeleteSession (Empty) returns (Empty) {}
 }

@@ -317,15 +317,4 @@ impl session_proto::session_service_server::SessionService for SessionGrpcServic
         let session = self.sess_manager.create_session(request)?;
         Ok(Response::new(session))
     }
-
-    async fn delete_session(
-        &self,
-        request: Request<session_proto::Empty>,
-    ) -> Result<Response<session_proto::Empty>, Status> {
-        if self.sess_manager.auth_enabled() {
-            let token = get_token(&request, true)?;
-            self.sess_manager.delete_session(token.unwrap());
-        }
-        Ok(Response::new(Empty {}))
-    }
 }
