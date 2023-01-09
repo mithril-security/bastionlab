@@ -100,6 +100,7 @@ impl BastionLabTorch {
         let tensor = tensor.lock().unwrap();
 
         let tensor = { tensor.data() };
+        println!("Found tensor: {:?}", tensor);
 
         Ok(tensor)
     }
