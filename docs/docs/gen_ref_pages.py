@@ -64,6 +64,15 @@ def construct_tree(dictionary, level=0, string="", parent_dir=""):
     return string
 
 
+def align_tabs(tree, tabs):
+    tab_lines = tree.splitlines()
+    for j in range(len(tab_lines)):
+        tab_lines[j] = tabs * " " + tab_lines[j]
+    tree = "\n".join(tab_lines)
+    tree += "\n"
+    return tree
+
+
 if __name__ == "__main__":
     structure = process_directory(root_dir)
     sorted_dict = OrderedDict([key, value] for key, value in sorted(structure.items()))
@@ -74,11 +83,7 @@ if __name__ == "__main__":
         for i, line in enumerate(data):
             if "API Reference:" in line:
                 tabs = line.count(" ")
-                tab_lines = tree.splitlines()
-                for j in range(len(tab_lines)):
-                    tab_lines[j] = tabs * " " + tab_lines[j]
-                tree = "\n".join(tab_lines)
-                tree += "\n"
+                tree = align_tabs(tree, tabs)
                 data.insert(i + 1, tree)
                 break
         with open("mkdocs.yml", "w") as file:
