@@ -1,10 +1,9 @@
 use linfa::traits::Predict;
-use ndarray::{Array2, Dim, Ix2, Shape, ShapeBuilder, StrideShape};
+use ndarray::{Array1, Array2};
 
 use polars::{
     df,
-    error::ErrString,
-    prelude::{DataFrame, NamedFrom, PolarsError, PolarsResult},
+    prelude::{DataFrame, Float64Type, NamedFrom, PolarsError, PolarsResult},
     series::Series,
 };
 use tonic::Status;
@@ -34,20 +33,6 @@ macro_rules! to_ndarray {
     };
 }
 
-fn df_to_vec(df: DataFrame, sh: (usize, usize)) -> Vec<f64> {
-    let mut out: Vec<f64> = Vec::with_capacity(sh.0 * sh.1);
-    let df = df.get_columns();
-    df.iter().for_each(|s| {
-        let s = s.cast(&polars::prelude::DataType::Float64).unwrap();
-        let s = s.f64().unwrap();
-        let s = s.cont_slice().unwrap();
-        out.append(&mut s.to_vec());
-    });
-    out
-}
-
-//TODO: Fix Trait implementation for `vec_to_df`
-
 fn vec_f64_to_df(data: Vec<f64>, name: &str) -> PolarsResult<DataFrame> {
     let s = Series::new(name, data);
     let df = to_polars_error(DataFrame::new(vec![s]))?;
@@ -61,125 +46,59 @@ fn vec_u64_to_df(data: Vec<usize>, name: &str) -> PolarsResult<DataFrame> {
     Ok(df)
 }
 
-/// Internal structure to hold the [`DataFrame`]s converted to raw [`Vec<f64>`].
-/// This also holds information about the features of the input dataset.
-///
-/// The shapes are stored alongside inorder to effectively use [`Array2::from_shape_vec`].
-struct Trainer {
-    records: Vec<f64>,
-    target: Vec<f64>,
-    cols: Vec<String>,
-    records_shape: StrideShape<Ix2>,
-    target_shape: Shape<Ix2>,
-}
-
-/// Transform [`DataFrame`] into [`Trainer`].
-///
-/// It does so by using the [`df_to_vec`] function which converts [`DataFrame`] into [`Vec<Series>`].
-/// Example:
-///```
-/// shape: (4, 4)
-///      ┌──────┬──────┬──────┬──────┐
-///      │ col1 ┆ col2 ┆ col3 ┆ col4 │
-///      │ ---  ┆ ---  ┆ ---  ┆ ---  │
-///      │ i64  ┆ i64  ┆ i64  ┆ i64  │
-///      ╞══════╪══════╪══════╪══════╡
-///      │ 1    ┆ 3    ┆ 6    ┆ 9    │
-///      ├╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┤
-///      │ 2    ┆ 4    ┆ 8    ┆ 16   │
-///      ├╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┤
-///      │ 3    ┆ 9    ┆ 18   ┆ 35   │
-///      ├╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┤
-///      │ 4    ┆ -1   ┆ 0    ┆ 1    │
-///      └──────┴──────┴──────┴──────┘
-///```
-/// The [`DataFrame`] above is first transformed into [Vec<Series>].
-///
-/// ```[shape: (4,) Series: 'col1' [i64]
-/// [
-/// 	1
-/// 	2
-/// 	3
-/// 	4
-/// ], shape: (4,)
-/// Series: 'col2' [i64]
-/// [
-/// 	3
-/// 	4
-/// 	9
-/// 	-1
-/// ], shape: (4,)
-/// Series: 'col3' [i64]
-/// [
-/// 	6
-/// 	8
-/// 	18
-/// 	0
-/// ], shape: (4,)
-/// Series: 'col4' [i64]
-/// [
-/// 	9
-/// 	16
-/// 	35
-/// 	1
-/// ]]
-/// ```
-/// And this [Vec<Series>] is then converted to [Vec<f64>] using an intermediary [Vec<String>].
-///
-/// **NB: We use, [f64] in order to capture every type (i{8,16,32}, u{8,16,32}, f{32,64}, usize). But, separate
-///  conversion path is used when necessary.**
-fn transform_dfs(records: DataFrame, target: DataFrame) -> Trainer {
-    let cols = records
-        .get_column_names()
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
-
-    let (records_shape, target_shape) = (records.shape(), target.shape());
-    let records = df_to_vec(records.clone(), records.shape());
-    let target = df_to_vec(target.clone(), target.shape());
-
-    Trainer {
-        records,
-        target,
-        cols,
-        records_shape: Shape::from(Dim([records_shape.0, records_shape.1]))
-            .strides(Dim([1, records_shape.0])),
-        target_shape: Shape::from(Dim([target_shape.0, target_shape.1])),
-    }
-}
-
 /// This method sends both the training and target datasets to the specified model in [`Models`].
 /// And `ratio` is passed along to [`linfa_datasets::DatasetBase`]
 pub fn send_to_trainer(
     records: DataFrame,
-    target: DataFrame,
+    targets: DataFrame,
     ratio: f32,
     model_type: Models,
 ) -> PolarsResult<(SupportedModels, (DataFrame, DataFrame))> {
     // We are assuming [`f64`] for all computation since it can represent all other types.
+
+    let transform = |records: &DataFrame,
+                     targets: &DataFrame|
+     -> PolarsResult<(Vec<String>, Array2<f64>, Array1<f64>)> {
+        let cols = records
+            .get_column_names()
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let shape = targets.shape();
+        let records = to_polars_error(records.to_ndarray::<Float64Type>())?
+            .as_standard_layout()
+            .to_owned();
+        let targets = to_polars_error(targets.to_ndarray::<Float64Type>())?
+            .as_standard_layout()
+            .to_owned();
+        let targets = to_polars_error(targets.into_shape(shape.0))?;
+
+        Ok((cols, records, targets))
+    };
+
+    let to_usize = |targets: Array1<f64>| -> PolarsResult<Array1<usize>> {
+        let targets = match targets.as_slice() {
+            Some(s) => {
+                let cast = s.into_iter().map(|v| *v as usize).collect::<Vec<_>>();
+                Array1::from_vec(cast)
+            }
+            None => {
+                return Err(PolarsError::InvalidOperation(
+                    polars::error::ErrString::Borrowed("Could not create slice from targets"),
+                ));
+            }
+        };
+        Ok(targets)
+    };
+
     match model_type {
         Models::GaussianNaiveBayes { var_smoothing } => {
             let var_smoothing: f64 = var_smoothing.into();
-            let Trainer {
-                records,
-                target,
-                cols,
-                records_shape,
-                target_shape,
-            } = transform_dfs(records, target);
 
-            let target = to_type! {<usize>(target)};
+            let (cols, records, targets) = transform(&records, &targets)?;
+            let targets = to_usize(targets)?;
 
-            let target = to_ndarray!(target_shape, target);
-            let target = target
-                .clone()
-                .into_shape([target.clone().len()])
-                .map_err(|e| PolarsError::InvalidOperation(ErrString::Owned(e.to_string())))?;
-
-            let records = to_ndarray!(records_shape, records);
-
-            let (train, test) = get_datasets(records, target, ratio, cols)?;
+            let (train, test) = get_datasets(records, targets, ratio, cols)?;
             let (model, _) = to_polars_error(gaussian_naive_bayes(
                 train,
                 test.clone(),
@@ -197,21 +116,8 @@ pub fn send_to_trainer(
             max_iterations,
             tolerance,
         } => {
-            let Trainer {
-                records,
-                target,
-                cols,
-                records_shape,
-                target_shape,
-            } = transform_dfs(records, target);
-
-            let target = to_type! {<f64>(target)};
-
-            let target = to_ndarray!(target_shape, target);
-            let target = to_polars_error(target.clone().into_shape([target.clone().len()]))?;
-
-            let records = to_ndarray!(records_shape, records);
-            let (train, test) = get_datasets(records, target, ratio, cols)?;
+            let (cols, records, targets) = transform(&records, &targets)?;
+            let (train, test) = get_datasets(records, targets, ratio, cols)?;
             let model = to_polars_error(elastic_net(
                 train,
                 test.clone(),
@@ -232,21 +138,8 @@ pub fn send_to_trainer(
             max_n_iterations,
             init_method,
         } => {
-            let Trainer {
-                records,
-                target,
-                cols,
-                records_shape,
-                target_shape,
-            } = transform_dfs(records, target);
-
-            let target = to_type! {<f64>(target)};
-
-            let target = to_ndarray!(target_shape, target);
-            let target = to_polars_error(target.clone().into_shape([target.clone().len()]))?;
-
-            let records = to_ndarray!(records_shape, records);
-            let (train, test) = get_datasets(records, target, ratio, cols)?;
+            let (cols, records, targets) = transform(&records, &targets)?;
+            let (train, test) = get_datasets(records, targets, ratio, cols)?;
             let model = to_polars_error(kmeans(
                 train,
                 test.clone(),
@@ -262,20 +155,8 @@ pub fn send_to_trainer(
             Ok((SupportedModels::KMeans(model), (rec, tar)))
         }
         Models::LinearRegression { fit_intercept } => {
-            let Trainer {
-                records,
-                target,
-                cols,
-                records_shape,
-                target_shape,
-            } = transform_dfs(records, target);
-
-            let target = to_type! {<f64>(target)};
-            let target = to_ndarray!(target_shape, target);
-            let target = to_polars_error(target.clone().into_shape([target.clone().len()]))?;
-
-            let records = to_ndarray!(records_shape, records);
-            let (dataset, test) = get_datasets(records, target, ratio, cols)?;
+            let (cols, records, targets) = transform(&records, &targets)?;
+            let (dataset, test) = get_datasets(records, targets, ratio, cols)?;
             let model = to_polars_error(linear_regression(dataset, fit_intercept))?;
 
             let rec = vec_f64_to_df(test.records.into_raw_vec(), "test_recs")?;
@@ -290,20 +171,9 @@ pub fn send_to_trainer(
             max_iterations,
             initial_params,
         } => {
-            let Trainer {
-                records,
-                target,
-                cols,
-                records_shape,
-                target_shape,
-            } = transform_dfs(records, target);
-
-            let target = to_type! {<usize>(target)};
-            let target = to_ndarray!(target_shape, target);
-            let target = to_polars_error(target.clone().into_shape([target.clone().len()]))?;
-
-            let records = to_ndarray!(records_shape, records);
-            let (dataset, test) = get_datasets(records, target, ratio, cols)?;
+            let (cols, records, targets) = transform(&records, &targets)?;
+            let targets = to_usize(targets)?;
+            let (dataset, test) = get_datasets(records, targets, ratio, cols)?;
 
             let model = to_polars_error(logistic_regression(
                 dataset,
@@ -326,22 +196,10 @@ pub fn send_to_trainer(
             min_weight_leaf,
             min_impurity_decrease,
         } => {
-            let Trainer {
-                records,
-                target,
-                cols,
-                records_shape,
-                target_shape,
-            } = transform_dfs(records, target);
+            let (cols, records, targets) = transform(&records, &targets)?;
+            let targets = to_usize(targets)?;
 
-            let target = to_type! {<usize>(target)};
-            let target = to_ndarray!(target_shape, target);
-            let target = to_polars_error(target.clone().into_shape([target.clone().len()]))?;
-
-            let records = to_ndarray!(records_shape, records);
-            let (train, test) = get_datasets(records, target, ratio, cols)?;
-
-            // TODO: Save Test set with the model id.
+            let (train, test) = get_datasets(records, targets, ratio, cols)?;
 
             let model = to_polars_error(decision_trees(
                 train,

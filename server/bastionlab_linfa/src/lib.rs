@@ -37,7 +37,7 @@ pub fn to_status_error<T, E: Error>(input: Result<T, E>) -> Result<T, Status> {
 }
 
 pub struct BastionLabLinfa {
-    bastionlab_polars: Arc<BastionLabPolars>, // Fix by replacing with RdLock
+    bastionlab_polars: Arc<BastionLabPolars>,
     models: Arc<RwLock<HashMap<String, SupportedModels>>>,
     test_sets: Arc<RwLock<HashMap<String, (DataFrame, DataFrame)>>>,
     sess_manager: Arc<SessionManager>,
