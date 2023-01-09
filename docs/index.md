@@ -48,7 +48,7 @@ ____________________________________________
 
 - [Concepts](docs/concepts-guides/remote_data_science.md) guides discuss key topics and concepts at a high level. They provide useful background information and explanations, especially on cybersecurity.
 
-- [API Reference](docs/resources/bastionlab/index.html) contains technical references for BastionLab’s API machinery. They describe how it works and how to use it but assume you have a good understanding of key concepts.
+- [API Reference](docs/resources/bastionlab/index.md) contains technical references for BastionLab’s API machinery. They describe how it works and how to use it but assume you have a good understanding of key concepts. 
 
 - [Security](docs/security/threat_model_data_owner_owns_infrastructure.md) guides contain technical information for security engineers. They explain the threat models and other cybersecurity topics required to audit BastionLab's security standards.
 
