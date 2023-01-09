@@ -10,6 +10,13 @@ root_dir = "docs/docs/resources/bastionlab/"
 # Key names to delete from the dictionary
 keys_to_delete = ["version", "index"]
 
+# files to exclude from the dictionary
+files_to_exclude = [
+    "bastionlab_pb2.md",
+    "bastionlab_polars_pb2.md",
+    "bastionlab_torch_pb2.md",
+]
+
 
 def process_directory(dir):
     subdocs = {}
@@ -33,7 +40,7 @@ def delete_keys(d, keys_to_delete):
     # Iterate through the dictionary
     for key in list(d.keys()):
         # If the key is in the list of keys to delete
-        if key in keys_to_delete:
+        if key in keys_to_delete or key in files_to_exclude:
             # Delete the key-value pair
             d.pop(key, None)
         # If the value is a dictionary
@@ -46,7 +53,7 @@ def construct_tree(dictionary, level=0, string="", parent_dir=""):
     for key, value in dictionary.items():
         if isinstance(value, dict):
             # Delete the first '/docs' from the path
-            string += "    " * level + "- bastionlab." + parent_dir + key + ": " + "\n"
+            string += "    " * level + "- bastionlab." + parent_dir + key + ":" + "\n"
             string += construct_tree(value, level + 1, "", parent_dir + key + ".")
         else:
             string += (
