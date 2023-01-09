@@ -7,6 +7,9 @@ docs = {}
 # Set the root directory
 root_dir = "docs/docs/resources/bastionlab/"
 
+# Key names to delete from the dictionary
+keys_to_delete = ["version", "index"]
+
 
 def process_directory(dir):
     subdocs = {}
@@ -64,6 +67,7 @@ def construct_tree(dictionary, level=0, string="", parent_dir=""):
 if __name__ == "__main__":
     structure = process_directory(root_dir)
     sorted_dict = OrderedDict([key, value] for key, value in sorted(structure.items()))
+    delete_keys(sorted_dict, keys_to_delete)
     tree = construct_tree(sorted_dict)
     with open("mkdocs.yml", "r") as file:
         data = file.readlines()
