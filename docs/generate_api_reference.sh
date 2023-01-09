@@ -39,3 +39,5 @@ while read line; do
 done < list_path.txt
 
 rm list_path.txt
+
+python docs/docs/gen_ref_pages.py
