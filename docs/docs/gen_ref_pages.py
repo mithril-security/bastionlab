@@ -40,7 +40,11 @@ def delete_keys(d, keys_to_delete):
     # Iterate through the dictionary
     for key in list(d.keys()):
         # If the key is in the list of keys to delete
-        if key in keys_to_delete or key in files_to_exclude:
+        if (
+            key in keys_to_delete
+            or isinstance(d[key], str)
+            and d[key].split("/")[-1] in files_to_exclude
+        ):
             # Delete the key-value pair
             d.pop(key, None)
         # If the value is a dictionary
