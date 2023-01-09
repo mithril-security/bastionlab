@@ -289,15 +289,15 @@ Reason: {}",
         let dataframes = self
             .dataframes
             .read()
-            .map_err(|_| Status::not_found("Unable to read dataframes!"))?;
+            .map_err(|_| Status::internal("Unable to read dataframes!"))?;
 
         let df_artifact = dataframes
             .get(identifier)
             .ok_or("")
             .map_err(|_| Status::not_found("Unable to find dataframe!"))?;
 
-        if df_artifact.fetchable != VerificationResult::Safe {
-            return Err(Status::failed_precondition("Dataframe is not fetchable"));
+        if df_artifact.policy.check_savable() != true {
+            return Err(Status::unknown("Dataframe is not savable"));
         }
 
         let error = create_dir("data_frames");
@@ -305,7 +305,7 @@ Reason: {}",
             Ok(_) => {}
             Err(err) => {
                 if err.kind() != ErrorKind::AlreadyExists {
-                    return Err(Status::failed_precondition(err.kind().to_string()));
+                    return Err(Status::unknown(err.kind().to_string()));
                 }
             }
         }
@@ -315,10 +315,10 @@ Reason: {}",
             .write(true)
             .create(true)
             .open(path)
-            .map_err(|_| Status::not_found("Unable to find or create storage file!"))?;
+            .map_err(|_| Status::internal("Unable to find or create storage file!"))?;
 
         serde_json::to_writer(df_store, df_artifact)
-            .map_err(|_| Status::unknown("Could not serialize dataframe artifact!"))?;
+            .map_err(|_| Status::internal("Could not serialize dataframe artifact!"))?;
 
         Ok(())
     }
@@ -339,6 +339,15 @@ Reason: {}",
             let mut dfs = self.dataframes.write().unwrap();
             dfs.insert(identifier, df);
         }
+        Ok(())
+    }
+
+    fn delete_dfs(&self, identifier: &str) -> Result<(), Error> {
+        let mut dfs = self.dataframes.write().unwrap();
+        dfs.remove(identifier);
+
+        let path = "data_frames/".to_owned() + identifier + ".json";
+        std::fs::remove_file(path).unwrap_or(());
         Ok(())
     }
 }
@@ -497,6 +506,28 @@ impl PolarsService for BastionLabPolars {
         self.persist_df(identifier)?;
         telemetry::add_event(
             TelemetryEventProps::SaveDataframe {
+                dataset_name: Some(identifier.clone()),
+            },
+            Some(self.sess_manager.get_client_info(token)?),
+        );
+        Ok(Response::new(Empty {}))
+    }
+
+    async fn delete_data_frame(
+        &self,
+        request: Request<ReferenceRequest>,
+    ) -> Result<Response<Empty>, Status> {
+        let token = self.sess_manager.verify_request(&request)?;
+        let identifier = &request.get_ref().identifier;
+        let user_id = self.sess_manager.get_user_id(token.clone())?;
+        let owner_check = self.sess_manager.verify_if_owner(&user_id)?;
+        if owner_check {
+            self.delete_dfs(identifier)?;
+        } else {
+            return Err(Status::internal("Only data owners can delete dataframes."));
+        }
+        telemetry::add_event(
+            TelemetryEventProps::DeleteDataframe {
                 dataset_name: Some(identifier.clone()),
             },
             Some(self.sess_manager.get_client_info(token)?),
