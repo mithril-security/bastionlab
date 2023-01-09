@@ -6,7 +6,7 @@ from torch.nn import Module
 from torch.nn.parameter import Parameter
 from torch.utils.data import Dataset
 from tqdm import tqdm  # type: ignore [import]
-from ..pb.bastionlab_torch_pb2 import Chunk, Reference  # type: ignore [import]
+from ..pb.bastionlab_torch_pb2 import Chunk, Reference, Meta  # type: ignore [import]
 
 T = TypeVar("T")
 U = TypeVar("U")
@@ -312,15 +312,13 @@ def serialize_dataset(
         ),
         name=name,
         description=description,
-        meta=bulk_serialize(
-            {
-                "input_shape": [input.size() for input in dataset[0][0]],
-                "input_dtype": [input.dtype for input in dataset[0][0]],
-                "nb_samples": len(dataset),  # type: ignore [arg-type]
-                "privacy_limit": privacy_limit,
-                "train_dataset": train_dataset,
-            }
-        ),
+        meta=Meta(
+            input_shape=[Meta.Shape(elem=input.size()) for input in dataset[0][0]],
+            input_dtype=[f"{input.dtype}" for input in dataset[0][0]],
+            nb_samples=len(dataset),  # type: ignore [arg-type]
+            privacy_limit=privacy_limit,
+            train_dataset=train_dataset,
+        ).SerializeToString(),
         progress=progress,
     )
 
@@ -408,3 +406,35 @@ def bulk_deserialize(b: bytes) -> Any:
     buff.write(b)
     buff.seek(0)
     return torch.load(buff)
+
+
+torch_dtypes = {
+    "Int8": torch.uint8,
+    "UInt8": torch.uint8,
+    "Int16": torch.int16,
+    "Int32": torch.int32,
+    "Int64": torch.int64,
+    "Half": torch.half,
+    "Float": torch.float,
+    "Float32": torch.float32,
+    "Float64": torch.float64,
+    "Double": torch.double,
+    "ComplexHalf": torch.complex32,
+    "ComplexFloat": torch.complex64,
+    "ComplexDouble": torch.complex128,
+    "Bool": torch.bool,
+    "QInt8": torch.qint8,
+    "QInt32": torch.qint32,
+    "BFloat16": torch.bfloat16,
+}
+
+tch_kinds = {v: k for k, v in torch_dtypes.items()}
+
+
+def to_torch_meta(meta_bytes: bytes):
+    meta = Meta()
+    meta.ParseFromString(meta_bytes)
+
+    return [torch_dtypes[dt] for dt in meta.input_dtype], [
+        torch.Size(list(meta.input_shape))
+    ]

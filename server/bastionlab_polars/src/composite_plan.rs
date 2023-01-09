@@ -1,4 +1,6 @@
 use base64;
+use bastionlab_common::utils::tensor_to_series;
+use polars::functions::hor_concat_df;
 use polars::{lazy::dsl::Expr, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io::Cursor};
@@ -19,6 +21,8 @@ pub struct CompositePlan(Vec<CompositePlanSegment>);
 pub enum CompositePlanSegment {
     PolarsPlanSegment(LogicalPlan),
     UdfPlanSegment { columns: Vec<String>, udf: String },
+    StringTransformerPlanSegment { columns: Vec<String>, model: String },
+    UdfTransformerPlanSegment { columns: Vec<String>, udf: String },
     EntryPointPlanSegment(String),
     StackPlanSegment,
 }
@@ -40,7 +44,8 @@ struct StackFrame {
 impl CompositePlan {
     pub fn run(self, state: &BastionLabPolars, user_id: &str) -> Result<DataFrameArtifact, Status> {
         let mut stack = Vec::new();
-        let plan_str = serde_json::to_string(&self.0).unwrap(); // FIX THIS
+        let plan_str = serde_json::to_string(&self.0)
+            .map_err(|e| Status::aborted(format!("Could not deserialize CompositePlan: {}", e)))?;
 
         for seg in self.0 {
             match seg {
@@ -107,6 +112,44 @@ impl CompositePlan {
                     stats.merge(frame2.stats);
                     stack.push(StackFrame { df, stats });
                 }
+                #[allow(unused)]
+                CompositePlanSegment::StringTransformerPlanSegment { columns, model } => {
+                    let frame = stack.pop().ok_or(Status::invalid_argument(
+                        "Could not apply udf: no input data frame",
+                    ))?;
+                    let mut df = frame.df;
+
+                    for name in columns {
+                        let idx = df
+                            .get_column_names()
+                            .iter()
+                            .position(|x| x == &&name)
+                            .ok_or(Status::invalid_argument(format!(
+                                "Could not apply udf: no column `{}` in data frame",
+                                name
+                            )))?;
+                        let series = df.get_columns().get(idx).unwrap();
+                        let out = if series.dtype().eq(&DataType::Utf8) {
+                            series_to_tokenized_series(series, &name, &model)?
+                        } else {
+                            to_status_error(DataFrame::new(vec![series.clone()]))?
+                        };
+                        let _ = to_status_error(df.drop_in_place(&name))?;
+
+                        df = to_status_error(hor_concat_df(&[df, out]))?;
+                    }
+
+                    let lazy = df.clone().lazy().select(&[col("text_ids")]);
+                    let plan = lazy.logical_plan;
+
+                    let serialized = serde_json::to_string(&plan).unwrap();
+                    stack.push(StackFrame {
+                        df,
+                        stats: frame.stats,
+                    });
+                }
+                #[allow(unused)]
+                CompositePlanSegment::UdfTransformerPlanSegment { columns, udf } => todo!(), //TODO: Add support for TorchScriptable Tokenizers
             }
         }
 
