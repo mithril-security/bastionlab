@@ -86,26 +86,20 @@ pub fn to_polars_error<T, E: Error>(input: Result<T, E>) -> PolarsResult<T> {
 pub fn get_datasets<D: Clone, T>(
     records: ArrayBase<OwnedRepr<D>, Ix2>,
     target: ArrayBase<OwnedRepr<T>, Ix1>,
-    ratio: f32,
     col_names: Vec<String>,
-) -> PolarsResult<(
-    DatasetBase<ArrayBase<OwnedRepr<D>, Ix2>, ArrayBase<OwnedRepr<T>, Ix1>>,
-    DatasetBase<ArrayBase<OwnedRepr<D>, Ix2>, ArrayBase<OwnedRepr<T>, Ix1>>,
-)> {
+) -> PolarsResult<DatasetBase<ArrayBase<OwnedRepr<D>, Ix2>, ArrayBase<OwnedRepr<T>, Ix1>>> {
     // ** For now, shuffling is not implemented.
     let dataset = linfa::Dataset::new(records, target);
     let dataset = dataset.with_feature_names::<String>(col_names);
-    let (train_set, test_set) = dataset.split_with_ratio(ratio);
-    Ok((train_set, test_set))
+    Ok(dataset)
 }
 
 pub fn process_trainer_req(
     request: Request<TrainingRequest>,
-) -> Result<(String, String, f32, Option<Trainer>), Status> {
+) -> Result<(String, String, Option<Trainer>), Status> {
     Ok((
         request.get_ref().records.clone(),
         request.get_ref().target.clone(),
-        request.get_ref().ratio,
         Some(
             request
                 .get_ref()

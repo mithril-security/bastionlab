@@ -325,10 +325,15 @@ class RemoteLazyFrame:
         return self._meta._client._run_query(self.composite_plan)
 
     def column(self: LDF, column: str) -> RemoteSeries:
+
         return RemoteSeries(self.select(column).collect())
 
     def columns(self: LDF, column_names: List[str]) -> List[RemoteSeries]:
         return RemoteSeries(self.select(column_names).collect())
+
+    def to_array(self: LDF) -> "RemoteArray":
+        cols = self.column_names
+        return RemoteArray(self.select(cols).collect())
 
     @staticmethod
     def sql(query: str, *rdfs: LDF) -> LDF:
@@ -422,7 +427,7 @@ class RemoteLazyFrame:
             ),
         )
 
-    def convert(self, columns: List[str], model: str) -> LDF:
+    def _convert(self, columns: List[str], model: str) -> LDF:
         df = pl.DataFrame(
             [pl.Series(k, dtype=v) for k, v in self._inner.schema.items()]
         )
@@ -1055,43 +1060,6 @@ class FetchableLazyFrame(RemoteLazyFrame):
         """
         return self._meta._client._fetch_df(self._identifier)
 
-    def to_dataset(
-        self,
-        inputs: Optional[Union[str, List[str]]] = None,
-        labels: Optional[str] = None,
-    ) -> "RemoteDataset":
-        """Converts BastionLab `FetchableLazy` to a `RemoteDataset`.
-
-        Args:
-            inputs (List[str]):
-                The list of input columns names to used as `DataFrame` columns.
-            labels (str):
-                The column name of the labels column in the resulting `DataFrame`
-            inputs_conv_fn (Optional[Callable] = None):
-                Function to convert inputs to `torch.Tensor` dtypes.
-            labels_conv_fn (Optional[Callable] = None):
-                Function to convert labels to `torch.Tensor` dtypes.
-
-        Returns:
-            RemoteDataset
-        """
-        from ..torch.learner import RemoteDataset
-        from ..config import CONFIG
-
-        if not isinstance(inputs, list):
-            inputs = [inputs]
-
-        ref = self._meta._client._conv._stub.ConvToDataset(
-            ToDataset(
-                inputs=inputs,
-                labels=labels,
-                identifier=self.identifier,
-            )
-        )
-        return RemoteDataset(
-            client=CONFIG["torch_client"], train_dataset=to_torch_ref(ref)
-        )
-
     def save(self):
         return self._meta._client._persist_df(self._identifier)
 
@@ -1485,3 +1453,13 @@ class RemoteSeries(RemoteLazyFrame):
 
     def __repr__(self) -> str:
         return str(self)
+
+
+class RemoteArray(RemoteLazyFrame):
+    def __init__(self, rdf: "RemoteLazyFrame") -> None:
+        self._inner = rdf._inner
+        self._meta = rdf._meta
+        self.identifier = rdf.identifier
+
+    def __str__(self) -> str:
+        return f"RemoteArray(identifier={self.identifier}"

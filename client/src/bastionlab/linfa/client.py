@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, List
 
 
 if TYPE_CHECKING:
-    from ..polars import FetchableLazyFrame, BastionLabPolars
+    from ..polars.remote_polars import RemoteArray, BastionLabPolars, FetchableLazyFrame
     from .trainers import Trainer
     from .remote_linfa import FittedModel
     from ..client import Client
@@ -25,12 +25,11 @@ class BastionLabLinfa:
         self.stub = LinfaServiceStub(client._channel)
         self.polars = polars
 
-    def train(
+    def _train(
         self,
-        records: "FetchableLazyFrame",
-        target: "FetchableLazyFrame",
+        records: "RemoteArray",
+        target: "RemoteArray",
         trainer: "Trainer",
-        ratio: float = 1.0,
     ) -> "FittedModel":
         from .remote_linfa import FittedModel
 
@@ -38,27 +37,30 @@ class BastionLabLinfa:
             TrainingRequest(
                 records=records.identifier,
                 target=target.identifier,
-                ratio=ratio,
                 **trainer.to_msg_dict(),
             )
         )
         return FittedModel._from_reference(res, trainer)
 
-    def predict(self, model: "FittedModel", data: List[float]) -> pl.DataFrame:
+    def _predict(self, model: "FittedModel", test_set: "RemoteArray") -> pl.DataFrame:
         from ..polars.remote_polars import FetchableLazyFrame
 
         res = self.stub.Predict(
-            PredictionRequest(model=model.identifier, data=data, probability=False)
+            PredictionRequest(
+                model=model.identifier, test_set=test_set.identifier, probability=False
+            )
         )
         return FetchableLazyFrame._from_reference(self.polars, res).fetch()
 
     def predict_proba(
-        self, model: "FittedModel", data: List[float]
+        self, model: "FittedModel", test_set: "RemoteArray"
     ) -> "FetchableLazyFrame":
         from ..polars.remote_polars import FetchableLazyFrame
 
         res = self.stub.Predict(
-            PredictionRequest(model=model.identifier, data=data, probability=True)
+            PredictionRequest(
+                model=model.identifier, data=test_set.identifier, probability=True
+            )
         )
         return FetchableLazyFrame._from_reference(self.polars, res).fetch()
 

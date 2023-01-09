@@ -1,14 +1,10 @@
-use linfa::{
-    traits::{Fit, Predict},
-    DatasetBase,
-};
+use linfa::{traits::Fit, DatasetBase};
 use linfa_clustering::{GmmError, KMeans, KMeansInit};
 use linfa_nn::distance::L2Dist;
 use ndarray::{ArrayBase, Ix1, Ix2, OwnedRepr};
 
 pub fn kmeans(
     train: DatasetBase<ArrayBase<OwnedRepr<f64>, Ix2>, ArrayBase<OwnedRepr<f64>, Ix1>>,
-    valid: DatasetBase<ArrayBase<OwnedRepr<f64>, Ix2>, ArrayBase<OwnedRepr<f64>, Ix1>>,
     n_runs: usize,
     n_clusters: usize,
     tolerance: f64,
@@ -21,8 +17,6 @@ pub fn kmeans(
         .tolerance(tolerance)
         .init_method(init_method)
         .fit(&train)?;
-
-    model.predict(valid);
 
     Ok(model)
 }

@@ -78,13 +78,6 @@ impl BastionLabLinfa {
         Ok(model.clone())
     }
 
-    fn insert_test_set(&self, model_id: &str, test_set: (DataFrame, DataFrame)) -> String {
-        let mut test_sets = self.test_sets.write().unwrap();
-        let id = model_id.to_string();
-        test_sets.insert(id.clone(), test_set);
-        id
-    }
-
     fn get_test_set(&self, model_id: &str) -> Result<(DataFrame, DataFrame), Status> {
         let test_sets = self.test_sets.read().unwrap();
 
@@ -102,7 +95,7 @@ impl LinfaService for BastionLabLinfa {
         request: Request<TrainingRequest>,
     ) -> Result<Response<ModelResponse>, Status> {
         self.sess_manager.verify_request(&request)?;
-        let (records, target, ratio, trainer): (String, String, f32, Option<Trainer>) =
+        let (records, target, trainer): (String, String, Option<Trainer>) =
             process_trainer_req(request)?;
 
         let (records, target) = {
@@ -113,14 +106,8 @@ impl LinfaService for BastionLabLinfa {
 
         let trainer = trainer.ok_or(Status::aborted("Invalid Trainer!"))?;
         let trainer = select_trainer(trainer)?;
-        let (model, (records, target)) = to_status_error(send_to_trainer(
-            records.clone(),
-            target.clone(),
-            ratio,
-            trainer,
-        ))?;
+        let model = to_status_error(send_to_trainer(records.clone(), target.clone(), trainer))?;
         let identifier = self.insert_model(model);
-        self.insert_test_set(&identifier, (records.clone(), target.clone()));
         Ok(Response::new(ModelResponse { identifier }))
     }
 
@@ -129,19 +116,17 @@ impl LinfaService for BastionLabLinfa {
         request: Request<PredictionRequest>,
     ) -> Result<Response<ReferenceResponse>, Status> {
         self.sess_manager.verify_request(&request)?;
-        let (model_id, data, probability) = {
+        let (model_id, test_set, probability) = {
             let model = &request.get_ref().model;
-            let data = &request.get_ref().data;
+            let test_set = &request.get_ref().test_set;
             let prob = *(&request.get_ref().probability);
-            let data = to_type! {<f64>(data)};
-            (model, data, prob)
+            (model, test_set, prob)
         };
 
         let model = self.get_model(model_id)?;
 
-        let prediction = to_status_error(predict(model, data, probability))?;
-
-        println!("{:?}", prediction);
+        let test_set = self.bastionlab_polars.get_df_unchecked(test_set)?;
+        let prediction = to_status_error(predict(model, test_set, probability))?;
 
         let identifier = self.insert_df(
             DataFrameArtifact::new(

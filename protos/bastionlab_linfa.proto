@@ -12,7 +12,7 @@ message ModelResponse {
 
 message PredictionRequest{
     string model = 1;
-    repeated float data = 2;
+    string test_set = 2;
     bool probability = 3;
 }
 
@@ -27,7 +27,6 @@ message ValidationResponse {
 message TrainingRequest {
     string records = 1;
     string target = 2;
-    float ratio = 3;
 
     oneof trainer {
         GaussianNb gaussian_nb = 4;

@@ -1,5 +1,5 @@
 use linfa::traits::Predict;
-use ndarray::{Array1, Array2};
+use ndarray::{Array, Array1, Array2, ArrayBase, Dimension, OwnedRepr, StrideShape};
 
 use polars::{
     df,
@@ -46,14 +46,31 @@ fn vec_u64_to_df(data: Vec<usize>, name: &str) -> PolarsResult<DataFrame> {
     Ok(df)
 }
 
+fn to_usize<D: Dimension, S: Into<StrideShape<D>>>(
+    targets: ArrayBase<OwnedRepr<f64>, D>,
+    shape: S,
+) -> PolarsResult<ArrayBase<OwnedRepr<usize>, D>> {
+    let targets = match targets.as_slice() {
+        Some(s) => {
+            let cast = s.into_iter().map(|v| *v as usize).collect::<Vec<_>>();
+            to_polars_error(Array::from_shape_vec(shape, cast))?
+        }
+        None => {
+            return Err(PolarsError::InvalidOperation(
+                polars::error::ErrString::Borrowed("Could not create slice from targets"),
+            ));
+        }
+    };
+    Ok(targets)
+}
+
 /// This method sends both the training and target datasets to the specified model in [`Models`].
 /// And `ratio` is passed along to [`linfa_datasets::DatasetBase`]
 pub fn send_to_trainer(
     records: DataFrame,
     targets: DataFrame,
-    ratio: f32,
     model_type: Models,
-) -> PolarsResult<(SupportedModels, (DataFrame, DataFrame))> {
+) -> PolarsResult<SupportedModels> {
     // We are assuming [`f64`] for all computation since it can represent all other types.
 
     let transform = |records: &DataFrame,
@@ -64,31 +81,16 @@ pub fn send_to_trainer(
             .iter()
             .map(|s| s.to_string())
             .collect();
-        let shape = targets.shape();
+        let targets_shape = targets.shape();
         let records = to_polars_error(records.to_ndarray::<Float64Type>())?
             .as_standard_layout()
             .to_owned();
         let targets = to_polars_error(targets.to_ndarray::<Float64Type>())?
             .as_standard_layout()
             .to_owned();
-        let targets = to_polars_error(targets.into_shape(shape.0))?;
+        let targets = to_polars_error(targets.into_shape(targets_shape.0))?;
 
         Ok((cols, records, targets))
-    };
-
-    let to_usize = |targets: Array1<f64>| -> PolarsResult<Array1<usize>> {
-        let targets = match targets.as_slice() {
-            Some(s) => {
-                let cast = s.into_iter().map(|v| *v as usize).collect::<Vec<_>>();
-                Array1::from_vec(cast)
-            }
-            None => {
-                return Err(PolarsError::InvalidOperation(
-                    polars::error::ErrString::Borrowed("Could not create slice from targets"),
-                ));
-            }
-        };
-        Ok(targets)
     };
 
     match model_type {
@@ -96,18 +98,13 @@ pub fn send_to_trainer(
             let var_smoothing: f64 = var_smoothing.into();
 
             let (cols, records, targets) = transform(&records, &targets)?;
-            let targets = to_usize(targets)?;
+            let targets_shape = targets.shape().to_vec();
+            let targets = to_usize(targets, targets_shape[0])?;
 
-            let (train, test) = get_datasets(records, targets, ratio, cols)?;
-            let (model, _) = to_polars_error(gaussian_naive_bayes(
-                train,
-                test.clone(),
-                var_smoothing.into(),
-            ))?;
+            let train = get_datasets(records, targets, cols)?;
+            let model = to_polars_error(gaussian_naive_bayes(train, var_smoothing.into()))?;
 
-            let rec = vec_f64_to_df(test.records.into_raw_vec(), "test_recs")?;
-            let tar = vec_u64_to_df(test.targets.into_raw_vec(), "test_target")?;
-            Ok((SupportedModels::GaussianNaiveBayes(model), (rec, tar)))
+            Ok(SupportedModels::GaussianNaiveBayes(model))
         }
         Models::ElasticNet {
             penalty,
@@ -117,19 +114,16 @@ pub fn send_to_trainer(
             tolerance,
         } => {
             let (cols, records, targets) = transform(&records, &targets)?;
-            let (train, test) = get_datasets(records, targets, ratio, cols)?;
+            let train = get_datasets(records, targets, cols)?;
             let model = to_polars_error(elastic_net(
                 train,
-                test.clone(),
                 penalty.into(),
                 l1_ratio.into(),
                 with_intercept,
                 max_iterations,
                 tolerance.into(),
             ))?;
-            let rec = vec_f64_to_df(test.records.clone().into_raw_vec(), "test_recs")?;
-            let tar = vec_f64_to_df(test.targets.clone().into_raw_vec(), "test_target")?;
-            Ok((SupportedModels::ElasticNet(model), (rec, tar)))
+            Ok(SupportedModels::ElasticNet(model))
         }
         Models::KMeans {
             n_runs,
@@ -139,10 +133,9 @@ pub fn send_to_trainer(
             init_method,
         } => {
             let (cols, records, targets) = transform(&records, &targets)?;
-            let (train, test) = get_datasets(records, targets, ratio, cols)?;
+            let train = get_datasets(records, targets, cols)?;
             let model = to_polars_error(kmeans(
                 train,
-                test.clone(),
                 n_runs.into(),
                 n_clusters.into(),
                 tolerance,
@@ -150,18 +143,14 @@ pub fn send_to_trainer(
                 init_method,
             ))?;
 
-            let rec = vec_f64_to_df(test.records.into_raw_vec(), "test_recs")?;
-            let tar = vec_f64_to_df(test.targets.into_raw_vec(), "test_target")?;
-            Ok((SupportedModels::KMeans(model), (rec, tar)))
+            Ok(SupportedModels::KMeans(model))
         }
         Models::LinearRegression { fit_intercept } => {
             let (cols, records, targets) = transform(&records, &targets)?;
-            let (dataset, test) = get_datasets(records, targets, ratio, cols)?;
-            let model = to_polars_error(linear_regression(dataset, fit_intercept))?;
+            let train = get_datasets(records, targets, cols)?;
+            let model = to_polars_error(linear_regression(train, fit_intercept))?;
 
-            let rec = vec_f64_to_df(test.records.into_raw_vec(), "test_recs")?;
-            let tar = vec_f64_to_df(test.targets.into_raw_vec(), "test_target")?;
-            Ok((SupportedModels::LinearRegression(model), (rec, tar)))
+            Ok(SupportedModels::LinearRegression(model))
         }
 
         Models::LogisticRegression {
@@ -172,11 +161,13 @@ pub fn send_to_trainer(
             initial_params,
         } => {
             let (cols, records, targets) = transform(&records, &targets)?;
-            let targets = to_usize(targets)?;
-            let (dataset, test) = get_datasets(records, targets, ratio, cols)?;
+            let targets_shape = targets.shape().to_vec();
+
+            let targets = to_usize(targets, targets_shape[0])?;
+            let train = get_datasets(records, targets, cols)?;
 
             let model = to_polars_error(logistic_regression(
-                dataset,
+                train,
                 alpha,
                 gradient_tolerance,
                 fit_intercept,
@@ -184,9 +175,7 @@ pub fn send_to_trainer(
                 initial_params,
             ))?;
 
-            let rec = vec_f64_to_df(test.records.into_raw_vec(), "test_recs")?;
-            let tar = vec_u64_to_df(test.targets.into_raw_vec(), "test_target")?;
-            Ok((SupportedModels::LogisticRegression(model), (rec, tar)))
+            Ok(SupportedModels::LogisticRegression(model))
         }
 
         Models::DecisionTree {
@@ -197,9 +186,11 @@ pub fn send_to_trainer(
             min_impurity_decrease,
         } => {
             let (cols, records, targets) = transform(&records, &targets)?;
-            let targets = to_usize(targets)?;
+            let targets_shape = targets.shape().to_vec();
 
-            let (train, test) = get_datasets(records, targets, ratio, cols)?;
+            let targets = to_usize(targets, targets_shape[0])?;
+
+            let train = get_datasets(records, targets, cols)?;
 
             let model = to_polars_error(decision_trees(
                 train,
@@ -210,9 +201,7 @@ pub fn send_to_trainer(
                 min_impurity_decrease,
             ))?;
 
-            let rec = vec_f64_to_df(test.records.into_raw_vec(), "test_recs")?;
-            let tar = vec_u64_to_df(test.targets.into_raw_vec(), "test_target")?;
-            Ok((SupportedModels::DecisionTree(model), (rec, tar)))
+            Ok(SupportedModels::DecisionTree(model))
         }
     }
 }
@@ -222,11 +211,13 @@ pub fn send_to_trainer(
 /// [f64] and [usize] --> [PredictionTypes::Float] and [PredictionTypes::Usize] respectively.
 pub fn predict(
     model: SupportedModels,
-    data: Vec<f64>,
+    data: DataFrame,
     probability: bool,
 ) -> PolarsResult<DataFrame> {
-    let sh = (1, data.len());
-    let sample = to_ndarray!(sh, data);
+    let sample = to_polars_error(data.to_ndarray::<Float64Type>())?
+        .as_standard_layout()
+        .to_owned();
+
     let prediction = match model {
         SupportedModels::ElasticNet(m) => Some(PredictionTypes::Float(m.predict(sample))),
         SupportedModels::GaussianNaiveBayes(m) => Some(PredictionTypes::Usize(m.predict(sample))),

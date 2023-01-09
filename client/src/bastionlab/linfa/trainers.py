@@ -1,12 +1,31 @@
 from dataclasses import dataclass, field
 from ..pb.bastionlab_linfa_pb2 import TrainingRequest
+from ..polars.remote_polars import RemoteArray
 from typing import Dict, Optional, List
+from ..config import CONFIG
 
 
 @dataclass
 class Trainer:
+    identifier: Optional[str] = None
+
     def to_msg_dict():
         raise NotImplementedError
+
+    def fit(self):
+        raise NotImplementedError
+
+    def predict(self):
+        raise NotImplementedError
+
+
+def get_client():
+    from ..config import CONFIG
+
+    if CONFIG["linfa_client"] == None:
+        raise Exception("BastionLab Linfa client is not initialized.")
+
+    return CONFIG["linfa_client"]
 
 
 @dataclass
@@ -17,6 +36,16 @@ class GaussianNb(Trainer):
         return {
             "gaussian_nb": TrainingRequest.GaussianNb(var_smoothing=self.var_smoothing)
         }
+
+    def fit(self, train_set: RemoteArray, target_set: RemoteArray):
+        client = get_client()
+        model = client._train(train_set, target_set, self)
+        self.identifier = model.identifier
+        return model
+
+    def predict(self, test_set: RemoteArray):
+        client = get_client()
+        return client._predict(self, test_set)
 
 
 @dataclass
@@ -29,6 +58,16 @@ class LinearRegression(Trainer):
                 fit_intercept=self.fit_intercept
             )
         }
+
+    def fit(self, train_set: RemoteArray, target_set: RemoteArray):
+        client = get_client()
+        model = client._train(train_set, target_set, self)
+        self.identifier = model.identifier
+        return model
+
+    def predict(self, test_set: RemoteArray):
+        client = get_client()
+        return client._predict(self, test_set)
 
 
 @dataclass
@@ -50,6 +89,16 @@ class LogisticRegression(Trainer):
             )
         }
 
+    def fit(self, train_set: RemoteArray, target_set: RemoteArray):
+        client = get_client()
+        model = client._train(train_set, target_set, self)
+        self.identifier = model.identifier
+        return model
+
+    def predict(self, test_set: RemoteArray):
+        client = get_client()
+        return client._predict(self, test_set)
+
 
 @dataclass
 class ElasticNet(Trainer):
@@ -69,6 +118,16 @@ class ElasticNet(Trainer):
                 tolerance=self.tolerance,
             )
         }
+
+    def fit(self, train_set: RemoteArray, target_set: RemoteArray):
+        client = get_client()
+        model = client._train(train_set, target_set, self)
+        self.identifier = model.identifier
+        return model
+
+    def predict(self, test_set: RemoteArray):
+        client = get_client()
+        return client._predict(self, test_set)
 
 
 @dataclass
@@ -101,6 +160,16 @@ class DecisionTree(Trainer):
                 split_quality=self.split_quality.to_msg_dict(),
             )
         }
+
+    def fit(self, train_set: RemoteArray, target_set: RemoteArray):
+        client = get_client()
+        model = client._train(train_set, target_set, self)
+        self.identifier = model.identifier
+        return model
+
+    def predict(self, test_set: RemoteArray):
+        client = get_client()
+        return client._predict(self, test_set)
 
 
 @dataclass
@@ -144,3 +213,13 @@ class KMeans(Trainer):
                 **self.get_init_method(),
             )
         }
+
+    def fit(self, train_set: RemoteArray, target_set: RemoteArray):
+        client = get_client()
+        model = client._train(train_set, target_set, self)
+        self.identifier = model.identifier
+        return model
+
+    def predict(self, test_set: RemoteArray):
+        client = get_client()
+        return client._predict(self, test_set)

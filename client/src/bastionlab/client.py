@@ -89,6 +89,7 @@ class Client:
         self._channel = channel
         CONFIG["torch_client"] = self.torch
         CONFIG["polars_client"] = self.polars
+        CONFIG["linfa_client"] = self.linfa
         self.__session_stub = SessionServiceStub(channel)
         self.signing_key = signing_key
 

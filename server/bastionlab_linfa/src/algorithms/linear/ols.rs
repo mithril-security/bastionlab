@@ -9,6 +9,5 @@ pub fn linear_regression(
     let model = LinearRegression::new();
     let model = model.with_intercept(fit_intercept).fit(&dataset)?;
 
-    println!("{:?}", model);
     Ok(model)
 }

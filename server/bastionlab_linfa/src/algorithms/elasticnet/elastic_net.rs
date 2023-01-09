@@ -4,7 +4,6 @@ use ndarray::{ArrayBase, Ix1, Ix2, OwnedRepr};
 
 pub fn elastic_net(
     train: DatasetBase<ArrayBase<OwnedRepr<f64>, Ix2>, ArrayBase<OwnedRepr<f64>, Ix1>>,
-    _valid: DatasetBase<ArrayBase<OwnedRepr<f64>, Ix2>, ArrayBase<OwnedRepr<f64>, Ix1>>,
     penalty: f64,
     l1_ratio: f64,
     with_intercept: bool,
