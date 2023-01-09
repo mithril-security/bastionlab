@@ -11,7 +11,9 @@ members = [
   "bastionlab_learning",
   "bastionlab_polars",
   "bastionlab_linfa",
+  "bastionlab_conversion",
 ]
+
 resolver = "2"
 
 [dependencies]
@@ -43,12 +45,12 @@ bastionlab_common = { path = "./bastionlab_common" }
 bastionlab_polars = { path = "./bastionlab_polars" }
 bastionlab_torch = { path = "./bastionlab_torch" }
 bastionlab_linfa = {path = "./bastionlab_linfa" }
-
+bastionlab_conversion = { path = "./bastionlab_conversion" }
 [dependencies.uuid]
 version = "1.1.2"
 features = [
-  "v4", # Lets you generate random UUIDs
-  "fast-rng", # Use a faster (but still sufficiently random) RNG
+  "v4",                # Lets you generate random UUIDs
+  "fast-rng",          # Use a faster (but still sufficiently random) RNG
   "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs,
   "serde",
 ]

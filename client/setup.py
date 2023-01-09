@@ -15,6 +15,7 @@ PROTO_FILES = [
     "bastionlab_polars.proto",
     "bastionlab_torch.proto",
     "bastionlab_linfa.proto",
+    "bastionlab_conversion.proto",
 ]
 PROTO_PATH = os.path.join(os.path.dirname(DIR), "protos")
 LONG_DESCRIPTION = read("README.md")

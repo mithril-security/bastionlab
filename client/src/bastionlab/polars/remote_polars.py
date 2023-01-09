@@ -8,12 +8,18 @@ from torch.jit import ScriptFunction
 import base64
 import json
 import torch
-from ..pb.bastionlab_polars_pb2 import ReferenceResponse
+from ..pb.bastionlab_conversion_pb2 import ToTensor
+from ..pb.bastionlab_polars_pb2 import ReferenceResponse, SplitRequest, ReferenceRequest
 from .client import BastionLabPolars
-from .utils import ApplyBins
+from .utils import ApplyBins, to_torch_ref
 import matplotlib.pyplot as plt
+from typing import TYPE_CHECKING
 
 LDF = TypeVar("LDF", bound="pl.LazyFrame")
+
+if TYPE_CHECKING:
+    from ..torch.learner import RemoteDataset
+    from ..torch.remote_torch import RemoteTensor
 
 
 def delegate(
@@ -49,11 +55,11 @@ def delegate(
     return inner
 
 
-def delegate_properties(*names: str) -> Callable[[Callable], Callable]:
+def delegate_properties(*names: str, target: str) -> Callable[[Callable], Callable]:
     def inner(cls: Callable) -> Callable:
         def prop(name):
             def f(_self):
-                return getattr(_self._inner, name)
+                return getattr(getattr(_self, target), name)
 
             return property(f)
 
@@ -148,6 +154,40 @@ class StackPlanSegment(CompositePlanSegment):
 
 
 @dataclass
+class StringTransformerPlanSegment(CompositePlanSegment):
+    """
+    Accepts a UDF for row-wise DataFrame transformation.
+    """
+
+    model: str
+    _columns: List[str]
+
+    def serialize(self) -> str:
+        """
+        returns serialized string of this plan segment
+
+        Returns:
+            str: serialized string of this plan segment
+        """
+        columns = ",".join([f'"{c}"' for c in self._columns])
+        model = base64.b64encode(self.model.encode("utf8")).decode("utf8")
+        return f'{{"StringTransformerPlanSegment":{{"columns":[{columns}],"model":"{model}"}}}}'
+
+
+@dataclass
+class UdfTransformerPlanSegment(CompositePlanSegment):
+    """
+    Accepts a UDF for row-wise DataFrame transformation.
+    """
+
+    _name: str
+    _columns: List[str]
+
+    def serialize(self) -> str:
+        pass
+
+
+@dataclass
 class Metadata:
     """
     A class containing metadata related to your dataframe
@@ -162,11 +202,7 @@ class Metadata:
 # cleared
 # Map
 # Joins
-@delegate_properties(
-    "columns",
-    "dtypes",
-    "schema",
-)
+@delegate_properties("dtypes", "schema", target="_inner")
 @delegate(
     target_cls=pl.LazyFrame,
     target_attr="_inner",
@@ -238,7 +274,6 @@ class RemoteLazyFrame:
     A class to represent a RemoteLazyFrame.
 
     Delegate attributes:
-        columns (str): Get column names.
         dtypes: Get dtypes of columns in LazyFrame.
         schema (dict[column name, DataType]): Get dataframe's schema
 
@@ -288,6 +323,12 @@ class RemoteLazyFrame:
             FetchableLazyFrame: FetchableLazyFrame of datarame after any queries have been performed
         """
         return self._meta._client._run_query(self.composite_plan)
+
+    def column(self: LDF, column: str) -> RemoteSeries:
+        return RemoteSeries(self.select(column).collect())
+
+    def columns(self: LDF, column_names: List[str]) -> List[RemoteSeries]:
+        return RemoteSeries(self.select(column_names).collect())
 
     @staticmethod
     def sql(query: str, *rdfs: LDF) -> LDF:
@@ -380,6 +421,30 @@ class RemoteLazyFrame:
                 ],
             ),
         )
+
+    def convert(self, columns: List[str], model: str) -> LDF:
+        df = pl.DataFrame(
+            [pl.Series(k, dtype=v) for k, v in self._inner.schema.items()]
+        )
+        return RemoteLazyFrame(
+            df.lazy(),
+            Metadata(
+                self._meta._client,
+                [
+                    *self._meta._prev_segments,
+                    StringTransformerPlanSegment(model, columns),
+                ],
+            ),
+        )
+
+    @property
+    def column_names(self) -> List[str]:
+        """Gets the column names of the RemoteDataFrame
+
+        Returns:
+            List[str]: List of column names in the RemoteDataFrame
+        """
+        return self._inner.columns
 
     def join(
         self: LDF,
@@ -955,9 +1020,22 @@ class FetchableLazyFrame(RemoteLazyFrame):
     @staticmethod
     def _from_reference(client: BastionLabPolars, ref: ReferenceResponse) -> LDF:
         header = json.loads(ref.header)["inner"]
-        df = pl.DataFrame(
-            [pl.Series(k, dtype=getattr(pl, v)()) for k, v in header.items()]
-        )
+
+        def get_dtype(v):
+            if isinstance(v, str):
+                return getattr(pl, v)()
+            else:
+                k, v = list(v.items())[0]
+                v = get_dtype(v)
+                return getattr(pl, k)(v)
+
+        def get_series(name, dtype):
+            if isinstance(dtype, str):
+                return pl.Series(name, dtype=get_dtype(dtype))
+            else:
+                return pl.Series(name, values=[[]], dtype=get_dtype(dtype))
+
+        df = pl.DataFrame([get_series(k, v) for k, v in header.items()])
         return FetchableLazyFrame(
             _identifier=ref.identifier,
             _inner=df.lazy(),
@@ -976,6 +1054,43 @@ class FetchableLazyFrame(RemoteLazyFrame):
             Polars.DataFrame: returns a Polars DataFrame instance of your FetchableLazyFrame
         """
         return self._meta._client._fetch_df(self._identifier)
+
+    def to_dataset(
+        self,
+        inputs: Optional[Union[str, List[str]]] = None,
+        labels: Optional[str] = None,
+    ) -> "RemoteDataset":
+        """Converts BastionLab `FetchableLazy` to a `RemoteDataset`.
+
+        Args:
+            inputs (List[str]):
+                The list of input columns names to used as `DataFrame` columns.
+            labels (str):
+                The column name of the labels column in the resulting `DataFrame`
+            inputs_conv_fn (Optional[Callable] = None):
+                Function to convert inputs to `torch.Tensor` dtypes.
+            labels_conv_fn (Optional[Callable] = None):
+                Function to convert labels to `torch.Tensor` dtypes.
+
+        Returns:
+            RemoteDataset
+        """
+        from ..torch.learner import RemoteDataset
+        from ..config import CONFIG
+
+        if not isinstance(inputs, list):
+            inputs = [inputs]
+
+        ref = self._meta._client._conv._stub.ConvToDataset(
+            ToDataset(
+                inputs=inputs,
+                labels=labels,
+                identifier=self.identifier,
+            )
+        )
+        return RemoteDataset(
+            client=CONFIG["torch_client"], train_dataset=to_torch_ref(ref)
+        )
 
     def save(self):
         return self._meta._client._persist_df(self._identifier)
@@ -1295,3 +1410,78 @@ class Facet:
 class RemoteLazyGroupBy(Generic[LDF]):
     _inner: pl.internals.lazyframe.groupby.LazyGroupBy[LDF]
     _meta: Metadata
+
+
+def train_test_split(
+    *rdfs,
+    train_size: Optional[float] = None,
+    test_size: Optional[float] = 0.25,
+    shuffle: Optional[bool] = False,
+    random_state: Optional[int] = None,
+) -> List["FetchableLazyFrame"]:
+    """
+    Split RemoteDataFrames into train and test subsets.
+
+    Args:
+        train_size (Optional[float] = None):
+            It should be between 0.0 and 1.0 and represent the proportion of the dataset to include in the train split.
+            If None, the value is automatically set to the complement of the test size.
+        test_size (Optional[float] =0.25):
+            It should be between 0.0 and 1.0 and represent the proportion of the dataset to include in the test split.
+            If None, the value is set to the complement of the train size.
+            If train_size is also None, it will be set to 0.25.
+        shuffle (Optional[bool] = False):
+            Whether or not to shuffle the data before splitting.
+        random_state (Optional[int] = -1):
+            Controls the shuffling applied to the data before applying the split.
+            Pass an int for reproducible output across multiple function calls.
+    """
+
+    from .remote_polars import FetchableLazyFrame
+
+    if len(rdfs) == 0:
+        raise ValueError("At least one RemoteDataFrame required as input")
+
+    _train_rdf = rdfs[0]
+
+    train_size = 1 - test_size if train_size is None else train_size
+    test_size = 1 - train_size if test_size is None else test_size
+
+    rdfs = [ReferenceRequest(identifier=rdf.identifier) for rdf in rdfs]
+
+    res = _train_rdf._meta._client.stub.Split(
+        SplitRequest(
+            rdfs=rdfs,
+            train_size=train_size,
+            test_size=test_size,
+            shuffle=shuffle,
+            random_state=random_state,
+        )
+    )
+    res = [
+        FetchableLazyFrame._from_reference(_train_rdf._meta._client, ref)
+        for ref in res.list
+    ]
+    return res
+
+
+class RemoteSeries(RemoteLazyFrame):
+    def __init__(self, rdf: "RemoteLazyFrame") -> None:
+        self._inner = rdf._inner
+        self._meta = rdf._meta
+        self.identifier = rdf.identifier
+
+    def to_tensor(self) -> "RemoteTensor":
+        from ..torch.remote_torch import RemoteTensor
+
+        res = self._meta._client._conv._stub.ConvToTensor(
+            ToTensor(identifier=self.identifier)
+        )
+        res = to_torch_ref(res)
+        return RemoteTensor._from_reference(res)
+
+    def __str__(self) -> str:
+        return f"RemoteSeries(identifier={self.identifier})"
+
+    def __repr__(self) -> str:
+        return str(self)
