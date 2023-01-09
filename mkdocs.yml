@@ -19,7 +19,6 @@ theme:
     - search.highlight
     - content.tabs.link
     - navigation.sections
-    - navigation.expand
   logo: assets/logo.png
   favicon: assets/logo.png
   palette:
