@@ -2,12 +2,6 @@ syntax = "proto3";
 
 package bastionlab_conversion;
 
-message ToDataset {
-    repeated string inputs = 1;
-    string labels = 2;
-    string identifier = 3;
-}
-
 message ToTensor {
     string identifier = 1;
 }
@@ -34,7 +28,6 @@ message ToDataFrame {
 }
 
 service ConversionService {
-    rpc ConvToDataset(ToDataset) returns (ConvReference) {}
     rpc ConvToTensor(ToTensor) returns (ConvReference) {}
     rpc ConvToDataFrame (ToDataFrame) returns (ConvReferenceResponse) {}
 }

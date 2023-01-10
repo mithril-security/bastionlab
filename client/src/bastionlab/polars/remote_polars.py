@@ -8,7 +8,7 @@ from torch.jit import ScriptFunction
 import base64
 import json
 import torch
-from ..pb.bastionlab_conversion_pb2 import ToDataset, ToTensor
+from ..pb.bastionlab_conversion_pb2 import ToTensor
 from ..pb.bastionlab_polars_pb2 import ReferenceResponse, SplitRequest, ReferenceRequest
 from .client import BastionLabPolars
 from .utils import ApplyBins, to_torch_ref
@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING
 LDF = TypeVar("LDF", bound="pl.LazyFrame")
 
 if TYPE_CHECKING:
-    from ..torch.learner import RemoteDataset
     from ..torch.remote_torch import RemoteTensor
 
 
@@ -1054,43 +1053,6 @@ class FetchableLazyFrame(RemoteLazyFrame):
             Polars.DataFrame: returns a Polars DataFrame instance of your FetchableLazyFrame
         """
         return self._meta._client._fetch_df(self._identifier)
-
-    def to_dataset(
-        self,
-        inputs: Optional[Union[str, List[str]]] = None,
-        labels: Optional[str] = None,
-    ) -> "RemoteDataset":
-        """Converts BastionLab `FetchableLazy` to a `RemoteDataset`.
-
-        Args:
-            inputs (List[str]):
-                The list of input columns names to used as `DataFrame` columns.
-            labels (str):
-                The column name of the labels column in the resulting `DataFrame`
-            inputs_conv_fn (Optional[Callable] = None):
-                Function to convert inputs to `torch.Tensor` dtypes.
-            labels_conv_fn (Optional[Callable] = None):
-                Function to convert labels to `torch.Tensor` dtypes.
-
-        Returns:
-            RemoteDataset
-        """
-        from ..torch.learner import RemoteDataset
-        from ..config import CONFIG
-
-        if not isinstance(inputs, list):
-            inputs = [inputs]
-
-        ref = self._meta._client._conv._stub.ConvToDataset(
-            ToDataset(
-                inputs=inputs,
-                labels=labels,
-                identifier=self.identifier,
-            )
-        )
-        return RemoteDataset(
-            client=CONFIG["torch_client"], train_dataset=to_torch_ref(ref)
-        )
 
     def save(self):
         return self._meta._client._persist_df(self._identifier)
