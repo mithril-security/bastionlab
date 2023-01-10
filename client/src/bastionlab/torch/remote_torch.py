@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from ..polars.utils import create_byte_chunk
 from ..pb.bastionlab_torch_pb2 import Chunk, Reference, Meta, UpdateTensor
 from .utils import DataWrapper, to_torch_meta
+from torch.utils.data import Dataset, DataLoader
 
 if TYPE_CHECKING:
     from tokenizers import Tokenizer
@@ -48,7 +49,7 @@ class RemoteTensor:
                     data=data, name="", description="", secret=bytes(), meta=bytes()
                 )
 
-        res = client.stub.SendTensor(inner(buff.getvalue()))
+        res = client.stub.SendTensor(inner(buff.getbuffer()))
         return RemoteTensor._from_reference(res)
 
     @staticmethod
@@ -111,6 +112,28 @@ class RemoteDataset:
     @property
     def nb_samples(self):
         return self.label.shape[0]
+
+    @staticmethod
+    def from_dataset(dataset: Dataset) -> "RemoteDataset":
+        data = dataset.__getitem__(0)
+        inputs = torch.cat(data[0]).unsqueeze(0)
+        labels = torch.tensor(data[1]).unsqueeze(0)
+
+        print("Dataset --> RemoteDataset Transformation")
+        for idx in range(1, len(dataset)):
+            data = dataset.__getitem__(idx)
+
+            input = torch.cat(data[0]).unsqueeze(0)
+            label = torch.tensor(data[1]).unsqueeze(0)
+
+            inputs = torch.cat([inputs, input], 0)
+            labels = torch.cat([labels, label])
+
+        print("Transformation Done")
+        inputs = RemoteTensor.send_tensor(inputs)
+        labels = RemoteTensor.send_tensor(labels.squeeze(0))
+
+        return RemoteDataset([inputs], labels)
 
     def serialize(self):
         inputs = ",".join([input.serialize() for input in self.inputs])
