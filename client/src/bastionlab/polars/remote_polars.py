@@ -933,6 +933,55 @@ class RemoteLazyFrame:
                     raise ValueError("Column ", x, " not found in dataframe")
         return Facet(inner_rdf=self, col=col, row=row, kwargs=kwargs)
 
+    def minmax(
+        self: LDF, cols: Union[str, List[str]]
+    ) -> LDF:
+        columns = []
+        #set up columns for single string argument
+        if isinstance(cols, str):
+            if cols not in self.columns:
+                raise ValueError("Column ", cols, " not found in dataframe")
+            columns.append(cols)
+        else: #set up columns for list
+            for x in cols:
+                if x not in self.columns:
+                    raise ValueError("Column ", x, " not found in dataframe")
+                columns.append(x)        
+        rdf = (
+            rdf.with_columns(
+            [
+            (pl.col(x) - pl.col(x).min()) / (pl.col(x).max() - pl.col(x).min())
+            .alias(x) for x in columns
+            ]
+            )
+        )
+        return rdf
+
+    def zscore(
+        self: LDF, cols: Union[str, List[str]]
+    ) -> LDF:
+    # df_z_scaled[column] = (df_z_scaled[column] -
+    #                        df_z_scaled[column].mean()) / df_z_scaled[column].std()   
+        columns = []
+        #set up columns for single string argument
+        if isinstance(cols, str):
+            if cols not in self.columns:
+                raise ValueError("Column ", cols, " not found in dataframe")
+            columns.append(cols)
+        else: #set up columns for list
+            for x in cols:
+                if x not in self.columns:
+                    raise ValueError("Column ", x, " not found in dataframe")
+                columns.append(x)        
+        rdf = (
+            rdf.with_columns(
+            [
+            (pl.col(x) - pl.col(x).mean()) / pl.col(x).std()
+            .alias(x) for x in columns
+            ]
+            )
+        )
+        return rdf
 
 @dataclass
 class FetchableLazyFrame(RemoteLazyFrame):
