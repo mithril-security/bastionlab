@@ -7,19 +7,11 @@ from ..polars.utils import create_byte_chunk
 from ..pb.bastionlab_torch_pb2 import Chunk, Reference, Meta, UpdateTensor
 from .utils import DataWrapper, to_torch_meta
 from torch.utils.data import Dataset, DataLoader
+from ..config import get_client
 
 if TYPE_CHECKING:
     from tokenizers import Tokenizer
     from ..polars.remote_polars import RemoteSeries
-
-
-def get_client():
-    from ..config import CONFIG
-
-    if CONFIG["torch_client"] == None:
-        raise Exception("BastionLab Torch client is not initialized.")
-
-    return CONFIG["torch_client"]
 
 
 @dataclass
@@ -37,7 +29,7 @@ class RemoteTensor:
 
     @staticmethod
     def send_tensor(tensor: torch.Tensor) -> "RemoteTensor":
-        client = get_client()
+        client = get_client("torch_client")
         data = DataWrapper([tensor], None)
         ts = torch.jit.script(data)
         buff = io.BytesIO()
@@ -74,7 +66,7 @@ class RemoteTensor:
     def to(self, dtype: torch.dtype):
         from .utils import tch_kinds
 
-        client = get_client()
+        client = get_client("torch_client")
         res = client.stub.ModifyTensor(
             UpdateTensor(identifier=self.identifier, dtype=tch_kinds[dtype])
         )

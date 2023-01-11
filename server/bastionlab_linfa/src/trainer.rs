@@ -4,7 +4,7 @@ use linfa::DatasetBase;
 use linfa_bayes::GaussianNb;
 use linfa_clustering::{KMeans, KMeansInit};
 use linfa_elasticnet::ElasticNet;
-use linfa_linear::{FittedLinearRegression, Float};
+use linfa_linear::FittedLinearRegression;
 use linfa_logistic::FittedLogisticRegression;
 use linfa_nn::{distance::L2Dist, BallTreeIndex, KdTreeIndex, LinearSearchIndex};
 use linfa_trees::{DecisionTree, SplitQuality};
@@ -16,16 +16,13 @@ use polars::{
 use tonic::{Request, Status};
 
 use crate::{
-    linfa_proto::{
-        training_request::{self, Trainer},
-        TrainingRequest,
-    },
+    linfa_proto::{ElasticNet as BastionElasticNet, KMeans as BastionKMeans, Trainer, *},
     to_status_error, to_type,
 };
 
 pub enum Models {
     GaussianNaiveBayes {
-        var_smoothing: f32,
+        var_smoothing: f64,
     },
     ElasticNet {
         penalty: f32,
@@ -62,6 +59,7 @@ pub enum Models {
     },
 }
 
+#[allow(unused)]
 #[derive(Debug)]
 pub enum SupportedModels {
     GaussianNaiveBayes(GaussianNb<f64, usize>),
@@ -114,128 +112,114 @@ pub fn process_trainer_req(
 }
 
 pub fn select_trainer(trainer: Trainer) -> Result<Models, Status> {
-    match trainer {
-        Trainer::GaussianNb(training_request::GaussianNb { var_smoothing }) => {
-            Ok(Models::GaussianNaiveBayes { var_smoothing })
-        }
-        Trainer::LinearRegression(training_request::LinearRegression { fit_intercept }) => {
-            Ok(Models::LinearRegression { fit_intercept })
-        }
-        Trainer::LogisticRegression(training_request::LogisticRegression {
-            alpha,
-            gradient_tolerance,
-            fit_intercept,
-            max_iterations,
-            initial_params,
-        }) => {
-            let initial_params = initial_params
-                .iter()
-                .map(|v| (*v).into())
-                .collect::<Vec<f64>>();
+    if let Some(t) = trainer.gaussian_nb {
+        Ok(Models::GaussianNaiveBayes {
+            var_smoothing: t.var_smoothing.into(),
+        })
+    } else if let Some(t) = trainer.linear_regression {
+        Ok(Models::LinearRegression {
+            fit_intercept: t.fit_intercept,
+        })
+    } else if let Some(t) = trainer.logistic_regression {
+        let initial_params = t
+            .initial_params
+            .iter()
+            .map(|v| (*v).into())
+            .collect::<Vec<f64>>();
 
-            let initial_params = if initial_params.len() == 0 {
-                None
-            } else {
-                Some(initial_params)
-            };
-            Ok(Models::LogisticRegression {
-                alpha: alpha.into(),
-                gradient_tolerance: gradient_tolerance.into(),
-                fit_intercept,
-                max_iterations,
-                initial_params,
-            })
-        }
-        Trainer::DecisionTree(training_request::DecisionTree {
-            split_quality,
-            max_depth,
-            min_weight_split,
-            min_weight_leaf,
-            min_impurity_decrease,
-        }) => {
-            let split_quality = match split_quality {
+        let initial_params = if initial_params.len() == 0 {
+            None
+        } else {
+            Some(initial_params)
+        };
+        Ok(Models::LogisticRegression {
+            alpha: t.alpha.into(),
+            gradient_tolerance: t.gradient_tolerance.into(),
+            fit_intercept: t.fit_intercept,
+            max_iterations: t.max_iterations,
+            initial_params,
+        })
+    } else if let Some(t) = trainer.decision_tree {
+        {
+            let split_quality = match t.split_quality {
                 Some(v) => match v {
-                    training_request::decision_tree::SplitQuality::Gini(
-                        training_request::decision_tree::Gini {},
-                    ) => SplitQuality::Gini,
-                    training_request::decision_tree::SplitQuality::Entropy(
-                        training_request::decision_tree::Entropy {},
-                    ) => SplitQuality::Entropy,
+                    decision_tree::SplitQuality::Gini(decision_tree::Gini {}) => SplitQuality::Gini,
+                    decision_tree::SplitQuality::Entropy(decision_tree::Entropy {}) => {
+                        SplitQuality::Entropy
+                    }
                 },
                 None => {
                     return Err(Status::failed_precondition("SplitQuality not found!"));
                 }
             };
 
-            let max_depth: Option<usize> = match max_depth {
+            let max_depth: Option<usize> = match t.max_depth {
                 Some(v) => Some(v as usize),
                 None => {
                     return Err(Status::failed_precondition("max_depth not provided!"));
                 }
             };
 
-            let min_impurity_decrease = min_impurity_decrease.into();
+            let min_impurity_decrease = t.min_impurity_decrease.into();
 
             Ok(Models::DecisionTree {
                 split_quality,
                 max_depth,
-                min_weight_split,
-                min_weight_leaf,
+                min_weight_split: t.min_weight_split,
+                min_weight_leaf: t.min_weight_leaf,
                 min_impurity_decrease,
             })
         }
-        Trainer::ElasticNet(training_request::ElasticNet {
+    } else if let Some(t) = trainer.elastic_net {
+        let BastionElasticNet {
             penalty,
             l1_ratio,
             with_intercept,
             max_iterations,
             tolerance,
-        }) => Ok(Models::ElasticNet {
+        } = t;
+        Ok(Models::ElasticNet {
             penalty,
             l1_ratio,
             with_intercept,
             max_iterations,
             tolerance,
-        }),
-        Trainer::Kmeans(training_request::KMeans {
+        })
+    } else if let Some(t) = trainer.kmeans {
+        let BastionKMeans {
             n_runs,
             n_clusters,
             tolerance,
             max_n_iterations,
             init_method,
-        }) => {
-            let init_method =
-                init_method.ok_or_else(|| Status::aborted("Invalid KMeans Init Method!"))?;
-            let init_method: KMeansInit<f64> = match init_method {
-                training_request::k_means::InitMethod::Random(
-                    training_request::k_means::Random {},
-                ) => KMeansInit::Random,
-                training_request::k_means::InitMethod::PreComputed(
-                    training_request::k_means::Precomputed {
-                        list,
-                        n_centroids,
-                        n_features,
-                    },
-                ) => {
-                    let list = to_type! {<f64>(list)};
-                    let sh = (n_centroids as usize, n_features as usize);
-                    let list = to_status_error(Array2::from_shape_vec(sh, list))?;
-                    KMeansInit::Precomputed(list)
-                }
-                training_request::k_means::InitMethod::KmeansPara(
-                    training_request::k_means::KMeansPara {},
-                ) => KMeansInit::KMeansPara,
-                training_request::k_means::InitMethod::KmeansPlusPlus(
-                    training_request::k_means::KMeansPlusPlus {},
-                ) => KMeansInit::KMeansPlusPlus,
-            };
-            Ok(Models::KMeans {
-                n_runs: n_runs.try_into().unwrap(),
-                n_clusters: n_clusters.try_into().unwrap(),
-                tolerance: tolerance.into(),
-                max_n_iterations,
-                init_method,
-            })
-        }
+        } = t;
+        let init_method =
+            init_method.ok_or_else(|| Status::aborted("Invalid KMeans Init Method!"))?;
+        let init_method: KMeansInit<f64> = match init_method {
+            k_means::InitMethod::Random(k_means::Random {}) => KMeansInit::Random,
+            k_means::InitMethod::PreComputed(k_means::Precomputed {
+                list,
+                n_centroids,
+                n_features,
+            }) => {
+                let list = to_type! {<f64>(list)};
+                let sh = (n_centroids as usize, n_features as usize);
+                let list = to_status_error(Array2::from_shape_vec(sh, list))?;
+                KMeansInit::Precomputed(list)
+            }
+            k_means::InitMethod::KmeansPara(k_means::KMeansPara {}) => KMeansInit::KMeansPara,
+            k_means::InitMethod::KmeansPlusPlus(k_means::KMeansPlusPlus {}) => {
+                KMeansInit::KMeansPlusPlus
+            }
+        };
+        Ok(Models::KMeans {
+            n_runs: n_runs.try_into().unwrap(),
+            n_clusters: n_clusters.try_into().unwrap(),
+            tolerance: tolerance.into(),
+            max_n_iterations,
+            init_method,
+        })
+    } else {
+        return Err(Status::not_found(format!("Unknown trainer: {:?}", trainer)));
     }
 }

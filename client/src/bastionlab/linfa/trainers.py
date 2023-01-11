@@ -1,8 +1,17 @@
 from dataclasses import dataclass, field
-from ..pb.bastionlab_linfa_pb2 import TrainingRequest
+from ..pb.bastionlab_linfa_pb2 import (
+    LinearRegression as ProtoLinReg,
+    LogisticRegression as ProtoLogReg,
+    KMeans as ProtoKMeans,
+    DecisionTree as ProtoDecisionTree,
+    ElasticNet as ProtoElas,
+    GaussianNb as ProtoGaussian,
+)
 from ..polars.remote_polars import RemoteArray
 from typing import Dict, Optional, List
-from ..config import CONFIG
+from ..config import CONFIG, get_client
+
+client_name = "linfa_client"
 
 
 @dataclass
@@ -19,32 +28,21 @@ class Trainer:
         raise NotImplementedError
 
 
-def get_client():
-    from ..config import CONFIG
-
-    if CONFIG["linfa_client"] == None:
-        raise Exception("BastionLab Linfa client is not initialized.")
-
-    return CONFIG["linfa_client"]
-
-
 @dataclass
 class GaussianNb(Trainer):
     var_smoothing: float = 1e-9
 
     def to_msg_dict(self):
-        return {
-            "gaussian_nb": TrainingRequest.GaussianNb(var_smoothing=self.var_smoothing)
-        }
+        return {"gaussian_nb": ProtoGaussian(var_smoothing=self.var_smoothing)}
 
     def fit(self, train_set: RemoteArray, target_set: RemoteArray):
-        client = get_client()
+        client = get_client(client_name)
         model = client._train(train_set, target_set, self)
         self.identifier = model.identifier
         return model
 
     def predict(self, test_set: RemoteArray):
-        client = get_client()
+        client = get_client(client_name)
         return client._predict(self, test_set)
 
 
@@ -53,20 +51,16 @@ class LinearRegression(Trainer):
     fit_intercept: bool = True
 
     def to_msg_dict(self):
-        return {
-            "linear_regression": TrainingRequest.LinearRegression(
-                fit_intercept=self.fit_intercept
-            )
-        }
+        return {"linear_regression": ProtoLinReg(fit_intercept=self.fit_intercept)}
 
     def fit(self, train_set: RemoteArray, target_set: RemoteArray):
-        client = get_client()
+        client = get_client(client_name)
         model = client._train(train_set, target_set, self)
         self.identifier = model.identifier
         return model
 
     def predict(self, test_set: RemoteArray):
-        client = get_client()
+        client = get_client(client_name)
         return client._predict(self, test_set)
 
 
@@ -80,7 +74,7 @@ class LogisticRegression(Trainer):
 
     def to_msg_dict(self):
         return {
-            "logistic_regression": TrainingRequest.LogisticRegression(
+            "logistic_regression": ProtoLogReg(
                 alpha=self.alpha,
                 gradient_tolerance=self.gradient_tolerance,
                 fit_intercept=self.fit_intercept,
@@ -90,13 +84,13 @@ class LogisticRegression(Trainer):
         }
 
     def fit(self, train_set: RemoteArray, target_set: RemoteArray):
-        client = get_client()
+        client = get_client(client_name)
         model = client._train(train_set, target_set, self)
         self.identifier = model.identifier
         return model
 
     def predict(self, test_set: RemoteArray):
-        client = get_client()
+        client = get_client(client_name)
         return client._predict(self, test_set)
 
 
@@ -110,7 +104,7 @@ class ElasticNet(Trainer):
 
     def to_msg_dict(self):
         return {
-            "elastic_net": TrainingRequest.ElasticNet(
+            "elastic_net": ProtoElas(
                 penalty=self.penalty,
                 l1_ratio=self.l1_ratio,
                 with_intercept=self.with_intercept,
@@ -120,13 +114,13 @@ class ElasticNet(Trainer):
         }
 
     def fit(self, train_set: RemoteArray, target_set: RemoteArray):
-        client = get_client()
+        client = get_client(client_name)
         model = client._train(train_set, target_set, self)
         self.identifier = model.identifier
         return model
 
     def predict(self, test_set: RemoteArray):
-        client = get_client()
+        client = get_client(client_name)
         return client._predict(self, test_set)
 
 
@@ -138,11 +132,11 @@ class DecisionTree(Trainer):
 
     class Gini(SplitQuality):
         def to_msg_dict():
-            return {"gini": TrainingRequest.DecisionTree.Gini}
+            return {"gini": ProtoDecisionTree.Gini}
 
     class Entropy(SplitQuality):
         def to_msg_dict():
-            return {"entropy": TrainingRequest.DecisionTree.Entropy}
+            return {"entropy": ProtoDecisionTree.Entropy}
 
     split_quality: Optional[SplitQuality] = Gini
     max_depth: Optional[int] = None
@@ -152,7 +146,7 @@ class DecisionTree(Trainer):
 
     def to_msg_dict(self):
         return {
-            "decision_tree": TrainingRequest.DecisionTree(
+            "decision_tree": ProtoDecisionTree(
                 max_depth=self.max_depth,
                 min_weight_split=self.min_weight_split,
                 min_weight_leaf=self.min_weight_leaf,
@@ -162,13 +156,13 @@ class DecisionTree(Trainer):
         }
 
     def fit(self, train_set: RemoteArray, target_set: RemoteArray):
-        client = get_client()
+        client = get_client(client_name)
         model = client._train(train_set, target_set, self)
         self.identifier = model.identifier
         return model
 
     def predict(self, test_set: RemoteArray):
-        client = get_client()
+        client = get_client(client_name)
         return client._predict(self, test_set)
 
 
@@ -180,15 +174,15 @@ class KMeans(Trainer):
 
     class Random(InitMethod):
         def to_msg_dict():
-            return {"random": TrainingRequest.KMeans.Random()}
+            return {"random": ProtoKMeans.Random()}
 
     class KMeanPara(InitMethod):
         def to_msg_dict():
-            return {"kmeans_para": TrainingRequest.KMeans.KMeansPara()}
+            return {"kmeans_para": ProtoKMeans.KMeansPara()}
 
     class KMeansPlusPlus(InitMethod):
         def to_msg_dict():
-            return {"kmeans_plus_plus": TrainingRequest.KMeans.KMeansPlusPlus()}
+            return {"kmeans_plus_plus": ProtoKMeans.KMeansPlusPlus()}
 
     n_runs: int = 10
     n_clusters: int = 0
@@ -205,7 +199,7 @@ class KMeans(Trainer):
 
     def to_msg_dict(self):
         return {
-            "kmeans": TrainingRequest.KMeans(
+            "kmeans": ProtoKMeans(
                 n_runs=self.n_runs,
                 n_clusters=self.n_clusters,
                 tolerance=self.tolerance,
@@ -215,11 +209,11 @@ class KMeans(Trainer):
         }
 
     def fit(self, train_set: RemoteArray, target_set: RemoteArray):
-        client = get_client()
+        client = get_client(client_name)
         model = client._train(train_set, target_set, self)
         self.identifier = model.identifier
         return model
 
     def predict(self, test_set: RemoteArray):
-        client = get_client()
+        client = get_client(client_name)
         return client._predict(self, test_set)

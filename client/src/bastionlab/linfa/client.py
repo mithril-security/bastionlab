@@ -5,9 +5,11 @@ from ..pb.bastionlab_linfa_pb2 import (
     TrainingRequest,
     PredictionRequest,
     ValidationRequest,
+    Trainer as LinfaTrainer,
 )
+from ..pb.bastionlab_polars_pb2 import ReferenceResponse
 from typing import TYPE_CHECKING, List
-
+from ..config import CONFIG
 
 if TYPE_CHECKING:
     from ..polars.remote_polars import RemoteArray, BastionLabPolars, FetchableLazyFrame
@@ -37,7 +39,7 @@ class BastionLabLinfa:
             TrainingRequest(
                 records=records.identifier,
                 target=target.identifier,
-                **trainer.to_msg_dict(),
+                trainer=LinfaTrainer(**trainer.to_msg_dict()),
             )
         )
         return FittedModel._from_reference(res, trainer)
@@ -64,11 +66,24 @@ class BastionLabLinfa:
         )
         return FetchableLazyFrame._from_reference(self.polars, res).fetch()
 
-    def cross_validate(
-        self,
-        model: "FittedModel",
-    ) -> pl.DataFrame:
-        from ..polars.remote_polars import FetchableLazyFrame
 
-        res = self.stub.CrossValidate(ValidationRequest(model=model.identifier))
-        return FetchableLazyFrame._from_reference(self.polars, res).fetch()
+def cross_validate(
+    trainer: "Trainer", X: "RemoteArray", y: "RemoteArray", cv: int
+) -> pl.DataFrame:
+    from .trainers import get_client
+    from ..polars.remote_polars import FetchableLazyFrame
+
+    linfa_client = get_client("linfa_client")
+    polars_client = get_client("polars_client")
+
+    res = linfa_client.stub.CrossValidate(
+        ValidationRequest(
+            trainer=LinfaTrainer(**trainer.to_msg_dict()),
+            records=X.identifier,
+            targets=y.identifier,
+            cv=cv,
+        )
+    )
+
+    ref = ReferenceResponse(identifier=res.identifier, header=res.header)
+    return FetchableLazyFrame._from_reference(polars_client, ref)

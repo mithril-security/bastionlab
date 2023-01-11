@@ -353,6 +353,7 @@ dependencies = [
  "ndarray",
  "polars",
  "prost 0.8.0",
+ "rand_xoshiro",
  "tokio",
  "tokio-stream",
  "tonic",

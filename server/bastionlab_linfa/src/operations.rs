@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
-use linfa::traits::Predict;
-use linfa_elasticnet::ElasticNetParams;
+use linfa::{
+    prelude::SingleTargetRegression,
+    traits::{Fit, Predict},
+};
 use ndarray::{Array, Array1, Array2, ArrayBase, Dimension, OwnedRepr, StrideShape};
 
 use polars::{
@@ -9,14 +11,12 @@ use polars::{
     prelude::{DataFrame, Float64Type, NamedFrom, PolarsError, PolarsResult},
     series::Series,
 };
-use tonic::Status;
 
 use crate::{
     algorithms::{
-        balltree, decision_trees, elastic_net, gaussian_naive_bayes, kdtree, kmeans,
-        linear_regression, linear_search, logistic_regression,
+        decision_trees, elastic_net, gaussian_naive_bayes, kmeans, linear_regression,
+        logistic_regression,
     },
-    to_status_error,
     trainer::{get_datasets, to_polars_error, Models, PredictionTypes, SupportedModels},
 };
 
@@ -51,7 +51,7 @@ fn vec_u64_to_df(data: Vec<usize>, name: &str) -> PolarsResult<DataFrame> {
 }
 
 fn to_usize<D: Dimension, S: Into<StrideShape<D>>>(
-    targets: ArrayBase<OwnedRepr<f64>, D>,
+    targets: &ArrayBase<OwnedRepr<f64>, D>,
     shape: S,
 ) -> PolarsResult<ArrayBase<OwnedRepr<usize>, D>> {
     let targets = match targets.as_slice() {
@@ -96,18 +96,18 @@ pub fn send_to_trainer(
     targets: DataFrame,
     model_type: Models,
 ) -> PolarsResult<SupportedModels> {
-    // We are assuming [`f64`] for all computation since it can represent all other types.
+    let (cols, records, targets) = transform(&records, &targets)?;
+    let targets_shape = targets.shape().to_vec();
+
+    let train = get_datasets(records, targets, cols)?;
+
     match model_type {
         Models::GaussianNaiveBayes { var_smoothing } => {
-            let var_smoothing: f64 = var_smoothing.into();
+            let targets = to_usize(&train.targets, targets_shape[0])?;
+            let train = train.with_targets(targets);
+            let model = gaussian_naive_bayes(var_smoothing.into());
 
-            let (cols, records, targets) = transform(&records, &targets)?;
-            let targets_shape = targets.shape().to_vec();
-            let targets = to_usize(targets, targets_shape[0])?;
-
-            let train = get_datasets(records, targets, cols)?;
-            let model = to_polars_error(gaussian_naive_bayes(train, var_smoothing.into()))?;
-
+            let model = to_polars_error(model.fit(&train))?;
             Ok(SupportedModels::GaussianNaiveBayes(model))
         }
         Models::ElasticNet {
@@ -117,17 +117,16 @@ pub fn send_to_trainer(
             max_iterations,
             tolerance,
         } => {
-            let (cols, records, targets) = transform(&records, &targets)?;
-            let train = get_datasets(records, targets, cols)?;
-            let model = to_polars_error(elastic_net(
-                train,
+            let model = elastic_net(
                 penalty.into(),
                 l1_ratio.into(),
                 with_intercept,
                 max_iterations,
                 tolerance.into(),
-            ))?;
-            Ok(SupportedModels::ElasticNet(model))
+            );
+            Ok(SupportedModels::ElasticNet(to_polars_error(
+                model.fit(&train),
+            )?))
         }
         Models::KMeans {
             n_runs,
@@ -136,25 +135,22 @@ pub fn send_to_trainer(
             max_n_iterations,
             init_method,
         } => {
-            let (cols, records, targets) = transform(&records, &targets)?;
-            let train = get_datasets(records, targets, cols)?;
-            let model = to_polars_error(kmeans(
-                train,
+            let model = kmeans(
                 n_runs.into(),
                 n_clusters.into(),
                 tolerance,
                 max_n_iterations,
                 init_method,
-            ))?;
+            );
 
-            Ok(SupportedModels::KMeans(model))
+            Ok(SupportedModels::KMeans(to_polars_error(model.fit(&train))?))
         }
         Models::LinearRegression { fit_intercept } => {
-            let (cols, records, targets) = transform(&records, &targets)?;
-            let train = get_datasets(records, targets, cols)?;
-            let model = to_polars_error(linear_regression(train, fit_intercept))?;
+            let model = linear_regression(fit_intercept);
 
-            Ok(SupportedModels::LinearRegression(model))
+            Ok(SupportedModels::LinearRegression(to_polars_error(
+                model.fit(&train),
+            )?))
         }
 
         Models::LogisticRegression {
@@ -164,22 +160,19 @@ pub fn send_to_trainer(
             max_iterations,
             initial_params,
         } => {
-            let (cols, records, targets) = transform(&records, &targets)?;
-            let targets_shape = targets.shape().to_vec();
-
-            let targets = to_usize(targets, targets_shape[0])?;
-            let train = get_datasets(records, targets, cols)?;
-
-            let model = to_polars_error(logistic_regression(
-                train,
+            let targets = to_usize(&train.targets, train.targets.shape().to_vec()[0])?;
+            let train = train.with_targets(targets);
+            let model = logistic_regression(
                 alpha,
                 gradient_tolerance,
                 fit_intercept,
                 max_iterations,
                 initial_params,
-            ))?;
+            );
 
-            Ok(SupportedModels::LogisticRegression(model))
+            Ok(SupportedModels::LogisticRegression(to_polars_error(
+                model.fit(&train),
+            )?))
         }
 
         Models::DecisionTree {
@@ -189,23 +182,20 @@ pub fn send_to_trainer(
             min_weight_leaf,
             min_impurity_decrease,
         } => {
-            let (cols, records, targets) = transform(&records, &targets)?;
-            let targets_shape = targets.shape().to_vec();
-
-            let targets = to_usize(targets, targets_shape[0])?;
-
-            let train = get_datasets(records, targets, cols)?;
-
-            let model = to_polars_error(decision_trees(
-                train,
+            let shape = train.targets.shape().to_vec();
+            let targets = to_usize(&train.targets, shape[0])?;
+            let train = train.with_targets(targets);
+            let model = decision_trees(
                 split_quality,
                 max_depth,
                 min_weight_split,
                 min_weight_leaf,
                 min_impurity_decrease,
-            ))?;
+            );
 
-            Ok(SupportedModels::DecisionTree(model))
+            Ok(SupportedModels::DecisionTree(to_polars_error(
+                model.fit(&train),
+            )?))
         }
     }
 }
@@ -268,28 +258,35 @@ pub fn predict(
 
 #[allow(unused)]
 pub fn inner_cross_validate(
-    model: Arc<SupportedModels>,
+    model: Models,
     records: DataFrame,
     targets: DataFrame, // (valid_X, valid_y)
     cv: usize,
 ) -> PolarsResult<DataFrame> {
-    let result = match &*model {
-        SupportedModels::LinearRegression(m) => {
-            let (cols, records, targets) = transform(&records, &targets)?;
-            let (train) = get_datasets(records, targets, cols)?;
-            // train.cross_validate_single(cv, &vec![m][..], eval)
-        }
-        // SupportedModels::LogisticRegression(m) => (),
-        SupportedModels::ElasticNet(m) => {
-            let (cols, records, targets) = transform(&records, &targets)?;
-            let (train) = get_datasets(records, targets, cols)?;
+    let (cols, records, targets) = transform(&records, &targets)?;
+    let mut train = get_datasets(records, targets, cols)?;
+    let result = match model {
+        Models::LinearRegression { fit_intercept } => {
+            let m = linear_regression(fit_intercept);
 
-            // let m = ElasticNetParams::new().l1_ratio(m.)
-            // train.cross_validate_single(cv, &vec![m][..], eval)
+            let arr =
+                to_polars_error(
+                    train.cross_validate_single(cv, &vec![m][..], |pred, truth| pred.r2(truth)),
+                )?;
+
+            let arr = match arr.as_slice() {
+                Some(d) => d.to_vec(),
+                None => {
+                    return Err(PolarsError::InvalidOperation(
+                        polars::error::ErrString::Borrowed(
+                            "Failed to convert validation result to slice",
+                        ),
+                    ));
+                }
+            };
+            vec_f64_to_df(arr, "cross_validation")
         }
-        // SupportedModels::DecisionTree(m) => (),
-        // SupportedModels::KMeans(m) => (),
-        // SupportedModels::GaussianNaiveBayes(m) => (),
+
         _ => {
             return Err(PolarsError::NotFound(polars::error::ErrString::Owned(
                 "Unsupported Model".to_owned(),
@@ -297,6 +294,5 @@ pub fn inner_cross_validate(
         }
     };
 
-    let df = df!("scores" => &[0]);
-    df
+    result
 }
