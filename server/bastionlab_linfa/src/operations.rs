@@ -7,16 +7,12 @@ use linfa::{
 use ndarray::{Array, Array1, Array2, ArrayBase, Dimension, OwnedRepr, StrideShape};
 
 use polars::{
-    df,
     prelude::{DataFrame, Float64Type, NamedFrom, PolarsError, PolarsResult},
     series::Series,
 };
 
 use crate::{
-    algorithms::{
-        decision_trees, elastic_net, gaussian_naive_bayes, kmeans, linear_regression,
-        logistic_regression,
-    },
+    algorithms::*,
     trainer::{get_datasets, to_polars_error, Models, PredictionTypes, SupportedModels},
 };
 

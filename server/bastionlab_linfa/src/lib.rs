@@ -20,6 +20,7 @@ mod algorithms;
 
 mod operations;
 use operations::*;
+
 use uuid::Uuid;
 
 use std::error::Error;
