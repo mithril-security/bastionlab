@@ -18,6 +18,8 @@ linfa-nn = "0.6.1"
 linfa-linear = "0.6.1"
 linfa-logistic = "0.6.1"
 linfa-trees = "0.6.1"
+linfa-svm = "0.6.1"
+linfa-kernel = "0.6.1"
 ndarray = "0.15.6"
 bastionlab_common = { path = "../bastionlab_common" }
 bastionlab_polars = { path = "../bastionlab_polars" }

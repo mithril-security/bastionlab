@@ -1,12 +1,17 @@
 use std::error::Error;
 
-use linfa::DatasetBase;
+use linfa::{DatasetBase, PlattParams};
 use linfa_bayes::GaussianNb;
 use linfa_clustering::{KMeans, KMeansInit};
 use linfa_elasticnet::ElasticNet;
+use linfa_kernel::{Kernel, KernelMethod, KernelParams, KernelType};
 use linfa_linear::FittedLinearRegression;
 use linfa_logistic::FittedLogisticRegression;
-use linfa_nn::{distance::L2Dist, BallTreeIndex, KdTreeIndex, LinearSearchIndex};
+use linfa_nn::{
+    distance::L2Dist, BallTreeIndex, CommonNearestNeighbour, KdTreeIndex, LinearSearchIndex,
+    NearestNeighbour,
+};
+use linfa_svm::Svm;
 use linfa_trees::{DecisionTree, SplitQuality};
 use ndarray::{Array2, ArrayBase, Ix1, Ix2, OwnedRepr};
 use polars::{
@@ -16,7 +21,10 @@ use polars::{
 use tonic::{Request, Status};
 
 use crate::{
-    linfa_proto::{ElasticNet as BastionElasticNet, KMeans as BastionKMeans, Trainer, *},
+    linfa_proto::{
+        svm::kernel_params::{Gaussian, Polynomial},
+        ElasticNet as BastionElasticNet, KMeans as BastionKMeans, Svm as BastionSvm, Trainer, *,
+    },
     to_status_error, to_type,
 };
 
@@ -57,6 +65,14 @@ pub enum Models {
         min_weight_leaf: f32,
         min_impurity_decrease: f64,
     },
+    SVM {
+        c: f32,
+        eps: f32,
+        nu: f32,
+        shrinking: bool,
+        platt_params: PlattParams<f64, ()>,
+        kernel_params: KernelParams<f64>,
+    },
 }
 
 #[allow(unused)]
@@ -71,6 +87,7 @@ pub enum SupportedModels {
     BallTree(BallTreeIndex<'static, f64, L2Dist>),
     Linear(LinearSearchIndex<'static, f64, L2Dist>),
     KdTree(KdTreeIndex<'static, f64, L2Dist>),
+    SVM(Svm<f64, f64>),
 }
 
 #[derive(Debug)]
@@ -218,6 +235,87 @@ pub fn select_trainer(trainer: Trainer) -> Result<Models, Status> {
             tolerance: tolerance.into(),
             max_n_iterations,
             init_method,
+        })
+    } else if let Some(t) = trainer.svm {
+        let BastionSvm {
+            c,
+            eps,
+            nu,
+            shrinking,
+            platt_params,
+            kernel_params,
+        } = t;
+
+        let platt_params: PlattParams<f64, ()> = match platt_params {
+            Some(v) => PlattParams::default()
+                .maxiter(v.maxiter as usize)
+                .sigma(v.sigma as f64)
+                .minstep(v.ministep as f64),
+            None => {
+                return Err(Status::aborted(
+                    "Could not deserialize PlattParams in Svm".to_string(),
+                ));
+            }
+        };
+
+        let kernel_params = match &kernel_params {
+            Some(v) => {
+                let kernel_type = match &v.kernel_type {
+                    Some(t) => match t {
+                        svm::kernel_params::KernelType::Dense(_) => KernelType::Dense,
+                        svm::kernel_params::KernelType::Sparse(s) => {
+                            KernelType::Sparse(s.sparsity as usize)
+                        }
+                    },
+                    None => {
+                        return Err(Status::aborted(
+                            "Could not deserialize KernelType in KernelParams in Svm".to_string(),
+                        ));
+                    }
+                };
+
+                // Verify this.
+                let n = match v.n() {
+                    svm::kernel_params::N::LinearSearch => CommonNearestNeighbour::LinearSearch,
+                    svm::kernel_params::N::KdTree => CommonNearestNeighbour::KdTree,
+                    svm::kernel_params::N::BallTree => CommonNearestNeighbour::BallTree,
+                };
+
+                let kernel_method = match &v.kernel_method {
+                    Some(m) => match m {
+                        svm::kernel_params::KernelMethod::Guassian(g) => {
+                            KernelMethod::Gaussian(g.eps as f64)
+                        }
+                        svm::kernel_params::KernelMethod::Linear(_) => KernelMethod::Linear,
+                        svm::kernel_params::KernelMethod::Poly(p) => {
+                            KernelMethod::Polynomial(p.constant as f64, p.degree as f64)
+                        }
+                    },
+                    None => {
+                        return Err(Status::aborted(
+                            "Could not deserialize KernelMethod in KernelParams in Svm".to_string(),
+                        ));
+                    }
+                };
+
+                Kernel::params()
+                    .kind(kernel_type)
+                    .method(kernel_method)
+                    .nn_algo(n)
+            }
+            None => {
+                return Err(Status::aborted(
+                    "Could not deserialize KernelParams in Svm".to_string(),
+                ));
+            }
+        };
+        Ok(Models::SVM {
+            c,
+            eps,
+            nu,
+            shrinking,
+            platt_params,
+            kernel_params,
         })
     } else {
         return Err(Status::not_found(format!("Unknown trainer: {:?}", trainer)));

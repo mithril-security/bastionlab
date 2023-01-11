@@ -6,10 +6,11 @@ from ..pb.bastionlab_linfa_pb2 import (
     DecisionTree as ProtoDecisionTree,
     ElasticNet as ProtoElas,
     GaussianNb as ProtoGaussian,
+    SVM,
 )
 from ..polars.remote_polars import RemoteArray
 from typing import Dict, Optional, List
-from ..config import CONFIG, get_client
+from ..config import get_client
 
 client_name = "linfa_client"
 
@@ -21,11 +22,15 @@ class Trainer:
     def to_msg_dict():
         raise NotImplementedError
 
-    def fit(self):
-        raise NotImplementedError
+    def fit(self, train_set: "RemoteArray", target_set: "RemoteArray"):
+        client = get_client(client_name)
+        model = client._train(train_set, target_set, self)
+        self.identifier = model.identifier
+        return model
 
-    def predict(self):
-        raise NotImplementedError
+    def predict(self, test_set: "RemoteArray"):
+        client = get_client(client_name)
+        return client._predict(self, test_set)
 
 
 @dataclass
@@ -35,15 +40,11 @@ class GaussianNb(Trainer):
     def to_msg_dict(self):
         return {"gaussian_nb": ProtoGaussian(var_smoothing=self.var_smoothing)}
 
-    def fit(self, train_set: RemoteArray, target_set: RemoteArray):
-        client = get_client(client_name)
-        model = client._train(train_set, target_set, self)
-        self.identifier = model.identifier
-        return model
+    def fit(self, train_set: "RemoteArray", target_set: "RemoteArray"):
+        return super().fit(train_set, target_set)
 
-    def predict(self, test_set: RemoteArray):
-        client = get_client(client_name)
-        return client._predict(self, test_set)
+    def predict(self, test_set: "RemoteArray"):
+        return super().predict(test_set)
 
 
 @dataclass
@@ -53,15 +54,11 @@ class LinearRegression(Trainer):
     def to_msg_dict(self):
         return {"linear_regression": ProtoLinReg(fit_intercept=self.fit_intercept)}
 
-    def fit(self, train_set: RemoteArray, target_set: RemoteArray):
-        client = get_client(client_name)
-        model = client._train(train_set, target_set, self)
-        self.identifier = model.identifier
-        return model
+    def fit(self, train_set: "RemoteArray", target_set: "RemoteArray"):
+        return super().fit(train_set, target_set)
 
-    def predict(self, test_set: RemoteArray):
-        client = get_client(client_name)
-        return client._predict(self, test_set)
+    def predict(self, test_set: "RemoteArray"):
+        return super().predict(test_set)
 
 
 @dataclass
@@ -83,15 +80,11 @@ class LogisticRegression(Trainer):
             )
         }
 
-    def fit(self, train_set: RemoteArray, target_set: RemoteArray):
-        client = get_client(client_name)
-        model = client._train(train_set, target_set, self)
-        self.identifier = model.identifier
-        return model
+    def fit(self, train_set: "RemoteArray", target_set: "RemoteArray"):
+        return super().fit(train_set, target_set)
 
-    def predict(self, test_set: RemoteArray):
-        client = get_client(client_name)
-        return client._predict(self, test_set)
+    def predict(self, test_set: "RemoteArray"):
+        return super().predict(test_set)
 
 
 @dataclass
@@ -113,15 +106,11 @@ class ElasticNet(Trainer):
             )
         }
 
-    def fit(self, train_set: RemoteArray, target_set: RemoteArray):
-        client = get_client(client_name)
-        model = client._train(train_set, target_set, self)
-        self.identifier = model.identifier
-        return model
+    def fit(self, train_set: "RemoteArray", target_set: "RemoteArray"):
+        return super().fit(train_set, target_set)
 
-    def predict(self, test_set: RemoteArray):
-        client = get_client(client_name)
-        return client._predict(self, test_set)
+    def predict(self, test_set: "RemoteArray"):
+        return super().predict(test_set)
 
 
 @dataclass
@@ -155,15 +144,11 @@ class DecisionTree(Trainer):
             )
         }
 
-    def fit(self, train_set: RemoteArray, target_set: RemoteArray):
-        client = get_client(client_name)
-        model = client._train(train_set, target_set, self)
-        self.identifier = model.identifier
-        return model
+    def fit(self, train_set: "RemoteArray", target_set: "RemoteArray"):
+        return super().fit(train_set, target_set)
 
-    def predict(self, test_set: RemoteArray):
-        client = get_client(client_name)
-        return client._predict(self, test_set)
+    def predict(self, test_set: "RemoteArray"):
+        return super().predict(test_set)
 
 
 @dataclass
@@ -208,12 +193,29 @@ class KMeans(Trainer):
             )
         }
 
-    def fit(self, train_set: RemoteArray, target_set: RemoteArray):
-        client = get_client(client_name)
-        model = client._train(train_set, target_set, self)
-        self.identifier = model.identifier
-        return model
+    def fit(self, train_set: "RemoteArray", target_set: "RemoteArray"):
+        return super().fit(train_set, target_set)
 
-    def predict(self, test_set: RemoteArray):
-        client = get_client(client_name)
-        return client._predict(self, test_set)
+    def predict(self, test_set: "RemoteArray"):
+        return super().predict(test_set)
+
+
+@dataclass
+class SVC(Trainer):
+    c: float = 1.0
+    shrinking: bool = False
+
+    class KernelParams(Trainer):
+        pass
+
+    class PlattParams(Trainer):
+        pass
+
+    def fit(self, train_set: "RemoteArray", target_set: "RemoteArray"):
+        return super().fit(train_set, target_set)
+
+    def predict(self, test_set: "RemoteArray"):
+        return super().predict(test_set)
+
+    def to_msg_dict():
+        return {"svm": SVM()}

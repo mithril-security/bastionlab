@@ -85,6 +85,65 @@ message Trainer {
     optional LinearRegression linear_regression = 4;
     optional LogisticRegression logistic_regression = 5;
     optional DecisionTree decision_tree = 6;
+    optional SVM svm = 7;
+}
+
+message SVM {
+    float c = 1;
+    float eps = 2;
+    float nu = 3;
+    bool shrinking = 4;
+    PlattParams platt_params = 5;
+    KernelParams kernel_params = 6;
+
+    message PlattParams {
+        int64 maxiter = 1;
+        float ministep = 2;
+        float sigma = 3;
+    }
+
+    message KernelParams {
+
+        /// Gaussian(eps): exp(-norm(x - x')/eps)
+        message Gaussian {
+            float eps = 1;
+        }
+        /// Euclidean inner product
+        message Linear {}
+        /// Polynomial(constant, degree):  ` (<x, x'> + costant)^(degree)`
+        message Polynomial {
+            float constant = 1;
+            float degree = 2;
+        }
+
+        message Dense {}
+        message Sparse {
+            uint64 sparsity = 1;
+        }
+
+        enum N {
+            /// Linear search
+            LinearSearch = 0;
+            /// KD Tree
+            KdTree = 1;
+            /// Ball Tree
+            BallTree = 2;
+        }
+
+        oneof kernel_type {
+            Dense dense = 7;
+            Sparse sparse = 8;
+        }
+
+        oneof kernel_method {
+            Gaussian guassian = 9;
+            Linear linear = 10;
+            Polynomial poly = 11;
+        }
+
+        N n = 12;
+    }
+
 }
 
 message ValidationRequest {

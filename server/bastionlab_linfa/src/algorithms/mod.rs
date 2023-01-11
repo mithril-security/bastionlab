@@ -1,12 +1,15 @@
+use linfa::PlattParams;
 use linfa_bayes::{GaussianNb, GaussianNbParams};
 use linfa_clustering::{KMeans, KMeansInit, KMeansParams};
 use linfa_elasticnet::{ElasticNet, ElasticNetParams};
+use linfa_kernel::KernelParams;
 use linfa_linear::LinearRegression;
 use linfa_logistic::LogisticRegression;
 use linfa_nn::{
     distance::{Distance, L2Dist},
     BallTreeIndex, BuildError, KdTreeIndex, LinearSearchIndex,
 };
+use linfa_svm::SvmParams;
 use linfa_trees::{DecisionTreeParams, SplitQuality};
 use ndarray::{Array1, ArrayBase, Data, Ix2};
 
@@ -117,4 +120,20 @@ pub fn balltree<DT: Data<Elem = f64>, D: Distance<f64>>(
     dist_fn: D,
 ) -> Result<BallTreeIndex<f64, D>, BuildError> {
     BallTreeIndex::new(batch, leaf_size, dist_fn)
+}
+
+pub fn svm(
+    c: f64,
+    eps: f64,
+    nu: f64,
+    shrinking: bool,
+    platt_params: PlattParams<f64, ()>,
+    kernel_params: KernelParams<f64>,
+) -> SvmParams<f64, f64> {
+    SvmParams::new()
+        .c_eps(c, eps)
+        .nu_eps(nu, eps)
+        .shrinking(shrinking)
+        .with_platt_params(platt_params)
+        .with_kernel_params(kernel_params)
 }

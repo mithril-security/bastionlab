@@ -193,6 +193,25 @@ pub fn send_to_trainer(
                 model.fit(&train),
             )?))
         }
+        Models::SVM {
+            c,
+            eps,
+            nu,
+            shrinking,
+            platt_params,
+            kernel_params,
+        } => {
+            let model = svm(
+                c.into(),
+                eps.into(),
+                nu.into(),
+                shrinking,
+                platt_params,
+                kernel_params,
+            );
+
+            Ok(SupportedModels::SVM(to_polars_error(model.fit(&train))?))
+        }
     }
 }
 
@@ -256,7 +275,7 @@ pub fn predict(
 pub fn inner_cross_validate(
     model: Models,
     records: DataFrame,
-    targets: DataFrame, // (valid_X, valid_y)
+    targets: DataFrame,
     cv: usize,
 ) -> PolarsResult<DataFrame> {
     let (cols, records, targets) = transform(&records, &targets)?;

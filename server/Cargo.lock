@@ -346,9 +346,11 @@ dependencies = [
  "linfa-bayes",
  "linfa-clustering",
  "linfa-elasticnet",
+ "linfa-kernel",
  "linfa-linear",
  "linfa-logistic",
  "linfa-nn",
+ "linfa-svm",
  "linfa-trees",
  "ndarray",
  "polars",
@@ -1745,6 +1747,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "linfa-kernel"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce18c24da587db6124a860e7211b78432f60693d6f2a393ab6af2e0c4ac300dd"
+dependencies = [
+ "linfa",
+ "linfa-nn",
+ "ndarray",
+ "num-traits",
+ "sprs",
+]
+
+[[package]]
 name = "linfa-linalg"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1798,6 +1813,20 @@ dependencies = [
  "noisy_float",
  "num-traits",
  "order-stat",
+ "thiserror",
+]
+
+[[package]]
+name = "linfa-svm"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47ee5fc0e64f53467c0fe57aa29587511cb0289019a3531dfdf288b03ca825b4"
+dependencies = [
+ "linfa",
+ "linfa-kernel",
+ "ndarray",
+ "ndarray-rand",
+ "num-traits",
  "thiserror",
 ]
 
@@ -3124,6 +3153,18 @@ dependencies = [
  "nom",
  "serde",
  "unicode-segmentation",
+]
+
+[[package]]
+name = "sprs"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ea71e48b3eab4c4b153e8e35dcaeac132720809ef68359097b8cb54a18edd70"
+dependencies = [
+ "ndarray",
+ "num-complex",
+ "num-traits",
+ "smallvec",
 ]
 
 [[package]]
