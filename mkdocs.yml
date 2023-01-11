@@ -19,7 +19,7 @@ theme:
     - search.highlight
     - content.tabs.link
     - navigation.sections
-    # - navigation.expand
+    - navigation.expand
   logo: assets/logo.png
   favicon: assets/logo.png
   palette:
@@ -71,6 +71,7 @@ extra_css:
 
 extra_javascript:
   - "https://code.jquery.com/jquery-3.3.1.min.js"
+  - javascripts/navbar.js
 
 # Extensions
 markdown_extensions:
