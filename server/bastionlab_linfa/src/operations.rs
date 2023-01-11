@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use linfa::traits::Predict;
 use ndarray::{Array, Array1, Array2, ArrayBase, Dimension, OwnedRepr, StrideShape};
 
@@ -9,12 +11,13 @@ use polars::{
 use tonic::Status;
 
 use crate::{
-    algorithms::{decision_trees, elastic_net, gaussian_naive_bayes, kmeans, linear_regression},
+    algorithms::{
+        balltree, decision_trees, elastic_net, gaussian_naive_bayes, kdtree, kmeans,
+        linear_regression, linear_search, logistic_regression,
+    },
     to_status_error,
     trainer::{get_datasets, to_polars_error, Models, PredictionTypes, SupportedModels},
 };
-
-use super::algorithms::logistic_regression;
 
 #[macro_export]
 macro_rules! to_type {
@@ -210,7 +213,7 @@ pub fn send_to_trainer(
 /// We use two different types for prediction
 /// [f64] and [usize] --> [PredictionTypes::Float] and [PredictionTypes::Usize] respectively.
 pub fn predict(
-    model: SupportedModels,
+    model: Arc<SupportedModels>,
     data: DataFrame,
     probability: bool,
 ) -> PolarsResult<DataFrame> {
@@ -218,7 +221,7 @@ pub fn predict(
         .as_standard_layout()
         .to_owned();
 
-    let prediction = match model {
+    let prediction = match &*model {
         SupportedModels::ElasticNet(m) => Some(PredictionTypes::Float(m.predict(sample))),
         SupportedModels::GaussianNaiveBayes(m) => Some(PredictionTypes::Usize(m.predict(sample))),
         SupportedModels::KMeans(m) => Some(PredictionTypes::Usize(m.predict(sample))),
@@ -233,6 +236,11 @@ pub fn predict(
             }
         }
         SupportedModels::DecisionTree(m) => Some(PredictionTypes::Usize(m.predict(sample))),
+        _ => {
+            return Err(PolarsError::NotFound(polars::error::ErrString::Borrowed(
+                "Unsupported Model",
+            )))
+        }
     };
 
     let prediction: DataFrame = match prediction {
@@ -259,16 +267,17 @@ pub fn predict(
 
 #[allow(unused)]
 pub fn inner_cross_validate(
-    model: &SupportedModels,
+    model: Arc<SupportedModels>,
     test_set: (DataFrame, DataFrame),
 ) -> Result<DataFrame, Status> {
-    let result = match model {
+    let result = match &*model {
         SupportedModels::LinearRegression(m) => (),
         SupportedModels::LogisticRegression(m) => (),
         SupportedModels::ElasticNet(m) => (),
         SupportedModels::DecisionTree(m) => (),
         SupportedModels::KMeans(m) => (),
         SupportedModels::GaussianNaiveBayes(m) => (),
+        _ => return Err(Status::not_found("Unsupported Model")),
     };
 
     let df = to_status_error(df!("scores" => &[0]));

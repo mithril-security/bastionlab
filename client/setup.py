@@ -82,5 +82,6 @@ setup(
         "six~=1.16.0",
         "numpy~=1.21",
         "tqdm~=4.64",
+        "tokenizers==0.13.2",
     ],
 )

@@ -38,7 +38,7 @@ pub fn to_status_error<T, E: Error>(input: Result<T, E>) -> Result<T, Status> {
 
 pub struct BastionLabLinfa {
     bastionlab_polars: Arc<BastionLabPolars>,
-    models: Arc<RwLock<HashMap<String, SupportedModels>>>,
+    models: Arc<RwLock<HashMap<String, Arc<SupportedModels>>>>,
     test_sets: Arc<RwLock<HashMap<String, (DataFrame, DataFrame)>>>,
     sess_manager: Arc<SessionManager>,
 }
@@ -66,11 +66,11 @@ impl BastionLabLinfa {
     fn insert_model(&self, model: SupportedModels) -> String {
         let mut models = self.models.write().unwrap();
         let identifier = format!("{}", Uuid::new_v4());
-        models.insert(identifier.clone(), model);
+        models.insert(identifier.clone(), Arc::new(model));
         identifier
     }
 
-    fn get_model(&self, identifier: &str) -> Result<SupportedModels, Status> {
+    fn get_model(&self, identifier: &str) -> Result<Arc<SupportedModels>, Status> {
         let models = self.models.read().unwrap();
         let model = models
             .get(identifier)
@@ -149,7 +149,7 @@ impl LinfaService for BastionLabLinfa {
         let test_set = self.get_test_set(&model)?;
         let model = self.get_model(&model)?;
 
-        let df = inner_cross_validate(&model, test_set)?;
+        let df = inner_cross_validate(model, test_set)?;
 
         let identifier = self.insert_df(
             DataFrameArtifact::new(df, Policy::allow_by_default(), vec![String::default()])

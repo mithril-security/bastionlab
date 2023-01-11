@@ -4,9 +4,9 @@ use linfa::DatasetBase;
 use linfa_bayes::GaussianNb;
 use linfa_clustering::{KMeans, KMeansInit};
 use linfa_elasticnet::ElasticNet;
-use linfa_linear::FittedLinearRegression;
+use linfa_linear::{FittedLinearRegression, Float};
 use linfa_logistic::FittedLogisticRegression;
-use linfa_nn::distance::L2Dist;
+use linfa_nn::{distance::L2Dist, BallTreeIndex, KdTreeIndex, LinearSearchIndex};
 use linfa_trees::{DecisionTree, SplitQuality};
 use ndarray::{Array2, ArrayBase, Ix1, Ix2, OwnedRepr};
 use polars::{
@@ -62,7 +62,7 @@ pub enum Models {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum SupportedModels {
     GaussianNaiveBayes(GaussianNb<f64, usize>),
     ElasticNet(ElasticNet<f64>),
@@ -70,6 +70,9 @@ pub enum SupportedModels {
     LinearRegression(FittedLinearRegression<f64>),
     LogisticRegression(FittedLogisticRegression<f64, usize>),
     DecisionTree(DecisionTree<f64, usize>),
+    BallTree(BallTreeIndex<'static, f64, L2Dist>),
+    Linear(LinearSearchIndex<'static, f64, L2Dist>),
+    KdTree(KdTreeIndex<'static, f64, L2Dist>),
 }
 
 #[derive(Debug)]
