@@ -144,12 +144,19 @@ impl LinfaService for BastionLabLinfa {
         &self,
         request: Request<ValidationRequest>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        let model = request.into_inner().model;
+        let (model, records, targets, cv) = (
+            &request.get_ref().model,
+            &request.get_ref().records,
+            &request.get_ref().targets,
+            request.get_ref().cv,
+        );
 
-        let test_set = self.get_test_set(&model)?;
         let model = self.get_model(&model)?;
 
-        let df = inner_cross_validate(model, test_set)?;
+        let records = self.bastionlab_polars.get_df_unchecked(records)?;
+        let targets = self.bastionlab_polars.get_df_unchecked(targets)?;
+
+        let df = to_status_error(inner_cross_validate(model, records, targets, cv as usize))?;
 
         let identifier = self.insert_df(
             DataFrameArtifact::new(df, Policy::allow_by_default(), vec![String::default()])

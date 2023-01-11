@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use linfa::traits::Predict;
+use linfa_elasticnet::ElasticNetParams;
 use ndarray::{Array, Array1, Array2, ArrayBase, Dimension, OwnedRepr, StrideShape};
 
 use polars::{
@@ -67,6 +68,27 @@ fn to_usize<D: Dimension, S: Into<StrideShape<D>>>(
     Ok(targets)
 }
 
+fn transform(
+    records: &DataFrame,
+    targets: &DataFrame,
+) -> PolarsResult<(Vec<String>, Array2<f64>, Array1<f64>)> {
+    let cols = records
+        .get_column_names()
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    let targets_shape = targets.shape();
+    let records = to_polars_error(records.to_ndarray::<Float64Type>())?
+        .as_standard_layout()
+        .to_owned();
+    let targets = to_polars_error(targets.to_ndarray::<Float64Type>())?
+        .as_standard_layout()
+        .to_owned();
+    let targets = to_polars_error(targets.into_shape(targets_shape.0))?;
+
+    Ok((cols, records, targets))
+}
+
 /// This method sends both the training and target datasets to the specified model in [`Models`].
 /// And `ratio` is passed along to [`linfa_datasets::DatasetBase`]
 pub fn send_to_trainer(
@@ -75,27 +97,6 @@ pub fn send_to_trainer(
     model_type: Models,
 ) -> PolarsResult<SupportedModels> {
     // We are assuming [`f64`] for all computation since it can represent all other types.
-
-    let transform = |records: &DataFrame,
-                     targets: &DataFrame|
-     -> PolarsResult<(Vec<String>, Array2<f64>, Array1<f64>)> {
-        let cols = records
-            .get_column_names()
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
-        let targets_shape = targets.shape();
-        let records = to_polars_error(records.to_ndarray::<Float64Type>())?
-            .as_standard_layout()
-            .to_owned();
-        let targets = to_polars_error(targets.to_ndarray::<Float64Type>())?
-            .as_standard_layout()
-            .to_owned();
-        let targets = to_polars_error(targets.into_shape(targets_shape.0))?;
-
-        Ok((cols, records, targets))
-    };
-
     match model_type {
         Models::GaussianNaiveBayes { var_smoothing } => {
             let var_smoothing: f64 = var_smoothing.into();
@@ -268,18 +269,34 @@ pub fn predict(
 #[allow(unused)]
 pub fn inner_cross_validate(
     model: Arc<SupportedModels>,
-    test_set: (DataFrame, DataFrame),
-) -> Result<DataFrame, Status> {
+    records: DataFrame,
+    targets: DataFrame, // (valid_X, valid_y)
+    cv: usize,
+) -> PolarsResult<DataFrame> {
     let result = match &*model {
-        SupportedModels::LinearRegression(m) => (),
-        SupportedModels::LogisticRegression(m) => (),
-        SupportedModels::ElasticNet(m) => (),
-        SupportedModels::DecisionTree(m) => (),
-        SupportedModels::KMeans(m) => (),
-        SupportedModels::GaussianNaiveBayes(m) => (),
-        _ => return Err(Status::not_found("Unsupported Model")),
+        SupportedModels::LinearRegression(m) => {
+            let (cols, records, targets) = transform(&records, &targets)?;
+            let (train) = get_datasets(records, targets, cols)?;
+            // train.cross_validate_single(cv, &vec![m][..], eval)
+        }
+        // SupportedModels::LogisticRegression(m) => (),
+        SupportedModels::ElasticNet(m) => {
+            let (cols, records, targets) = transform(&records, &targets)?;
+            let (train) = get_datasets(records, targets, cols)?;
+
+            // let m = ElasticNetParams::new().l1_ratio(m.)
+            // train.cross_validate_single(cv, &vec![m][..], eval)
+        }
+        // SupportedModels::DecisionTree(m) => (),
+        // SupportedModels::KMeans(m) => (),
+        // SupportedModels::GaussianNaiveBayes(m) => (),
+        _ => {
+            return Err(PolarsError::NotFound(polars::error::ErrString::Owned(
+                "Unsupported Model".to_owned(),
+            )))
+        }
     };
 
-    let df = to_status_error(df!("scores" => &[0]));
+    let df = df!("scores" => &[0]);
     df
 }

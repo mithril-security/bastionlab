@@ -18,6 +18,9 @@ message PredictionRequest{
 
 message ValidationRequest {
     string model = 1;
+    string records = 2;
+    string targets = 3;
+    uint64 cv = 4;
 }
 
 message ValidationResponse {
