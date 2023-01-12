@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING
 LDF = TypeVar("LDF", bound="pl.LazyFrame")
 
 if TYPE_CHECKING:
-    from ..torch.learner import RemoteDataset
     from ..torch.remote_torch import RemoteTensor
 
 

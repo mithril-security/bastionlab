@@ -100,8 +100,6 @@ impl BastionLabTorch {
         let tensor = tensor.lock().unwrap();
 
         let tensor = { tensor.data() };
-        println!("Found tensor: {:?}", tensor);
-
         Ok(tensor)
     }
 
@@ -151,7 +149,7 @@ impl BastionLabTorch {
             samples_inputs.push(Mutex::new(self.get_tensor(&input.identifier)?));
         }
 
-        let label = Mutex::new(self.get_tensor(&dataset.label.identifier)?);
+        let label = Mutex::new(self.get_tensor(&dataset.labels.identifier)?);
         let limit = dataset.privacy_limit;
 
         let data = Dataset::new(samples_inputs, label, limit);
