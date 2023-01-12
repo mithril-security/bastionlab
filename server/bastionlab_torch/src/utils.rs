@@ -15,7 +15,7 @@ pub struct RemoteTensor {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RemoteDataset {
     pub inputs: Vec<RemoteTensor>,
-    pub label: RemoteTensor,
+    pub labels: RemoteTensor,
     pub nb_samples: usize,
     pub privacy_limit: f64,
 }

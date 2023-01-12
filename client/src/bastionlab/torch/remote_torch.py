@@ -99,7 +99,7 @@ def _tracer(dtypes: List[torch.dtype], shapes: List[torch.Size]):
 @dataclass
 class RemoteDataset:
     inputs: List[RemoteTensor]
-    label: RemoteTensor
+    labels: RemoteTensor
     name: Optional[str] = "RemoteDataset-" + hashlib.sha256().hexdigest()[:5]
     privacy_limit: Optional[float] = -1.0
 
@@ -111,7 +111,7 @@ class RemoteDataset:
 
     @property
     def nb_samples(self):
-        return self.label.shape[0]
+        return self.labels.shape[0]
 
     @staticmethod
     def from_dataset(dataset: Dataset) -> "RemoteDataset":
@@ -137,7 +137,7 @@ class RemoteDataset:
 
     def serialize(self):
         inputs = ",".join([input.serialize() for input in self.inputs])
-        return f'{{"inputs": [{inputs}], "label": {self.label.serialize()}, "nb_samples": {self.nb_samples}, "privacy_limit": {self.privacy_limit}}}'
+        return f'{{"inputs": [{inputs}], "labels": {self.labels.serialize()}, "nb_samples": {self.nb_samples}, "privacy_limit": {self.privacy_limit}}}'
 
     def __str__(self) -> str:
-        return f"RemoteDataset(name={self.name}, privacy_limit={self.privacy_limit}, inputs={str(self.inputs)}, label={str(self.label)})"
+        return f"RemoteDataset(name={self.name}, privacy_limit={self.privacy_limit}, inputs={str(self.inputs)}, label={str(self.labels)})"
