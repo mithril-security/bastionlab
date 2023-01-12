@@ -136,3 +136,15 @@ class ApplyBins(torch.nn.Module):
     def forward(self, x):
         bins = self.bin_size * torch.ones_like(x)
         return round(x // bins) * bins
+
+
+class ApplyAbs(torch.nn.Module):
+    """BastionLab internal class used to serialize user-defined functions (UDF) in TorchScript.
+    It uses `torch.nn.Module` and applies abs() to the input value.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+
+    def forward(self, x):
+        return torch.abs(x)

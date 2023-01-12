@@ -11,6 +11,7 @@ import torch
 from ..pb.bastionlab_polars_pb2 import ReferenceResponse
 from .client import BastionLabPolars
 from .utils import ApplyBins
+from .utils import ApplyAbs
 import matplotlib.pyplot as plt
 
 LDF = TypeVar("LDF", bound="pl.LazyFrame")
@@ -954,6 +955,48 @@ class RemoteLazyFrame:
         )
         return rdf
 
+    def mean_scale(self: LDF, cols: Union[str, List[str]]) -> LDF:
+        columns = []
+        # set up columns for single string argument
+        if isinstance(cols, str):
+            if cols not in self.columns:
+                raise ValueError("Column ", cols, " not found in dataframe")
+            columns.append(cols)
+        else:  # set up columns for list
+            for x in cols:
+                if x not in self.columns:
+                    raise ValueError("Column ", x, " not found in dataframe")
+                columns.append(x)
+        rdf = self.with_columns(
+            [
+                (pl.col(x) - pl.col(x).min())
+                / (pl.col(x).max() - pl.col(x).mean()).alias(x)
+                for x in columns
+            ]
+        )
+        return rdf
+
+    def max_abs_scale(self: LDF, cols: Union[str, List[str]]) -> LDF:
+        model = ApplyAbs()
+        columns = []
+        # set up columns for single string argument
+        if isinstance(cols, str):
+            if cols not in self.columns:
+                raise ValueError("Column ", cols, " not found in dataframe")
+            columns.append(cols)
+        else:  # set up columns for list
+            for x in cols:
+                if x not in self.columns:
+                    raise ValueError("Column ", x, " not found in dataframe")
+                columns.append(x)
+        rdf = self.select([pl.col(x) for x in columns]).apply_udf(
+            [x for x in columns], model
+        )
+        rdf = rdf.with_columns(
+            [pl.col(x) / (pl.col(x).max()).alias(x) for x in columns]
+        )
+        return rdf
+
     def zscore_scale(self: LDF, cols: Union[str, List[str]]) -> LDF:
         columns = []
         # set up columns for single string argument
@@ -968,6 +1011,27 @@ class RemoteLazyFrame:
                 columns.append(x)
         rdf = self.with_columns(
             [(pl.col(x) - pl.col(x).mean()) / pl.col(x).std().alias(x) for x in columns]
+        )
+        return rdf
+
+    def median_quantile_scale(self: LDF, cols: Union[str, List[str]]) -> LDF:
+        columns = []
+        # set up columns for single string argument
+        if isinstance(cols, str):
+            if cols not in self.columns:
+                raise ValueError("Column ", cols, " not found in dataframe")
+            columns.append(cols)
+        else:  # set up columns for list
+            for x in cols:
+                if x not in self.columns:
+                    raise ValueError("Column ", x, " not found in dataframe")
+                columns.append(x)
+        rdf = self.with_columns(
+            [
+                (pl.col(x) - pl.col(x).median())
+                / (pl.col(x).quantile(0.25) - pl.col(x).quantile(0.75)).alias(x)
+                for x in columns
+            ]
         )
         return rdf
 
