@@ -52,7 +52,7 @@ class BastionLabLinfa:
                 model=model.identifier, test_set=test_set.identifier, probability=False
             )
         )
-        return FetchableLazyFrame._from_reference(self.polars, res).fetch()
+        return FetchableLazyFrame._from_reference(self.polars, res)
 
     def predict_proba(
         self, model: "FittedModel", test_set: "RemoteArray"
