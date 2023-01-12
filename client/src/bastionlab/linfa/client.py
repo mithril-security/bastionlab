@@ -68,7 +68,7 @@ class BastionLabLinfa:
 
 
 def cross_validate(
-    trainer: "Trainer", X: "RemoteArray", y: "RemoteArray", cv: int
+    trainer: "Trainer", X: "RemoteArray", y: "RemoteArray", cv: int, scoring: str = "r2"
 ) -> pl.DataFrame:
     from .trainers import get_client
     from ..polars.remote_polars import FetchableLazyFrame
@@ -82,6 +82,7 @@ def cross_validate(
             records=X.identifier,
             targets=y.identifier,
             cv=cv,
+            scoring=scoring,
         )
     )
 

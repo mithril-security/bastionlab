@@ -9,7 +9,6 @@ use linfa_linear::FittedLinearRegression;
 use linfa_logistic::FittedLogisticRegression;
 use linfa_nn::{
     distance::L2Dist, BallTreeIndex, CommonNearestNeighbour, KdTreeIndex, LinearSearchIndex,
-    NearestNeighbour,
 };
 use linfa_svm::Svm;
 use linfa_trees::{DecisionTree, SplitQuality};
@@ -22,7 +21,6 @@ use tonic::{Request, Status};
 
 use crate::{
     linfa_proto::{
-        svm::kernel_params::{Gaussian, Polynomial},
         ElasticNet as BastionElasticNet, KMeans as BastionKMeans, Svm as BastionSvm, Trainer, *,
     },
     to_status_error, to_type,

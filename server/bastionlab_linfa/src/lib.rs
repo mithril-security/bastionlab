@@ -134,11 +134,12 @@ impl LinfaService for BastionLabLinfa {
         &self,
         request: Request<ValidationRequest>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        let (trainer, records, targets, cv) = (
+        let (trainer, records, targets, cv, scoring) = (
             request.get_ref().trainer.clone(),
             &request.get_ref().records,
             &request.get_ref().targets,
             request.get_ref().cv,
+            &request.get_ref().scoring,
         );
 
         let records = self.bastionlab_polars.get_df_unchecked(records)?;
@@ -146,7 +147,13 @@ impl LinfaService for BastionLabLinfa {
         let trainer = trainer.ok_or(Status::aborted("Invalid Trainer!"))?;
         let trainer = select_trainer(trainer)?;
 
-        let df = to_status_error(inner_cross_validate(trainer, records, targets, cv as usize))?;
+        let df = to_status_error(inner_cross_validate(
+            trainer,
+            records,
+            targets,
+            &scoring,
+            cv as usize,
+        ))?;
 
         let identifier = self.insert_df(
             DataFrameArtifact::new(df, Policy::allow_by_default(), vec![String::default()])

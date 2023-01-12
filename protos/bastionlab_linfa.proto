@@ -151,6 +151,7 @@ message ValidationRequest {
     string records = 2;
     string targets = 3;
     uint64 cv = 4;
+    string scoring = 5;
 }
 
 message ValidationResponse {

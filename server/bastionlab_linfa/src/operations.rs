@@ -4,7 +4,7 @@ use linfa::{
     prelude::SingleTargetRegression,
     traits::{Fit, Predict},
 };
-use ndarray::{Array, Array1, Array2, ArrayBase, Dimension, OwnedRepr, StrideShape};
+use ndarray::{Array, Array1, Array2, ArrayBase, Dimension, Ix1, OwnedRepr, StrideShape, ViewRepr};
 
 use polars::{
     prelude::{DataFrame, Float64Type, NamedFrom, PolarsError, PolarsResult},
@@ -277,23 +277,48 @@ pub fn predict(
     Ok(prediction)
 }
 
+pub fn metric(
+    prediction: &ArrayBase<OwnedRepr<f64>, Ix1>,
+    truth: &ArrayBase<ViewRepr<&f64>, Ix1>,
+    metric: &str,
+) -> Result<f64, linfa::Error> {
+    match metric {
+        "r2" => prediction.r2(truth),
+        "max_error" => prediction.max_error(truth),
+        "mean_absolute_error" => prediction.mean_absolute_error(truth),
+        "explained_variance" => prediction.explained_variance(truth),
+        "mean_squared_log_error" => prediction.mean_squared_log_error(truth),
+        "mean_squared_error" => prediction.mean_squared_error(truth),
+        "median_absolute_error" => prediction.median_absolute_error(truth),
+        _ => {
+            return Err(linfa::Error::Priors(format!(
+                "Could not find metric: {}",
+                metric
+            )))
+        }
+    }
+}
+
 #[allow(unused)]
 pub fn inner_cross_validate(
     model: Models,
     records: DataFrame,
     targets: DataFrame,
+    scoring: &str,
     cv: usize,
 ) -> PolarsResult<DataFrame> {
     let (cols, records, targets) = transform(&records, &targets)?;
     let mut train = get_datasets(records, targets, cols)?;
+
     let result = match model {
         Models::LinearRegression { fit_intercept } => {
             let m = linear_regression(fit_intercept);
 
-            let arr =
-                to_polars_error(
-                    train.cross_validate_single(cv, &vec![m][..], |pred, truth| pred.r2(truth)),
-                )?;
+            let arr = to_polars_error(train.cross_validate_single(
+                cv,
+                &vec![m][..],
+                |pred, truth| metric(pred, truth, scoring),
+            ))?;
 
             let arr = match arr.as_slice() {
                 Some(d) => d.to_vec(),
