@@ -7,18 +7,18 @@ from ..pb.bastionlab_linfa_pb2 import (
     ElasticNet as ProtoElas,
     GaussianNb as ProtoGaussian,
     SVM,
+    _SVM_KERNELPARAMS_N as N,
 )
 from ..polars.remote_polars import RemoteArray
 from typing import Dict, Optional, List
 from ..config import get_client
+from enum import Enum
 
 client_name = "linfa_client"
 
 
 @dataclass
 class Trainer:
-    identifier: Optional[str] = None
-
     def to_msg_dict():
         raise NotImplementedError
 
@@ -202,14 +202,87 @@ class KMeans(Trainer):
 
 @dataclass
 class SVC(Trainer):
-    c: float = 1.0
-    shrinking: bool = False
+    class PlattParams(Trainer):
+        maxiter: int = 100
+        ministep: float = 1e-10
+        sigma: float = 1e-12
+
+        def to_msg_dict(self):
+            return {
+                "platt_params": SVM.PlattParams(
+                    maxiter=self.maxiter, ministep=self.ministep, sigma=self.sigma
+                )
+            }
 
     class KernelParams(Trainer):
-        pass
+        class KernelMethod:
+            pass
 
-    class PlattParams(Trainer):
-        pass
+        class KernelType(Trainer):
+            pass
+
+        class Dense(KernelType):
+            def to_msg_dict():
+                return {"dense": SVM.KernelParams.Dense()}
+
+        class Sparse(KernelType):
+            sparsity: int = 1
+
+            def to_msg_dict(self):
+                return {"sparse": SVM.KernelParams.Sparse(sparsity=self.sparsity)}
+
+        class Gaussian(KernelMethod):
+            eps: float = 1.0
+
+            def to_msg_dict(self):
+                return {"gaussian": SVM.KernelParams.Guassian(eps=self.eps)}
+
+        class Linear(KernelMethod):
+            def to_msg_dict():
+                return {"linear": SVM.KernelParams.Linear()}
+
+        class Polynomial(KernelMethod):
+            constant: float = 1.0
+            degree: float = 1.0
+
+            def to_msg_dict(self):
+                return {
+                    "poly": SVM.KernelParams.Polynomial(
+                        constant=self.constant, degree=self.degree
+                    )
+                }
+
+        kernel_method: Optional[KernelMethod] = Linear.to_msg_dict()
+        kernel_type: Optional[KernelType] = Dense.to_msg_dict()
+        n: N = SVM.KernelParams.LinearSearch
+
+        def to_msg_dict(self):
+            return {
+                "kernel_params": SVM.KernelParams(
+                    **self.kernel_method, **self.kernel_type, n=self.n
+                )
+            }
+
+    c: List[float] = field(default_factory=list)
+    eps: Optional[float] = None
+    nu: Optional[float] = None
+    shrinking: bool = False
+    platt_params: Optional[PlattParams] = None
+    kernel_params: Optional[KernelParams] = None
+
+    def get_kernel_params(self):
+        return (
+            self.KernelParams().to_msg_dict()
+            if not self.kernel_params
+            else self.kernel_params.to_msg_dict()
+        )
+
+    def get_platt_params(self):
+        return (
+            self.PlattParams().to_msg_dict()
+            if not self.platt_params
+            else self.platt_params.to_msg_dict()
+        )
 
     def fit(self, train_set: "RemoteArray", target_set: "RemoteArray"):
         return super().fit(train_set, target_set)
@@ -217,5 +290,14 @@ class SVC(Trainer):
     def predict(self, test_set: "RemoteArray"):
         return super().predict(test_set)
 
-    def to_msg_dict():
-        return {"svm": SVM()}
+    def to_msg_dict(self):
+        return {
+            "svm": SVM(
+                c=self.c,
+                eps=self.eps,
+                shrinking=self.shrinking,
+                nu=self.nu,
+                **self.get_kernel_params(),
+                **self.get_platt_params(),
+            )
+        }

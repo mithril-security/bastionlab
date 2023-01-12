@@ -123,17 +123,29 @@ pub fn balltree<DT: Data<Elem = f64>, D: Distance<f64>>(
 }
 
 pub fn svm(
-    c: f64,
-    eps: f64,
-    nu: f64,
+    c: Vec<f64>,
+    eps: Option<f64>,
+    nu: Option<f64>,
     shrinking: bool,
     platt_params: PlattParams<f64, ()>,
     kernel_params: KernelParams<f64>,
 ) -> SvmParams<f64, f64> {
-    SvmParams::new()
-        .c_eps(c, eps)
-        .nu_eps(nu, eps)
+    let model = SvmParams::new()
         .shrinking(shrinking)
         .with_platt_params(platt_params)
-        .with_kernel_params(kernel_params)
+        .with_kernel_params(kernel_params);
+
+    if c.len() > 0 {
+        if c.len() == 2 {
+            model.pos_neg_weights(c[0], c[1])
+        } else if c.len() == 1 && eps.is_some() {
+            model.c_eps(c[0], eps.unwrap())
+        } else {
+            model
+        }
+    } else if nu.is_some() && eps.is_some() {
+        model.nu_eps(nu.unwrap(), eps.unwrap())
+    } else {
+        model
+    }
 }

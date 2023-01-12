@@ -89,9 +89,9 @@ message Trainer {
 }
 
 message SVM {
-    float c = 1;
-    float eps = 2;
-    float nu = 3;
+    repeated float c = 1;
+    optional float eps = 2;
+    optional float nu = 3;
     bool shrinking = 4;
     PlattParams platt_params = 5;
     KernelParams kernel_params = 6;

@@ -201,14 +201,20 @@ pub fn send_to_trainer(
             platt_params,
             kernel_params,
         } => {
-            let model = svm(
-                c.into(),
-                eps.into(),
-                nu.into(),
-                shrinking,
-                platt_params,
-                kernel_params,
-            );
+            let c = c
+                .iter()
+                .map(|v| (*v).try_into().unwrap())
+                .collect::<Vec<_>>();
+            let eps = match eps {
+                Some(v) => Some(v.into()),
+                None => None,
+            };
+
+            let nu = match nu {
+                Some(v) => Some(v.into()),
+                None => None,
+            };
+            let model = svm(c, eps, nu, shrinking, platt_params, kernel_params);
 
             Ok(SupportedModels::SVM(to_polars_error(model.fit(&train))?))
         }

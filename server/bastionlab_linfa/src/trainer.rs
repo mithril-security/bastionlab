@@ -66,9 +66,9 @@ pub enum Models {
         min_impurity_decrease: f64,
     },
     SVM {
-        c: f32,
-        eps: f32,
-        nu: f32,
+        c: Vec<f32>,
+        eps: Option<f32>,
+        nu: Option<f32>,
         shrinking: bool,
         platt_params: PlattParams<f64, ()>,
         kernel_params: KernelParams<f64>,
