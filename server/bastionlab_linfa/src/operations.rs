@@ -24,15 +24,6 @@ macro_rules! to_type {
     };
 }
 
-#[macro_export]
-macro_rules! to_ndarray {
-    ($sh:ident, $target:ident) => {
-        to_polars_error(Array2::from_shape_vec($sh, $target))?
-            .as_standard_layout()
-            .to_owned()
-    };
-}
-
 fn vec_f64_to_df(data: Vec<f64>, name: &str) -> PolarsResult<DataFrame> {
     let s = Series::new(name, data);
     let df = to_polars_error(DataFrame::new(vec![s]))?;
@@ -330,7 +321,7 @@ pub fn inner_cross_validate(
                     ));
                 }
             };
-            vec_f64_to_df(arr, "cross_validation")
+            vec_f64_to_df(arr, scoring)
         }
 
         _ => {
