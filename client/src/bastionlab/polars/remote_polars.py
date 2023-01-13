@@ -1426,7 +1426,12 @@ def train_test_split(
 
 class RemoteArray(RemoteLazyFrame):
     def __init__(self, rdf: "RemoteLazyFrame") -> None:
-        rdf = rdf.collect()
+        def _verify_schema(rdf: "RemoteLazyFrame"):
+            if pl.Utf8 in list(rdf.schema.values()):
+                raise TypeError("Utf8 column cannot be converted into RemoteArray")
+            return rdf.collect()
+
+        rdf = _verify_schema(rdf)
         self._inner = rdf._inner
         self._meta = rdf._meta
         self.identifier = rdf.identifier
