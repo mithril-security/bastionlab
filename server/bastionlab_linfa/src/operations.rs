@@ -23,14 +23,6 @@ use crate::{
     trainer::{get_datasets, to_polars_error, Models, PredictionTypes, SupportedModels},
 };
 
-#[macro_export]
-macro_rules! to_type {
-    {<$t_ty:ty>($item:ident)} => {
-        // Use specified type.
-        $item.iter().map(|v| *v as $t_ty).collect::<Vec<$t_ty>>()
-    };
-}
-
 fn ndarray_to_df<T, D: Dimension>(
     arr: &ArrayBase<OwnedRepr<T>, D>,
     col_names: Vec<&str>,
