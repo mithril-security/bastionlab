@@ -96,7 +96,7 @@ impl SessionManager {
             .ok_or_else(|| Status::aborted("User IP unavailable"))?;
 
         // ip verification
-        if session.user_ip.ip() == recv_ip.ip() {
+        if session.user_ip.ip() != recv_ip.ip() {
             return Err(Status::aborted("Unknown IP Address!"));
         }
 
