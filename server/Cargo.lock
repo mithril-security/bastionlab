@@ -266,7 +266,7 @@ dependencies = [
 
 [[package]]
 name = "bastionlab_conversion"
-version = "0.3.6"
+version = "0.3.7"
 dependencies = [
  "bastionlab_common",
  "bastionlab_learning",

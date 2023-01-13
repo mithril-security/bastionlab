@@ -2,12 +2,12 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Tuple, Union
 import polars as pl
 from tokenizers import Tokenizer
-from ..polars.remote_polars import RemoteSeries, delegate, delegate_properties
+from ..polars.remote_polars import RemoteArray, delegate, delegate_properties
 from ..torch.remote_torch import RemoteTensor
 
 if TYPE_CHECKING:
-    from ..polars.remote_polars import RemoteSeries
     from ..torch.remote_torch import RemoteTensor
+    from ..polars.remote_polars import RemoteLazyFrame, RemoteArray
 
 
 @delegate_properties(
@@ -46,11 +46,11 @@ class RemoteTokenizer:
         return RemoteTokenizer(Tokenizer.from_pretrained(model))
 
     def encode(
-        self, series: "RemoteSeries", return_tensors: bool = True
-    ) -> Tuple[Union[RemoteTensor, RemoteSeries], Union[RemoteTensor, RemoteSeries]]:
-        res = series.convert(series.column_names, self._tokenizer.to_str()).collect()
-        input_ids = res.column(res.column_names[0])
-        attention_mask = res.column(res.column_names[1])
+        self, rdf: "RemoteLazyFrame", return_tensors: bool = True
+    ) -> Tuple[Union[RemoteTensor, RemoteArray], Union[RemoteTensor, RemoteArray]]:
+        res = rdf.convert(rdf.column_names, self._tokenizer.to_str()).collect()
+        input_ids = res.select(res.column_names[0]).to_array()
+        attention_mask = res.select(res.column_names[1]).to_array()
 
         if return_tensors:
             return input_ids.to_tensor(), attention_mask.to_tensor()
