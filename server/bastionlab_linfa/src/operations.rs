@@ -330,7 +330,7 @@ pub fn inner_cross_validate(
                     ));
                 }
             };
-            vec_f64_to_df(arr, "cross_validation")
+            vec_f64_to_df(arr, scoring)
         }
 
         _ => {
