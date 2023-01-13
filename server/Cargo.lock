@@ -2426,6 +2426,7 @@ dependencies = [
  "rayon",
  "regex",
  "serde",
+ "serde_json",
  "smartstring",
  "thiserror",
 ]

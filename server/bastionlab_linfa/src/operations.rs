@@ -7,7 +7,14 @@ use linfa::{
 use ndarray::{Array, Array1, Array2, ArrayBase, Dimension, Ix1, OwnedRepr, StrideShape, ViewRepr};
 
 use polars::{
-    prelude::{DataFrame, Float64Type, NamedFrom, PolarsError, PolarsResult},
+    export::{
+        arrow::types::PrimitiveType,
+        num::{FromPrimitive, ToPrimitive},
+    },
+    prelude::{
+        DataFrame, Float32Chunked, Float64Chunked, Float64Type, NumericNative, PolarsError,
+        PolarsResult, UInt32Chunked, UInt64Chunked,
+    },
     series::Series,
 };
 
@@ -24,17 +31,61 @@ macro_rules! to_type {
     };
 }
 
-fn vec_f64_to_df(data: Vec<f64>, name: &str) -> PolarsResult<DataFrame> {
-    let s = Series::new(name, data);
-    let df = to_polars_error(DataFrame::new(vec![s]))?;
-    Ok(df)
-}
+fn ndarray_to_df<T, D: Dimension>(
+    arr: &ArrayBase<OwnedRepr<T>, D>,
+    col_names: Vec<&str>,
+) -> PolarsResult<DataFrame>
+where
+    T: NumericNative + FromPrimitive + ToPrimitive,
+{
+    let mut lanes: Vec<Series> = vec![];
 
-fn vec_u64_to_df(data: Vec<usize>, name: &str) -> PolarsResult<DataFrame> {
-    let data = to_type! {<u64>(data)};
-    let s = Series::new(name, data);
-    let df = to_polars_error(DataFrame::new(vec![s]))?;
-    Ok(df)
+    for (i, col) in arr.columns().into_iter().enumerate() {
+        match col.as_slice() {
+            Some(d) => {
+                if let PrimitiveType::Float64 = T::PRIMITIVE {
+                    let d = d
+                        .into_iter()
+                        .map(|v| v.to_f64().unwrap())
+                        .collect::<Vec<_>>();
+                    let series = Series::from(Float64Chunked::new_vec(col_names[i], d));
+                    lanes.push(series);
+                }
+                if let PrimitiveType::Float32 = T::PRIMITIVE {
+                    let d = d
+                        .into_iter()
+                        .map(|v| v.to_f32().unwrap())
+                        .collect::<Vec<_>>();
+                    let series = Series::from(Float32Chunked::new_vec(col_names[i], d));
+                    lanes.push(series);
+                }
+                if let PrimitiveType::UInt64 = T::PRIMITIVE {
+                    let d = d
+                        .into_iter()
+                        .map(|v| v.to_u64().unwrap())
+                        .collect::<Vec<_>>();
+                    let series = Series::from(UInt64Chunked::new_vec(col_names[i], d));
+                    lanes.push(series);
+                }
+                if let PrimitiveType::UInt32 = T::PRIMITIVE {
+                    let d = d
+                        .into_iter()
+                        .map(|v| v.to_u32().unwrap())
+                        .collect::<Vec<_>>();
+                    let series = Series::from(UInt32Chunked::new_vec("col", d));
+                    lanes.push(series);
+                }
+                // This could be expanded... for now, only (f64,f32, u64, and u32) are supported.
+            }
+            None => {
+                return Err(PolarsError::NoData(polars::error::ErrString::Borrowed(
+                    "Could not convert column to slice",
+                )));
+            }
+        }
+    }
+
+    DataFrame::new(lanes)
 }
 
 fn to_usize<D: Dimension, S: Into<StrideShape<D>>>(
@@ -249,14 +300,21 @@ pub fn predict(
     let prediction: DataFrame = match prediction {
         Some(v) => match v {
             PredictionTypes::Usize(m) => {
-                let targets = m.targets.to_vec();
-                vec_u64_to_df(targets, "prediction")?
+                let targets = match m.targets.as_slice() {
+                    Some(s) => {
+                        let arr = s.into_iter().map(|v| *v as u64).collect::<Vec<u64>>();
+                        Array1::from_vec(arr)
+                    }
+                    None => {
+                        return Err(PolarsError::InvalidOperation(
+                            polars::error::ErrString::Borrowed("Could not convert to slice"),
+                        ));
+                    }
+                };
+                ndarray_to_df::<u64, Ix1>(&targets, vec!["prediction"])?
             }
-            PredictionTypes::Float(m) => {
-                let targets = m.targets.to_vec();
-                vec_f64_to_df(targets, "prediction")?
-            }
-            PredictionTypes::Probability(m) => vec_f64_to_df(m.to_vec(), "prediction")?,
+            PredictionTypes::Float(m) => ndarray_to_df::<f64, Ix1>(&m.targets, vec!["prediction"])?,
+            PredictionTypes::Probability(pr) => ndarray_to_df::<f64, Ix1>(&pr, vec!["prediction"])?,
         },
         None => {
             return PolarsResult::Err(PolarsError::ComputeError(polars::error::ErrString::Owned(
@@ -311,17 +369,7 @@ pub fn inner_cross_validate(
                 |pred, truth| metric(pred, truth, scoring),
             ))?;
 
-            let arr = match arr.as_slice() {
-                Some(d) => d.to_vec(),
-                None => {
-                    return Err(PolarsError::InvalidOperation(
-                        polars::error::ErrString::Borrowed(
-                            "Failed to convert validation result to slice",
-                        ),
-                    ));
-                }
-            };
-            vec_f64_to_df(arr, scoring)
+            ndarray_to_df::<f64, Ix1>(&arr, vec![scoring])
         }
 
         _ => {
