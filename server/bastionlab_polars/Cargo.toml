@@ -84,6 +84,7 @@ features = [
   "string_justify",
   "arg_where",
   "date_offset",
+  "ipc_streaming",
 ]
 
 [dependencies.uuid]

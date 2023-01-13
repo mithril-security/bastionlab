@@ -9,7 +9,7 @@ pub fn sanitize_df(df: &mut DataFrame, blacklist: &Vec<String>) {
             None => continue,
         };
         let series = df.get_columns_mut().get_mut(idx).unwrap();
-        *series = Series::new_empty(name, series.dtype());
+        *series = Series::full_null(name, series.len(), series.dtype());
     }
 }
 
