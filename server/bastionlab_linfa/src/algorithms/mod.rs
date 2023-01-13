@@ -18,7 +18,7 @@ pub fn logistic_regression(
     gradient_tolerance: f64,
     fit_intercept: bool,
     max_iterations: u64,
-    inital_params: Option<Vec<f64>>,
+    initial_params: Option<Vec<f64>>,
 ) -> LogisticRegression<f64> {
     let mut reg = LogisticRegression::new()
         .alpha(alpha)
@@ -26,7 +26,7 @@ pub fn logistic_regression(
         .gradient_tolerance(gradient_tolerance)
         .max_iterations(max_iterations);
 
-    if let Some(params) = inital_params {
+    if let Some(params) = initial_params {
         let params = Array1::from_vec(params);
         reg = reg.initial_params(params);
     }

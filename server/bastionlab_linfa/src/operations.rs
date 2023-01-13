@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use linfa::{
-    prelude::SingleTargetRegression,
+    prelude::{SingleTargetRegression, ToConfusionMatrix},
     traits::{Fit, Predict},
 };
 use ndarray::{Array, Array1, Array2, ArrayBase, Dimension, Ix1, OwnedRepr, StrideShape, ViewRepr};
@@ -318,7 +318,7 @@ pub fn predict(
     Ok(prediction)
 }
 
-pub fn metric(
+fn regression_metrics(
     prediction: &ArrayBase<OwnedRepr<f64>, Ix1>,
     truth: &ArrayBase<ViewRepr<&f64>, Ix1>,
     metric: &str,
@@ -340,6 +340,24 @@ pub fn metric(
     }
 }
 
+fn classification_metrics(
+    prediction: &ArrayBase<OwnedRepr<usize>, Ix1>,
+    truth: &ArrayBase<ViewRepr<&usize>, Ix1>,
+    metric: &str,
+) -> Result<f32, linfa::Error> {
+    let cm = prediction.confusion_matrix(truth)?;
+    match metric {
+        "accuracy" => Ok(cm.accuracy()),
+        "f1_score" => Ok(cm.f1_score()),
+        "mcc" => Ok(cm.mcc()),
+        _ => {
+            return Err(linfa::Error::Priors(format!(
+                "Could not find metric: {}",
+                metric
+            )))
+        }
+    }
+}
 #[allow(unused)]
 pub fn inner_cross_validate(
     model: Models,
@@ -358,10 +376,38 @@ pub fn inner_cross_validate(
             let arr = to_polars_error(train.cross_validate_single(
                 cv,
                 &vec![m][..],
-                |pred, truth| metric(pred, truth, scoring),
+                |pred, truth| regression_metrics(pred, truth, scoring),
             ))?;
 
             ndarray_to_df::<f64, Ix1>(&arr, vec![scoring])
+        }
+
+        Models::LogisticRegression {
+            alpha,
+            gradient_tolerance,
+            fit_intercept,
+            max_iterations,
+            initial_params,
+        } => {
+            let m = logistic_regression(
+                alpha,
+                gradient_tolerance,
+                fit_intercept,
+                max_iterations,
+                initial_params,
+            );
+
+            let targets = to_usize(&train.targets, train.targets.shape().to_vec()[0])?;
+            let mut train = train.with_targets(targets);
+            let arr = to_polars_error(train.cross_validate_single(
+                cv,
+                &vec![m][..],
+                |pred, truth| classification_metrics(pred, truth, scoring),
+            ))?;
+
+            println!("{:?}", arr);
+
+            ndarray_to_df::<f32, Ix1>(&arr, vec![scoring])
         }
 
         _ => {
