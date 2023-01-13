@@ -323,12 +323,8 @@ class RemoteLazyFrame:
         """
         return self._meta._client._run_query(self.composite_plan)
 
-    def column(self: LDF, column: str) -> RemoteSeries:
-
-        return RemoteSeries(self.select(column).collect())
-
-    def columns(self: LDF, column_names: List[str]) -> List[RemoteSeries]:
-        return RemoteSeries(self.select(column_names).collect())
+    def to_array(self: LDF) -> "RemoteArray":
+        return RemoteArray(self)
 
     def to_array(self: LDF) -> "RemoteArray":
         cols = self.column_names
@@ -1432,8 +1428,9 @@ def train_test_split(
     return res
 
 
-class RemoteSeries(RemoteLazyFrame):
+class RemoteArray(RemoteLazyFrame):
     def __init__(self, rdf: "RemoteLazyFrame") -> None:
+        rdf = rdf.collect()
         self._inner = rdf._inner
         self._meta = rdf._meta
         self.identifier = rdf.identifier
@@ -1446,19 +1443,6 @@ class RemoteSeries(RemoteLazyFrame):
         )
         res = to_torch_ref(res)
         return RemoteTensor._from_reference(res)
-
-    def __str__(self) -> str:
-        return f"RemoteSeries(identifier={self.identifier})"
-
-    def __repr__(self) -> str:
-        return str(self)
-
-
-class RemoteArray(RemoteLazyFrame):
-    def __init__(self, rdf: "RemoteLazyFrame") -> None:
-        self._inner = rdf._inner
-        self._meta = rdf._meta
-        self.identifier = rdf.identifier
 
     def __str__(self) -> str:
         return f"RemoteArray(identifier={self.identifier}"
