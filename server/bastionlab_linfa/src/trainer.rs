@@ -23,7 +23,7 @@ use crate::{
     linfa_proto::{
         ElasticNet as BastionElasticNet, KMeans as BastionKMeans, Svm as BastionSvm, Trainer, *,
     },
-    to_status_error, to_type,
+    to_status_error,
 };
 
 pub enum Models {
@@ -217,9 +217,12 @@ pub fn select_trainer(trainer: Trainer) -> Result<Models, Status> {
                 n_centroids,
                 n_features,
             }) => {
-                let list = to_type! {<f64>(list)};
                 let sh = (n_centroids as usize, n_features as usize);
-                let list = to_status_error(Array2::from_shape_vec(sh, list))?;
+                let list = to_status_error(Array2::from_shape_vec(
+                    sh,
+                    list.into_iter().map(|v| v.into()).collect::<Vec<_>>(),
+                ))?;
+
                 KMeansInit::Precomputed(list)
             }
             k_means::InitMethod::KmeansPara(k_means::KMeansPara {}) => KMeansInit::KMeansPara,

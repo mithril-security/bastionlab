@@ -23,7 +23,7 @@ use crate::{
     trainer::{get_datasets, to_polars_error, Models, PredictionTypes, SupportedModels},
 };
 
-fn ndarray_to_df<T, D: Dimension>(
+pub fn ndarray_to_df<T, D: Dimension>(
     arr: &ArrayBase<OwnedRepr<T>, D>,
     col_names: Vec<&str>,
 ) -> PolarsResult<DataFrame>
