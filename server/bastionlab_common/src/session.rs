@@ -154,6 +154,20 @@ impl SessionManager {
         Ok(challenge_bytes)
     }
 
+    pub fn verify_if_owner(&self, public_hash: &str) -> Result<bool, Status> {
+        if self.auth_enabled() == false {
+            return Err(Status::permission_denied(
+                "This operation requires authentication to be enabled.",
+            ));
+        }
+        let keys_lock = self.keys.as_ref().map(|l| l.lock().expect("Poisoned lock"));
+        if let Some(ref keys) = keys_lock {
+            return Ok(keys.verify_owner(public_hash));
+        }
+        return Ok(false);
+    }
+
+    // TODO: move grpc specific things to the grpc service and not the session manager
     fn create_session(&self, request: Request<ClientInfo>) -> Result<SessionInfo, Status> {
         let user_ip = request
             .remote_addr()

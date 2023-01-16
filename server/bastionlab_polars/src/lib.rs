@@ -346,6 +346,15 @@ Reason: {}",
         }
         Ok(())
     }
+
+    fn delete_dfs(&self, identifier: &str) -> Result<(), Error> {
+        let mut dfs = self.dataframes.write().unwrap();
+        dfs.remove(identifier);
+
+        let path = "data_frames/".to_owned() + identifier + ".json";
+        std::fs::remove_file(path).unwrap_or(());
+        Ok(())
+    }
 }
 
 fn get_df_header(df: &DataFrame) -> Result<String, Status> {
@@ -502,6 +511,28 @@ impl PolarsService for BastionLabPolars {
         self.persist_df(identifier)?;
         telemetry::add_event(
             TelemetryEventProps::SaveDataframe {
+                dataset_name: Some(identifier.clone()),
+            },
+            Some(self.sess_manager.get_client_info(token)?),
+        );
+        Ok(Response::new(Empty {}))
+    }
+
+    async fn delete_data_frame(
+        &self,
+        request: Request<ReferenceRequest>,
+    ) -> Result<Response<Empty>, Status> {
+        let token = self.sess_manager.verify_request(&request)?;
+        let identifier = &request.get_ref().identifier;
+        let user_id = self.sess_manager.get_user_id(token.clone())?;
+        let owner_check = self.sess_manager.verify_if_owner(&user_id)?;
+        if owner_check {
+            self.delete_dfs(identifier)?;
+        } else {
+            return Err(Status::internal("Only data owners can delete dataframes."));
+        }
+        telemetry::add_event(
+            TelemetryEventProps::DeleteDataframe {
                 dataset_name: Some(identifier.clone()),
             },
             Some(self.sess_manager.get_client_info(token)?),
