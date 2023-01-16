@@ -72,9 +72,11 @@ impl TryFrom<SizedObjectsBytes> for BinaryModule {
     type Error = TchError;
 
     fn try_from(mut value: SizedObjectsBytes) -> Result<Self, Self::Error> {
-        let object = value.next().ok_or(TchError::FileFormat(String::from(
-            "Invalid data, expected at least one object in stream.",
-        )))?;
+        let object = value.next().ok_or_else(|| {
+            TchError::FileFormat(String::from(
+                "Invalid data, expected at least one object in stream.",
+            ))
+        })?;
         Ok(BinaryModule(object))
     }
 }
