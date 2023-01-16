@@ -147,6 +147,16 @@ class StackPlanSegment(CompositePlanSegment):
     def serialize(self) -> str:
         return '"StackPlanSegment"'
 
+@dataclass
+class RowCountSegment(CompositePlanSegment):
+    _name: str
+    """
+    Composite plan segment class responsible for with_row_count function
+    """
+
+    def serialize(self) -> str:
+        return f'{{"RowCountSegment": "{self._name}"}}'
+
 
 @dataclass
 class Metadata:
@@ -201,7 +211,6 @@ class Metadata:
         "tail",
         "last",
         "first",
-        "with_row_count",
         "take_every",
         "fill_null",
         "fill_nan",
@@ -378,6 +387,28 @@ class RemoteLazyFrame:
                     *self._meta._prev_segments,
                     PolarsPlanSegment(self._inner),
                     StackPlanSegment(),
+                ],
+            ),
+        )
+    
+    def with_row_count(self: LDF, name: str = "index") -> LDF:
+        """adds new column with row count
+        Args:
+            name (String): The name of the new index column.
+        Returns:
+            RemoteLazyFrame: The RemoteLazyFrame with new row count/index column
+        """
+        df = pl.DataFrame(
+            [pl.Series(k, dtype=v) for k, v in self._inner.schema.items()]
+        )
+        return RemoteLazyFrame(
+            df.lazy(),
+            Metadata(
+                self._meta._client,
+                [
+                    *self._meta._prev_segments,
+                    PolarsPlanSegment(self._inner),
+                    RowCountSegment(name),
                 ],
             ),
         )
