@@ -1,4 +1,6 @@
 use base64;
+use bastionlab_common::utils::tensor_to_series;
+use polars::functions::hor_concat_df;
 use polars::{lazy::dsl::Expr, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io::Cursor};
@@ -34,6 +36,14 @@ pub enum CompositePlanSegment {
         method: StringMethod,
         columns: Vec<String>,
     },
+    StringTransformerPlanSegment {
+        columns: Vec<String>,
+        model: String,
+    },
+    UdfTransformerPlanSegment {
+        columns: Vec<String>,
+        udf: String,
+    },
     EntryPointPlanSegment(String),
     StackPlanSegment,
 }
@@ -55,7 +65,10 @@ struct StackFrame {
 impl CompositePlan {
     pub fn run(self, state: &BastionLabPolars, user_id: &str) -> Result<DataFrameArtifact, Status> {
         let mut stack = Vec::new();
-        let plan_str = serde_json::to_string(&self.0).unwrap(); // FIX THIS
+
+        let plan_str = serde_json::to_string(&self.0).map_err(|e| {
+            Status::invalid_argument(format!("Could not parse composite plan: {e}"))
+        })?;
 
         let column_to_idx = |col: &str, df: &DataFrame| -> Result<usize, Status> {
             Ok(df.get_column_names().iter().position(|x| x == &col).ok_or(
@@ -87,9 +100,9 @@ impl CompositePlan {
                             ))
                         })?;
 
-                    let mut frame = stack.pop().ok_or(Status::invalid_argument(
-                        "Could not apply udf: no input data frame",
-                    ))?;
+                    let mut frame = stack.pop().ok_or_else(|| {
+                        Status::invalid_argument("Could not apply udf: no input data frame")
+                    })?;
                     for name in columns {
                         let idx = column_to_idx(&name, &frame.df)?;
                         let series = frame.df.get_columns_mut().get_mut(idx).unwrap();
@@ -107,13 +120,13 @@ impl CompositePlan {
                     stack.push(StackFrame { df, stats });
                 }
                 CompositePlanSegment::StackPlanSegment => {
-                    let frame1 = stack.pop().ok_or(Status::invalid_argument(
-                        "Could not apply stack: no input data frame",
-                    ))?;
+                    let frame1 = stack.pop().ok_or_else(|| {
+                        Status::invalid_argument("Could not apply stack: no input data frame")
+                    })?;
 
-                    let frame2 = stack.pop().ok_or(Status::invalid_argument(
-                        "Could not apply stack: no df2 input data frame",
-                    ))?;
+                    let frame2 = stack.pop().ok_or_else(|| {
+                        Status::invalid_argument("Could not apply stack: no df2 input data frame")
+                    })?;
 
                     let df = frame1.df.vstack(&frame2.df).map_err(|e| {
                         Status::invalid_argument(format!("Error while running vstack: {}", e))
@@ -224,6 +237,44 @@ impl CompositePlan {
                     }
                     stack.push(frame);
                 }
+                #[allow(unused)]
+                CompositePlanSegment::StringTransformerPlanSegment { columns, model } => {
+                    let frame = stack.pop().ok_or(Status::invalid_argument(
+                        "Could not apply udf: no input data frame",
+                    ))?;
+                    let mut df = frame.df;
+
+                    for name in columns {
+                        let idx = df
+                            .get_column_names()
+                            .iter()
+                            .position(|x| x == &&name)
+                            .ok_or(Status::invalid_argument(format!(
+                                "Could not apply udf: no column `{}` in data frame",
+                                name
+                            )))?;
+                        let series = df.get_columns().get(idx).unwrap();
+                        let out = if series.dtype().eq(&DataType::Utf8) {
+                            series_to_tokenized_series(series, &name, &model)?
+                        } else {
+                            to_status_error(DataFrame::new(vec![series.clone()]))?
+                        };
+                        let _ = to_status_error(df.drop_in_place(&name))?;
+
+                        df = to_status_error(hor_concat_df(&[df, out]))?;
+                    }
+
+                    let lazy = df.clone().lazy().select(&[col("text_ids")]);
+                    let plan = lazy.logical_plan;
+
+                    let serialized = serde_json::to_string(&plan).unwrap();
+                    stack.push(StackFrame {
+                        df,
+                        stats: frame.stats,
+                    });
+                }
+                #[allow(unused)]
+                CompositePlanSegment::UdfTransformerPlanSegment { columns, udf } => todo!(), //TODO: Add support for TorchScriptable Tokenizers
             }
         }
 
@@ -313,14 +364,13 @@ fn expr_agg_check(expr: &Expr) -> Result<bool, Status> {
 }
 
 fn exprs_agg_check(exprs: &[Expr]) -> Result<bool, Status> {
-    let mut res = true;
-
     for e in exprs.iter() {
         let x = expr_agg_check(e)?;
-        res = res && x;
+        if !x {
+            return Ok(false);
+        }
     }
-
-    Ok(res)
+    Ok(true)
 }
 
 fn run_logical_plan(plan: LogicalPlan) -> Result<DataFrame, Status> {
@@ -378,9 +428,11 @@ fn initialize_plan(
     plan.visit_mut(&mut state, |plan, (main_stack, stats_stack)| {
         match plan {
             LogicalPlan::DataFrameScan { .. } => {
-                let frame = main_stack.pop().ok_or(Status::invalid_argument(
-                    "Could not run logical plan: not enough input data frames",
-                ))?;
+                let frame = main_stack.pop().ok_or_else(|| {
+                    Status::invalid_argument(
+                        "Could not run logical plan: not enough input data frames",
+                    )
+                })?;
                 stats_stack.push(frame.stats);
                 *plan = frame.df.lazy().logical_plan;
             }

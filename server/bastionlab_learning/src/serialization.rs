@@ -1,4 +1,6 @@
-use tch::TchError;
+use std::io::Cursor;
+
+use tch::{Device, TchError, Tensor};
 
 fn read_le_usize(input: &mut &[u8]) -> usize {
     let (int_bytes, rest) = input.split_at(std::mem::size_of::<usize>());
@@ -72,9 +74,11 @@ impl TryFrom<SizedObjectsBytes> for BinaryModule {
     type Error = TchError;
 
     fn try_from(mut value: SizedObjectsBytes) -> Result<Self, Self::Error> {
-        let object = value.next().ok_or(TchError::FileFormat(String::from(
-            "Invalid data, expected at least one object in stream.",
-        )))?;
+        let object = value.next().ok_or_else(|| {
+            TchError::FileFormat(String::from(
+                "Invalid data, expected at least one object in stream.",
+            ))
+        })?;
         Ok(BinaryModule(object))
     }
 }
@@ -86,5 +90,16 @@ impl TryFrom<&BinaryModule> for SizedObjectsBytes {
         let mut buff = SizedObjectsBytes::new();
         buff.append_back(value.0.clone());
         Ok(buff)
+    }
+}
+
+impl TryFrom<&SizedObjectsBytes> for tch::Tensor {
+    type Error = TchError;
+    fn try_from(value: &SizedObjectsBytes) -> Result<Self, Self::Error> {
+        let object = value.0.clone();
+        let data = Tensor::load_multi_from_stream_with_device(Cursor::new(object), Device::Cpu)?;
+        // Get first item in list
+        let data = data[0].1.detach();
+        Ok(data)
     }
 }

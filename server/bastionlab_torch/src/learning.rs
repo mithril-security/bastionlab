@@ -105,7 +105,7 @@ fn build_train_context<'a>(
     let optimizer = match config
         .clone()
         .optimizer
-        .ok_or(TchError::FileFormat(String::from("Invalid optimizer")))?
+        .ok_or_else(|| TchError::FileFormat(String::from("Invalid optimizer")))?
     {
         train_config::Optimizer::Sgd(train_config::Sgd {
             learning_rate,
@@ -264,21 +264,18 @@ pub fn module_train(
                 );
                 match &*run.read().unwrap() {
                     Run::Ok(_) => info!(
-                    target: "BastionAI",
-                                "Model trained successfully in {}ms",
-                                start_time.elapsed().as_millis()
-                            ),
+                        "Model trained successfully in {}ms",
+                        start_time.elapsed().as_millis()
+                    ),
                     Run::Error(e) => info!(
-                    target: "BastionAI",
-                                "Model training failed in {}ms: {}",
-                                start_time.elapsed().as_millis(),
-                                e
-                            ),
+                        "Model training failed in {}ms: {}",
+                        start_time.elapsed().as_millis(),
+                        e
+                    ),
                     _ => info!(
-                    target: "BastionAI",
-                                "Model training failed in {}ms",
-                                start_time.elapsed().as_millis()
-                            ),
+                        "Model training failed in {}ms",
+                        start_time.elapsed().as_millis()
+                    ),
                 }
             }
             Err(e) => *run.write().unwrap() = Run::Error(e),
@@ -361,10 +358,9 @@ pub fn module_test(
                     client_info,
                 );
                 info!(
-                target: "BastionAI",
-                            "Model tested successfully in {}ms",
-                            start_time.elapsed().as_millis()
-                        );
+                    "Model tested successfully in {}ms",
+                    start_time.elapsed().as_millis()
+                );
             }
             Err(e) => *run.write().unwrap() = Run::Error(e),
         }

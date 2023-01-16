@@ -1,24 +1,18 @@
-from typing import List, TYPE_CHECKING, Optional
+from typing import List, TYPE_CHECKING, Optional, Callable, Union
 import grpc
 from grpc import StatusCode
 import polars as pl
 from colorama import Fore
-from ..pb.bastionlab_polars_pb2 import (
-    ReferenceRequest,
-    Query,
-    Empty,
-)
+from ..pb.bastionlab_polars_pb2 import ReferenceRequest, Empty, SplitRequest
 from ..pb.bastionlab_polars_pb2_grpc import PolarsServiceStub
 from ..errors import GRPCException
-from .utils import (
-    deserialize_dataframe,
-    serialize_dataframe,
-)
+from .utils import deserialize_dataframe, serialize_dataframe, serialize_query
 from .policy import Policy, DEFAULT_POLICY
 
 
 if TYPE_CHECKING:
-    from .remote_polars import RemoteLazyFrame, FetchableLazyFrame
+    from .remote_polars import FetchableLazyFrame
+    from ..converter import BastionLabConverter
     from ..client import Client
 
 
@@ -34,11 +28,11 @@ class BastionLabPolars:
     """
 
     def __init__(
-        self,
-        client: "Client",
+        self, channel: grpc.Channel, conv: "BastionLabConverter", client: "Client"
     ):
+        self.stub = PolarsServiceStub(channel)
+        self._conv = conv
         self.client = client
-        self.stub = PolarsServiceStub(client._channel)
 
     def send_df(
         self,
@@ -158,7 +152,7 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
         self.client.refresh_session_if_needed()
 
         res = GRPCException.map_error(
-            lambda: self.stub.RunQuery(Query(composite_plan=composite_plan))
+            lambda: self.stub.RunQuery(serialize_query(composite_plan))
         )
         return FetchableLazyFrame._from_reference(self, res)
 

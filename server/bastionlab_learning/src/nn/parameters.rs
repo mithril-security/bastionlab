@@ -195,7 +195,7 @@ impl<'a> Parameters<'a> {
             } => tch::no_grad(|| {
                 if !dp_sgd_context
                     .read()
-                    .unwrap()
+                    .expect("Poisoned lock")
                     .as_ref()
                     .unwrap()
                     .empty_guard()
@@ -208,7 +208,7 @@ impl<'a> Parameters<'a> {
                     let _ = param.f_sub_(&update)?;
                     dp_sgd_context
                         .write()
-                        .unwrap()
+                        .expect("Poisoned lock")
                         .as_mut()
                         .unwrap()
                         .empty_guard()
