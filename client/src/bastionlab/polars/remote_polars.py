@@ -956,26 +956,27 @@ class RemoteLazyFrame:
         self: RemoteLazyFrame,
         method_name: str,
         method_pattern: str = None,
+        method_to: str = None,
         cols: Optional[Union[str, List[str]]] = None,
     ) -> "RemoteLazyFrame":
-        rdf, cols = (
-            (self.collect(), self.columns)
-            if cols is None
-            else (
-                self.select(cols).collect(),
-                cols if isinstance(cols, list) else [cols],
-            )
+        cols = (
+            self.columns if cols is None else cols if isinstance(cols, list) else [cols]
         )
 
         return RemoteLazyFrame(
-            rdf._inner,
+            self._inner,
             Metadata(
-                rdf._meta._client,
+                self._meta._client,
                 [
-                    *rdf._meta._prev_segments,
-                    PolarsPlanSegment(rdf._inner),
+                    *self._meta._prev_segments,
+                    PolarsPlanSegment(self._inner),
                     StringUdfPlanSegmenet(
-                        {"name": method_name, "pattern": method_pattern}, cols
+                        {
+                            "name": method_name,
+                            "pattern": method_pattern,
+                            "to": method_to,
+                        },
+                        cols,
                     ),
                 ],
             ),
@@ -985,22 +986,31 @@ class RemoteLazyFrame:
     def split(
         self, pattern: str, cols: Optional[Union[str, List[str]]] = None
     ) -> "RemoteLazyFrame":
-        return self._make_string_udf_segment("split", pattern, cols)
+        return self._make_string_udf_segment("split", pattern, cols=cols)
 
     def to_lowercase(
         self, cols: Optional[Union[str, List[str]]] = None
     ) -> "RemoteLazyFrame":
-        return self._make_string_udf_segment("to_lowercase", cols)
+        return self._make_string_udf_segment("to_lowercase", cols=cols)
 
     def to_uppercase(
         self, cols: Optional[Union[str, List[str]]] = None
     ) -> "RemoteLazyFrame":
-        return self._make_string_udf_segment("to_uppercase", cols)
+        return self._make_string_udf_segment("to_uppercase", cols=cols)
 
     def replace(
-        self, cols: Optional[Union[str, List[str]]] = None
+        self, pattern: str, to: str, cols: Optional[Union[str, List[str]]] = None
     ) -> "RemoteLazyFrame":
-        return self._make_string_udf_segment("replace", cols)
+        return self._make_string_udf_segment(
+            method_name="replace", method_pattern=pattern, method_to=to, cols=cols
+        )
+
+    def replace_all(
+        self, pattern: str, to: str, cols: Optional[Union[str, List[str]]] = None
+    ) -> "RemoteLazyFrame":
+        return self._make_string_udf_segment(
+            method_name="replace_all", method_pattern=pattern, method_to=to, cols=cols
+        )
 
 
 @dataclass

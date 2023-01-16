@@ -131,11 +131,75 @@ impl CompositePlan {
                     let apply_method = |method: &StringMethod,
                                         series: &Series|
                      -> Result<Series, Status> {
-                        let StringMethod { name, .. } = method;
+                        let StringMethod { name, pattern, to } = method;
 
+                        let get_inner_opt = |v: &Option<String>| -> Result<String, Status> {
+                            match v {
+                                Some(v) => Ok(v.clone()),
+                                None => {
+                                    return Err(Status::failed_precondition(format!(
+                                        "{:?} necessary for {name}",
+                                        v
+                                    )));
+                                }
+                            }
+                        };
+                        let series = series.utf8().unwrap();
                         let output = match name.as_str() {
-                            "to_lowercase" => series.utf8().unwrap().to_lowercase().into_series(),
-                            "to_uppercase" => series.utf8().unwrap().to_uppercase().into_series(),
+                            "split" => {
+                                let pat = get_inner_opt(pattern)?;
+                                let mut out = vec![];
+                                for elem in series.into_iter() {
+                                    let value = match elem {
+                                        Some(r) => {
+                                            let s = r.split(&pat).into_vec();
+                                            let v = AnyValue::List(
+                                                Utf8Chunked::from_slice("col", &s[..])
+                                                    .into_series(),
+                                            );
+                                            v
+                                        }
+                                        None => {
+                                            return Err(Status::aborted(format!(
+                                                "Could not apply split to null"
+                                            )));
+                                        }
+                                    };
+                                    out.push(value);
+                                }
+                                let s = Series::from_any_values("col", &out[..]).map_err(|e| {
+                                    Status::aborted(format!(
+                                        "Failed to create Series from AnyValues: {e}"
+                                    ))
+                                })?;
+                                s
+                            }
+                            "to_lowercase" => series.to_lowercase().into_series(),
+                            "to_uppercase" => series.to_uppercase().into_series(),
+                            "replace" => {
+                                let pattern = get_inner_opt(pattern)?;
+                                let to = get_inner_opt(to)?;
+                                series
+                                    .replace(&pattern, &to)
+                                    .map_err(|e| {
+                                        Status::aborted(format!(
+                                            "Failed to replace {pattern} with {to} for {name}: {e}"
+                                        ))
+                                    })?
+                                    .into_series()
+                            }
+                            "replace_all" => {
+                                let pattern = get_inner_opt(pattern)?;
+                                let to = get_inner_opt(to)?;
+                                series
+                                        .replace_all(&pattern, &to)
+                                        .map_err(|e| {
+                                            Status::aborted(format!(
+                                            "Failed to replace all {pattern} with {to} for {name}: {e}"
+                                        ))
+                                        })?
+                                        .into_series()
+                            }
                             _ => {
                                 return Err(Status::invalid_argument(format!(
                                     "{name} is unsupported"
