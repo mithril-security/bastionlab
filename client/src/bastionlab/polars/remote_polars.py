@@ -589,9 +589,9 @@ class RemoteLazyFrame:
             various exceptions: Note that exceptions may be raised from matplotlib pyplot's pie or subplots functions, for example if fig_kwargs keywords are not valid.
         """
 
-        if parts not in self.columns:
+        if parts not in self.column_names:
             raise ValueError("Parts column not found in dataframe")
-        if type(labels) == str and labels not in self.columns:
+        if type(labels) == str and labels not in self.column_names:
             raise ValueError("Labels column not found in dataframe")
 
         # get list of values in parts column
@@ -681,7 +681,7 @@ class RemoteLazyFrame:
                 selects.append(hue)
 
         for col in selects:
-            if not col in self.columns:
+            if not col in self.column_names:
                 raise ValueError("Column ", col, " not found in dataframe")
 
         agg = y if y != None else x
@@ -757,7 +757,7 @@ class RemoteLazyFrame:
             q_x = pl.col(col_x) if col_x != "count" else pl.col(col_y)
             q_y = pl.count()
 
-            if not col_x in self.columns and not col_y in self.columns:
+            if not col_x in self.column_names and not col_y in self.column_names:
                 raise ValueError("Please supply a valid column for x or y axes")
 
             df = (
@@ -794,7 +794,7 @@ class RemoteLazyFrame:
         # If we have X and Y
         else:
             for col in [col_x, col_y]:
-                if not col in self.columns:
+                if not col in self.column_names:
                     raise ValueError("Column name not found in dataframe")
             df = (
                 self.filter(pl.col(col_x) != None)
@@ -860,7 +860,7 @@ class RemoteLazyFrame:
             kwargs["units"] = units
 
         for col in selects:
-            if not col in self.columns:
+            if not col in self.column_names:
                 raise ValueError("Column ", col, " not found in dataframe")
 
         # get df with necessary columns
@@ -889,7 +889,7 @@ class RemoteLazyFrame:
                 cols.append(kwargs["style"])
 
         for col in cols:
-            if not col in self.columns:
+            if not col in self.column_names:
                 raise ValueError("Column ", col, " not found in dataframe")
 
         # get df with necessary columns
@@ -939,7 +939,7 @@ class RemoteLazyFrame:
                 selects.append(hue)
 
         for col in selects:
-            if not col in self.columns:
+            if not col in self.column_names:
                 raise ValueError("Column ", col, " not found in dataframe")
 
         agg = y if y != None else x
@@ -998,7 +998,7 @@ class RemoteLazyFrame:
         """
         for x in [col, row]:
             if x != None:
-                if not x in self.columns:
+                if not x in self.column_names:
                     raise ValueError("Column ", x, " not found in dataframe")
         return Facet(inner_rdf=self, col=col, row=row, kwargs=kwargs)
 
