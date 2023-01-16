@@ -92,10 +92,12 @@ impl BastionLabPolars {
         client_info: Option<ClientInfo>,
     ) -> Result<DelayedDataFrame, Status> {
         let dfs = self.dataframes.read().unwrap();
-        let artifact = dfs.get(identifier).ok_or(Status::not_found(format!(
-            "Could not find dataframe: identifier={}",
-            identifier
-        )))?;
+        let artifact = dfs.get(identifier).ok_or_else(|| {
+            Status::not_found(format!(
+                "Could not find dataframe: identifier={}",
+                identifier
+            ))
+        })?;
         if let VerificationResult::Unsafe { reason, .. } = &artifact.fetchable {
             println!(
                 "Safe zone violation: a DataFrame has been non-privately fetched.
@@ -211,9 +213,12 @@ Reason: {}",
                         );
                         Ok({
                             let guard = dfs.read().unwrap();
-                            let artifact = guard.get(&identifier).ok_or(Status::not_found(
-                                format!("Could not find dataframe: identifier={}", identifier),
-                            ))?;
+                            let artifact = guard.get(&identifier).ok_or_else(|| {
+                                Status::not_found(format!(
+                                    "Could not find dataframe: identifier={}",
+                                    identifier
+                                ))
+                            })?;
                             let mut df = artifact.dataframe.clone();
                             sanitize_df(&mut df, &artifact.blacklist);
                             df
@@ -228,10 +233,12 @@ Reason: {}",
         let dfs = self.dataframes.read().unwrap();
         Ok(dfs
             .get(identifier)
-            .ok_or(Status::not_found(format!(
-                "Could not find dataframe: identifier={}",
-                identifier
-            )))?
+            .ok_or_else(|| {
+                Status::not_found(format!(
+                    "Could not find dataframe: identifier={}",
+                    identifier
+                ))
+            })?
             .dataframe
             .clone())
     }
@@ -242,10 +249,12 @@ Reason: {}",
         mut f: impl FnMut(&DataFrameArtifact) -> T,
     ) -> Result<T, Status> {
         let dfs = self.dataframes.read().unwrap();
-        Ok(f(dfs.get(identifier).ok_or(Status::not_found(format!(
-            "Could not find dataframe: identifier={}",
-            identifier
-        )))?))
+        Ok(f(dfs.get(identifier).ok_or_else(|| {
+            Status::not_found(format!(
+                "Could not find dataframe: identifier={}",
+                identifier
+            ))
+        })?))
     }
 
     fn get_header(&self, identifier: &str) -> Result<String, Status> {
@@ -255,10 +264,12 @@ Reason: {}",
                 .read()
                 .unwrap()
                 .get(identifier)
-                .ok_or(Status::not_found(format!(
-                    "Could not find dataframe: identifier={}",
-                    identifier
-                )))?
+                .ok_or_else(|| {
+                    Status::not_found(format!(
+                        "Could not find dataframe: identifier={}",
+                        identifier
+                    ))
+                })?
                 .dataframe,
         )?)
     }
@@ -288,8 +299,7 @@ Reason: {}",
 
         let df_artifact = dataframes
             .get(identifier)
-            .ok_or("")
-            .map_err(|_| Status::not_found("Unable to find dataframe!"))?;
+            .ok_or_else(|| Status::not_found("Unable to find dataframe!"))?;
 
         if df_artifact.policy.check_savable() != true {
             return Err(Status::unknown("Dataframe is not savable"));
@@ -334,6 +344,15 @@ Reason: {}",
             let mut dfs = self.dataframes.write().unwrap();
             dfs.insert(identifier, df);
         }
+        Ok(())
+    }
+
+    fn delete_dfs(&self, identifier: &str) -> Result<(), Error> {
+        let mut dfs = self.dataframes.write().unwrap();
+        dfs.remove(identifier);
+
+        let path = "data_frames/".to_owned() + identifier + ".json";
+        std::fs::remove_file(path).unwrap_or(());
         Ok(())
     }
 }
@@ -492,6 +511,28 @@ impl PolarsService for BastionLabPolars {
         self.persist_df(identifier)?;
         telemetry::add_event(
             TelemetryEventProps::SaveDataframe {
+                dataset_name: Some(identifier.clone()),
+            },
+            Some(self.sess_manager.get_client_info(token)?),
+        );
+        Ok(Response::new(Empty {}))
+    }
+
+    async fn delete_data_frame(
+        &self,
+        request: Request<ReferenceRequest>,
+    ) -> Result<Response<Empty>, Status> {
+        let token = self.sess_manager.verify_request(&request)?;
+        let identifier = &request.get_ref().identifier;
+        let user_id = self.sess_manager.get_user_id(token.clone())?;
+        let owner_check = self.sess_manager.verify_if_owner(&user_id)?;
+        if owner_check {
+            self.delete_dfs(identifier)?;
+        } else {
+            return Err(Status::internal("Only data owners can delete dataframes."));
+        }
+        telemetry::add_event(
+            TelemetryEventProps::DeleteDataframe {
                 dataset_name: Some(identifier.clone()),
             },
             Some(self.sess_manager.get_client_info(token)?),

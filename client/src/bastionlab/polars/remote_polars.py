@@ -113,7 +113,15 @@ class PolarsPlanSegment(CompositePlanSegment):
         Returns:
             str: serialized string of this plan segment
         """
-        return f'{{"PolarsPlanSegment":{self._inner.write_json()}}}'
+
+        # HACK: when getting using the schema attribute, polars returns
+        #  the proper error messages (polars.NotFoundError etc) when it is invalid.
+        #  This is not the case for write_json(), which returns a confusing error
+        #  message. So, we get the schema beforehand :)
+        self._inner.schema
+
+        json_str = self._inner.write_json()
+        return f'{{"PolarsPlanSegment":{json_str}}}'
 
 
 @dataclass
@@ -996,7 +1004,10 @@ class FetchableLazyFrame(RemoteLazyFrame):
         return self._meta._client._fetch_df(self._identifier)
 
     def save(self):
-        return self._meta._client.persist_df(self._identifier)
+        return self._meta._client._persist_df(self._identifier)
+
+    def delete(self):
+        return self._meta._client._delete_df(self._identifier)
 
 
 @dataclass
