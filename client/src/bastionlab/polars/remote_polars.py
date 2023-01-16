@@ -147,6 +147,7 @@ class StackPlanSegment(CompositePlanSegment):
     def serialize(self) -> str:
         return '"StackPlanSegment"'
 
+
 @dataclass
 class RowCountSegment(CompositePlanSegment):
     _name: str
@@ -390,7 +391,7 @@ class RemoteLazyFrame:
                 ],
             ),
         )
-    
+
     def with_row_count(self: LDF, name: str = "index") -> LDF:
         """adds new column with row count
         Args:
