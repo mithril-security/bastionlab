@@ -148,6 +148,25 @@ class StackPlanSegment(CompositePlanSegment):
 
 
 @dataclass
+class StringUdfPlanSegmenet(CompositePlanSegment):
+    """
+    Composite plan segment class responsible for string-based user defined functions
+    """
+
+    _method: Dict[str, str]
+    _columns: List[str]
+
+    def serialize(self) -> str:
+        columns = ",".join([f'"{c}"' for c in self._columns])
+        name = self._method.get("name")
+        pattern = self._method.get("pattern")
+        to = self._method.get("to")
+
+        method = f'{{"name": "{name}", "pattern": "{pattern}", "to": "{to}"}}'
+        return f'{{"StringUdfPlanSegment": {{"method": {method}, "columns": [{columns}]}}}}'
+
+
+@dataclass
 class Metadata:
     """
     A class containing metadata related to your dataframe
@@ -932,6 +951,56 @@ class RemoteLazyFrame:
                 if not x in self.columns:
                     raise ValueError("Column ", x, " not found in dataframe")
         return Facet(inner_rdf=self, col=col, row=row, kwargs=kwargs)
+
+    def _make_string_udf_segment(
+        self: RemoteLazyFrame,
+        method_name: str,
+        method_pattern: str = None,
+        cols: Optional[Union[str, List[str]]] = None,
+    ) -> "RemoteLazyFrame":
+        rdf, cols = (
+            (self.collect(), self.columns)
+            if cols is None
+            else (
+                self.select(cols).collect(),
+                cols if isinstance(cols, list) else [cols],
+            )
+        )
+
+        return RemoteLazyFrame(
+            rdf._inner,
+            Metadata(
+                rdf._meta._client,
+                [
+                    *rdf._meta._prev_segments,
+                    PolarsPlanSegment(rdf._inner),
+                    StringUdfPlanSegmenet(
+                        {"name": method_name, "pattern": method_pattern}, cols
+                    ),
+                ],
+            ),
+        )
+
+    # String Methods
+    def split(
+        self, pattern: str, cols: Optional[Union[str, List[str]]] = None
+    ) -> "RemoteLazyFrame":
+        return self._make_string_udf_segment("split", pattern, cols)
+
+    def to_lowercase(
+        self, cols: Optional[Union[str, List[str]]] = None
+    ) -> "RemoteLazyFrame":
+        return self._make_string_udf_segment("to_lowercase", cols)
+
+    def to_uppercase(
+        self, cols: Optional[Union[str, List[str]]] = None
+    ) -> "RemoteLazyFrame":
+        return self._make_string_udf_segment("to_uppercase", cols)
+
+    def replace(
+        self, cols: Optional[Union[str, List[str]]] = None
+    ) -> "RemoteLazyFrame":
+        return self._make_string_udf_segment("replace", cols)
 
 
 @dataclass

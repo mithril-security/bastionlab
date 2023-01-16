@@ -16,9 +16,24 @@ use crate::{
 pub struct CompositePlan(Vec<CompositePlanSegment>);
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct StringMethod {
+    name: String,
+    pattern: Option<String>,
+    to: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+
 pub enum CompositePlanSegment {
     PolarsPlanSegment(LogicalPlan),
-    UdfPlanSegment { columns: Vec<String>, udf: String },
+    UdfPlanSegment {
+        columns: Vec<String>,
+        udf: String,
+    },
+    StringUdfPlanSegment {
+        method: StringMethod,
+        columns: Vec<String>,
+    },
     EntryPointPlanSegment(String),
     StackPlanSegment,
 }
@@ -42,6 +57,14 @@ impl CompositePlan {
         let mut stack = Vec::new();
         let plan_str = serde_json::to_string(&self.0).unwrap(); // FIX THIS
 
+        let column_to_idx = |col: &str, df: &DataFrame| -> Result<usize, Status> {
+            Ok(df.get_column_names().iter().position(|x| x == &col).ok_or(
+                Status::invalid_argument(format!(
+                    "Could not apply udf: no column `{}` in data frame",
+                    col
+                )),
+            )?)
+        };
         for seg in self.0 {
             match seg {
                 CompositePlanSegment::PolarsPlanSegment(mut plan) => {
@@ -68,15 +91,7 @@ impl CompositePlan {
                         "Could not apply udf: no input data frame",
                     ))?;
                     for name in columns {
-                        let idx = frame
-                            .df
-                            .get_column_names()
-                            .iter()
-                            .position(|x| x == &&name)
-                            .ok_or(Status::invalid_argument(format!(
-                                "Could not apply udf: no column `{}` in data frame",
-                                name
-                            )))?;
+                        let idx = column_to_idx(&name, &frame.df)?;
                         let series = frame.df.get_columns_mut().get_mut(idx).unwrap();
                         let tensor = series_to_tensor(series)?;
                         let tensor = module.forward_ts(&[tensor]).map_err(|e| {
@@ -106,6 +121,44 @@ impl CompositePlan {
                     let mut stats = frame1.stats;
                     stats.merge(frame2.stats);
                     stack.push(StackFrame { df, stats });
+                }
+
+                CompositePlanSegment::StringUdfPlanSegment { method, columns } => {
+                    let mut frame = stack.pop().ok_or(Status::invalid_argument(
+                        "Could not apply stack: no input data frame",
+                    ))?;
+
+                    let apply_method = |method: &StringMethod,
+                                        series: &Series|
+                     -> Result<Series, Status> {
+                        let StringMethod { name, .. } = method;
+
+                        let output = match name.as_str() {
+                            "to_lowercase" => series.utf8().unwrap().to_lowercase().into_series(),
+                            "to_uppercase" => series.utf8().unwrap().to_uppercase().into_series(),
+                            _ => {
+                                return Err(Status::invalid_argument(format!(
+                                    "{name} is unsupported"
+                                )));
+                            }
+                        };
+                        Ok(output)
+                    };
+
+                    for col in columns {
+                        let idx = column_to_idx(&col, &frame.df)?;
+                        let series = frame.df.get_columns_mut().get_mut(idx).unwrap();
+
+                        if series.dtype().ne(&DataType::Utf8) {
+                            return Err(Status::failed_precondition(format!(
+                                "{col} is not a string column"
+                            )));
+                        }
+
+                        *series = apply_method(&method, &series)?;
+                        series.rename(&col);
+                    }
+                    stack.push(frame);
                 }
             }
         }
