@@ -44,8 +44,10 @@ struct StackFrame {
 impl CompositePlan {
     pub fn run(self, state: &BastionLabPolars, user_id: &str) -> Result<DataFrameArtifact, Status> {
         let mut stack = Vec::new();
-        let plan_str = serde_json::to_string(&self.0)
-            .map_err(|e| Status::aborted(format!("Could not deserialize CompositePlan: {}", e)))?;
+
+        let plan_str = serde_json::to_string(&self.0).map_err(|e| {
+            Status::invalid_argument(format!("Could not parse composite plan: {e}"))
+        })?;
 
         for seg in self.0 {
             match seg {
@@ -69,19 +71,21 @@ impl CompositePlan {
                             ))
                         })?;
 
-                    let mut frame = stack.pop().ok_or(Status::invalid_argument(
-                        "Could not apply udf: no input data frame",
-                    ))?;
+                    let mut frame = stack.pop().ok_or_else(|| {
+                        Status::invalid_argument("Could not apply udf: no input data frame")
+                    })?;
                     for name in columns {
                         let idx = frame
                             .df
                             .get_column_names()
                             .iter()
                             .position(|x| x == &&name)
-                            .ok_or(Status::invalid_argument(format!(
-                                "Could not apply udf: no column `{}` in data frame",
-                                name
-                            )))?;
+                            .ok_or_else(|| {
+                                Status::invalid_argument(format!(
+                                    "Could not apply udf: no column `{}` in data frame",
+                                    name
+                                ))
+                            })?;
                         let series = frame.df.get_columns_mut().get_mut(idx).unwrap();
                         let tensor = series_to_tensor(series)?;
                         let tensor = module.forward_ts(&[tensor]).map_err(|e| {
@@ -97,13 +101,13 @@ impl CompositePlan {
                     stack.push(StackFrame { df, stats });
                 }
                 CompositePlanSegment::StackPlanSegment => {
-                    let frame1 = stack.pop().ok_or(Status::invalid_argument(
-                        "Could not apply stack: no input data frame",
-                    ))?;
+                    let frame1 = stack.pop().ok_or_else(|| {
+                        Status::invalid_argument("Could not apply stack: no input data frame")
+                    })?;
 
-                    let frame2 = stack.pop().ok_or(Status::invalid_argument(
-                        "Could not apply stack: no df2 input data frame",
-                    ))?;
+                    let frame2 = stack.pop().ok_or_else(|| {
+                        Status::invalid_argument("Could not apply stack: no df2 input data frame")
+                    })?;
 
                     let df = frame1.df.vstack(&frame2.df).map_err(|e| {
                         Status::invalid_argument(format!("Error while running vstack: {}", e))
@@ -239,14 +243,13 @@ fn expr_agg_check(expr: &Expr) -> Result<bool, Status> {
 }
 
 fn exprs_agg_check(exprs: &[Expr]) -> Result<bool, Status> {
-    let mut res = true;
-
     for e in exprs.iter() {
         let x = expr_agg_check(e)?;
-        res = res && x;
+        if !x {
+            return Ok(false);
+        }
     }
-
-    Ok(res)
+    Ok(true)
 }
 
 fn run_logical_plan(plan: LogicalPlan) -> Result<DataFrame, Status> {
@@ -304,9 +307,11 @@ fn initialize_plan(
     plan.visit_mut(&mut state, |plan, (main_stack, stats_stack)| {
         match plan {
             LogicalPlan::DataFrameScan { .. } => {
-                let frame = main_stack.pop().ok_or(Status::invalid_argument(
-                    "Could not run logical plan: not enough input data frames",
-                ))?;
+                let frame = main_stack.pop().ok_or_else(|| {
+                    Status::invalid_argument(
+                        "Could not run logical plan: not enough input data frames",
+                    )
+                })?;
                 stats_stack.push(frame.stats);
                 *plan = frame.df.lazy().logical_plan;
             }

@@ -1,5 +1,4 @@
 use bastionlab_common::prelude::*;
-use bastionlab_common::session::get_token;
 use bastionlab_common::session::SessionManager;
 use bastionlab_common::telemetry::{self, TelemetryEventProps};
 use bastionlab_learning::nn::Module;
@@ -167,7 +166,7 @@ impl TorchService for BastionLabTorch {
         &self,
         request: Request<Streaming<Chunk>>,
     ) -> Result<Response<Reference>, Status> {
-        let token = get_token(&request, self.sess_manager.auth_enabled())?;
+        let token = self.sess_manager.verify_request(&request)?;
         let client_info = self.sess_manager.get_client_info(token)?;
         let start_time = Instant::now();
 
@@ -209,7 +208,7 @@ impl TorchService for BastionLabTorch {
     ) -> Result<Response<Reference>, Status> {
         let start_time = Instant::now();
 
-        let token = get_token(&request, self.sess_manager.auth_enabled())?;
+        let token = self.sess_manager.verify_request(&request)?;
         let client_info = self.sess_manager.get_client_info(token)?;
         let artifact: Artifact<SizedObjectsBytes> = unstream_data(request.into_inner()).await?;
 
@@ -260,7 +259,7 @@ impl TorchService for BastionLabTorch {
             let datasets = self.datasets.read().unwrap();
             let artifact = datasets
                 .get(&identifier)
-                .ok_or(Status::not_found("Dataset not found"))?;
+                .ok_or_else(|| Status::not_found("Dataset not found"))?;
             tcherror_to_status(artifact.serialize())?
         };
 
@@ -271,7 +270,7 @@ impl TorchService for BastionLabTorch {
         &self,
         request: Request<Reference>,
     ) -> Result<Response<Self::FetchModuleStream>, Status> {
-        let token = get_token(&request, self.sess_manager.auth_enabled())?;
+        let token = self.sess_manager.verify_request(&request)?;
         let client_info = self.sess_manager.get_client_info(token)?;
         let identifier = request.into_inner().identifier;
 
@@ -301,7 +300,7 @@ impl TorchService for BastionLabTorch {
                     let binaries = self.binaries.read().unwrap();
                     let binary = binaries
                         .get(&identifier)
-                        .ok_or(Status::not_found("Module not found!"))?;
+                        .ok_or_else(|| Status::not_found("Module not found!"))?;
                     let module: Module = (&*binary.data.read().unwrap()).try_into().unwrap();
                     let module = Artifact {
                         data: Arc::new(RwLock::new(module)),
@@ -333,26 +332,16 @@ impl TorchService for BastionLabTorch {
     }
 
     async fn train(&self, request: Request<TrainConfig>) -> Result<Response<Reference>, Status> {
-        let token = get_token(&request, self.sess_manager.auth_enabled())?;
+        let token = self.sess_manager.verify_request(&request)?;
         let client_info = self.sess_manager.get_client_info(token)?;
         let config = request.into_inner();
-        // let d = RemoteDataset {
-        //     inputs: vec![RemoteTensor {
-        //         identifier: "".to_string(),
-        //     }],
-        //     label: RemoteTensor {
-        //         identifier: "".to_string(),
-        //     },
-        //     nb_samples: 1,
-        //     privacy_limit: -1.0,
-        // };
 
         let (dataset, dataset_id) = self.convert_from_remote_dataset(&config.dataset)?;
 
         let binary_id = config
             .model
             .clone()
-            .ok_or(Status::invalid_argument("Invalid module reference"))?
+            .ok_or_else(|| Status::invalid_argument("Invalid module reference"))?
             .identifier;
         let device = parse_device(&config.device)?;
 
@@ -360,12 +349,12 @@ impl TorchService for BastionLabTorch {
             let binaries = self.binaries.read().unwrap();
             let binary: &Artifact<BinaryModule> = binaries
                 .get(&binary_id)
-                .ok_or(Status::not_found("Module binary not found"))?;
+                .ok_or_else(|| Status::not_found("Module binary not found"))?;
             let mut checkpoints = self.checkpoints.write().unwrap();
             let chkpt = if config.resume {
                 let chkpt = checkpoints
                     .get(&binary_id)
-                    .ok_or(Status::not_found("CheckPoint not found!"))?;
+                    .ok_or_else(|| Status::not_found("CheckPoint not found!"))?;
                 chkpt
             } else {
                 let chkpt = Artifact {
@@ -379,7 +368,7 @@ impl TorchService for BastionLabTorch {
                 checkpoints.insert(binary_id.clone(), chkpt);
                 let chkpt = checkpoints
                     .get(&binary_id)
-                    .ok_or(Status::not_found("Module binary not found"))?;
+                    .ok_or_else(|| Status::not_found("Module binary not found"))?;
                 chkpt
             };
             (Arc::clone(&binary.data), Arc::clone(&chkpt.data))
@@ -411,23 +400,24 @@ impl TorchService for BastionLabTorch {
     }
 
     async fn test(&self, request: Request<TestConfig>) -> Result<Response<Reference>, Status> {
-        let token = get_token(&request, self.sess_manager.auth_enabled())?;
+        let token = self.sess_manager.verify_request(&request)?;
         let client_info = self.sess_manager.get_client_info(token)?;
         let config = request.into_inner();
 
         let (dataset, dataset_id) = self.convert_from_remote_dataset(&config.dataset)?;
 
+
         let module_id = config
             .model
             .clone()
-            .ok_or(Status::invalid_argument("Invalid dataset reference"))?
+            .ok_or_else(|| Status::invalid_argument("Invalid dataset reference"))?
             .identifier;
         let device = parse_device(&config.device)?;
         let (module, binary) = {
             let chkpts_store = self.checkpoints.read().unwrap();
             let artifact = chkpts_store
                 .get(&module_id)
-                .ok_or(Status::not_found("Module not found"))?;
+                .ok_or_else(|| Status::not_found("Module not found"))?;
             let binaries = self.binaries.read().unwrap();
             let binary = binaries.get(&module_id).unwrap();
 
