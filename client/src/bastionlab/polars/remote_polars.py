@@ -1180,7 +1180,7 @@ class Facet:
                 selects.append(to_add)
 
         for col in selects:
-            if col not in self.inner_rdf.columns:
+            if col not in self.self.column_names:
                 raise ValueError("Column ", col, " not found in dataframe")
 
         # get unique row and col values
@@ -1284,7 +1284,7 @@ class Facet:
             selects.append(kwargs["y"])
 
         for col in selects:
-            if col not in self.inner_rdf.columns:
+            if col not in self.self.column_names:
                 raise ValueError("Column ", col, " not found in dataframe")
 
         # get unique row and col values
