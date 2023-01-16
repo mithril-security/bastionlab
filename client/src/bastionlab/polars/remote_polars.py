@@ -597,6 +597,7 @@ class RemoteLazyFrame:
             **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function.
         Raises:
             ValueError: Incorrect column name given, no x or y values provided, estimator function not recognised
+            RequestRejected: Could not continue in function as data owner rejected a required access request
             various exceptions: Note that exceptions may be raised from Seaborn when the barplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
@@ -681,6 +682,7 @@ class RemoteLazyFrame:
 
         Raises:
             ValueError: Incorrect column name given
+            RequestRejected: Could not continue in function as data owner rejected a required access request
             various exceptions: Note that exceptions may be raised from Seaborn when the barplot or heatmap function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
@@ -865,6 +867,7 @@ class RemoteLazyFrame:
             **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function.
         Raises:
             ValueError: Incorrect column name given, no x or y values provided, estimator function not recognised
+            RequestRejected: Could not continue in function as data owner rejected a required access request
             various exceptions: Note that exceptions may be raised from Seaborn when the barplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
@@ -1102,6 +1105,7 @@ class Facet:
             **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function.
         Raises:
             ValueError: Incorrect column name given, no x or y values provided, estimator function not recognised
+            RequestRejected: Could not continue in function as data owner rejected a required access request
             various exceptions: Note that exceptions may be raised from Seaborn when the barplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
 
