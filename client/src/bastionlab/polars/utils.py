@@ -15,6 +15,20 @@ CHUNK_SIZE = 32 * 1024
 def serialize_dataframe(
     df: pl.DataFrame, policy: Policy, sanitized_columns: List[str]
 ) -> Iterator[SendChunk]:
+    """Converts Polars `DataFrame` to BastionLab `SendChunk` protobuf message.
+    This currently uses the Apache IPC format.
+    Args:
+        df : polars.internals.dataframe.frame.DataFrame
+            Polars DataFrame
+        policy : Policy
+            BastionLab Remote DataFrame policy. This specifies which operations can be performed on
+            DataFrames and they specified the data owner.
+        sanitized_columns : List[str]
+            This field contains the sensitive columns in the DataFrame that will be removed when a Data Scientist
+            wishes to fetch a query performed on the DataFrame.
+    Returns:
+        Iterator[SendChunk]
+    """
     buf = io.BytesIO()
 
     df.write_ipc(buf)
@@ -39,6 +53,14 @@ def serialize_dataframe(
 
 
 def deserialize_dataframe(chunks: Iterator[bytes]) -> pl.DataFrame:
+    """Converts chunks of `bytes` sent from BastionLab server to DataFrame.
+    This currently uses the Apache IPC format.
+    Args:
+        chunks : Iterator[bytes]
+            Iterator of bytes sent from the server.
+    Returns:
+        polars.internals.dataframe.frame.DataFrame
+    """
     buf = io.BytesIO()
 
     for el in chunks:

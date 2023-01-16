@@ -216,7 +216,6 @@ dependencies = [
  "bastionlab_common",
  "bastionlab_polars",
  "bastionlab_torch",
- "bincode",
  "bytes",
  "env_logger",
  "hex",
@@ -246,7 +245,6 @@ version = "0.3.7"
 dependencies = [
  "anyhow",
  "base64",
- "bincode",
  "bytes",
  "env_logger",
  "hex",
@@ -288,7 +286,6 @@ dependencies = [
  "anyhow",
  "base64",
  "bastionlab_common",
- "bincode",
  "bytes",
  "hex",
  "http",
@@ -321,7 +318,6 @@ dependencies = [
  "base64",
  "bastionlab_common",
  "bastionlab_learning",
- "bincode",
  "bytes",
  "env_logger",
  "hex",
@@ -345,15 +341,6 @@ dependencies = [
  "uuid",
  "whoami",
  "x509-parser",
-]
-
-[[package]]
-name = "bincode"
-version = "1.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
-dependencies = [
- "serde",
 ]
 
 [[package]]
