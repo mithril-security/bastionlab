@@ -12,6 +12,7 @@ from ..pb.bastionlab_polars_pb2 import ReferenceResponse
 from .client import BastionLabPolars
 from .utils import ApplyBins
 import matplotlib.pyplot as plt
+from ..errors import RequestRejected
 
 LDF = TypeVar("LDF", bound="pl.LazyFrame")
 
@@ -641,8 +642,7 @@ class RemoteLazyFrame:
                 .collect()
                 .fetch()
             )
-            if tmp is None:
-                return
+            RequestRejected.check_valid_df(tmp)
             df = tmp.to_pandas()
         else:
             agg_fn = pl.col(y).mean()
@@ -655,8 +655,7 @@ class RemoteLazyFrame:
                 .collect()
                 .fetch()
             )
-            if tmp is None:
-                return
+            RequestRejected.check_valid_df(tmp)
             df = tmp.to_pandas()
         # run query
         if x == None:
@@ -713,8 +712,7 @@ class RemoteLazyFrame:
                 .collect()
                 .fetch()
             )
-            if tmp is None:
-                return
+            RequestRejected.check_valid_df(tmp)
             df = tmp.to_pandas()
 
             # horizontal barplot where x axis is count
@@ -752,8 +750,7 @@ class RemoteLazyFrame:
                 .collect()
                 .fetch()
             )
-            if tmp is None:
-                return
+            RequestRejected.check_valid_df(tmp)
             df = tmp.to_pandas()
             my_cmap = sns.color_palette("Blues", as_cmap=True)
             pivot = df.pivot(index=col_y, columns=col_x, values="count")
@@ -913,8 +910,7 @@ class RemoteLazyFrame:
                 .collect()
                 .fetch()
             )
-            if tmp is None:
-                return
+            RequestRejected.check_valid_df(tmp)
             df = tmp.to_pandas()
         else:
             agg_fn = pl.col(y).mean()
@@ -927,8 +923,7 @@ class RemoteLazyFrame:
                 .collect()
                 .fetch()
             )
-            if tmp is None:
-                return
+            RequestRejected.check_valid_df(tmp)
             df = tmp.to_pandas()
         # run query
         if x == None:
@@ -1138,8 +1133,7 @@ class Facet:
                 .collect()
                 .fetch()
             )
-            if tmp is None:
-                return
+            RequestRejected.check_valid_df(tmp)
             cols = tmp.to_pandas()[self.col].tolist()
         if self.row != None:
             tmp = (
@@ -1149,8 +1143,7 @@ class Facet:
                 .collect()
                 .fetch()
             )
-            if tmp is None:
-                return
+            RequestRejected.check_valid_df(tmp)
             rows = tmp.to_pandas()[self.row].tolist()
 
         if fn == "histplot":
@@ -1244,8 +1237,7 @@ class Facet:
                 .collect()
                 .fetch()
             )
-            if tmp is None:
-                return
+            RequestRejected.check_valid_df(tmp)
             cols = tmp.to_pandas()[self.col].tolist()
 
         if self.row != None:
@@ -1256,8 +1248,7 @@ class Facet:
                 .collect()
                 .fetch()
             )
-            if tmp is None:
-                return
+            RequestRejected.check_valid_df(tmp)
             rows = tmp.to_pandas()[self.row].tolist()
 
         # mapping
