@@ -11,6 +11,7 @@ import torch
 from ..pb.bastionlab_polars_pb2 import ReferenceResponse
 from .client import BastionLabPolars
 from .utils import ApplyBins
+from .utils import ApplyAbs
 import matplotlib.pyplot as plt
 
 LDF = TypeVar("LDF", bound="pl.LazyFrame")
@@ -932,6 +933,154 @@ class RemoteLazyFrame:
                 if not x in self.columns:
                     raise ValueError("Column ", x, " not found in dataframe")
         return Facet(inner_rdf=self, col=col, row=row, kwargs=kwargs)
+
+    def minmax_scale(self: LDF, cols: Union[str, List[str]]) -> LDF:
+        """Rescales data using the Min/Max or normalization method to a range of [0,1]
+        by subtracting the overall minimum value of the data and then dividing the result by the difference between the minimum and maximum values.
+
+        Args:
+            cols (Union[str, List[str]]): The name of the column(s) which scaling should be applied to.
+        Returns:
+            Copy of original RemoteLazyFrame with scaling applied to specified column(s)
+        Raises:
+            ValueError: Column with a name provided as the cols argument not found in dataset.
+        """
+        columns = []
+        # set up columns for single string argument
+        if isinstance(cols, str):
+            if cols not in self.columns:
+                raise ValueError("Column ", cols, " not found in dataframe")
+            columns.append(cols)
+        else:  # set up columns for list
+            for x in cols:
+                if x not in self.columns:
+                    raise ValueError("Column ", x, " not found in dataframe")
+                columns.append(x)
+        rdf = self.with_columns(
+            [
+                (pl.col(x) - pl.col(x).min())
+                / (pl.col(x).max() - pl.col(x).min()).alias(x)
+                for x in columns
+            ]
+        )
+        return rdf
+
+    def mean_scale(self: LDF, cols: Union[str, List[str]]) -> LDF:
+        """Similar to the Min/Max scaling method, but subtracts the overall mean value of data instead of the min value.
+
+        Args:
+            cols (Union[str, List[str]]): The name of the column(s) which scaling should be applied to.
+        Returns:
+            Copy of original RemoteLazyFrame with scaling applied to specified column(s)
+        Raises:
+            ValueError: Column with a name provided as the cols argument not found in dataset.
+        """
+        columns = []
+        # set up columns for single string argument
+        if isinstance(cols, str):
+            if cols not in self.columns:
+                raise ValueError("Column ", cols, " not found in dataframe")
+            columns.append(cols)
+        else:  # set up columns for list
+            for x in cols:
+                if x not in self.columns:
+                    raise ValueError("Column ", x, " not found in dataframe")
+                columns.append(x)
+        rdf = self.with_columns(
+            [
+                (pl.col(x) - pl.col(x).min())
+                / (pl.col(x).max() - pl.col(x).mean()).alias(x)
+                for x in columns
+            ]
+        )
+        return rdf
+
+    def max_abs_scale(self: LDF, cols: Union[str, List[str]]) -> LDF:
+        """Rescales each data point between -1 and 1 by dividing each data point by its maximum absolute value.
+
+        Args:
+            cols (Union[str, List[str]]): The name of the column(s) which scaling should be applied to.
+        Returns:
+            Copy of original RemoteLazyFrame with scaling applied to specified column(s)
+        Raises:
+            ValueError: Column with a name provided as the cols argument not found in dataset.
+        """
+        model = ApplyAbs()
+        columns = []
+        # set up columns for single string argument
+        if isinstance(cols, str):
+            if cols not in self.columns:
+                raise ValueError("Column ", cols, " not found in dataframe")
+            columns.append(cols)
+        else:  # set up columns for list
+            for x in cols:
+                if x not in self.columns:
+                    raise ValueError("Column ", x, " not found in dataframe")
+                columns.append(x)
+        rdf = self.select([pl.col(x) for x in columns]).apply_udf(
+            [x for x in columns], model
+        )
+        rdf = rdf.with_columns(
+            [pl.col(x) / (pl.col(x).max()).alias(x) for x in columns]
+        )
+        # LAURA Todo: Need to insert these columns into copy of original dataset!
+        return rdf
+
+    def zscore_scale(self: LDF, cols: Union[str, List[str]]) -> LDF:
+        """Rescales data by subtracting the mean from data poiints and then dividing the result by the standard deviation of the data.
+
+        Args:
+            cols (Union[str, List[str]]): The name of the column(s) which scaling should be applied to.
+        Returns:
+            Copy of original RemoteLazyFrame with scaling applied to specified column(s)
+        Raises:
+            ValueError: Column with a name provided as the cols argument not found in dataset.
+        """
+        columns = []
+        # set up columns for single string argument
+        if isinstance(cols, str):
+            if cols not in self.columns:
+                raise ValueError("Column ", cols, " not found in dataframe")
+            columns.append(cols)
+        else:  # set up columns for list
+            for x in cols:
+                if x not in self.columns:
+                    raise ValueError("Column ", x, " not found in dataframe")
+                columns.append(x)
+        rdf = self.with_columns(
+            [(pl.col(x) - pl.col(x).mean()) / pl.col(x).std().alias(x) for x in columns]
+        )
+        return rdf
+
+    def median_quantile_scale(self: LDF, cols: Union[str, List[str]]) -> LDF:
+        """Rescales data by subtracting the median value from data points and dividing the result by the IQR (inter-quartile range).
+
+        Args:
+            cols (Union[str, List[str]]): The name of the column(s) which scaling should be applied to.
+        Returns:
+            Copy of original RemoteLazyFrame with scaling applied to specified column(s)
+        Raises:
+            ValueError: Column with a name provided as the cols argument not found in dataset.
+        """
+        columns = []
+        # set up columns for single string argument
+        if isinstance(cols, str):
+            if cols not in self.columns:
+                raise ValueError("Column ", cols, " not found in dataframe")
+            columns.append(cols)
+        else:  # set up columns for list
+            for x in cols:
+                if x not in self.columns:
+                    raise ValueError("Column ", x, " not found in dataframe")
+                columns.append(x)
+        rdf = self.with_columns(
+            [
+                (pl.col(x) - pl.col(x).median())
+                / (pl.col(x).quantile(0.25) - pl.col(x).quantile(0.75)).alias(x)
+                for x in columns
+            ]
+        )
+        return rdf
 
 
 @dataclass
