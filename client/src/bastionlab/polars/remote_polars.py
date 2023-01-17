@@ -1119,7 +1119,7 @@ class RemoteLazyFrame:
         rdf = self.with_columns(
             [
                 (pl.col(x) - pl.col(x).median())
-                / (pl.col(x).quantile(0.25) - pl.col(x).quantile(0.75)).alias(x)
+                / (pl.col(x).quantile(0.75) - pl.col(x).quantile(0.25)).alias(x)
                 for x in columns
             ]
         )
