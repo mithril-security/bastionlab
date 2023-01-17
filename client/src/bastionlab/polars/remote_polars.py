@@ -936,6 +936,47 @@ class RemoteLazyFrame:
         else:
             sns.barplot(data=df, x=x, y=y, **kwargs)
 
+    def boxplot(
+        self: LDF,
+        x: str = None,
+        y: str = None,
+        hue: str = None,
+        **kwargs,
+    ):
+        """Draws a boxplot based on x, y and hue values.
+
+        boxplot filters data down to necessary columns only and then calls Seaborn's boxplot function with this scaled down dataframe.
+
+        boxplot accepts any additional options supported by Seaborn's boxplot as kwargs, which can be viewed in Seaborn's documentation.
+
+        Args:
+            x (str): The name of column to be used for x axes.
+            y (str): The name of column to be used for y axes.
+            hue (str = None): The name of the column to be used as a grouping variable that will produce boxes with different colors.
+            kwargs: Other keyword arguments that will be passed to Seaborn's boxplot function.
+        Raises:
+            ValueError: Incorrect column name given
+            various exceptions: Note that exceptions may be raised from Seaborn when the lineplot function is called,
+            for example, where kwargs keywords are not expected. See Seaborn documentation for further details."""
+
+        selects = []
+        for col in [x, y, hue]:
+            if col != None:
+                if col not in self.columns:
+                    raise ValueError("Column ", col, " not found in dataframe")
+                else:
+                    selects.append(col)
+        if selects == []:
+            raise ValueError("Please specify at least an X or Y value")
+
+        if hue != None:
+            kwargs["hue"] = hue
+
+        tmp = self.select([pl.col(x) for x in selects]).collect().fetch()
+        RequestRejected.check_valid_df(tmp)
+        df = tmp.to_pandas()
+        sns.boxplot(data=df, x=x, y=y, **kwargs)
+
     def facet(
         self: LDF, col: Optional[str] = None, row: Optional[str] = None, **kwargs
     ) -> any:
