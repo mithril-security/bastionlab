@@ -787,6 +787,7 @@ class RemoteLazyFrame:
             **kwargs: Other keyword arguments that will be passed to Seaborn's lineplot function.
         Raises:
             ValueError: Incorrect column name given
+            RequestRejected: Could not continue in function as data owner rejected a required access request
             various exceptions: Note that exceptions may be raised from Seaborn when the lineplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
@@ -811,8 +812,7 @@ class RemoteLazyFrame:
 
         # get df with necessary columns
         tmp = self.select([pl.col(x) for x in selects]).collect().fetch()
-        if tmp is None:
-            return
+        RequestRejected.check_valid_df(tmp)
         df = tmp.to_pandas()
         sns.lineplot(data=df, x=x, y=y, **kwargs)
 
@@ -825,6 +825,7 @@ class RemoteLazyFrame:
             **kwargs: Other keyword arguments that will be passed to Seaborn's scatterplot function.
         Raises:
             ValueError: Incorrect column name given
+            RequestRejected: Could not continue in function as data owner rejected a required access request
             various exceptions: Note that exceptions may be raised from Seaborn when the scatterplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
@@ -843,8 +844,7 @@ class RemoteLazyFrame:
 
         # get df with necessary columns
         tmp = self.select([pl.col(x) for x in cols]).collect().fetch()
-        if tmp is None:
-            return
+        RequestRejected.check_valid_df(tmp)
         df = tmp.to_pandas()
         # run query
         sns.scatterplot(data=df, x=x, y=y, **kwargs)
@@ -1283,8 +1283,7 @@ class Facet:
                         + str(cols[col_count])
                     )
                     tmp = df.select([pl.col(x) for x in selects]).collect().fetch()
-                    if tmp is None:
-                        return
+                    RequestRejected.check_valid_df(tmp)
                     sea_df = tmp.to_pandas()
                     func(data=sea_df, ax=axes[row_count, col_count], **kwargs)
                     axes[row_count, col_count].set_title(t1)
@@ -1297,8 +1296,7 @@ class Facet:
                 df = self.inner_rdf.clone().filter((pl.col(t) == my_list[count]))
                 t1 = t + ": " + str(my_list[count])
                 tmp = df.select([pl.col(x) for x in selects]).collect().fetch()
-                if tmp is None:
-                    return
+                RequestRejected.check_valid_df(tmp)
                 sea_df = tmp.to_pandas()
                 func(data=sea_df, ax=axes[row_count, col_count], **kwargs)
                 axes[count].set_title(t1)
