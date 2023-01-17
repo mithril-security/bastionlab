@@ -400,28 +400,6 @@ class RemoteLazyFrame:
             ),
         )
 
-    def with_row_count(self: LDF, name: str = "index") -> LDF:
-        """adds new column with row count
-        Args:
-            name (String): The name of the new index column.
-        Returns:
-            RemoteLazyFrame: The RemoteLazyFrame with new row count/index column
-        """
-        df = pl.DataFrame(
-            [pl.Series(k, dtype=v) for k, v in self._inner.schema.items()]
-        )
-        return RemoteLazyFrame(
-            df.lazy(),
-            Metadata(
-                self._meta._client,
-                [
-                    *self._meta._prev_segments,
-                    PolarsPlanSegment(self._inner),
-                    RowCountSegment(name),
-                ],
-            ),
-        )
-
     def join(
         self: LDF,
         other: LDF,
