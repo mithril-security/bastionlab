@@ -400,6 +400,31 @@ class RemoteLazyFrame:
             ),
         )
 
+    def with_row_count(self: LDF, name: str = "index") -> LDF:
+        """adds new column with row count
+        Args:
+            name (String): The name of the new index column.
+        Returns:
+            RemoteLazyFrame: The RemoteLazyFrame with new row count/index column
+        """
+        df = pl.DataFrame(
+            [pl.Series(k, dtype=v) for k, v in self._inner.schema.items()]
+        )
+        ret = RemoteLazyFrame(
+            df.lazy(),
+            Metadata(
+                self._meta._client,
+                [
+                    *self._meta._prev_segments,
+                    PolarsPlanSegment(self._inner),
+                    RowCountSegment(name),
+                ],
+            ),
+        )
+        # Either we need to collect before returning OR we need to make it clear to users they need to call collect() with this function
+        # because if not this leads to panics etc. when we follow this with other operations that use the new column before next using collect()
+        return ret.collect()
+
     def join(
         self: LDF,
         other: LDF,
