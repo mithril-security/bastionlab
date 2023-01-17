@@ -105,7 +105,7 @@ fn build_train_context<'a>(
     let optimizer = match config
         .clone()
         .optimizer
-        .ok_or(TchError::FileFormat(String::from("Invalid optimizer")))?
+        .ok_or_else(|| TchError::FileFormat(String::from("Invalid optimizer")))?
     {
         train_config::Optimizer::Sgd(train_config::Sgd {
             learning_rate,
