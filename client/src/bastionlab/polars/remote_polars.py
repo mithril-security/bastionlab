@@ -1081,8 +1081,54 @@ class RemoteLazyFrame:
     def replace_all(
         self, pattern: str, to: str, cols: Optional[Union[str, List[str]]] = None
     ) -> "RemoteLazyFrame":
+        print(pattern, to)
         return self._make_string_udf_segment(
             method_name="replace_all", method_pattern=pattern, method_to=to, cols=cols
+        )
+
+    def contains(
+        self,
+        pattern: str,
+        cols: Optional[Union[str, List[str]]] = None,
+    ) -> "RemoteLazyFrame":
+        return self._make_string_udf_segment(
+            method_name="contains", method_pattern=pattern, cols=cols
+        )
+
+    def match(
+        self,
+        pattern: str,
+        cols: Optional[Union[str, List[str]]] = None,
+    ) -> "RemoteLazyFrame":
+        return self._make_string_udf_segment(
+            method_name="match", method_pattern=pattern, cols=cols
+        )
+
+    def fuzzy_match(
+        self,
+        pattern: str,
+        cols: Optional[Union[str, List[str]]] = None,
+    ) -> "RemoteLazyFrame":
+        return self._make_string_udf_segment(
+            method_name="fuzzy_match", method_pattern=pattern, cols=cols
+        )
+
+    def findall(
+        self,
+        pattern: str,
+        cols: Optional[Union[str, List[str]]] = None,
+    ) -> "RemoteLazyFrame":
+        return self._make_string_udf_segment(
+            method_name="findall", method_pattern=pattern, cols=cols
+        )
+
+    def extract(
+        self,
+        pattern: str,
+        cols: Optional[Union[str, List[str]]] = None,
+    ) -> "RemoteLazyFrame":
+        return self._make_string_udf_segment(
+            method_name="extract", method_pattern=pattern, cols=cols
         )
 
 
