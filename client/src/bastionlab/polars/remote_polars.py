@@ -963,9 +963,22 @@ class FetchableLazyFrame(RemoteLazyFrame):
     @staticmethod
     def _from_reference(client: BastionLabPolars, ref: ReferenceResponse) -> LDF:
         header = json.loads(ref.header)["inner"]
-        df = pl.DataFrame(
-            [pl.Series(k, dtype=getattr(pl, v)()) for k, v in header.items()]
-        )
+
+        def get_dtype(v):
+            if isinstance(v, str):
+                return getattr(pl, v)()
+            else:
+                k, v = list(v.items())[0]
+                v = get_dtype(v)
+                return getattr(pl, k)(v)
+
+        def get_series(name, dtype):
+            if isinstance(dtype, str):
+                return pl.Series(name, dtype=get_dtype(dtype))
+            else:
+                return pl.Series(name, values=[[]], dtype=get_dtype(dtype))
+
+        df = pl.DataFrame([get_series(k, v) for k, v in header.items()])
         return FetchableLazyFrame(
             _identifier=ref.identifier,
             _inner=df.lazy(),
