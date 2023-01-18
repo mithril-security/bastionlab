@@ -8,7 +8,7 @@ docs = {}
 root_dir = "docs/docs/resources/bastionlab/"
 
 # Key names to delete from the dictionary
-keys_to_delete = ["version", "index"]
+keys_to_delete = ["version"]
 
 # files to exclude from the dictionary
 files_to_exclude = [
@@ -33,6 +33,12 @@ def process_directory(dir):
             # Recursively process the subdirectory
             subdocs[item] = process_directory(os.path.join(dir, item))
     sorted_subdocs = {key: subdocs[key] for key in sorted(subdocs.keys())}
+    # Swap the first key and value with the keys and value of the key index
+    ordered_sorted_subdocs = OrderedDict(sorted_subdocs)
+    ordered_sorted_subdocs.move_to_end("index", last=False)
+    # Convert the OrderedDict back to a dictionary
+    sorted_subdocs = dict(ordered_sorted_subdocs)
+    # Return the dictionary
     return sorted_subdocs
 
 
@@ -57,20 +63,23 @@ def construct_tree(dictionary, level=0, string="", parent_dir=""):
     for key, value in dictionary.items():
         if isinstance(value, dict):
             # Delete the first '/docs' from the path
-            string += "    " * level + "- bastionlab." + parent_dir + key + ":" + "\n"
+            string += " " * 4 * level + "- bastionlab." + parent_dir + key + ":" + "\n"
             string += construct_tree(value, level + 1, "", parent_dir + key + ".")
         else:
-            string += (
-                "    " * level
-                + "- bastionlab."
-                + parent_dir
-                + key
-                + ": "
-                + '"'
-                + value[5:]
-                + '"'
-                + "\n"
-            )
+            if key == "index":
+                string += "    " * level + "- " + '"' + value[5:] + '"' + "\n"
+            else:
+                string += (
+                    "    " * level
+                    + "- bastionlab."
+                    + parent_dir
+                    + key
+                    + ": "
+                    + '"'
+                    + value[5:]
+                    + '"'
+                    + "\n"
+                )
 
     return string
 
@@ -86,16 +95,15 @@ def align_tabs(tree, tabs):
 
 if __name__ == "__main__":
     structure = process_directory(root_dir)
-    sorted_dict = OrderedDict([key, value] for key, value in sorted(structure.items()))
-    delete_keys(sorted_dict, keys_to_delete)
-    tree = construct_tree(sorted_dict)
+    delete_keys(structure, keys_to_delete)
+    tree = construct_tree(structure)
     with open("mkdocs.yml", "r") as file:
         data = file.readlines()
         for i, line in enumerate(data):
             if "Submodules:" in line:
                 tabs = line.count(" ") + 3
                 tree = align_tabs(tree, tabs)
-                data.insert(i + 2, tree)
+                data.insert(i + 1, tree)
                 break
         with open("mkdocs.yml", "w") as file:
             file.writelines(data)
