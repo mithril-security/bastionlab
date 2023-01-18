@@ -1,8 +1,9 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Callable, Generic, List, Optional, TypeVar, Sequence, Union
+from typing import Callable, Generic, List, Optional, TypeVar, Sequence, Union, Dict
 import seaborn as sns
 import polars as pl
+from polars.internals.sql.context import SQLContext
 from torch.jit import ScriptFunction
 import base64
 import json
@@ -11,6 +12,7 @@ from ..pb.bastionlab_polars_pb2 import ReferenceResponse
 from .client import BastionLabPolars
 from .utils import ApplyBins
 import matplotlib.pyplot as plt
+from ..errors import RequestRejected
 
 LDF = TypeVar("LDF", bound="pl.LazyFrame")
 
@@ -112,7 +114,15 @@ class PolarsPlanSegment(CompositePlanSegment):
         Returns:
             str: serialized string of this plan segment
         """
-        return f'{{"PolarsPlanSegment":{self._inner.write_json()}}}'
+
+        # HACK: when getting using the schema attribute, polars returns
+        #  the proper error messages (polars.NotFoundError etc) when it is invalid.
+        #  This is not the case for write_json(), which returns a confusing error
+        #  message. So, we get the schema beforehand :)
+        self._inner.schema
+
+        json_str = self._inner.write_json()
+        return f'{{"PolarsPlanSegment":{json_str}}}'
 
 
 @dataclass
@@ -287,6 +297,50 @@ class RemoteLazyFrame:
             FetchableLazyFrame: FetchableLazyFrame of datarame after any queries have been performed
         """
         return self._meta._client._run_query(self.composite_plan)
+
+    @staticmethod
+    def sql(query: str, *rdfs: LDF) -> LDF:
+        """Parses given SQL query and interpolates {} placeholders with given RemoteLazyFrames.
+        Args:
+            query (str): the SQL query
+            rdfs (RemoteLazyFrame): DataFrames used in the SQL query
+        Returns:
+            RemoteLazyFrame: The resulting RemoteLazyFrame
+        """
+        if len(rdfs) == 0:
+            raise Exception("The SQL query must at least use one RemoteLazyFrame")
+        if any([rdf._meta._client is not rdfs[0]._meta._client for rdf in rdfs]):
+            raise Exception(
+                "Cannot use remote data frames from two different servers in an SQL query"
+            )
+
+        unique_rdfs = []
+        rdfs_refs = []
+        for rdf in rdfs:
+            try:
+                rdfs_refs.append(unique_rdfs.index(rdf))
+            except ValueError:
+                rdfs_refs.append(len(unique_rdfs))
+                unique_rdfs.append(rdf)
+
+        query = query.format(*(f"__{i}" for i in rdfs_refs))
+
+        ctx = SQLContext()
+        for i, rdf in enumerate(unique_rdfs):
+            ctx.register(f"__{i}", rdf._inner)
+        res = ctx.execute(query)
+
+        return RemoteLazyFrame(
+            res,
+            Metadata(
+                rdfs[0]._meta._client,
+                [
+                    seg
+                    for segs in reversed(unique_rdfs)
+                    for seg in segs._meta._prev_segments
+                ],
+            ),
+        )
 
     def apply_udf(self: LDF, columns: List[str], udf: Callable) -> LDF:
         """Applied user-defined function to selected columns of RemoteLazyFrame and returns result
@@ -543,6 +597,7 @@ class RemoteLazyFrame:
             **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function.
         Raises:
             ValueError: Incorrect column name given, no x or y values provided, estimator function not recognised
+            RequestRejected: Could not continue in function as data owner rejected a required access request
             various exceptions: Note that exceptions may be raised from Seaborn when the barplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
@@ -582,16 +637,17 @@ class RemoteLazyFrame:
         }
         if x == None or y == None:
             c = x if x != None else y
-            df = (
+            tmp = (
                 self.filter(pl.col(c) != None)
                 .select(agg_dict[estimator])
                 .collect()
                 .fetch()
-                .to_pandas()
             )
+            RequestRejected.check_valid_df(tmp)
+            df = tmp.to_pandas()
         else:
             agg_fn = pl.col(y).mean()
-            df = (
+            tmp = (
                 self.filter(pl.col(x) != None)
                 .select(pl.col(y) for y in selects)
                 .groupby(pl.col(y) for y in groups)
@@ -599,8 +655,9 @@ class RemoteLazyFrame:
                 .sort(pl.col(x))
                 .collect()
                 .fetch()
-                .to_pandas()
             )
+            RequestRejected.check_valid_df(tmp)
+            df = tmp.to_pandas()
         # run query
         if x == None:
             sns.barplot(data=df, y=y, **kwargs)
@@ -625,6 +682,7 @@ class RemoteLazyFrame:
 
         Raises:
             ValueError: Incorrect column name given
+            RequestRejected: Could not continue in function as data owner rejected a required access request
             various exceptions: Note that exceptions may be raised from Seaborn when the barplot or heatmap function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
@@ -646,7 +704,7 @@ class RemoteLazyFrame:
             if not col_x in self.columns and not col_y in self.columns:
                 raise ValueError("Please supply a valid column for x or y axes")
 
-            df = (
+            tmp = (
                 self.filter(q_x != None)
                 .select(q_x)
                 .apply_udf([col_x if col_x != "count" else col_y], model)
@@ -655,8 +713,9 @@ class RemoteLazyFrame:
                 .sort(q_x)
                 .collect()
                 .fetch()
-                .to_pandas()
             )
+            RequestRejected.check_valid_df(tmp)
+            df = tmp.to_pandas()
 
             # horizontal barplot where x axis is count
             if "color" not in kwargs:
@@ -682,7 +741,7 @@ class RemoteLazyFrame:
             for col in [col_x, col_y]:
                 if not col in self.columns:
                     raise ValueError("Column name not found in dataframe")
-            df = (
+            tmp = (
                 self.filter(pl.col(col_x) != None)
                 .filter(pl.col(col_y) != None)
                 .select([pl.col(col_y), pl.col(col_x)])
@@ -692,8 +751,9 @@ class RemoteLazyFrame:
                 .sort(pl.col(col_x))
                 .collect()
                 .fetch()
-                .to_pandas()
             )
+            RequestRejected.check_valid_df(tmp)
+            df = tmp.to_pandas()
             my_cmap = sns.color_palette("Blues", as_cmap=True)
             pivot = df.pivot(index=col_y, columns=col_x, values="count")
             if "cmap" not in kwargs:
@@ -727,6 +787,7 @@ class RemoteLazyFrame:
             **kwargs: Other keyword arguments that will be passed to Seaborn's lineplot function.
         Raises:
             ValueError: Incorrect column name given
+            RequestRejected: Could not continue in function as data owner rejected a required access request
             various exceptions: Note that exceptions may be raised from Seaborn when the lineplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
@@ -750,7 +811,9 @@ class RemoteLazyFrame:
                 raise ValueError("Column ", col, " not found in dataframe")
 
         # get df with necessary columns
-        df = self.select([pl.col(x) for x in selects]).collect().fetch().to_pandas()
+        tmp = self.select([pl.col(x) for x in selects]).collect().fetch()
+        RequestRejected.check_valid_df(tmp)
+        df = tmp.to_pandas()
         sns.lineplot(data=df, x=x, y=y, **kwargs)
 
     def scatterplot(self: LDF, x: str, y: str, **kwargs):
@@ -762,6 +825,7 @@ class RemoteLazyFrame:
             **kwargs: Other keyword arguments that will be passed to Seaborn's scatterplot function.
         Raises:
             ValueError: Incorrect column name given
+            RequestRejected: Could not continue in function as data owner rejected a required access request
             various exceptions: Note that exceptions may be raised from Seaborn when the scatterplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
@@ -779,7 +843,9 @@ class RemoteLazyFrame:
                 raise ValueError("Column ", col, " not found in dataframe")
 
         # get df with necessary columns
-        df = self.select([pl.col(x) for x in cols]).collect().fetch().to_pandas()
+        tmp = self.select([pl.col(x) for x in cols]).collect().fetch()
+        RequestRejected.check_valid_df(tmp)
+        df = tmp.to_pandas()
         # run query
         sns.scatterplot(data=df, x=x, y=y, **kwargs)
 
@@ -801,6 +867,7 @@ class RemoteLazyFrame:
             **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function.
         Raises:
             ValueError: Incorrect column name given, no x or y values provided, estimator function not recognised
+            RequestRejected: Could not continue in function as data owner rejected a required access request
             various exceptions: Note that exceptions may be raised from Seaborn when the barplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
@@ -840,16 +907,17 @@ class RemoteLazyFrame:
         }
         if x == None or y == None:
             c = x if x != None else y
-            df = (
+            tmp = (
                 self.filter(pl.col(c) != None)
                 .select(agg_dict[estimator])
                 .collect()
                 .fetch()
-                .to_pandas()
             )
+            RequestRejected.check_valid_df(tmp)
+            df = tmp.to_pandas()
         else:
             agg_fn = pl.col(y).mean()
-            df = (
+            tmp = (
                 self.filter(pl.col(x) != None)
                 .select(pl.col(y) for y in selects)
                 .groupby(pl.col(y) for y in groups)
@@ -857,8 +925,9 @@ class RemoteLazyFrame:
                 .sort(pl.col(x))
                 .collect()
                 .fetch()
-                .to_pandas()
             )
+            RequestRejected.check_valid_df(tmp)
+            df = tmp.to_pandas()
         # run query
         if x == None:
             sns.barplot(data=df, y=y, **kwargs)
@@ -910,9 +979,22 @@ class FetchableLazyFrame(RemoteLazyFrame):
     @staticmethod
     def _from_reference(client: BastionLabPolars, ref: ReferenceResponse) -> LDF:
         header = json.loads(ref.header)["inner"]
-        df = pl.DataFrame(
-            [pl.Series(k, dtype=getattr(pl, v)()) for k, v in header.items()]
-        )
+
+        def get_dtype(v):
+            if isinstance(v, str):
+                return getattr(pl, v)()
+            else:
+                k, v = list(v.items())[0]
+                v = get_dtype(v)
+                return getattr(pl, k)(v)
+
+        def get_series(name, dtype):
+            if isinstance(dtype, str):
+                return pl.Series(name, dtype=get_dtype(dtype))
+            else:
+                return pl.Series(name, values=[[]], dtype=get_dtype(dtype))
+
+        df = pl.DataFrame([get_series(k, v) for k, v in header.items()])
         return FetchableLazyFrame(
             _identifier=ref.identifier,
             _inner=df.lazy(),
@@ -933,7 +1015,10 @@ class FetchableLazyFrame(RemoteLazyFrame):
         return self._meta._client._fetch_df(self._identifier)
 
     def save(self):
-        return self._meta._client.persist_df(self._identifier)
+        return self._meta._client._persist_df(self._identifier)
+
+    def delete(self):
+        return self._meta._client._delete_df(self._identifier)
 
 
 @dataclass
@@ -1033,6 +1118,7 @@ class Facet:
             **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function.
         Raises:
             ValueError: Incorrect column name given, no x or y values provided, estimator function not recognised
+            RequestRejected: Could not continue in function as data owner rejected a required access request
             various exceptions: Note that exceptions may be raised from Seaborn when the barplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
 
@@ -1057,25 +1143,25 @@ class Facet:
         cols = []
         rows = []
         if self.col != None:
-            cols = (
+            tmp = (
                 self.inner_rdf.select(pl.col(self.col))
                 .unique()
                 .sort(pl.col(self.col))
                 .collect()
                 .fetch()
-                .to_pandas()[self.col]
-                .tolist()
             )
+            RequestRejected.check_valid_df(tmp)
+            cols = tmp.to_pandas()[self.col].tolist()
         if self.row != None:
-            rows = (
+            tmp = (
                 self.inner_rdf.select(pl.col(self.row))
                 .unique()
                 .sort(pl.col(self.row))
                 .collect()
                 .fetch()
-                .to_pandas()[self.row]
-                .tolist()
             )
+            RequestRejected.check_valid_df(tmp)
+            rows = tmp.to_pandas()[self.row].tolist()
 
         if fn == "histplot":
             bins = kwargs["bins"] if "bins" in kwargs else 10
@@ -1161,26 +1247,26 @@ class Facet:
         cols = []
         rows = []
         if self.col != None:
-            cols = (
+            tmp = (
                 self.inner_rdf.select(pl.col(self.col))
                 .unique()
                 .sort(pl.col(self.col))
                 .collect()
                 .fetch()
-                .to_pandas()[self.col]
-                .tolist()
             )
+            RequestRejected.check_valid_df(tmp)
+            cols = tmp.to_pandas()[self.col].tolist()
 
         if self.row != None:
-            rows = (
+            tmp = (
                 self.inner_rdf.select(pl.col(self.row))
                 .unique()
                 .sort(pl.col(self.row))
                 .collect()
                 .fetch()
-                .to_pandas()[self.row]
-                .tolist()
             )
+            RequestRejected.check_valid_df(tmp)
+            rows = tmp.to_pandas()[self.row].tolist()
 
         # mapping
         r_len = len(rows) if len(rows) > 0 else 1
@@ -1209,12 +1295,9 @@ class Facet:
                         + ": "
                         + str(cols[col_count])
                     )
-                    sea_df = (
-                        df.select([pl.col(x) for x in selects])
-                        .collect()
-                        .fetch()
-                        .to_pandas()
-                    )
+                    tmp = df.select([pl.col(x) for x in selects]).collect().fetch()
+                    RequestRejected.check_valid_df(tmp)
+                    sea_df = tmp.to_pandas()
                     func(data=sea_df, ax=axes[row_count, col_count], **kwargs)
                     axes[row_count, col_count].set_title(t1)
         else:
@@ -1225,12 +1308,9 @@ class Facet:
             for count in range(max_len):
                 df = self.inner_rdf.clone().filter((pl.col(t) == my_list[count]))
                 t1 = t + ": " + str(my_list[count])
-                sea_df = (
-                    df.select([pl.col(x) for x in selects])
-                    .collect()
-                    .fetch()
-                    .to_pandas()
-                )
+                tmp = df.select([pl.col(x) for x in selects]).collect().fetch()
+                RequestRejected.check_valid_df(tmp)
+                sea_df = tmp.to_pandas()
                 func(data=sea_df, ax=axes[row_count, col_count], **kwargs)
                 axes[count].set_title(t1)
 

@@ -101,10 +101,11 @@ nav:
       - Installation: "docs/getting-started/installation.md"
   - 📙 Tutorials:
       - Authentication: "docs/tutorials/authentication.ipynb"
+      - Defining a privacy policy: "docs/tutorials/defining_policy_privacy.ipynb"
       - Combining datasets: "docs/tutorials/combining_datasets.ipynb"
       - Data cleaning: "docs/tutorials/data_cleaning.ipynb"
+      - SQL queries: "docs/tutorials/SQL_queries.ipynb"
       - Data visualization: "docs/tutorials/visualization.ipynb"
-      - Defining a privacy policy: "docs/tutorials/defining_policy_privacy.ipynb"
       - Saving DataFrames: "docs/tutorials/saving_dataframes.ipynb"
   - 🌍 How-to-guides:
       - Data exploration:

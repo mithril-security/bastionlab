@@ -5,7 +5,6 @@ use bastionlab_common::{
     telemetry::{self, TelemetryEventProps},
 };
 use polars::prelude::*;
-use ring::digest;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::fs::{create_dir, read_dir, OpenOptions};
@@ -37,12 +36,18 @@ use access_control::*;
 
 mod utils;
 
+pub mod prelude {
+    pub use bastionlab_common::prelude::*;
+}
+
 pub enum FetchStatus {
     Ok,
     Pending(String),
     Warning(String),
 }
 
+/// This a DataFrame intended to be streamed to the client.
+/// It can be delayed when the data owner's approval is required.
 pub struct DelayedDataFrame {
     future: Pin<Box<dyn Future<Output = Result<DataFrame, Status>> + Send>>,
     fetch_status: FetchStatus,
@@ -92,10 +97,12 @@ impl BastionLabPolars {
         client_info: Option<ClientInfo>,
     ) -> Result<DelayedDataFrame, Status> {
         let dfs = self.dataframes.read().unwrap();
-        let artifact = dfs.get(identifier).ok_or(Status::not_found(format!(
-            "Could not find dataframe: identifier={}",
-            identifier
-        )))?;
+        let artifact = dfs.get(identifier).ok_or_else(|| {
+            Status::not_found(format!(
+                "Could not find dataframe: identifier={}",
+                identifier
+            ))
+        })?;
         if let VerificationResult::Unsafe { reason, .. } = &artifact.fetchable {
             println!(
                 "Safe zone violation: a DataFrame has been non-privately fetched.
@@ -211,9 +218,12 @@ Reason: {}",
                         );
                         Ok({
                             let guard = dfs.read().unwrap();
-                            let artifact = guard.get(&identifier).ok_or(Status::not_found(
-                                format!("Could not find dataframe: identifier={}", identifier),
-                            ))?;
+                            let artifact = guard.get(&identifier).ok_or_else(|| {
+                                Status::not_found(format!(
+                                    "Could not find dataframe: identifier={}",
+                                    identifier
+                                ))
+                            })?;
                             let mut df = artifact.dataframe.clone();
                             sanitize_df(&mut df, &artifact.blacklist);
                             df
@@ -228,10 +238,12 @@ Reason: {}",
         let dfs = self.dataframes.read().unwrap();
         Ok(dfs
             .get(identifier)
-            .ok_or(Status::not_found(format!(
-                "Could not find dataframe: identifier={}",
-                identifier
-            )))?
+            .ok_or_else(|| {
+                Status::not_found(format!(
+                    "Could not find dataframe: identifier={}",
+                    identifier
+                ))
+            })?
             .dataframe
             .clone())
     }
@@ -242,10 +254,12 @@ Reason: {}",
         mut f: impl FnMut(&DataFrameArtifact) -> T,
     ) -> Result<T, Status> {
         let dfs = self.dataframes.read().unwrap();
-        Ok(f(dfs.get(identifier).ok_or(Status::not_found(format!(
-            "Could not find dataframe: identifier={}",
-            identifier
-        )))?))
+        Ok(f(dfs.get(identifier).ok_or_else(|| {
+            Status::not_found(format!(
+                "Could not find dataframe: identifier={}",
+                identifier
+            ))
+        })?))
     }
 
     fn get_header(&self, identifier: &str) -> Result<String, Status> {
@@ -255,10 +269,12 @@ Reason: {}",
                 .read()
                 .unwrap()
                 .get(identifier)
-                .ok_or(Status::not_found(format!(
-                    "Could not find dataframe: identifier={}",
-                    identifier
-                )))?
+                .ok_or_else(|| {
+                    Status::not_found(format!(
+                        "Could not find dataframe: identifier={}",
+                        identifier
+                    ))
+                })?
                 .dataframe,
         )?)
     }
@@ -288,8 +304,7 @@ Reason: {}",
 
         let df_artifact = dataframes
             .get(identifier)
-            .ok_or("")
-            .map_err(|_| Status::not_found("Unable to find dataframe!"))?;
+            .ok_or_else(|| Status::not_found("Unable to find dataframe!"))?;
 
         if df_artifact.policy.check_savable() != true {
             return Err(Status::unknown("Dataframe is not savable"));
@@ -336,6 +351,15 @@ Reason: {}",
         }
         Ok(())
     }
+
+    fn delete_dfs(&self, identifier: &str) -> Result<(), Error> {
+        let mut dfs = self.dataframes.write().unwrap();
+        dfs.remove(identifier);
+
+        let path = "data_frames/".to_owned() + identifier + ".json";
+        std::fs::remove_file(path).unwrap_or(());
+        Ok(())
+    }
 }
 
 fn get_df_header(df: &DataFrame) -> Result<String, Status> {
@@ -366,20 +390,15 @@ impl PolarsService for BastionLabPolars {
 
         let start_time = Instant::now();
 
-        let res = composite_plan.run(self, &user_id)?;
-        let dataframe_bytes: Vec<u8> =
-            df_to_bytes(&res.dataframe)
-                .iter_mut()
-                .fold(Vec::new(), |mut acc, x| {
-                    acc.append(x);
-                    acc
-                }); // Not efficient fix this
+        let mut res = composite_plan.run(self, &user_id)?;
+        // TODO: this isn't really great.. this does a full serialization under the hood
+        let hash = hash_dataset(&mut res.dataframe)
+            .map_err(|e| Status::internal(format!("Polars error: {e}")))?;
 
         let header = get_df_header(&res.dataframe)?;
         let identifier = self.insert_df(res);
 
         let elapsed = start_time.elapsed();
-        let hash = hex::encode(digest::digest(&digest::SHA256, &dataframe_bytes).as_ref());
 
         telemetry::add_event(
             TelemetryEventProps::RunQuery {
@@ -404,19 +423,11 @@ impl PolarsService for BastionLabPolars {
         let token = self.sess_manager.verify_request(&request)?;
 
         let client_info = self.sess_manager.get_client_info(token)?;
-        let df = df_artifact_from_stream(request.into_inner()).await?;
-        let dataframe_bytes: Vec<u8> =
-            df_to_bytes(&df.dataframe)
-                .iter_mut()
-                .fold(Vec::new(), |mut acc, x| {
-                    acc.append(x);
-                    acc
-                }); // Not efficient fix this
+        let (df, hash) = unserialize_dataframe(request.into_inner()).await?;
         let header = get_df_header(&df.dataframe)?;
         let identifier = self.insert_df(df);
 
         let elapsed = start_time.elapsed();
-        let hash = hex::encode(digest::digest(&digest::SHA256, &dataframe_bytes).as_ref());
         telemetry::add_event(
             TelemetryEventProps::SendDataFrame {
                 dataset_name: Some(identifier.clone()),
@@ -445,7 +456,7 @@ impl PolarsService for BastionLabPolars {
                 &request.get_ref().identifier,
                 Some(self.sess_manager.get_client_info(token)?),
             )?;
-            stream_data(df, 32)
+            serialize_delayed_dataframe(df)
         };
         Ok(fut.await)
     }
@@ -492,6 +503,28 @@ impl PolarsService for BastionLabPolars {
         self.persist_df(identifier)?;
         telemetry::add_event(
             TelemetryEventProps::SaveDataframe {
+                dataset_name: Some(identifier.clone()),
+            },
+            Some(self.sess_manager.get_client_info(token)?),
+        );
+        Ok(Response::new(Empty {}))
+    }
+
+    async fn delete_data_frame(
+        &self,
+        request: Request<ReferenceRequest>,
+    ) -> Result<Response<Empty>, Status> {
+        let token = self.sess_manager.verify_request(&request)?;
+        let identifier = &request.get_ref().identifier;
+        let user_id = self.sess_manager.get_user_id(token.clone())?;
+        let owner_check = self.sess_manager.verify_if_owner(&user_id)?;
+        if owner_check {
+            self.delete_dfs(identifier)?;
+        } else {
+            return Err(Status::internal("Only data owners can delete dataframes."));
+        }
+        telemetry::add_event(
+            TelemetryEventProps::DeleteDataframe {
                 dataset_name: Some(identifier.clone()),
             },
             Some(self.sess_manager.get_client_info(token)?),

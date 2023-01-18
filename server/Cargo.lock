@@ -68,12 +68,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "216261ddc8289130e551ddcd5ce8a064710c0d064a4d2895c67151c92b5443f6"
 
 [[package]]
+name = "array-init-cursor"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf7d0a018de4f6aa429b9d33d69edf69072b1c5b1cb8d3e4a5f7ef898fc3eb76"
+
+[[package]]
+name = "arrow-format"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8df5d25bc6d676271277120c41ef28760fe0a9f070677a58db621c0f983f9c20"
+dependencies = [
+ "planus",
+ "serde",
+]
+
+[[package]]
 name = "arrow2"
 version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee6f62e41078c967a4c063fcbdfd3801a2a9632276402c045311c4d73d0845f3"
 dependencies = [
  "ahash 0.7.6",
+ "arrow-format",
  "bytemuck",
  "chrono",
  "dyn-clone",
@@ -82,10 +99,12 @@ dependencies = [
  "foreign_vec",
  "hash_hasher",
  "lexical-core",
+ "lz4",
  "multiversion",
  "num-traits",
  "simdutf8",
  "strength_reduce",
+ "zstd",
 ]
 
 [[package]]
@@ -190,14 +209,13 @@ checksum = "b645a089122eccb6111b4f81cbc1a49f5900ac4666bb93ac027feaecf15607bf"
 
 [[package]]
 name = "bastionlab"
-version = "0.3.6"
+version = "0.3.7"
 dependencies = [
  "anyhow",
  "base64",
  "bastionlab_common",
  "bastionlab_polars",
  "bastionlab_torch",
- "bincode",
  "bytes",
  "env_logger",
  "hex",
@@ -223,11 +241,10 @@ dependencies = [
 
 [[package]]
 name = "bastionlab_common"
-version = "0.3.6"
+version = "0.3.7"
 dependencies = [
  "anyhow",
  "base64",
- "bincode",
  "bytes",
  "env_logger",
  "hex",
@@ -254,7 +271,7 @@ dependencies = [
 
 [[package]]
 name = "bastionlab_learning"
-version = "0.3.6"
+version = "0.3.7"
 dependencies = [
  "libc",
  "rand",
@@ -264,12 +281,11 @@ dependencies = [
 
 [[package]]
 name = "bastionlab_polars"
-version = "0.3.6"
+version = "0.3.7"
 dependencies = [
  "anyhow",
  "base64",
  "bastionlab_common",
- "bincode",
  "bytes",
  "hex",
  "http",
@@ -296,13 +312,12 @@ dependencies = [
 
 [[package]]
 name = "bastionlab_torch"
-version = "0.3.6"
+version = "0.3.7"
 dependencies = [
  "anyhow",
  "base64",
  "bastionlab_common",
  "bastionlab_learning",
- "bincode",
  "bytes",
  "env_logger",
  "hex",
@@ -326,15 +341,6 @@ dependencies = [
  "uuid",
  "whoami",
  "x509-parser",
-]
-
-[[package]]
-name = "bincode"
-version = "1.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
-dependencies = [
- "serde",
 ]
 
 [[package]]
@@ -1313,6 +1319,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "lz4"
+version = "1.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e9e2dd86df36ce760a60f6ff6ad526f7ba1f14ba0356f8254fb6905e6494df1"
+dependencies = [
+ "libc",
+ "lz4-sys",
+]
+
+[[package]]
+name = "lz4-sys"
+version = "1.9.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57d27b317e207b10f69f5e75494119e391a96f48861ae870d1da6edac98ca900"
+dependencies = [
+ "cc",
+ "libc",
+]
+
+[[package]]
 name = "matrixmultiply"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1653,6 +1679,15 @@ name = "pkg-config"
 version = "0.3.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ac9a59f73473f1b8d852421e59e64809f025994837ef743615c6d0c5b305160"
+
+[[package]]
+name = "planus"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc1691dd09e82f428ce8d6310bd6d5da2557c82ff17694d2a32cad7242aea89f"
+dependencies = [
+ "array-init-cursor",
+]
 
 [[package]]
 name = "polars"

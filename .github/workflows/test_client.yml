@@ -1,0 +1,85 @@
+name: Test client
+
+on:
+  pull_request:
+    branches: [ master ]
+    paths: ['client/**', 'server/**', '.github/**', 'tests/**']
+
+jobs:
+  testing_client:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - serverImage: mithrilsecuritysas/bastionlab
+            client-wheel: client-artifacts
+            os: ubuntu-latest
+        python-version: [3.9]
+
+    steps:
+      - uses: actions/checkout@v2
+      ########## SETUP ##########
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+
+      ######### INSTALL CLIENT FROM SOURCE OTHERWISE ##########
+      - name: Install bastionlab client from source
+        run: |
+          cd client
+          make dev-install
+          source env/bin/activate
+
+      ##### BUILD SERVER OTHERWISE ######
+      - name: Build server image
+        id: build-server-no-download
+        run: |
+          docker build -t ${{ matrix.serverImage }}:latest -f ./Dockerfile .
+
+      ##### CHECK BASTIONLAB IMAGE IS INSTALLED ######
+      - name: Check bastionlab image is installed
+        id: check-bastionlab-image
+        run: |
+          docker image ls -a
+          docker image inspect ${{ matrix.serverImage }}:latest
+
+      ###### RUNNING SERVER ######
+      - name: Run server
+        id: run-server
+        run: |
+          docker kill -f app > /dev/null 2>&1 || true
+          docker run --rm -d -e BASTIONLAB_DISABLE_TELEMETRY=1 -e DISABLE_AUTHENTICATION=1 -p 50056:50056  --name app ${{ matrix.serverImage }}:latest
+
+      ########## TESTING CLIENT ##########
+      - name: Install dependencies for testing
+        if: always()
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install flake8 mypy pytest-cov
+          wget 'https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv'
+
+      - name: Test with pytest
+        id: test-client
+        if: always()
+        run: |
+          pip install polars
+          pip install ./client
+          pytest --cov --cov-report=xml tests
+        env:
+          bastionlab_TEST_NO_LAUNCH_SERVER: "true"
+      # Need test to be written in order to work properly
+
+      - name: Pytest Coverage report
+        uses: orgoro/coverage@v2
+        with:
+          coverageFile: ./coverage.xml
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check types with mypy
+        continue-on-error: True
+        if: always()
+        run: |
+          mypy ./client/src/bastionlab/

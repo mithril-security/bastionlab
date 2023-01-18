@@ -15,9 +15,13 @@ message ReferenceList {
 }
 
 message SendChunk {
+    // Apache IPC format
     bytes data = 1;
+
+    // This is present on the first chunk only.
     string policy = 2;
-    string metadata = 3;
+    // This is present on the first chunk only.
+    repeated string sanitized_columns = 3;
 }
 
 message FetchChunk {
@@ -41,4 +45,5 @@ service PolarsService {
     rpc ListDataFrames (Empty) returns (ReferenceList) {}
     rpc GetDataFrameHeader (ReferenceRequest) returns (ReferenceResponse) {}
     rpc PersistDataFrame (ReferenceRequest) returns (Empty) {}
+    rpc DeleteDataFrame (ReferenceRequest) returns (Empty) {}
 }
