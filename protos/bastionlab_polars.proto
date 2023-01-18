@@ -34,6 +34,14 @@ message Query {
 
 message Empty {}
 
+message SplitRequest {
+    repeated ReferenceRequest arrays = 1;
+    float train_size = 2;
+    float test_size = 3;
+    bool shuffle = 5;
+    optional uint64 random_state = 6;
+}
+
 service PolarsService {
     rpc SendDataFrame (stream SendChunk) returns (ReferenceResponse) {}
     rpc RunQuery (Query) returns (ReferenceResponse) {}
@@ -42,4 +50,5 @@ service PolarsService {
     rpc GetDataFrameHeader (ReferenceRequest) returns (ReferenceResponse) {}
     rpc PersistDataFrame (ReferenceRequest) returns (Empty) {}
     rpc DeleteDataFrame (ReferenceRequest) returns (Empty) {}
+    rpc Split(SplitRequest) returns (ReferenceList) {}
 }

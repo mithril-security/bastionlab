@@ -15,15 +15,7 @@
 syntax = "proto3";
 package bastionlab_torch;
 
-// import "bastionlab_session.proto";
-
-message Reference {
-    // BastionAI reference object. 
-    string identifier = 1;
-    string name = 2;
-    string description = 3;
-    bytes meta = 4;
-}
+import "bastionlab.proto";
 
 message Chunk {
     // Chunk of data sent from and to the BastionAI server.
@@ -40,8 +32,8 @@ message Empty {
 
 message TrainConfig {
     // Configuration for training sent to BastionAI.
-    Reference model = 1;
-    Reference dataset = 2;
+    bastionlab.Reference model = 1;
+    string dataset = 2;
     int32 batch_size = 3;
     int32 epochs = 4;
     string device = 5;
@@ -83,8 +75,8 @@ message TrainConfig {
 }
 
 message TestConfig {
-    Reference model = 1;
-    Reference dataset = 2;
+    bastionlab.Reference model = 1;
+    string dataset = 2;
     int32 batch_size = 3;
     string device = 4;
     string metric = 5;
@@ -92,7 +84,7 @@ message TestConfig {
 }
 
 message References {
-    repeated Reference list = 1;
+    repeated bastionlab.Reference list = 1;
 }
 
 message Accuracy {
@@ -116,18 +108,25 @@ message Metric {
     int32 nb_batches = 6;
 }
 
+message UpdateTensor {
+    string identifier = 1;
+    string dtype = 2;
+}
+
 service TorchService {
-    rpc SendDataset (stream Chunk) returns (Reference) {}
-    rpc SendModel (stream Chunk) returns (Reference) {}
-    rpc FetchDataset (Reference) returns (stream Chunk) {}
-    rpc FetchModule (Reference) returns (stream Chunk) {}
-    rpc DeleteDataset (Reference) returns (Empty) {}
-    rpc DeleteModule (Reference) returns (Empty) {}
+    rpc SendDataset (stream Chunk) returns (bastionlab.Reference) {}
+    rpc SendTensor (stream Chunk) returns (bastionlab.Reference) {}
+    rpc SendModel (stream Chunk) returns (bastionlab.Reference) {}
+    rpc ModifyTensor(UpdateTensor) returns (bastionlab.Reference) {}
+    rpc FetchDataset (bastionlab.Reference) returns (stream Chunk) {}
+    rpc FetchModule (bastionlab.Reference) returns (stream Chunk) {}
+    rpc DeleteDataset (bastionlab.Reference) returns (Empty) {}
+    rpc DeleteModule (bastionlab.Reference) returns (Empty) {}
     rpc AvailableModels(Empty) returns (References) {}
     rpc AvailableDatasets(Empty) returns (References) {}
     rpc AvailableDevices(Empty) returns (Devices) {}
     rpc AvailableOptimizers(Empty) returns (Optimizers) {}
-    rpc Train (TrainConfig) returns (Reference) {}
-    rpc Test (TestConfig) returns (Reference) {}
-    rpc GetMetric (Reference) returns (Metric) {}
+    rpc Train (TrainConfig) returns (bastionlab.Reference) {}
+    rpc Test (TestConfig) returns (bastionlab.Reference) {}
+    rpc GetMetric (bastionlab.Reference) returns (Metric) {}
 }

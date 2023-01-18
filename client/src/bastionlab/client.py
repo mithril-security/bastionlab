@@ -17,10 +17,10 @@ import time
 import logging
 import sys
 
-
 if TYPE_CHECKING:
     from .torch import BastionLabTorch
     from .polars import BastionLabPolars
+    from .converter import BastionLabConverter
 
 
 class AuthPlugin(grpc.AuthMetadataPlugin):
@@ -64,6 +64,7 @@ class Client:
     _bastionlab_polars: "BastionLabPolars" = (
         None  #: The BastionLabPolars object for accessing the polars functionality.
     )
+    _bastionlab_converter: "BastionLabConverter" = None  #: The BastionLabConverter object for converting internal objects (DF->Dataset, Dataset->DF).
     _channel: grpc.Channel  #: The underlying gRPC channel used to communicate with the server.
     __session_expiry_time: float = 0.0  #: Time in seconds
     _token: Optional[bytes] = None
@@ -136,7 +137,19 @@ class Client:
             from bastionlab.polars import BastionLabPolars
 
             self._bastionlab_polars = BastionLabPolars(self)
+
         return self._bastionlab_polars
+
+    @property
+    def converter(self) -> "BastionLabConverter":
+        """
+        Returns the BastionLabPolars instance used by this client.
+        """
+        if self._bastionlab_converter is None:
+            from bastionlab.converter import BastionLabConverter
+
+            self._bastionlab_converter = BastionLabConverter(self)
+        return self._bastionlab_converter
 
 
 @dataclass
