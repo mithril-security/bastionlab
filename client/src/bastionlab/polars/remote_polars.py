@@ -410,7 +410,7 @@ class RemoteLazyFrame:
         df = pl.DataFrame(
             [pl.Series(k, dtype=v) for k, v in self._inner.schema.items()]
         )
-        return RemoteLazyFrame(
+        ret = RemoteLazyFrame(
             df.lazy(),
             Metadata(
                 self._meta._client,
@@ -421,6 +421,9 @@ class RemoteLazyFrame:
                 ],
             ),
         )
+        # Either we need to collect before returning OR we need to make it clear to users they need to call collect() with this function
+        # because if not this leads to panics etc. when we follow this with other operations that use the new column before next using collect()
+        return ret.collect()
 
     def join(
         self: LDF,
@@ -1116,7 +1119,7 @@ class RemoteLazyFrame:
         rdf = self.with_columns(
             [
                 (pl.col(x) - pl.col(x).median())
-                / (pl.col(x).quantile(0.25) - pl.col(x).quantile(0.75)).alias(x)
+                / (pl.col(x).quantile(0.75) - pl.col(x).quantile(0.25)).alias(x)
                 for x in columns
             ]
         )
