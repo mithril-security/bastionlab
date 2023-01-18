@@ -115,7 +115,7 @@ nav:
   - 🛠️ API reference:
   - 💡 Concepts:
       - Remote data science: "docs/concepts-guides/remote_data_science.md"
-  - 🛠️ Reference guides
+  # - 🛠️ Reference guides
   - 🔒 Security:
       - Threat model: "docs/security/threat_model_data_owner_owns_infrastructure.md"
       - Authentication specifications: "docs/security/authenticated_sessions.md"
