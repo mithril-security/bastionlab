@@ -113,6 +113,7 @@ nav:
       - Deep learning:
           - Fine Tuning Distilbert on BastionLab: "docs/how-to-guides/distilbert_example_notebook.ipynb"
   - 🛠️ API reference:
+      - Submodules:
   - 💡 Concepts:
       - Remote data science: "docs/concepts-guides/remote_data_science.md"
   # - 🛠️ Reference guides

@@ -92,8 +92,8 @@ if __name__ == "__main__":
     with open("mkdocs.yml", "r") as file:
         data = file.readlines()
         for i, line in enumerate(data):
-            if "🛠️ API reference:" in line:
-                tabs = line.count(" ") + 1
+            if "Submodules:" in line:
+                tabs = line.count(" ") + 4
                 tree = align_tabs(tree, tabs)
                 data.insert(i + 1, tree)
                 break
