@@ -3,7 +3,6 @@ import hashlib
 import io
 from typing import Iterator, TYPE_CHECKING, List, Optional
 from dataclasses import dataclass
-from ..polars.utils import create_byte_chunk
 from .utils import DataWrapper, Chunk
 from ..pb.bastionlab_torch_pb2 import UpdateTensor
 from ..pb.bastionlab_pb2 import Reference
@@ -35,22 +34,9 @@ class RemoteTensor:
 
     @staticmethod
     def send_tensor(tensor: torch.Tensor) -> "RemoteTensor":
-        data = DataWrapper([tensor], None)
-        ts = torch.jit.script(data)
-        buff = io.BytesIO()
-        data = torch.jit.save(ts, buff)
-
-        def inner(b) -> Iterator[Chunk]:
-            for data in create_byte_chunk(b):
-                yield Chunk(
-                    data=data, name="", description="", secret=bytes(), meta=bytes()
-                )
-
         raise Exception(
             "Sending tensors to the BastionLab Torch service is not yet implemented"
         )
-        # res = self_meta._torch_client.stub.SendTensor(inner(buff.getbuffer()))
-        # return RemoteTensor._from_reference(res)
 
     @staticmethod
     def _from_reference(ref: Reference, client: "Client") -> "RemoteTensor":
