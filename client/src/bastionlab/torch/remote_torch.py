@@ -35,7 +35,6 @@ class RemoteTensor:
 
     @staticmethod
     def send_tensor(tensor: torch.Tensor) -> "RemoteTensor":
-        pass
         data = DataWrapper([tensor], None)
         ts = torch.jit.script(data)
         buff = io.BytesIO()

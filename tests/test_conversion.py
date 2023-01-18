@@ -1,10 +1,5 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-
 import polars as pl
 import torch
-from sklearn.model_selection import train_test_split as sk_train_test_split
 import logging
 import unittest
 from bastionlab import Connection

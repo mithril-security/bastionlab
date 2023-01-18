@@ -1,8 +1,9 @@
 from bastionlab.torch.remote_torch import RemoteDataset
 from bastionlab.torch.optimizer_config import Adam
 import polars as pl
+import os
 import torch
-from sklearn.model_selection import train_test_split as sk_train_test_split
+import subprocess
 import logging
 import unittest
 from bastionlab import Connection
@@ -28,6 +29,24 @@ def make_model(in_features: int, dtype: torch.dtype):
     return LinearRegression
 
 
+def get_covid_dataset():
+    def runcmd(cmd, verbose=False, *args, **kwargs):
+
+        process = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=True
+        )
+        std_out, std_err = process.communicate()
+        if verbose:
+            print(std_out.strip(), std_err)
+        pass
+
+    if not os.path.exists("covid.csv"):
+        print("Downloading Covid Dataset")
+        runcmd(
+            'wget "https://raw.githubusercontent.com/rinbaruah/COVID_preconditions_Kaggle/master/Data/covid.csv"'
+        )
+
+
 class TestingConnection(unittest.TestCase):
     def test_connection(self):
         connection = Connection("localhost")
@@ -38,6 +57,7 @@ class TestingConnection(unittest.TestCase):
     def test_df_to_tensor_conv(self):
         connection = Connection("localhost")
         client = connection.client
+        get_covid_dataset()
         df = pl.read_csv("covid.csv").limit(200)
         policy = Policy(safe_zone=TrueRule(), unsafe_handling=Log(), savable=True)
         rdf = client.polars.send_df(df, policy=policy, sanitized_columns=["Name"])
