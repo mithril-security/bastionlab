@@ -12,6 +12,7 @@ from ..pb.bastionlab_polars_pb2 import ReferenceResponse
 from .client import BastionLabPolars
 from .utils import ApplyBins
 import matplotlib.pyplot as plt
+from ..errors import RequestRejected
 
 LDF = TypeVar("LDF", bound="pl.LazyFrame")
 
@@ -596,6 +597,7 @@ class RemoteLazyFrame:
             **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function.
         Raises:
             ValueError: Incorrect column name given, no x or y values provided, estimator function not recognised
+            RequestRejected: Could not continue in function as data owner rejected a required access request
             various exceptions: Note that exceptions may be raised from Seaborn when the barplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
@@ -635,16 +637,17 @@ class RemoteLazyFrame:
         }
         if x == None or y == None:
             c = x if x != None else y
-            df = (
+            tmp = (
                 self.filter(pl.col(c) != None)
                 .select(agg_dict[estimator])
                 .collect()
                 .fetch()
-                .to_pandas()
             )
+            RequestRejected.check_valid_df(tmp)
+            df = tmp.to_pandas()
         else:
             agg_fn = pl.col(y).mean()
-            df = (
+            tmp = (
                 self.filter(pl.col(x) != None)
                 .select(pl.col(y) for y in selects)
                 .groupby(pl.col(y) for y in groups)
@@ -652,8 +655,9 @@ class RemoteLazyFrame:
                 .sort(pl.col(x))
                 .collect()
                 .fetch()
-                .to_pandas()
             )
+            RequestRejected.check_valid_df(tmp)
+            df = tmp.to_pandas()
         # run query
         if x == None:
             sns.barplot(data=df, y=y, **kwargs)
@@ -678,6 +682,7 @@ class RemoteLazyFrame:
 
         Raises:
             ValueError: Incorrect column name given
+            RequestRejected: Could not continue in function as data owner rejected a required access request
             various exceptions: Note that exceptions may be raised from Seaborn when the barplot or heatmap function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
@@ -699,7 +704,7 @@ class RemoteLazyFrame:
             if not col_x in self.columns and not col_y in self.columns:
                 raise ValueError("Please supply a valid column for x or y axes")
 
-            df = (
+            tmp = (
                 self.filter(q_x != None)
                 .select(q_x)
                 .apply_udf([col_x if col_x != "count" else col_y], model)
@@ -708,8 +713,9 @@ class RemoteLazyFrame:
                 .sort(q_x)
                 .collect()
                 .fetch()
-                .to_pandas()
             )
+            RequestRejected.check_valid_df(tmp)
+            df = tmp.to_pandas()
 
             # horizontal barplot where x axis is count
             if "color" not in kwargs:
@@ -735,7 +741,7 @@ class RemoteLazyFrame:
             for col in [col_x, col_y]:
                 if not col in self.columns:
                     raise ValueError("Column name not found in dataframe")
-            df = (
+            tmp = (
                 self.filter(pl.col(col_x) != None)
                 .filter(pl.col(col_y) != None)
                 .select([pl.col(col_y), pl.col(col_x)])
@@ -745,8 +751,9 @@ class RemoteLazyFrame:
                 .sort(pl.col(col_x))
                 .collect()
                 .fetch()
-                .to_pandas()
             )
+            RequestRejected.check_valid_df(tmp)
+            df = tmp.to_pandas()
             my_cmap = sns.color_palette("Blues", as_cmap=True)
             pivot = df.pivot(index=col_y, columns=col_x, values="count")
             if "cmap" not in kwargs:
@@ -780,6 +787,7 @@ class RemoteLazyFrame:
             **kwargs: Other keyword arguments that will be passed to Seaborn's lineplot function.
         Raises:
             ValueError: Incorrect column name given
+            RequestRejected: Could not continue in function as data owner rejected a required access request
             various exceptions: Note that exceptions may be raised from Seaborn when the lineplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
@@ -803,7 +811,9 @@ class RemoteLazyFrame:
                 raise ValueError("Column ", col, " not found in dataframe")
 
         # get df with necessary columns
-        df = self.select([pl.col(x) for x in selects]).collect().fetch().to_pandas()
+        tmp = self.select([pl.col(x) for x in selects]).collect().fetch()
+        RequestRejected.check_valid_df(tmp)
+        df = tmp.to_pandas()
         sns.lineplot(data=df, x=x, y=y, **kwargs)
 
     def scatterplot(self: LDF, x: str, y: str, **kwargs):
@@ -815,6 +825,7 @@ class RemoteLazyFrame:
             **kwargs: Other keyword arguments that will be passed to Seaborn's scatterplot function.
         Raises:
             ValueError: Incorrect column name given
+            RequestRejected: Could not continue in function as data owner rejected a required access request
             various exceptions: Note that exceptions may be raised from Seaborn when the scatterplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
@@ -832,7 +843,9 @@ class RemoteLazyFrame:
                 raise ValueError("Column ", col, " not found in dataframe")
 
         # get df with necessary columns
-        df = self.select([pl.col(x) for x in cols]).collect().fetch().to_pandas()
+        tmp = self.select([pl.col(x) for x in cols]).collect().fetch()
+        RequestRejected.check_valid_df(tmp)
+        df = tmp.to_pandas()
         # run query
         sns.scatterplot(data=df, x=x, y=y, **kwargs)
 
@@ -854,6 +867,7 @@ class RemoteLazyFrame:
             **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function.
         Raises:
             ValueError: Incorrect column name given, no x or y values provided, estimator function not recognised
+            RequestRejected: Could not continue in function as data owner rejected a required access request
             various exceptions: Note that exceptions may be raised from Seaborn when the barplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
@@ -893,16 +907,17 @@ class RemoteLazyFrame:
         }
         if x == None or y == None:
             c = x if x != None else y
-            df = (
+            tmp = (
                 self.filter(pl.col(c) != None)
                 .select(agg_dict[estimator])
                 .collect()
                 .fetch()
-                .to_pandas()
             )
+            RequestRejected.check_valid_df(tmp)
+            df = tmp.to_pandas()
         else:
             agg_fn = pl.col(y).mean()
-            df = (
+            tmp = (
                 self.filter(pl.col(x) != None)
                 .select(pl.col(y) for y in selects)
                 .groupby(pl.col(y) for y in groups)
@@ -910,8 +925,9 @@ class RemoteLazyFrame:
                 .sort(pl.col(x))
                 .collect()
                 .fetch()
-                .to_pandas()
             )
+            RequestRejected.check_valid_df(tmp)
+            df = tmp.to_pandas()
         # run query
         if x == None:
             sns.barplot(data=df, y=y, **kwargs)
@@ -1089,6 +1105,7 @@ class Facet:
             **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function.
         Raises:
             ValueError: Incorrect column name given, no x or y values provided, estimator function not recognised
+            RequestRejected: Could not continue in function as data owner rejected a required access request
             various exceptions: Note that exceptions may be raised from Seaborn when the barplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
 
@@ -1113,25 +1130,25 @@ class Facet:
         cols = []
         rows = []
         if self.col != None:
-            cols = (
+            tmp = (
                 self.inner_rdf.select(pl.col(self.col))
                 .unique()
                 .sort(pl.col(self.col))
                 .collect()
                 .fetch()
-                .to_pandas()[self.col]
-                .tolist()
             )
+            RequestRejected.check_valid_df(tmp)
+            cols = tmp.to_pandas()[self.col].tolist()
         if self.row != None:
-            rows = (
+            tmp = (
                 self.inner_rdf.select(pl.col(self.row))
                 .unique()
                 .sort(pl.col(self.row))
                 .collect()
                 .fetch()
-                .to_pandas()[self.row]
-                .tolist()
             )
+            RequestRejected.check_valid_df(tmp)
+            rows = tmp.to_pandas()[self.row].tolist()
 
         if fn == "histplot":
             bins = kwargs["bins"] if "bins" in kwargs else 10
@@ -1217,26 +1234,26 @@ class Facet:
         cols = []
         rows = []
         if self.col != None:
-            cols = (
+            tmp = (
                 self.inner_rdf.select(pl.col(self.col))
                 .unique()
                 .sort(pl.col(self.col))
                 .collect()
                 .fetch()
-                .to_pandas()[self.col]
-                .tolist()
             )
+            RequestRejected.check_valid_df(tmp)
+            cols = tmp.to_pandas()[self.col].tolist()
 
         if self.row != None:
-            rows = (
+            tmp = (
                 self.inner_rdf.select(pl.col(self.row))
                 .unique()
                 .sort(pl.col(self.row))
                 .collect()
                 .fetch()
-                .to_pandas()[self.row]
-                .tolist()
             )
+            RequestRejected.check_valid_df(tmp)
+            rows = tmp.to_pandas()[self.row].tolist()
 
         # mapping
         r_len = len(rows) if len(rows) > 0 else 1
@@ -1265,12 +1282,9 @@ class Facet:
                         + ": "
                         + str(cols[col_count])
                     )
-                    sea_df = (
-                        df.select([pl.col(x) for x in selects])
-                        .collect()
-                        .fetch()
-                        .to_pandas()
-                    )
+                    tmp = df.select([pl.col(x) for x in selects]).collect().fetch()
+                    RequestRejected.check_valid_df(tmp)
+                    sea_df = tmp.to_pandas()
                     func(data=sea_df, ax=axes[row_count, col_count], **kwargs)
                     axes[row_count, col_count].set_title(t1)
         else:
@@ -1281,12 +1295,9 @@ class Facet:
             for count in range(max_len):
                 df = self.inner_rdf.clone().filter((pl.col(t) == my_list[count]))
                 t1 = t + ": " + str(my_list[count])
-                sea_df = (
-                    df.select([pl.col(x) for x in selects])
-                    .collect()
-                    .fetch()
-                    .to_pandas()
-                )
+                tmp = df.select([pl.col(x) for x in selects]).collect().fetch()
+                RequestRejected.check_valid_df(tmp)
+                sea_df = tmp.to_pandas()
                 func(data=sea_df, ax=axes[row_count, col_count], **kwargs)
                 axes[count].set_title(t1)
 
