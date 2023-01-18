@@ -1,5 +1,6 @@
-from typing import List, TYPE_CHECKING, Optional
+from typing import List, TYPE_CHECKING, Optional, Iterator
 import grpc
+import io
 from grpc import StatusCode
 import polars as pl
 from colorama import Fore
@@ -91,8 +92,7 @@ class BastionLabPolars:
             Optional[pl.DataFrame]
         """
 
-        def inner() -> bytes:
-            joined_bytes = b""
+        def make_chunks_iter() -> Iterator[bytes]:
             blocked = False
 
             for b in self.stub.FetchDataFrame(ReferenceRequest(identifier=ref)):
@@ -119,14 +119,15 @@ Reason: {b.warning}
 This incident will be reported to the data owner.{Fore.WHITE}"""
                     )
 
-                joined_bytes += b.data
-            return joined_bytes
+                yield b.data
 
         self.client.refresh_session_if_needed()
 
         try:
-            joined_bytes = GRPCException.map_error(inner)
-            return deserialize_dataframe(joined_bytes)
+            df = GRPCException.map_error(
+                lambda: deserialize_dataframe(make_chunks_iter())
+            )
+            return df
         except GRPCException as e:
             if e.code == StatusCode.PERMISSION_DENIED:
                 print(
