@@ -114,7 +114,7 @@ impl CompositePlan {
                 }
                 CompositePlanSegment::RowCountSegment(name) => {
                     let frame = stack.pop().ok_or(Status::invalid_argument(
-                        "Could not apply stack: no input data frame",
+                        "Could not apply with_row_count: no input data frame",
                     ))?;
                     let df = frame.df.with_row_count(&name, Some(0)).map_err(|e| {
                         Status::invalid_argument(format!("Error while running with_row_count: {}", e))
