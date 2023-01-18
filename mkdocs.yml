@@ -19,6 +19,7 @@ theme:
     - search.highlight
     - content.tabs.link
     - navigation.sections
+    - navigation.indexes
     # - navigation.expand
   logo: assets/logo.png
   favicon: assets/logo.png
@@ -114,6 +115,7 @@ nav:
           - Fine Tuning Distilbert on BastionLab: "docs/how-to-guides/distilbert_example_notebook.ipynb"
   - 🛠️ API reference:
       - Submodules:
+          - "docs/resources/bastionlab/index.md"
   - 💡 Concepts:
       - Remote data science: "docs/concepts-guides/remote_data_science.md"
   # - 🛠️ Reference guides

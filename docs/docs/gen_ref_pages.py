@@ -93,9 +93,9 @@ if __name__ == "__main__":
         data = file.readlines()
         for i, line in enumerate(data):
             if "Submodules:" in line:
-                tabs = line.count(" ") + 4
+                tabs = line.count(" ") + 3
                 tree = align_tabs(tree, tabs)
-                data.insert(i + 1, tree)
+                data.insert(i + 2, tree)
                 break
         with open("mkdocs.yml", "w") as file:
             file.writelines(data)
