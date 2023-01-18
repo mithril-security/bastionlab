@@ -7,7 +7,6 @@ use bastionlab_common::{
 
 use polars::export::ahash::HashSet;
 use polars::prelude::*;
-use ring::digest;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::fs::{create_dir, read_dir, OpenOptions};
@@ -40,12 +39,18 @@ use access_control::*;
 
 pub mod utils;
 
+pub mod prelude {
+    pub use bastionlab_common::prelude::*;
+}
+
 pub enum FetchStatus {
     Ok,
     Pending(String),
     Warning(String),
 }
 
+/// This a DataFrame intended to be streamed to the client.
+/// It can be delayed when the data owner's approval is required.
 pub struct DelayedDataFrame {
     future: Pin<Box<dyn Future<Output = Result<DataFrame, Status>> + Send>>,
     fetch_status: FetchStatus,
@@ -401,20 +406,15 @@ impl PolarsService for BastionLabPolars {
 
         let start_time = Instant::now();
 
-        let res = composite_plan.run(self, &user_id)?;
-        let dataframe_bytes: Vec<u8> =
-            df_to_bytes(&res.dataframe)
-                .iter_mut()
-                .fold(Vec::new(), |mut acc, x| {
-                    acc.append(x);
-                    acc
-                }); // Not efficient fix this
+        let mut res = composite_plan.run(self, &user_id)?;
+        // TODO: this isn't really great.. this does a full serialization under the hood
+        let hash = hash_dataset(&mut res.dataframe)
+            .map_err(|e| Status::internal(format!("Polars error: {e}")))?;
 
         let header = get_df_header(&res.dataframe)?;
         let identifier = self.insert_df(res);
 
         let elapsed = start_time.elapsed();
-        let hash = hex::encode(digest::digest(&digest::SHA256, &dataframe_bytes).as_ref());
 
         telemetry::add_event(
             TelemetryEventProps::RunQuery {
@@ -439,19 +439,11 @@ impl PolarsService for BastionLabPolars {
         let token = self.sess_manager.verify_request(&request)?;
 
         let client_info = self.sess_manager.get_client_info(token)?;
-        let df = df_artifact_from_stream(request.into_inner()).await?;
-        let dataframe_bytes: Vec<u8> =
-            df_to_bytes(&df.dataframe)
-                .iter_mut()
-                .fold(Vec::new(), |mut acc, x| {
-                    acc.append(x);
-                    acc
-                }); // Not efficient fix this
+        let (df, hash) = unserialize_dataframe(request.into_inner()).await?;
         let header = get_df_header(&df.dataframe)?;
         let identifier = self.insert_df(df);
 
         let elapsed = start_time.elapsed();
-        let hash = hex::encode(digest::digest(&digest::SHA256, &dataframe_bytes).as_ref());
         telemetry::add_event(
             TelemetryEventProps::SendDataFrame {
                 dataset_name: Some(identifier.clone()),
@@ -480,7 +472,7 @@ impl PolarsService for BastionLabPolars {
                 &request.get_ref().identifier,
                 Some(self.sess_manager.get_client_info(token)?),
             )?;
-            stream_data(df, 32)
+            serialize_delayed_dataframe(df)
         };
         Ok(fut.await)
     }
