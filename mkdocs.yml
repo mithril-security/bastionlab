@@ -112,11 +112,10 @@ nav:
           - Covid-19 cleaning and exploration: "docs/how-to-guides/covid_cleaning_exploration.ipynb"
       - Deep learning:
           - Fine Tuning Distilbert on BastionLab: "docs/how-to-guides/distilbert_example_notebook.ipynb"
-  - 🛠️ API reference: "docs/resources/bastionlab/index.md"
+  - 🛠️ API reference:
   - 💡 Concepts:
       - Remote data science: "docs/concepts-guides/remote_data_science.md"
-  - 🛠️ Reference guides:
-      - API Reference:
+  - 🛠️ Reference guides
   - 🔒 Security:
       - Threat model: "docs/security/threat_model_data_owner_owns_infrastructure.md"
       - Authentication specifications: "docs/security/authenticated_sessions.md"
