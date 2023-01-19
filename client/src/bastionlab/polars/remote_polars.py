@@ -157,6 +157,25 @@ class StackPlanSegment(CompositePlanSegment):
 
 
 @dataclass
+class StringUdfPlanSegmenet(CompositePlanSegment):
+    """
+    Composite plan segment class responsible for string-based user defined functions
+    """
+
+    _method: Dict[str, str]
+    _columns: List[str]
+
+    def serialize(self) -> str:
+        columns = ",".join([f'"{c}"' for c in self._columns])
+        name = self._method.get("name")
+        pattern = self._method.get("pattern")
+        to = self._method.get("to")
+
+        method = f'{{"name": "{name}", "pattern": "{pattern}", "to": "{to}"}}'
+        return f'{{"StringUdfPlanSegment": {{"method": {method}, "columns": [{columns}]}}}}'
+
+
+@dataclass
 class Metadata:
     """
     A class containing metadata related to your dataframe
@@ -956,6 +975,112 @@ class RemoteLazyFrame:
                 if not x in self.columns:
                     raise ValueError("Column ", x, " not found in dataframe")
         return Facet(inner_rdf=self, col=col, row=row, kwargs=kwargs)
+
+    def _make_string_udf_segment(
+        self: RemoteLazyFrame,
+        method_name: str,
+        method_pattern: str = None,
+        method_to: str = None,
+        cols: Optional[Union[str, List[str]]] = None,
+    ) -> "RemoteLazyFrame":
+        cols = (
+            self.columns if cols is None else cols if isinstance(cols, list) else [cols]
+        )
+
+        return RemoteLazyFrame(
+            self._inner,
+            Metadata(
+                self._meta._client,
+                [
+                    *self._meta._prev_segments,
+                    PolarsPlanSegment(self._inner),
+                    StringUdfPlanSegmenet(
+                        {
+                            "name": method_name,
+                            "pattern": method_pattern,
+                            "to": method_to,
+                        },
+                        cols,
+                    ),
+                ],
+            ),
+        )
+
+    # String Methods
+    def split(
+        self, pattern: str, cols: Optional[Union[str, List[str]]] = None
+    ) -> "RemoteLazyFrame":
+        return self._make_string_udf_segment("split", pattern, cols=cols)
+
+    def to_lowercase(
+        self, cols: Optional[Union[str, List[str]]] = None
+    ) -> "RemoteLazyFrame":
+        return self._make_string_udf_segment("to_lowercase", cols=cols)
+
+    def to_uppercase(
+        self, cols: Optional[Union[str, List[str]]] = None
+    ) -> "RemoteLazyFrame":
+        return self._make_string_udf_segment("to_uppercase", cols=cols)
+
+    def replace(
+        self, pattern: str, to: str, cols: Optional[Union[str, List[str]]] = None
+    ) -> "RemoteLazyFrame":
+        return self._make_string_udf_segment(
+            method_name="replace", method_pattern=pattern, method_to=to, cols=cols
+        )
+
+    def replace_all(
+        self, pattern: str, to: str, cols: Optional[Union[str, List[str]]] = None
+    ) -> "RemoteLazyFrame":
+        print(pattern, to)
+        return self._make_string_udf_segment(
+            method_name="replace_all", method_pattern=pattern, method_to=to, cols=cols
+        )
+
+    def contains(
+        self,
+        pattern: str,
+        cols: Optional[Union[str, List[str]]] = None,
+    ) -> "RemoteLazyFrame":
+        return self._make_string_udf_segment(
+            method_name="contains", method_pattern=pattern, cols=cols
+        )
+
+    def match(
+        self,
+        pattern: str,
+        cols: Optional[Union[str, List[str]]] = None,
+    ) -> "RemoteLazyFrame":
+        return self._make_string_udf_segment(
+            method_name="match", method_pattern=pattern, cols=cols
+        )
+
+    def fuzzy_match(
+        self,
+        pattern: str,
+        cols: Optional[Union[str, List[str]]] = None,
+    ) -> "RemoteLazyFrame":
+        return self._make_string_udf_segment(
+            method_name="fuzzy_match", method_pattern=pattern, cols=cols
+        )
+
+    def findall(
+        self,
+        pattern: str,
+        cols: Optional[Union[str, List[str]]] = None,
+    ) -> "RemoteLazyFrame":
+        return self._make_string_udf_segment(
+            method_name="findall", method_pattern=pattern, cols=cols
+        )
+
+    def extract(
+        self,
+        pattern: str,
+        cols: Optional[Union[str, List[str]]] = None,
+    ) -> "RemoteLazyFrame":
+        return self._make_string_udf_segment(
+            method_name="extract", method_pattern=pattern, cols=cols
+        )
 
 
 @dataclass
