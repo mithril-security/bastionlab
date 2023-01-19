@@ -13,6 +13,8 @@ from .client import BastionLabPolars
 from .utils import ApplyBins
 import matplotlib.pyplot as plt
 from ..errors import RequestRejected
+import matplotlib.pyplot as plt
+
 
 LDF = TypeVar("LDF", bound="pl.LazyFrame")
 
@@ -154,6 +156,20 @@ class StackPlanSegment(CompositePlanSegment):
 
     def serialize(self) -> str:
         return '"StackPlanSegment"'
+
+
+@dataclass
+class BoxPlotterPlanSegment(CompositePlanSegment):
+    """
+    Composite plan segment class responsible for boxplot function
+    """
+
+    _with_outliers: int
+    _columns: List[str]
+
+    def serialize(self) -> str:
+        columns = ",".join([f'"{c}"' for c in self._columns])
+        return f'{{"BoxPlotterPlanSegment": {{"columns": [{columns}], "with_outliers": {self._with_outliers}}}}}'
 
 
 @dataclass
@@ -941,6 +957,7 @@ class RemoteLazyFrame:
         x: str = None,
         y: str = None,
         hue: str = None,
+        with_outliers: bool = False,
         **kwargs,
     ):
         """Draws a boxplot based on x, y and hue values.
@@ -972,10 +989,58 @@ class RemoteLazyFrame:
         if hue != None:
             kwargs["hue"] = hue
 
-        tmp = self.select([pl.col(x) for x in selects]).collect().fetch()
-        RequestRejected.check_valid_df(tmp)
-        df = tmp.to_pandas()
-        sns.boxplot(data=df, x=x, y=y, **kwargs)
+        selected = self.select([pl.col(x) for x in selects]).collect()
+
+        df = pl.DataFrame(
+            [pl.Series(k, dtype=v) for k, v in selected._inner.schema.items()]
+        )
+        res: RemoteLazyFrame = RemoteLazyFrame(
+            df.lazy(),
+            Metadata(
+                self._meta._client,
+                [
+                    *self._meta._prev_segments,
+                    BoxPlotterPlanSegment(1 if with_outliers else 0, selected.columns),
+                ],
+            ),
+        )
+
+        df = res.collect().fetch()
+        RequestRejected.check_valid_df(df)
+
+        if not with_outliers:
+
+            def get_value(df: pl.DataFrame, col) -> float:
+                return df.select(col).to_numpy()[0]
+
+            boxes = []
+            for col in selects:
+                fig, ax = plt.subplots()
+                boxes.append(
+                    {
+                        "label": col,
+                        "whislo": get_value(
+                            df, f"{col}_min"
+                        ),  # Bottom whisker position
+                        "q1": get_value(
+                            df, f"{col}_q1"
+                        ),  # First quartile (25th percentile)
+                        "med": get_value(
+                            df, f"{col}_median"
+                        ),  # Median         (50th percentile)
+                        "q3": get_value(
+                            df, f"{col}_q3"
+                        ),  # Third quartile (75th percentile)
+                        "whishi": get_value(df, f"{col}_max"),  # Top whisker position
+                    }
+                )
+            print(boxes)
+
+            ax.bxp(boxes, showfliers=False)
+            plt.savefig("boxplot.png")
+            plt.close()
+        else:
+            sns.boxplot(data=df.to_pandas(), x=x, y=y, **kwargs)
 
     def facet(
         self: LDF, col: Optional[str] = None, row: Optional[str] = None, **kwargs

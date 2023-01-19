@@ -1,5 +1,9 @@
 use base64;
-use polars::{lazy::dsl::Expr, prelude::*};
+use polars::{
+    functions::hor_concat_df,
+    lazy::dsl::{col, Expr},
+    prelude::*,
+};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io::Cursor};
 use tch::CModule;
@@ -18,9 +22,16 @@ pub struct CompositePlan(Vec<CompositePlanSegment>);
 #[derive(Debug, Serialize, Deserialize)]
 pub enum CompositePlanSegment {
     PolarsPlanSegment(LogicalPlan),
-    UdfPlanSegment { columns: Vec<String>, udf: String },
+    UdfPlanSegment {
+        columns: Vec<String>,
+        udf: String,
+    },
     EntryPointPlanSegment(String),
     StackPlanSegment,
+    BoxPlotterPlanSegment {
+        with_outliers: u8,
+        columns: Vec<String>,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -110,6 +121,66 @@ impl CompositePlan {
                     let mut stats = frame1.stats;
                     stats.merge(frame2.stats);
                     stack.push(StackFrame { df, stats });
+                }
+                CompositePlanSegment::BoxPlotterPlanSegment {
+                    with_outliers,
+                    columns,
+                } => {
+                    let with_outliers = with_outliers != 0;
+
+                    let frame = stack.pop().ok_or_else(|| {
+                        Status::invalid_argument("Could not apply stack: no input data frame")
+                    })?;
+                    let df = frame.df;
+
+                    let selection = df
+                        .select(&columns[..])
+                        .map_err(|e| Status::aborted(format!("Columns not found: {e}")))?;
+
+                    if !with_outliers {
+                        let mut median = selection.median();
+                        let mut min = selection.min();
+                        let mut max = selection.max();
+                        let mut q1 = selection
+                            .quantile(0.25, QuantileInterpolOptions::Nearest)
+                            .map_err(|e| {
+                                Status::aborted(format!("Could not calculate 1st Quartile : {e}"))
+                            })?;
+
+                        let mut q3 = selection
+                            .quantile(0.25, QuantileInterpolOptions::Nearest)
+                            .map_err(|e| {
+                                Status::aborted(format!("Could not calculate 1st Quartile : {e}"))
+                            })?;
+                        let rename =
+                            |df: &mut DataFrame, col: &str, name: &str| -> Result<(), Status> {
+                                df.rename(&col, &format!("{col}_{name}")).map_err(|e| {
+                                    Status::aborted(format!("Could not rename col: {col}{e}"))
+                                })?;
+                                Ok(())
+                            };
+                        for col in columns {
+                            rename(&mut min, &col, "min")?;
+                            rename(&mut q1, &col, "q1")?;
+                            rename(&mut q3, &col, "q3")?;
+                            rename(&mut max, &col, "max")?;
+                            rename(&mut median, &col, "median")?;
+                        }
+                        let df =
+                            hor_concat_df(&vec![min, q1, median, q3, max][..]).map_err(|e| {
+                                Status::aborted(format!("Could not concatenate dataframes: {e}"))
+                            })?;
+
+                        stack.push(StackFrame {
+                            df,
+                            stats: frame.stats,
+                        })
+                    } else {
+                        stack.push(StackFrame {
+                            df: selection,
+                            stats: frame.stats,
+                        })
+                    }
                 }
             }
         }
