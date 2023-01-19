@@ -170,6 +170,7 @@ class StringTransformerPlanSegment(CompositePlanSegment):
 
     model: str
     _columns: List[str]
+    add_special_tokens: bool
 
     def serialize(self) -> str:
         """
@@ -180,7 +181,8 @@ class StringTransformerPlanSegment(CompositePlanSegment):
         """
         columns = ",".join([f'"{c}"' for c in self._columns])
         model = base64.b64encode(self.model.encode("utf8")).decode("utf8")
-        return f'{{"StringTransformerPlanSegment":{{"columns":[{columns}],"model":"{model}"}}}}'
+        add_special_tokens = 1 if self.add_special_tokens else 0
+        return f'{{"StringTransformerPlanSegment":{{"columns":[{columns}],"model":"{model}","add_special_tokens":{add_special_tokens}}}}}'
 
 
 @dataclass
@@ -433,7 +435,7 @@ class RemoteLazyFrame:
             ),
         )
 
-    def convert(self, columns: List[str], model: str) -> LDF:
+    def _convert(self, columns: List[str], model: str, add_special_tokens: bool) -> LDF:
         df = pl.DataFrame(
             [pl.Series(k, dtype=v) for k, v in self._inner.schema.items()]
         )
@@ -443,7 +445,7 @@ class RemoteLazyFrame:
                 self._meta._polars_client,
                 [
                     *self._meta._prev_segments,
-                    StringTransformerPlanSegment(model, columns),
+                    StringTransformerPlanSegment(model, columns, add_special_tokens),
                 ],
             ),
         )

@@ -2,7 +2,7 @@ from typing import Iterator, Tuple, List
 import torch
 import polars as pl
 import io
-from ..pb.bastionlab_polars_pb2 import SendChunk, FetchChunk
+from ..pb.bastionlab_polars_pb2 import SendChunk, FetchChunk, QueryBytes
 from .policy import Policy
 
 CHUNK_SIZE = 32 * 1024
@@ -85,3 +85,29 @@ class ApplyBins(torch.nn.Module):
     def forward(self, x):
         bins = self.bin_size * torch.ones_like(x)
         return round(x // bins) * bins
+
+
+def serialize_query(composite_plan: str) -> Iterator[QueryBytes]:
+    plan = composite_plan.encode("utf8")
+    for data in create_byte_chunk(plan):
+        yield QueryBytes(data=data)
+
+
+def create_byte_chunk(data: bytes) -> Iterator[bytes]:
+    """This method chunks bytes into sub-bytes of len `CHUNK_SIZE = 32KB`.
+    If `data` is less than 32KB, it returns directly the `data`.
+    Otherwise, it iteratively yields 32KB until the last chunk of bytes.
+    Args:
+        data : bytes
+            Bytes to be chunked.
+    Returns:
+        Iterator[bytes]
+    """
+    sent_bytes = 0
+    while sent_bytes < len(data):
+
+        yield bytes(
+            data[sent_bytes : sent_bytes + min(CHUNK_SIZE, len(data) - sent_bytes)]
+        )
+
+        sent_bytes += min(CHUNK_SIZE, len(data) - sent_bytes)
