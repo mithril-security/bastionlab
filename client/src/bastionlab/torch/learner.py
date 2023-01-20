@@ -68,7 +68,7 @@ class RemoteLearner:
                 model = torch.jit.trace(  # Compile the model with the tracing strategy
                     # Wrapp the model to use the first output only (and drop the others)
                     model,
-                    [x.unsqueeze(0) for x in remote_dataset.trace_input],
+                    [x.unsqueeze(0) for x in remote_dataset._trace_input],
                 )
             self.model_ref = client.send_model(
                 model,
@@ -110,7 +110,7 @@ class RemoteLearner:
         batch_size = batch_size if batch_size is not None else self.max_batch_size
         return TrainConfig(
             model=self.model_ref,
-            dataset=self.remote_dataset.serialize(),
+            dataset=self.remote_dataset._serialize(),
             batch_size=batch_size,
             epochs=nb_epochs,
             device=self.device,
@@ -137,7 +137,7 @@ class RemoteLearner:
         batch_size = batch_size if batch_size is not None else self.max_batch_size
         return TestConfig(
             model=self.model_ref,
-            dataset=self.remote_dataset.serialize(),
+            dataset=self.remote_dataset._serialize(),
             batch_size=batch_size,
             device=self.device,
             metric=metric if metric is not None else self.loss,

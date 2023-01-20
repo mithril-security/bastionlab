@@ -141,7 +141,7 @@ class Client:
         return self._bastionlab_polars
 
     @property
-    def converter(self) -> "BastionLabConverter":
+    def _converter(self) -> "BastionLabConverter":
         """
         Returns the BastionLabPolars instance used by this client.
         """

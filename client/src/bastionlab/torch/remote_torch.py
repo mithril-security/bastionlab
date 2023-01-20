@@ -8,19 +8,23 @@ from ..pb.bastionlab_torch_pb2 import UpdateTensor
 from ..pb.bastionlab_pb2 import Reference
 from torch.utils.data import Dataset, DataLoader
 from ..pb.bastionlab_pb2 import Reference, TensorMetaData
+import logging
 
 if TYPE_CHECKING:
     from ..client import Client
 
 
 @dataclass
-class Metadata:
-    _client: "Client"
-
-
-@dataclass
 class RemoteTensor:
-    _meta: Metadata
+    """
+    BastionLab reference to a PyTorch (tch) Tensor on the server.
+
+    It also stores a few basic information about the tensor (`dtype`, `shape`).
+
+    You can also change the dtype of the tensor through an API call
+    """
+
+    _client: "Client"
     _identifier: str
     _dtype: torch.dtype
     _shape: torch.Size
@@ -29,11 +33,11 @@ class RemoteTensor:
     def identifier(self) -> str:
         return self._identifier
 
-    def serialize(self) -> str:
+    def _serialize(self) -> str:
         return f'{{"identifier": "{self.identifier}"}}'
 
     @staticmethod
-    def send_tensor(tensor: torch.Tensor) -> "RemoteTensor":
+    def _send_tensor(tensor: torch.Tensor) -> "RemoteTensor":
         raise Exception(
             "Sending tensors to the BastionLab Torch service is not yet implemented"
         )
@@ -41,8 +45,7 @@ class RemoteTensor:
     @staticmethod
     def _from_reference(ref: Reference, client: "Client") -> "RemoteTensor":
         dtypes, shape = _get_tensor_metadata(ref.meta)
-        _meta = Metadata(client)
-        return RemoteTensor(_meta, ref.identifier, dtypes[0], shape[0])
+        return RemoteTensor(client, ref.identifier, dtypes[0], shape[0])
 
     def __str__(self) -> str:
         return f"RemoteTensor(identifier={self._identifier}, dtype={self._dtype}, shape={self._shape})"
@@ -51,18 +54,27 @@ class RemoteTensor:
         return str(self)
 
     @property
-    def dtype(self):
+    def dtype(self) -> torch.dtype:
+        """Returns the torch dtype of the corresponding tensor"""
         return self._dtype
 
     @property
     def shape(self):
+        """Returns the torch Size of the corresponding tensor"""
         return self._shape
 
     def to(self, dtype: torch.dtype):
-        res = self._meta._client.torch.stub.ModifyTensor(
+        """
+        Performs Tensor dtype conversion.
+
+        Args:
+            dtype: torch.dtype
+                The resulting torch.dtype
+        """
+        res = self._client.torch.stub.ModifyTensor(
             UpdateTensor(identifier=self.identifier, dtype=tch_kinds[dtype])
         )
-        return RemoteTensor._from_reference(res, self._meta._client)
+        return RemoteTensor._from_reference(res, self._client)
 
 
 torch_dtypes = {
@@ -114,22 +126,39 @@ class RemoteDataset:
     privacy_limit: Optional[float] = -1.0
 
     @property
-    def trace_input(self):
+    def _trace_input(self):
         dtypes = [input.dtype for input in self.inputs]
         shapes = [input.shape for input in self.inputs]
         return _tracer(dtypes, shapes)
 
     @property
-    def nb_samples(self):
+    def nb_samples(self) -> int:
+        """
+        Returns the number of samples in the RemoteDataset
+        """
         return self.labels.shape[0]
 
     @staticmethod
     def from_dataset(dataset: Dataset) -> "RemoteDataset":
+        """
+        Converts ordinary PyTorch `Dataset` to `RemoteDataset`.
+
+        It streams all the `inputs` and `label` tensors and forms a similar representation on
+        the server with `RemoteTensor`s.
+
+        Args:
+            dataset: `Dataset`
+                PyTorch Dataset.
+
+        Returns:
+            RemoteDataset:
+                BastionLab's collection of `RemoteTensors` representing the dataset.
+        """
         data = dataset.__getitem__(0)
         inputs = torch.cat(data[0]).unsqueeze(0)
         labels = torch.tensor(data[1]).unsqueeze(0)
 
-        print("Dataset --> RemoteDataset Transformation")
+        logging.debug("Dataset --> RemoteDataset Transformation")
         for idx in range(1, len(dataset)):
             data = dataset.__getitem__(idx)
 
@@ -139,15 +168,15 @@ class RemoteDataset:
             inputs = torch.cat([inputs, input], 0)
             labels = torch.cat([labels, label])
 
-        print("Transformation Done")
+        logging.debug("Transformation Done")
         inputs = RemoteTensor.send_tensor(inputs)
         labels = RemoteTensor.send_tensor(labels.squeeze(0))
 
         return RemoteDataset([inputs], labels)
 
-    def serialize(self):
-        inputs = ",".join([input.serialize() for input in self.inputs])
-        return f'{{"inputs": [{inputs}], "labels": {self.labels.serialize()}, "nb_samples": {self.nb_samples}, "privacy_limit": {self.privacy_limit}}}'
+    def _serialize(self):
+        inputs = ",".join([input._serialize() for input in self.inputs])
+        return f'{{"inputs": [{inputs}], "labels": {self.labels._serialize()}, "nb_samples": {self.nb_samples}, "privacy_limit": {self.privacy_limit}}}'
 
     def __str__(self) -> str:
         return f"RemoteDataset(name={self.name}, privacy_limit={self.privacy_limit}, inputs={str(self.inputs)}, label={str(self.labels)})"

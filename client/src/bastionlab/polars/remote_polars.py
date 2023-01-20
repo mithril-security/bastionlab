@@ -184,19 +184,6 @@ class StringTransformerPlanSegment(CompositePlanSegment):
 
 
 @dataclass
-class UdfTransformerPlanSegment(CompositePlanSegment):
-    """
-    Accepts a UDF for row-wise DataFrame transformation.
-    """
-
-    _name: str
-    _columns: List[str]
-
-    def serialize(self) -> str:
-        pass
-
-
-@dataclass
 class Metadata:
     """
     A class containing metadata related to your dataframe
@@ -1456,8 +1443,12 @@ def train_test_split(
 class RemoteArray(RemoteLazyFrame):
     def __init__(self, rdf: "RemoteLazyFrame") -> None:
         def _verify_schema(rdf: "RemoteLazyFrame"):
-            if pl.Utf8 in list(rdf.schema.values()):
+            dtypes = rdf.schema.values()
+            if pl.Utf8 in list(dtypes):
                 raise TypeError("Utf8 column cannot be converted into RemoteArray")
+
+            if len(set(dtypes)) > 1:
+                raise TypeError("DataTypes for all columns should be the same")
             return rdf.collect()
 
         rdf = _verify_schema(rdf)
@@ -1466,9 +1457,19 @@ class RemoteArray(RemoteLazyFrame):
         self.identifier = rdf.identifier
 
     def to_tensor(self) -> "RemoteTensor":
+        """
+        Converts `RemoteArray` to `RemoteTensor`
+
+        `RemoteArray` is BastionLab's internal intermediate representation which is akin to
+        numpy arrays but are essentially pointers to a `DataFrame` on the server which when `to_tensor`
+        is called converts the `DataFrame` to `Tensor` on the server.
+
+        Returns:
+            RemoteTensor
+        """
         from ..torch.remote_torch import RemoteTensor
 
-        res = self._meta._polars_client.client.converter._stub.ConvToTensor(
+        res = self._meta._polars_client.client._converter._stub.ConvToTensor(
             ToTensor(identifier=self.identifier)
         )
         return RemoteTensor._from_reference(res, self._meta._polars_client.client)
