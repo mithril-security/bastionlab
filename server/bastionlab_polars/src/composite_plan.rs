@@ -148,7 +148,7 @@ impl CompositePlan {
                             })?;
 
                         let mut q3 = selection
-                            .quantile(0.25, QuantileInterpolOptions::Nearest)
+                            .quantile(0.75, QuantileInterpolOptions::Nearest)
                             .map_err(|e| {
                                 Status::aborted(format!("Could not calculate 1st Quartile : {e}"))
                             })?;

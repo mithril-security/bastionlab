@@ -957,7 +957,7 @@ class RemoteLazyFrame:
         x: str = None,
         y: str = None,
         hue: str = None,
-        with_outliers: bool = False,
+        with_outliers: bool = True,
         **kwargs,
     ):
         """Draws a boxplot based on x, y and hue values.
@@ -1007,7 +1007,7 @@ class RemoteLazyFrame:
 
         df = res.collect().fetch()
         RequestRejected.check_valid_df(df)
-
+        print(df)
         if not with_outliers:
 
             def get_value(df: pl.DataFrame, col) -> float:
@@ -1015,30 +1015,34 @@ class RemoteLazyFrame:
 
             boxes = []
             for col in selects:
-                fig, ax = plt.subplots()
+                _, ax = plt.subplots()
+                ax.set_ylabel(col)
+                ax.set_xlabel("" if x is None else x)
+                q1 = get_value(df, f"{col}_q1")
+                q3 = get_value(df, f"{col}_q3")
                 boxes.append(
                     {
                         "label": col,
-                        "whislo": get_value(
-                            df, f"{col}_min"
-                        ),  # Bottom whisker position
-                        "q1": get_value(
-                            df, f"{col}_q1"
-                        ),  # First quartile (25th percentile)
-                        "med": get_value(
-                            df, f"{col}_median"
-                        ),  # Median         (50th percentile)
-                        "q3": get_value(
-                            df, f"{col}_q3"
-                        ),  # Third quartile (75th percentile)
-                        "whishi": get_value(df, f"{col}_max"),  # Top whisker position
+                        "whislo": get_value(df, f"{col}_min"),
+                        "q1": q1,
+                        "med": get_value(df, f"{col}_median"),
+                        "q3": q3,
+                        "iqr": q3 - q1,
+                        "whishi": get_value(df, f"{col}_max"),
                     }
                 )
-            print(boxes)
 
-            ax.bxp(boxes, showfliers=False)
-            plt.savefig("boxplot.png")
-            plt.close()
+            medianprops = dict(linestyle="-", color="black")
+            boxprops = dict(facecolor="#007AA3")
+            ax.bxp(
+                boxes,
+                showfliers=False,
+                widths=0.75,
+                medianprops=medianprops,
+                boxprops=boxprops,
+                patch_artist=True,
+            )
+            plt.show()
         else:
             sns.boxplot(data=df.to_pandas(), x=x, y=y, **kwargs)
 
