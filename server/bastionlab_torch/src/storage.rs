@@ -1,13 +1,9 @@
 use bastionlab_common::session_proto::ClientInfo;
-use bastionlab_learning::data::Dataset;
 use bastionlab_learning::serialization::SizedObjectsBytes;
 use ring::hmac;
 use std::convert::TryInto;
 use std::sync::{Arc, RwLock};
 use tch::TchError;
-use tonic::Status;
-
-use crate::utils::RemoteDataset;
 
 /// Stored object with name, description and owner key
 #[derive(Debug)]

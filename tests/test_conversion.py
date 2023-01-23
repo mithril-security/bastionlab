@@ -141,6 +141,15 @@ class TestingConnection(unittest.TestCase):
             "1D Linear Regression",
         )
 
+    def test_send_tensor_method(self):
+        connection = Connection("localhost")
+        client = connection.client
+        X = torch.tensor([[0.0], [1.0], [0.5], [0.2]])
+        remote_tensor = client.torch.RemoteTensor(X)
+
+        self.assertEqual(remote_tensor.shape, torch.Size((4, 1)))
+        self.assertEqual(remote_tensor.dtype, torch.float)
+
 
 if __name__ == "__main__":
 
