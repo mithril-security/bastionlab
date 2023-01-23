@@ -21,7 +21,8 @@ pub mod bastionlab {
 
 use torch_proto::torch_service_server::TorchService;
 use torch_proto::{
-    Chunk, Devices, Empty, Metric, Optimizers, References, TestConfig, TrainConfig, UpdateTensor,
+    Chunk, Devices, Empty, Metric, Optimizers, References, RemoteDatasetReference, TestConfig,
+    TrainConfig, UpdateTensor,
 };
 
 use bastionlab::{Reference, TensorMetaData};
@@ -131,6 +132,40 @@ impl BastionLabTorch {
 
         Ok((Arc::new(RwLock::new(data)), hash))
     }
+
+    fn convert_from_dataset_to_remote_dataset(
+        &self,
+        dataset: &mut Dataset,
+    ) -> Result<RemoteDatasetReference, Status> {
+        let mut samples_locks = dataset
+            .samples_inputs
+            .iter()
+            .map(|s| s.lock().unwrap())
+            .collect::<Vec<_>>();
+        let create_tensor = |tensor| -> Reference {
+            let meta = create_tensor_meta(&tensor);
+
+            let identifier = self.insert_tensor(tensor);
+
+            Reference {
+                identifier,
+                meta: meta.encode_to_vec(),
+                ..Default::default()
+            }
+        };
+
+        let mut inputs = vec![];
+
+        let labels_lock = dataset.labels.lock().unwrap();
+
+        for sample in samples_locks.drain(..) {
+            inputs.push(create_tensor(sample.data()));
+        }
+        Ok(RemoteDatasetReference {
+            inputs,
+            labels: Some(create_tensor(labels_lock.data())),
+        })
+    }
 }
 
 #[tonic::async_trait]
@@ -141,13 +176,13 @@ impl TorchService for BastionLabTorch {
     async fn send_dataset(
         &self,
         request: Request<Streaming<Chunk>>,
-    ) -> Result<Response<Reference>, Status> {
+    ) -> Result<Response<RemoteDatasetReference>, Status> {
         let token = self.sess_manager.verify_request(&request)?;
         let client_info = self.sess_manager.get_client_info(token)?;
         let start_time = Instant::now();
 
         let artifact: Artifact<SizedObjectsBytes> = unstream_data(request.into_inner()).await?;
-
+        let name = { artifact.name.clone() };
         let (dataset_hash, dataset_size) = {
             let lock = artifact.data.read().unwrap();
             let data = lock.get();
@@ -156,8 +191,12 @@ impl TorchService for BastionLabTorch {
         };
 
         let dataset: Artifact<Dataset> = tcherror_to_status((artifact).deserialize())?;
-        let (_, name, description, meta) = self.insert_dataset(&dataset_hash, dataset)?;
 
+        let remote_dataset = {
+            let mut dataset = dataset.data.write().unwrap();
+            let data = self.convert_from_dataset_to_remote_dataset(&mut dataset)?;
+            data
+        };
         let elapsed = start_time.elapsed();
         info!("Upload Dataset successful in {}ms", elapsed.as_millis());
 
@@ -170,12 +209,7 @@ impl TorchService for BastionLabTorch {
             },
             Some(client_info),
         );
-        Ok(Response::new(Reference {
-            identifier: format!("{}", dataset_hash),
-            name,
-            description,
-            meta,
-        }))
+        Ok(Response::new(remote_dataset))
     }
 
     async fn send_model(
@@ -530,10 +564,7 @@ impl TorchService for BastionLabTorch {
         let (tensor, meta) = {
             let data = res.data.read().unwrap();
             let data: Tensor = (&*data).try_into().unwrap();
-            let meta = TensorMetaData {
-                input_dtype: vec![format!("{:?}", data.kind())],
-                input_shape: data.size(),
-            };
+            let meta = create_tensor_meta(&data);
             (data, meta)
         };
 

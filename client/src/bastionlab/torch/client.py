@@ -250,9 +250,9 @@ class BastionLabTorch:
             *args: all arguments are forwarded to the `RemoteDataLoader` constructor.
             **kwargs: all keyword arguments are forwarded to the `RemoteDataLoader` constructor.
         """
-        from .learner import RemoteDataset
+        from .remote_torch import RemoteDataset
 
-        return RemoteDataset(self, *args, **kwargs)
+        return RemoteDataset._from_dataset(self, *args, **kwargs)
 
     def RemoteLearner(self, *args, **kwargs) -> "RemoteLearner":
         """Returns a RemoteLearner object encapsulating a model and hyperparameters for

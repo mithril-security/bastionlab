@@ -113,8 +113,14 @@ message UpdateTensor {
     string dtype = 2;
 }
 
+message RemoteDatasetReference {
+    repeated bastionlab.Reference inputs= 1;
+    bastionlab.Reference labels = 2;
+    
+}
+
 service TorchService {
-    rpc SendDataset (stream Chunk) returns (bastionlab.Reference) {}
+    rpc SendDataset (stream Chunk) returns (RemoteDatasetReference) {}
     rpc SendTensor (stream Chunk) returns (bastionlab.Reference) {}
     rpc SendModel (stream Chunk) returns (bastionlab.Reference) {}
     rpc ModifyTensor(UpdateTensor) returns (bastionlab.Reference) {}

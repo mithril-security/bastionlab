@@ -1,3 +1,4 @@
+from bastionlab.torch.utils import TensorDataset
 import polars as pl
 import torch
 import logging
@@ -84,6 +85,61 @@ class TestingConnection(unittest.TestCase):
             test_tensor.shape, sk_test_tensor.shape, "Test set not the same Shape"
         )
         connection.close()
+
+    def test_torch_dataset_upload(self):
+        connection = Connection("localhost")
+        client = connection.client
+        X = torch.tensor([[0.0], [1.0], [0.5], [0.2]])
+        Y = torch.tensor([[0.0], [2.0], [1.0], [0.4]])
+        train_dataset = TensorDataset([X], Y)
+
+        X = torch.tensor([[0.1], [-1.0]])
+        Y = torch.tensor([[0.2], [-2.0]])
+        test_dataset = TensorDataset([X], Y)
+
+        train_dataset = client.torch.RemoteDataset(
+            train_dataset,
+            name="1D Linear Regression",
+            description="Dummy 1D Linear Regression Dataset (param is 2)",
+            privacy_limit=8320.1,
+        )
+        test_dataset = client.torch.RemoteDataset(
+            test_dataset,
+            name="1D Linear Regression",
+            description="Dummy 1D Linear Regression Dataset (param is 2)",
+            privacy_limit=8320.1,
+        )
+
+        train_inputs_shapes = [input.shape for input in train_dataset.inputs]
+        test_inputs_shapes = [input.shape for input in test_dataset.inputs]
+
+        self.assertListEqual(
+            train_inputs_shapes,
+            [
+                torch.Size((4, 1)),
+            ],
+        )
+        self.assertListEqual(
+            test_inputs_shapes,
+            [
+                torch.Size((2, 1)),
+            ],
+        )
+        self.assertEqual(
+            train_dataset.privacy_limit,
+            8320.1,
+        )
+        self.assertEqual(
+            train_dataset.nb_samples,
+            4,
+        )
+        self.assertEqual(
+            train_dataset.description, "Dummy 1D Linear Regression Dataset (param is 2)"
+        )
+        self.assertEqual(
+            train_dataset.name,
+            "1D Linear Regression",
+        )
 
 
 if __name__ == "__main__":

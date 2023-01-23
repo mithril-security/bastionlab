@@ -4,7 +4,7 @@ import io
 from typing import Iterator, TYPE_CHECKING, List, Optional
 from dataclasses import dataclass
 from .utils import DataWrapper, Chunk
-from ..pb.bastionlab_torch_pb2 import UpdateTensor
+from ..pb.bastionlab_torch_pb2 import UpdateTensor, RemoteDatasetReference
 from ..pb.bastionlab_pb2 import Reference
 from torch.utils.data import Dataset, DataLoader
 from ..pb.bastionlab_pb2 import Reference, TensorMetaData
@@ -122,7 +122,8 @@ def _tracer(dtypes: List[torch.dtype], shapes: List[torch.Size]):
 class RemoteDataset:
     inputs: List[RemoteTensor]
     labels: RemoteTensor
-    name: Optional[str] = "RemoteDataset-" + hashlib.sha256().hexdigest()[:5]
+    name: Optional[str] = "RemoteDataset"
+    description: Optional[str] = "RemoteDataset"
     privacy_limit: Optional[float] = -1.0
 
     @property
@@ -139,40 +140,20 @@ class RemoteDataset:
         return self.labels.shape[0]
 
     @staticmethod
-    def from_dataset(dataset: Dataset) -> "RemoteDataset":
-        """
-        Converts ordinary PyTorch `Dataset` to `RemoteDataset`.
+    def _from_dataset(
+        client: "Client", dataset: Dataset, *args, **kwargs
+    ) -> "RemoteDataset":
+        res: RemoteDatasetReference = client.send_dataset(dataset, *args, **kwargs)
+        inputs = [RemoteTensor._from_reference(ref, client) for ref in res.inputs]
+        labels = RemoteTensor._from_reference(res.labels, client)
 
-        It streams all the `inputs` and `label` tensors and forms a similar representation on
-        the server with `RemoteTensor`s.
-
-        Args:
-            dataset: `Dataset`
-                PyTorch Dataset.
-
-        Returns:
-            RemoteDataset:
-                BastionLab's collection of `RemoteTensors` representing the dataset.
-        """
-        data = dataset.__getitem__(0)
-        inputs = torch.cat(data[0]).unsqueeze(0)
-        labels = torch.tensor(data[1]).unsqueeze(0)
-
-        logging.debug("Dataset --> RemoteDataset Transformation")
-        for idx in range(1, len(dataset)):
-            data = dataset.__getitem__(idx)
-
-            input = torch.cat(data[0]).unsqueeze(0)
-            label = torch.tensor(data[1]).unsqueeze(0)
-
-            inputs = torch.cat([inputs, input], 0)
-            labels = torch.cat([labels, label])
-
-        logging.debug("Transformation Done")
-        inputs = RemoteTensor.send_tensor(inputs)
-        labels = RemoteTensor.send_tensor(labels.squeeze(0))
-
-        return RemoteDataset([inputs], labels)
+        return RemoteDataset(
+            inputs,
+            labels,
+            name=kwargs["name"],
+            description=kwargs["description"],
+            privacy_limit=kwargs["privacy_limit"],
+        )
 
     def _serialize(self):
         inputs = ",".join([input._serialize() for input in self.inputs])

@@ -1,5 +1,6 @@
+use bastionlab_common::session_proto::TensorMetaData;
 use serde::{Deserialize, Serialize};
-use tch::{Kind, TchError};
+use tch::{Kind, TchError, Tensor};
 use tonic::Status;
 
 /// Converts a [`tch::TchError`]-based result into a [`tonic::Status`]-based one.
@@ -46,5 +47,12 @@ pub fn get_kind(kind: &str) -> Result<Kind, Status> {
                 kind
             )));
         }
+    }
+}
+
+pub fn create_tensor_meta(tensor: &Tensor) -> TensorMetaData {
+    TensorMetaData {
+        input_dtype: vec![format!("{:?}", tensor.kind())],
+        input_shape: tensor.size(),
     }
 }
