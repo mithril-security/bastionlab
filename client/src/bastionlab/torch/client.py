@@ -2,6 +2,7 @@ from typing import List, TYPE_CHECKING
 from torch.nn import Module
 from torch.utils.data import Dataset
 import grpc
+import torch
 from ..pb.bastionlab_torch_pb2 import Empty, Metric, TestConfig, TrainConfig  # type: ignore [import]
 from ..pb.bastionlab_pb2 import Reference
 from ..pb.bastionlab_torch_pb2_grpc import TorchServiceStub  # type: ignore [import]
@@ -20,6 +21,7 @@ from .utils import (
 if TYPE_CHECKING:
     from .learner import RemoteLearner, RemoteDataset
     from ..client import Client
+    from .remote_torch import RemoteTensor
 
 
 class BastionLabTorch:
@@ -243,12 +245,12 @@ class BastionLabTorch:
         return RemoteDataset.list_available(self)
 
     def RemoteDataset(self, *args, **kwargs) -> "RemoteDataset":
-        """Returns a RemoteDataLoader object encapsulating a training and testing dataloaders
+        """Returns a RemoteDataset object encapsulating a training and testing dataloaders
         on the remote server that uses this client to communicate with the server.
 
         Args:
-            *args: all arguments are forwarded to the `RemoteDataLoader` constructor.
-            **kwargs: all keyword arguments are forwarded to the `RemoteDataLoader` constructor.
+            *args: all arguments are forwarded to the `RemoteDataset` constructor.
+            **kwargs: all keyword arguments are forwarded to the `RemoteDataset` constructor.
         """
         from .remote_torch import RemoteDataset
 
@@ -265,3 +267,13 @@ class BastionLabTorch:
         from .learner import RemoteLearner
 
         return RemoteLearner(self, *args, **kwargs)
+
+    def RemoteTensor(self, tensor: torch.Tensor) -> "RemoteTensor":
+        """Returns a RemoteTensor which represents a reference to the uploaded tensor.
+
+        Args:
+            tensor: The tensor to be uploaded.
+        """
+        from .remote_torch import RemoteTensor
+
+        return RemoteTensor._send_tensor(self, tensor)

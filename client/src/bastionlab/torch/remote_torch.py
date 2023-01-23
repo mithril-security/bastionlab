@@ -3,7 +3,7 @@ import hashlib
 import io
 from typing import Iterator, TYPE_CHECKING, List, Optional
 from dataclasses import dataclass
-from .utils import DataWrapper, Chunk
+from .utils import DataWrapper, Chunk, TensorDataset
 from ..pb.bastionlab_torch_pb2 import UpdateTensor, RemoteDatasetReference
 from ..pb.bastionlab_pb2 import Reference
 from torch.utils.data import Dataset, DataLoader
@@ -37,10 +37,10 @@ class RemoteTensor:
         return f'{{"identifier": "{self.identifier}"}}'
 
     @staticmethod
-    def _send_tensor(tensor: torch.Tensor) -> "RemoteTensor":
-        raise Exception(
-            "Sending tensors to the BastionLab Torch service is not yet implemented"
-        )
+    def _send_tensor(client: "Client", tensor: torch.Tensor) -> "RemoteTensor":
+        tensor = TensorDataset([], tensor)
+        dataset = RemoteDataset._from_dataset(client, tensor, name=None)
+        return dataset.labels
 
     @staticmethod
     def _from_reference(ref: Reference, client: "Client") -> "RemoteTensor":
@@ -147,12 +147,16 @@ class RemoteDataset:
         inputs = [RemoteTensor._from_reference(ref, client) for ref in res.inputs]
         labels = RemoteTensor._from_reference(res.labels, client)
 
+        name = kwargs.get("name")
+        description = kwargs.get("description")
+        privacy_limit = kwargs.get("privacy_limit")
+
         return RemoteDataset(
             inputs,
             labels,
-            name=kwargs["name"],
-            description=kwargs["description"],
-            privacy_limit=kwargs["privacy_limit"],
+            name=name,
+            description=description,
+            privacy_limit=-1.0 if not privacy_limit else privacy_limit,
         )
 
     def _serialize(self):

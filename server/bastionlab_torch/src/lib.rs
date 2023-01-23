@@ -136,7 +136,7 @@ impl BastionLabTorch {
     fn convert_from_dataset_to_remote_dataset(
         &self,
         dataset: &mut Dataset,
-    ) -> Result<RemoteDatasetReference, Status> {
+    ) -> Result<(RemoteDatasetReference, bool), Status> {
         let mut samples_locks = dataset
             .samples_inputs
             .iter()
@@ -161,10 +161,14 @@ impl BastionLabTorch {
         for sample in samples_locks.drain(..) {
             inputs.push(create_tensor(sample.data()));
         }
-        Ok(RemoteDatasetReference {
-            inputs,
-            labels: Some(create_tensor(labels_lock.data())),
-        })
+        let single_tensor = inputs.len() > 0;
+        Ok((
+            RemoteDatasetReference {
+                inputs,
+                labels: Some(create_tensor(labels_lock.data())),
+            },
+            single_tensor,
+        ))
     }
 }
 
@@ -192,23 +196,26 @@ impl TorchService for BastionLabTorch {
 
         let dataset: Artifact<Dataset> = tcherror_to_status((artifact).deserialize())?;
 
-        let remote_dataset = {
+        let (remote_dataset, single_tensor) = {
             let mut dataset = dataset.data.write().unwrap();
             let data = self.convert_from_dataset_to_remote_dataset(&mut dataset)?;
             data
         };
-        let elapsed = start_time.elapsed();
-        info!("Upload Dataset successful in {}ms", elapsed.as_millis());
 
-        telemetry::add_event(
-            TelemetryEventProps::SendDataset {
-                dataset_name: Some(name.clone()),
-                dataset_size,
-                time_taken: elapsed.as_millis() as f64,
-                dataset_hash: Some(dataset_hash.clone()),
-            },
-            Some(client_info),
-        );
+        if !single_tensor {
+            let elapsed = start_time.elapsed();
+            info!("Upload Dataset successful in {}ms", elapsed.as_millis());
+
+            telemetry::add_event(
+                TelemetryEventProps::SendDataset {
+                    dataset_name: Some(name.clone()),
+                    dataset_size,
+                    time_taken: elapsed.as_millis() as f64,
+                    dataset_hash: Some(dataset_hash.clone()),
+                },
+                Some(client_info),
+            );
+        }
         Ok(Response::new(remote_dataset))
     }
 
