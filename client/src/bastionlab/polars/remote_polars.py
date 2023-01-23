@@ -157,6 +157,16 @@ class StackPlanSegment(CompositePlanSegment):
 
 
 @dataclass
+class DescribeSegment(CompositePlanSegment):
+    """
+    Composite plan segment class responsible for vstack function
+    """
+
+    def serialize(self) -> str:
+        return '"DescribeSegment"'
+
+
+@dataclass
 class Metadata:
     """
     A class containing metadata related to your dataframe
@@ -386,6 +396,26 @@ class RemoteLazyFrame:
                     *self._meta._prev_segments,
                     PolarsPlanSegment(self._inner),
                     StackPlanSegment(),
+                ],
+            ),
+        )
+
+    def describe(self: LDF) -> LDF:
+        """appends df2 to df1 provided columns have the same name/type
+        Returns:
+            RemoteLazyFrame: A RemoteLazyFrame
+        """
+        df = pl.DataFrame(
+            [pl.Series(k, dtype=v) for k, v in self._inner.schema.items()]
+        )
+        return RemoteLazyFrame(
+            df.lazy(),
+            Metadata(
+                self._meta._client,
+                [
+                    *self._meta._prev_segments,
+                    PolarsPlanSegment(self._inner),
+                    DescribeSegment(),
                 ],
             ),
         )

@@ -21,6 +21,7 @@ pub enum CompositePlanSegment {
     UdfPlanSegment { columns: Vec<String>, udf: String },
     EntryPointPlanSegment(String),
     StackPlanSegment,
+    DescribeSegment,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -43,7 +44,7 @@ impl CompositePlan {
         let plan_str = serde_json::to_string(&self.0).map_err(|e| {
             Status::invalid_argument(format!("Could not parse composite plan: {e}"))
         })?;
-
+        let mut IS_DESCRIBE = 0;
         for seg in self.0 {
             match seg {
                 CompositePlanSegment::PolarsPlanSegment(mut plan) => {
@@ -96,6 +97,7 @@ impl CompositePlan {
                     stack.push(StackFrame { df, stats });
                 }
                 CompositePlanSegment::StackPlanSegment => {
+                    IS_DESCRIBE = 0;
                     let frame1 = stack.pop().ok_or_else(|| {
                         Status::invalid_argument("Could not apply stack: no input data frame")
                     })?;
@@ -109,6 +111,16 @@ impl CompositePlan {
                     })?;
                     let mut stats = frame1.stats;
                     stats.merge(frame2.stats);
+                    stack.push(StackFrame { df, stats });
+                }
+
+                CompositePlanSegment::DescribeSegment => {
+                    IS_DESCRIBE = 1;
+                    let frame1 = stack.pop().ok_or_else(|| {
+                        Status::invalid_argument("Could not apply stack: no input data frame")
+                    })?;
+                    let df = frame1.df.describe(None);
+                    let stats = frame1.stats;
                     stack.push(StackFrame { df, stats });
                 }
             }
@@ -143,7 +155,9 @@ impl CompositePlan {
                 Ok(())
             })??;
         }
-
+        if IS_DESCRIBE == 1 {
+            fetchable = VerificationResult::Safe;
+        }
         Ok(DataFrameArtifact {
             dataframe: df,
             fetchable,
