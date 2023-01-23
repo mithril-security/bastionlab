@@ -1,5 +1,6 @@
 from bastionlab.torch.remote_torch import RemoteDataset
-from bastionlab.torch.optimizer_config import Adam
+from bastionlab.torch.optimizer_config import SGD, Adam
+from bastionlab.torch.utils import TensorDataset
 import polars as pl
 import os
 import torch
@@ -120,6 +121,91 @@ class TestingConnection(unittest.TestCase):
 
         fetched_model = remote_learner.get_model()
 
+        self.assertEqual(fetched_model, model)
+
+    def test_sgd_linear_regression(self):
+        connection = Connection("localhost")
+        client = connection.client
+        X = torch.tensor([[0.0], [1.0], [0.5], [0.2]])
+        Y = torch.tensor([[0.0], [2.0], [1.0], [0.4]])
+        train_dataset = TensorDataset([X], Y)
+
+        X = torch.tensor([[0.1], [-1.0]])
+        Y = torch.tensor([[0.2], [-2.0]])
+        test_dataset = TensorDataset([X], Y)
+
+        train_dataset = client.torch.RemoteDataset(
+            train_dataset,
+            name="1D Linear Regression",
+            description="Dummy 1D Linear Regression Dataset (param is 2)",
+        )
+        test_dataset = client.torch.RemoteDataset(
+            test_dataset,
+            name="1D Linear Regression",
+            description="Dummy 1D Linear Regression Dataset (param is 2)",
+        )
+
+        model = make_model(in_features=X.shape[-1], dtype=X.dtype)()
+
+        remote_learner = client.torch.RemoteLearner(
+            model,
+            train_dataset,
+            max_batch_size=2,
+            loss="l2",
+            optimizer=SGD(lr=0.1, momentum=0.9),
+            model_name="Linear 1x1",
+            model_description="1D Linear Regression Model",
+        )
+        remote_learner.fit(
+            nb_epochs=1,
+        )
+
+        fetched_model = remote_learner.get_model()
+
+        remote_learner.test(test_dataset, metric_eps=20.0)
+        self.assertEqual(fetched_model, model)
+
+    def test_dp_sgd_linear_regression(self):
+        connection = Connection("localhost")
+        client = connection.client
+        X = torch.tensor([[0.0], [1.0], [0.5], [0.2]])
+        Y = torch.tensor([[0.0], [2.0], [1.0], [0.4]])
+        train_dataset = TensorDataset([X], Y)
+
+        X = torch.tensor([[0.1], [-1.0]])
+        Y = torch.tensor([[0.2], [-2.0]])
+        test_dataset = TensorDataset([X], Y)
+
+        train_dataset = client.torch.RemoteDataset(
+            train_dataset,
+            name="1D Linear Regression",
+            description="Dummy 1D Linear Regression Dataset (param is 2)",
+            privacy_limit=8001.1,
+        )
+        test_dataset = client.torch.RemoteDataset(
+            test_dataset,
+            name="1D Linear Regression",
+            description="Dummy 1D Linear Regression Dataset (param is 2)",
+            privacy_limit=8001.1,
+        )
+
+        model = make_model(in_features=X.shape[-1], dtype=X.dtype)()
+
+        remote_learner = client.torch.RemoteLearner(
+            model,
+            train_dataset,
+            max_batch_size=2,
+            loss="l2",
+            optimizer=SGD(lr=0.1, momentum=0.9),
+            model_name="Linear 1x1",
+            model_description="1D Linear Regression Model",
+            expand=True,
+        )
+        remote_learner.fit(nb_epochs=1, eps=5.0)
+
+        fetched_model = remote_learner.get_model()
+
+        remote_learner.test(test_dataset)
         self.assertEqual(fetched_model, model)
 
 

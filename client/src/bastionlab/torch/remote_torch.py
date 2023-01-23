@@ -147,12 +147,16 @@ class RemoteDataset:
         inputs = [RemoteTensor._from_reference(ref, client) for ref in res.inputs]
         labels = RemoteTensor._from_reference(res.labels, client)
 
+        name = kwargs.get("name")
+        description = kwargs.get("description")
+        privacy_limit = kwargs.get("privacy_limit")
+
         return RemoteDataset(
             inputs,
             labels,
-            name=kwargs.get("name"),
-            description=kwargs.get("description"),
-            privacy_limit=kwargs.get("privacy_limit"),
+            name=name,
+            description=description,
+            privacy_limit=-1.0 if not privacy_limit else privacy_limit,
         )
 
     def _serialize(self):
