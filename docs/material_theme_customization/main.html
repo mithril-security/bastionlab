@@ -83,22 +83,42 @@
 /* warning */
 .jp-RenderedHTMLCommon .warning {
 	background: #f0b92d11;
+	/* Add a border to the admonition */
+	border: 1px solid #f0b92d;
+	border-radius: 5px;
+	border-left: 5px solid #f0b92d;
 }
 
 .jp-RenderedHTMLCommon .note {
 	background: #f0b92d11;
+	border: 1px solid #214649;
+	border-radius: 5px;
+	border-left: 5px solid #214649;
 }
 
 .jp-RenderedHTMLCommon .danger {
 	background: #f0b92d11;
+	border: 1px solid #FF1744;
+	border-radius: 5px;
+	border-left: 5px solid #FF1744;
 }
 
 .jp-RenderedHTMLCommon .tip {
 	background: #f0b92d11;
+	border: 1px solid #00BFA5;
+	border-radius: 5px;
+	border-left: 5px solid #00BFA5;
 }
 
 .jp-RenderedHTMLCommon .info {
 	background: #f0b92d11;
+	border: 1px solid #00B8D4;
+	border-radius: 5px;
+	border-left: 5px solid #00B8D4;
+}
+
+[dir=ltr] .md-typeset :is(.admonition,details) {
+    border-left-width: 1px;
 }
 
 
