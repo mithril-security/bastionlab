@@ -200,6 +200,20 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
         )
         return FetchableLazyFrame._from_reference(self, res)
 
+    def _describe_df(self, identifier: str) -> "FetchableLazyFrame":
+        """creates a FetchableLazyFrame containing statistics relating to the your original RemoteLazyFrame
+        Returns:
+            FetchableLazyFrame: A FetchableLazyFrame containing stats relating to original RemoteLazyFrame
+        """
+        from .remote_polars import FetchableLazyFrame
+
+        self.client.refresh_session_if_needed()
+
+        res = GRPCException.map_error(
+            lambda: self.stub.DescribeDataFrame(ReferenceRequest(identifier=identifier))
+        )
+        return FetchableLazyFrame._from_reference(self, res)
+
     def _persist_df(self, identifier: str):
         """
         Saves a Dataframe on the server from a BastionLab DataFrame identifier.
