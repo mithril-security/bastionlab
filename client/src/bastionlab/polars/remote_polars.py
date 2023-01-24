@@ -941,6 +941,7 @@ class RemoteLazyFrame:
         x: str = None,
         y: str = None,
         hue: str = None,
+        with_outliers: bool = True,
         **kwargs,
     ):
         """Draws a boxplot based on x, y and hue values.
@@ -953,6 +954,8 @@ class RemoteLazyFrame:
             x (str): The name of column to be used for x axes.
             y (str): The name of column to be used for y axes.
             hue (str = None): The name of the column to be used as a grouping variable that will produce boxes with different colors.
+            with_outliers: If set to false, the boxplot will be built with aggregated queries, thus avoiding any potential privacy policy breaches, but notably
+            leading to the loss of outlier data in the boxplot.
             kwargs: Other keyword arguments that will be passed to Seaborn's boxplot function.
         Raises:
             ValueError: Incorrect column name given
@@ -972,10 +975,44 @@ class RemoteLazyFrame:
         if hue != None:
             kwargs["hue"] = hue
 
-        tmp = self.select([pl.col(x) for x in selects]).collect().fetch()
-        RequestRejected.check_valid_df(tmp)
-        df = tmp.to_pandas()
-        sns.boxplot(data=df, x=x, y=y, **kwargs)
+        if not with_outliers:
+            boxes = []
+            #works for X or Y but not X & Y
+            for col in selects:
+                _, ax = plt.subplots()
+                ax.set_ylabel(col)
+                ax.set_xlabel("" if x is None else x)
+                q1 = self.select(pl.col(col).quantile(0.25)).collect().fetch().to_numpy()[0]
+                q3 = self.select(pl.col(col).quantile(0.75)).collect().fetch().to_numpy()[0]
+                boxes.append(
+                    {
+                        "label": col,
+                        "whislo": self.select(pl.col(col).min()).collect().fetch().to_numpy()[0],
+                        "q1": q1,
+                        "med": self.select(pl.col(col).min()).collect().fetch().to_numpy()[0],
+                        "q3": q3,
+                        "iqr": q3 - q1,
+                        "whishi": self.select(pl.col(col).max()).collect().fetch().to_numpy()[0],
+                    }
+                )
+
+            medianprops = dict(linestyle="-", color="black")
+            boxprops = dict(facecolor="#007AA3")
+            ax.bxp(
+                boxes,
+                showfliers=False,
+                widths=0.75,
+                medianprops=medianprops,
+                boxprops=boxprops,
+                patch_artist=True,
+            )
+            plt.show()
+        else:
+
+            tmp = self.select([pl.col(x) for x in selects]).collect().fetch()
+            RequestRejected.check_valid_df(tmp)
+            df = tmp.to_pandas()
+            sns.boxplot(data=df, x=x, y=y, **kwargs)
 
     def facet(
         self: LDF, col: Optional[str] = None, row: Optional[str] = None, **kwargs
