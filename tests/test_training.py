@@ -48,6 +48,10 @@ def get_covid_dataset():
         )
 
 
+def list_tensor_to_list_list(tensors):
+    return [tensor.numpy().tolist() for tensor in tensors]
+
+
 class TestingConnection(unittest.TestCase):
     def test_connection(self):
         connection = Connection("localhost")
@@ -106,7 +110,6 @@ class TestingConnection(unittest.TestCase):
 
         train_dataset = RemoteDataset(inputs=[train_inputs], labels=train_labels)
         test_dataset = RemoteDataset(inputs=[test_inputs], labels=test_labels)
-
         remote_learner = connection.client.torch.RemoteLearner(
             model,
             train_dataset,
@@ -117,11 +120,14 @@ class TestingConnection(unittest.TestCase):
         )
 
         remote_learner.fit(nb_epochs=1)
+
         remote_learner.test(test_dataset)
 
         fetched_model = remote_learner.get_model()
 
         self.assertEqual(fetched_model, model)
+
+        connection.close()
 
     def test_sgd_linear_regression(self):
         connection = Connection("localhost")
@@ -165,6 +171,10 @@ class TestingConnection(unittest.TestCase):
         remote_learner.test(test_dataset, metric_eps=20.0)
         self.assertEqual(fetched_model, model)
 
+        client.torch.delete_dataset(train_dataset)
+        client.torch.delete_dataset(test_dataset)
+        connection.close()
+
     def test_dp_sgd_linear_regression(self):
         connection = Connection("localhost")
         client = connection.client
@@ -207,6 +217,86 @@ class TestingConnection(unittest.TestCase):
 
         remote_learner.test(test_dataset)
         self.assertEqual(fetched_model, model)
+
+        client.torch.delete_dataset(train_dataset)
+        client.torch.delete_dataset(test_dataset)
+
+        connection.close()
+
+    def test_available_datasets(self):
+        connection = Connection("localhost")
+        client = connection.client
+        X = torch.tensor([[0.0], [1.0], [0.5], [0.2]])
+        Y = torch.tensor([[0.0], [2.0], [1.0], [0.4]])
+        train_dataset = TensorDataset([X], Y)
+
+        X = torch.tensor([[0.1], [-1.0]])
+        Y = torch.tensor([[0.2], [-2.0]])
+        test_dataset = TensorDataset([X], Y)
+
+        count = len(client.torch.get_available_datasets())
+        train_dataset = client.torch.RemoteDataset(
+            train_dataset,
+            name="1D Linear Regression",
+            description="Dummy 1D Linear Regression Dataset (param is 2)",
+            privacy_limit=8001.1,
+        )
+        test_dataset = client.torch.RemoteDataset(
+            test_dataset,
+            name="1D Linear Regression",
+            description="Dummy 1D Linear Regression Dataset (param is 2)",
+            privacy_limit=8001.1,
+        )
+
+        after_count = len(client.torch.get_available_datasets())
+
+        print("before: ", count, "after: ", after_count)
+        self.assertEqual(after_count, count + 2)
+
+        connection.close()
+
+    def test_delete_datasets(self):
+        connection = Connection("localhost")
+        client = connection.client
+        X = torch.tensor([[0.0], [1.0], [0.5], [0.2]])
+        Y = torch.tensor([[0.0], [2.0], [1.0], [0.4]])
+        train_dataset = TensorDataset([X], Y)
+
+        train_dataset = client.torch.RemoteDataset(
+            train_dataset,
+            name="1D Linear Regression",
+            description="Dummy 1D Linear Regression Dataset (param is 2)",
+            privacy_limit=8001.1,
+        )
+
+        count = len(client.torch.get_available_datasets())
+        client.torch.delete_dataset(train_dataset)
+        after_count = len(client.torch.get_available_datasets())
+
+        self.assertEqual(after_count, count - 1)
+        connection.close()
+
+    def test_fetch_dataset(self):
+        connection = Connection("localhost")
+        client = connection.client
+        X = torch.tensor([[0.0], [1.0], [0.5], [0.2]])
+        Y = torch.tensor([[0.0], [2.0], [1.0], [0.4]])
+        tensor_train = TensorDataset([X], Y)
+
+        train_dataset = client.torch.RemoteDataset(
+            tensor_train,
+            name="1D Linear Regression",
+            description="Dummy 1D Linear Regression Dataset (param is 2)",
+            privacy_limit=8001.1,
+        )
+
+        fetched_tensor_train = client.torch.fetch_dataset(train_dataset)
+        self.assertListEqual(
+            list_tensor_to_list_list(fetched_tensor_train.column_names),
+            list_tensor_to_list_list(tensor_train.column_names),
+        )
+
+        connection.close()
 
 
 if __name__ == "__main__":

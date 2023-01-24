@@ -258,34 +258,6 @@ pub fn series_to_tokenized_series(
     Ok(df)
 }
 
-#[allow(unused)]
-pub fn tokenized_series_to_series(vs: Vec<Series>, model: &str) -> Result<Series, Status> {
-    let tokenizer = get_tokenizer(model)?;
-
-    let get_list = |v: AnyValue| match v {
-        AnyValue::List(s) => Some(s),
-        _ => None,
-    };
-    for idx in 0..vs[0].len() {
-        let id_tokens = vs[0].get(idx);
-        match get_list(id_tokens) {
-            Some(v) => {
-                println!("{:?}", v);
-            }
-            None => (),
-        }
-        let mask_tokens = vs[1].get(idx);
-        match get_list(mask_tokens) {
-            Some(v) => {
-                println!("{:?}", v);
-            }
-            None => (),
-        }
-    }
-
-    Ok(Series::new_empty("", &DataType::Utf8))
-}
-
 pub fn chunked_array_to_tensor<T>(series: &ChunkedArray<T>) -> Result<Tensor, Status>
 where
     T: PolarsNumericType,

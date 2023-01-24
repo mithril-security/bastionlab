@@ -125,6 +125,7 @@ class RemoteDataset:
     name: Optional[str] = "RemoteDataset"
     description: Optional[str] = "RemoteDataset"
     privacy_limit: Optional[float] = -1.0
+    identifier: Optional[str] = ""
 
     @property
     def _trace_input(self):
@@ -157,11 +158,13 @@ class RemoteDataset:
             name=name,
             description=description,
             privacy_limit=-1.0 if not privacy_limit else privacy_limit,
+            identifier=res.identifier,
         )
 
     def _serialize(self):
         inputs = ",".join([input._serialize() for input in self.inputs])
-        return f'{{"inputs": [{inputs}], "labels": {self.labels._serialize()}, "nb_samples": {self.nb_samples}, "privacy_limit": {self.privacy_limit}}}'
+
+        return f'{{"inputs": [{inputs}], "labels": {self.labels._serialize()}, "nb_samples": {self.nb_samples}, "privacy_limit": {self.privacy_limit}, "identifier": "{self.identifier}" }}'
 
     def __str__(self) -> str:
-        return f"RemoteDataset(name={self.name}, privacy_limit={self.privacy_limit}, inputs={str(self.inputs)}, label={str(self.labels)})"
+        return f"RemoteDataset(identifier={self.identifier}, name={self.name}, privacy_limit={self.privacy_limit}, inputs={str(self.inputs)}, label={str(self.labels)})"

@@ -114,8 +114,9 @@ message UpdateTensor {
 }
 
 message RemoteDatasetReference {
-    repeated bastionlab.Reference inputs= 1;
-    bastionlab.Reference labels = 2;
+    optional string identifier = 1;
+    repeated bastionlab.Reference inputs= 2;
+    bastionlab.Reference labels = 3;
     
 }
 

@@ -1,4 +1,4 @@
-from typing import List, TYPE_CHECKING
+from typing import List, TYPE_CHECKING, Union
 from torch.nn import Module
 from torch.utils.data import Dataset
 import grpc
@@ -19,16 +19,16 @@ from .utils import (
 
 
 if TYPE_CHECKING:
-    from .learner import RemoteLearner, RemoteDataset
+    from .learner import RemoteLearner
     from ..client import Client
-    from .remote_torch import RemoteTensor
+    from .remote_torch import RemoteTensor, RemoteDataset
 
 
 class BastionLabTorch:
     """BastionLab Torch RPC Handle
 
     Args:
-        stub: The underlying gRPC client for the BastionAI protocol.
+        stub: The underlying gRPC client for the BastionLab Torch protocol.
     """
 
     def __init__(
@@ -46,19 +46,19 @@ class BastionLabTorch:
         chunk_size: int = 4_194_285,
         progress: bool = False,
     ) -> Reference:
-        """Uploads a Pytorch module to the BastionAI server.
+        """Uploads a Pytorch module to the BastionLab Torch server.
 
         This endpoint transforms Pytorch modules into TorchScript modules and sends
-        them to the BastionAI server over gRPC.
+        them to the BastionLab Torch server over gRPC.
 
         Args:
             model: The Pytorch nn.Module to upload.
             name: A name for the module being uploaded.
             description: A string description of the module being uploaded.
-            chunk_size: Size of a chunk in the BastionAI gRPC protocol in bytes.
+            chunk_size: Size of a chunk in the BastionLab Torch gRPC protocol in bytes.
 
         Returns:
-            BastionAI gRPC protocol's reference object.
+            BastionLab Torch gRPC protocol's reference object.
         """
 
         self.client.refresh_session_if_needed()
@@ -86,13 +86,13 @@ class BastionLabTorch:
         train_dataset: Optional[Reference] = None,
         progress: bool = False,
     ) -> Reference:
-        """Uploads a Pytorch Dataset to the BastionAI server.
+        """Uploads a Pytorch Dataset to the BastionLab Torch server.
 
         Args:
             model: The Pytorch Dataset to upload.
             name: A name for the dataset being uploaded.
             description: A string description of the dataset being uploaded.
-            chunk_size: Size of a chunk in the BastionAI gRPC protocol in bytes.
+            chunk_size: Size of a chunk in the BastionLab Torch gRPC protocol in bytes.
             batch_size: Size of a unit of serialization in number of samples,
                         increasing this value may increase serialization throughput
                         at the price of a higher memory consumption.
@@ -100,7 +100,7 @@ class BastionLabTorch:
                    False that it should be used for testing/validating only
 
         Returns:
-            BastionAI gRPC protocol's reference object.
+            BastionLab Torch gRPC protocol's reference object.
         """
 
         self.client.refresh_session_if_needed()
@@ -121,12 +121,12 @@ class BastionLabTorch:
         )
 
     def fetch_model_weights(self, model: Module, ref: Reference) -> None:
-        """Fetches the weights of a distant trained model with a BastionAI gRPC protocol reference
+        """Fetches the weights of a distant trained model with a BastionLab Torch gRPC protocol reference
         and loads the weights into the passed model instance.
 
         Args:
             model: The Pytorch's nn.Module whose weights will be replaced by the fetched weights.
-            ref: BastionAI gRPC protocol reference object corresponding to the distant trained model.
+            ref: BastionLab Torch gRPC protocol reference object corresponding to the distant trained model.
         """
 
         self.client.refresh_session_if_needed()
@@ -134,31 +134,35 @@ class BastionLabTorch:
         chunks = GRPCException.map_error(lambda: self.stub.FetchModule(ref))
         deserialize_weights_to_model(model, chunks)
 
-    def fetch_dataset(self, ref: Reference) -> TensorDataset:
-        """Fetches the distant dataset with a BastionAI gRPC protocol reference.
+    def fetch_dataset(self, ref: Union["RemoteDataset", Reference]) -> TensorDataset:
+        """Fetches the distant dataset with a BastionLab Torch gRPC protocol reference.
 
         Args:
-            ref: BastionAI gRPC protocol reference object corresponding to the distant dataset.
+            ref: BastionLab Torch gRPC protocol reference object corresponding to the distant dataset.
 
         Returns:
             A dataset instance built from received data.
         """
+        from .remote_torch import RemoteDataset
 
         self.client.refresh_session_if_needed()
-
+        if isinstance(ref, RemoteDataset):
+            ref = Reference(
+                identifier=ref.identifier, name="", description="", meta=bytes()
+            )
         return dataset_from_chunks(
             GRPCException.map_error(lambda: self.stub.FetchDataset(ref))
         )
 
     def get_available_models(self) -> List[Reference]:
-        """Returns the list of BastionAI gRPC protocol references of all available models on the server."""
+        """Returns the list of BastionLab Torch gRPC protocol references of all available models on the server."""
 
         self.client.refresh_session_if_needed()
 
         return GRPCException.map_error(lambda: self.stub.AvailableModels(Empty())).list
 
     def get_available_datasets(self) -> List[Reference]:
-        """Returns the list of BastionAI gRPC protocol references of all datasets on the server."""
+        """Returns the list of BastionLab Torch gRPC protocol references of all datasets on the server."""
 
         self.client.refresh_session_if_needed()
 
@@ -183,7 +187,7 @@ class BastionLabTorch:
         ).list
 
     def train(self, config: TrainConfig) -> Reference:
-        """Trains a model with hyperparameters defined in `config` on the BastionAI server.
+        """Trains a model with hyperparameters defined in `config` on the BastionLab Torch server.
 
         Args:
             config: Training configuration that specifies the model, dataset and hyperparameters.
@@ -194,7 +198,7 @@ class BastionLabTorch:
         return GRPCException.map_error(lambda: self.stub.Train(config))
 
     def test(self, config: TestConfig) -> Reference:
-        """Tests a dataset on a model according to `config` on the BastionAI server.
+        """Tests a dataset on a model according to `config` on the BastionLab Torch server.
 
         Args:
             config: Testing configuration that specifies the model, dataset and hyperparameters.
@@ -204,22 +208,28 @@ class BastionLabTorch:
 
         return GRPCException.map_error(lambda: self.stub.Test(config))
 
-    def delete_dataset(self, ref: Reference) -> None:
-        """Deletes the dataset correponding to the given `ref` reference on the BastionAI server.
+    def delete_dataset(self, ref: Union["RemoteDataset", Reference]) -> None:
+        """Deletes the dataset correponding to the given `ref` reference on the BastionLab Torch server.
 
         Args:
-            ref: BastionAI gRPC protocol reference of the dataset to be deleted.
+            ref: BastionLab Torch gRPC protocol reference of the dataset to be deleted.
         """
+        from .remote_torch import RemoteDataset
 
         self.client.refresh_session_if_needed()
+
+        if isinstance(ref, RemoteDataset):
+            ref = Reference(
+                identifier=ref.identifier, name="", description="", meta=bytes()
+            )
 
         GRPCException.map_error(lambda: self.stub.DeleteDataset(ref))
 
     def delete_module(self, ref: Reference) -> None:
-        """Deletes the module correponding to the given `ref` reference on the BastionAI server.
+        """Deletes the module correponding to the given `ref` reference on the BastionLab Torch server.
 
         Args:
-            ref: BastionAI gRPC protocol reference of the module to be deleted.
+            ref: BastionLab Torch gRPC protocol reference of the module to be deleted.
         """
 
         self.client.refresh_session_if_needed()
@@ -230,19 +240,12 @@ class BastionLabTorch:
         """Returns the value of the metric associated with the given `run` reference.
 
         Args:
-            run: BastionAI gRPC protocol reference of the run whose metric is read.
+            run: BastionLab Torch gRPC protocol reference of the run whose metric is read.
         """
 
         self.client.refresh_session_if_needed()
 
         return GRPCException.map_error(lambda: self.stub.GetMetric(run))
-
-    def list_remote_datasets(self) -> List["RemoteDataset"]:
-        from .learner import RemoteDataset
-
-        self.client.refresh_session_if_needed()
-
-        return RemoteDataset.list_available(self)
 
     def RemoteDataset(self, *args, **kwargs) -> "RemoteDataset":
         """Returns a RemoteDataset object encapsulating a training and testing dataloaders

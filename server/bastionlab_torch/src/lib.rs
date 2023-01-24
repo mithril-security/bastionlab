@@ -2,9 +2,10 @@ use bastionlab_common::prelude::*;
 use bastionlab_common::session::SessionManager;
 use bastionlab_common::telemetry::{self, TelemetryEventProps};
 use bastionlab_learning::nn::Module;
-use bastionlab_learning::{data::Dataset, nn::CheckPoint};
+use bastionlab_learning::{data::Dataset, data::DatasetMetadata, nn::CheckPoint};
 use prost::Message;
 use ring::digest;
+use ring::hmac::Key;
 use std::time::Instant;
 use tch::Tensor;
 use tokio_stream::wrappers::ReceiverStream;
@@ -45,10 +46,11 @@ use bastionlab_learning::serialization::{BinaryModule, SizedObjectsBytes};
 pub struct BastionLabTorch {
     binaries: Arc<RwLock<HashMap<String, Artifact<BinaryModule>>>>,
     checkpoints: Arc<RwLock<HashMap<String, Artifact<CheckPoint>>>>,
-    pub datasets: Arc<RwLock<HashMap<String, Artifact<Dataset>>>>,
+    datasets_metadata: Arc<RwLock<HashMap<String, DatasetMetadata>>>,
+    dataset_remote_dataset_relation: Arc<RwLock<HashMap<String, RemoteDatasetReference>>>,
     runs: Arc<RwLock<HashMap<Uuid, Arc<RwLock<Run>>>>>,
     sess_manager: Arc<SessionManager>,
-    tensors: Arc<RwLock<HashMap<String, Mutex<Tensor>>>>,
+    tensors: Arc<RwLock<HashMap<String, Arc<Mutex<Tensor>>>>>,
 }
 
 impl BastionLabTorch {
@@ -56,33 +58,28 @@ impl BastionLabTorch {
         BastionLabTorch {
             binaries: Arc::new(RwLock::new(HashMap::new())),
             checkpoints: Arc::new(RwLock::new(HashMap::new())),
-            datasets: Arc::new(RwLock::new(HashMap::new())),
+            datasets_metadata: Arc::new(RwLock::new(HashMap::new())),
             runs: Arc::new(RwLock::new(HashMap::new())),
             tensors: Arc::new(RwLock::new(HashMap::new())),
+            dataset_remote_dataset_relation: Arc::new(RwLock::new(HashMap::new())),
             sess_manager,
         }
     }
 
-    pub fn insert_dataset(
-        &self,
-        identifier: &str,
-        dataset: Artifact<Dataset>,
-    ) -> Result<(String, String, String, Vec<u8>), Status> {
-        let identifier = identifier.to_string();
-        let name = dataset.name.clone();
-        let description = dataset.description.clone();
-        let meta = dataset.meta.clone();
+    pub fn insert_dataset_metadata(&self, artifact: &Artifact<Dataset>) -> DatasetMetadata {
+        let mut metadata = self.datasets_metadata.write().unwrap();
 
-        self.datasets
-            .write()
-            .unwrap()
-            .insert(identifier.clone(), dataset);
-        info!(
-            "Successfully inserted dataset {} in server",
-            identifier.clone()
-        );
+        let identifier = Uuid::new_v4().to_string();
+        let dataset_metadata = DatasetMetadata {
+            identifier: identifier.clone(),
+            description: artifact.description.clone(),
+            name: artifact.name.clone(),
+            meta: artifact.meta.clone(),
+        };
 
-        Ok((identifier.clone(), name, description, meta))
+        metadata.insert(identifier, dataset_metadata.clone());
+
+        dataset_metadata
     }
 
     pub fn insert_tensor(&self, tensor: Tensor) -> String {
@@ -90,31 +87,41 @@ impl BastionLabTorch {
         self.tensors
             .write()
             .unwrap()
-            .insert(identifier.to_string(), Mutex::new(tensor));
+            .insert(identifier.to_string(), Arc::new(Mutex::new(tensor)));
 
         info!("Successfully inserted tensor {}", identifier);
         identifier.to_string()
     }
 
-    fn get_tensor(&self, identifier: &str) -> Result<Tensor, Status> {
+    fn get_tensor(&self, identifier: &str) -> Result<Arc<Mutex<Tensor>>, Status> {
         let tensors = self.tensors.read().unwrap();
         let tensor = tensors
             .get(identifier)
             .ok_or(Status::aborted("Could not find tensor on BastionLab Torch"))?;
 
-        let tensor = tensor.lock().unwrap();
-
-        let tensor = { tensor.data() };
-        Ok(tensor)
+        Ok(Arc::clone(tensor))
     }
 
     fn convert_from_remote_dataset(
         &self,
         serialized_dataset: &str,
-    ) -> Result<(Arc<RwLock<Dataset>>, String), Status> {
+    ) -> Result<(Arc<RwLock<Dataset>>, String, Option<DatasetMetadata>), Status> {
         let dataset: RemoteDataset = serde_json::from_str(&serialized_dataset).map_err(|e| {
             Status::invalid_argument(format!("Could not deserialize RemoteDataset: {}", e))
         })?;
+
+        let dataset_metadata = self.datasets_metadata.read().unwrap();
+        let dataset_metadata = if !dataset.identifier.is_empty() {
+            let id = dataset.identifier;
+            Some(
+                dataset_metadata
+                    .get(&id)
+                    .ok_or(Status::aborted(format!("{:?} not found", id)))?
+                    .clone(),
+            )
+        } else {
+            None
+        };
 
         let hash =
             hex::encode(digest::digest(&digest::SHA256, serialized_dataset.as_bytes()).as_ref());
@@ -122,27 +129,40 @@ impl BastionLabTorch {
         let mut samples_inputs = vec![];
 
         for input in dataset.inputs {
-            samples_inputs.push(Mutex::new(self.get_tensor(&input.identifier)?));
+            samples_inputs.push(self.get_tensor(&input.identifier)?);
         }
 
-        let label = Mutex::new(self.get_tensor(&dataset.labels.identifier)?);
+        let labels = self.get_tensor(&dataset.labels.identifier)?;
         let limit = dataset.privacy_limit;
 
-        let data = Dataset::new(samples_inputs, label, limit);
+        let data = Dataset::new(samples_inputs, labels, limit);
 
-        Ok((Arc::new(RwLock::new(data)), hash))
+        Ok((Arc::new(RwLock::new(data)), hash, dataset_metadata.clone()))
     }
 
+    fn insert_dataset_remote_dataset_relation(
+        &self,
+        dataset_id: &str,
+        remote_dataset_ref: &RemoteDatasetReference,
+    ) {
+        let mut relations = self.dataset_remote_dataset_relation.write().unwrap();
+
+        relations.insert(dataset_id.to_string(), remote_dataset_ref.clone());
+    }
     fn convert_from_dataset_to_remote_dataset(
         &self,
         dataset: &mut Dataset,
+        metadata: &DatasetMetadata,
     ) -> Result<(RemoteDatasetReference, bool), Status> {
         let mut samples_locks = dataset
             .samples_inputs
             .iter()
-            .map(|s| s.lock().unwrap())
+            .map(|tensor| {
+                let tensor = tensor.lock().unwrap();
+                tensor
+            })
             .collect::<Vec<_>>();
-        let create_tensor = |tensor| -> Reference {
+        let create_tensor = |tensor: Tensor| -> Reference {
             let meta = create_tensor_meta(&tensor);
 
             let identifier = self.insert_tensor(tensor);
@@ -150,6 +170,7 @@ impl BastionLabTorch {
             Reference {
                 identifier,
                 meta: meta.encode_to_vec(),
+                name: format!("Tensor-{}", metadata.name.clone()),
                 ..Default::default()
             }
         };
@@ -159,13 +180,16 @@ impl BastionLabTorch {
         let labels_lock = dataset.labels.lock().unwrap();
 
         for sample in samples_locks.drain(..) {
-            inputs.push(create_tensor(sample.data()));
+            inputs.push(create_tensor(sample.detach()));
         }
-        let single_tensor = inputs.len() > 0;
+        let labels = create_tensor(labels_lock.detach());
+        let single_tensor = inputs.is_empty();
+
         Ok((
             RemoteDatasetReference {
+                identifier: Some(metadata.clone().identifier),
                 inputs,
-                labels: Some(create_tensor(labels_lock.data())),
+                labels: Some(labels),
             },
             single_tensor,
         ))
@@ -196,15 +220,38 @@ impl TorchService for BastionLabTorch {
 
         let dataset: Artifact<Dataset> = tcherror_to_status((artifact).deserialize())?;
 
+        // DatasetMetadata object is just a light-copy of the metadata sent with dataset and
+        // stored in Artifact.
+        // This is not be confused with the `meta` field which actually stores the meta of the Dataset
+        // including the `nb_samples`, `privacy_limit`, and other dataset specific feature.
+        let dataset_metadata = self.insert_dataset_metadata(&dataset);
+
         let (remote_dataset, single_tensor) = {
             let mut dataset = dataset.data.write().unwrap();
-            let data = self.convert_from_dataset_to_remote_dataset(&mut dataset)?;
-            data
+
+            self.convert_from_dataset_to_remote_dataset(&mut dataset, &dataset_metadata)?
         };
 
         if !single_tensor {
+            // Here, we create the relationship between `Dataset` and `RemoteDataset` by adding them to
+            // `dataset_remote_dataset_relation` storage in the database.
+
+            // We do this because if we would want to avoid doubling the tensor storage (i.e., storing
+            // tensors in `BastionLabTorchState.tensors` and `BastionLabTorchState.dataset`, then we would have to
+            // manually create that relationship so that when a `fetch_dataset` API call is made, we can reconstruct the real `Dataset`
+            // from the references of `RemoteTensor`.)
+
+            self.insert_dataset_remote_dataset_relation(
+                &dataset_metadata.identifier,
+                &remote_dataset,
+            );
+
             let elapsed = start_time.elapsed();
-            info!("Upload Dataset successful in {}ms", elapsed.as_millis());
+            info!(
+                "Successfully uploaded Dataset {} in {}ms",
+                dataset_metadata.identifier,
+                elapsed.as_millis()
+            );
 
             telemetry::add_event(
                 TelemetryEventProps::SendDataset {
@@ -232,8 +279,8 @@ impl TorchService for BastionLabTorch {
         let (model_hash, model_size) = {
             let lock = artifact.data.read().unwrap();
             let data = lock.get();
-            let hash = hex::encode(digest::digest(&digest::SHA256, &data).as_ref());
-            (hash, data.len())
+            let model_hash = Uuid::new_v4().to_string();
+            (model_hash, data.len())
         };
 
         let binary = tcherror_to_status(artifact.deserialize())?;
@@ -248,7 +295,11 @@ impl TorchService for BastionLabTorch {
             .insert(model_hash.clone(), binary);
         let elapsed = start_time.elapsed();
 
-        info!("Upload Model successful in {}ms", elapsed.as_millis());
+        info!(
+            "Successfully uploaded Model {} in {}ms",
+            model_hash.clone(),
+            elapsed.as_millis()
+        );
 
         telemetry::add_event(
             TelemetryEventProps::SendModel {
@@ -271,14 +322,40 @@ impl TorchService for BastionLabTorch {
         &self,
         request: Request<Reference>,
     ) -> Result<Response<Self::FetchDatasetStream>, Status> {
-        let identifier = request.into_inner().identifier;
-        let serialized = {
-            let datasets = self.datasets.read().unwrap();
-            let artifact = datasets
+        let (dataset, _, metadata) = {
+            let identifier = request.into_inner().identifier;
+
+            // Here, we use the dataset identifier from the request to read the relationship
+
+            // We then convert the RemoteDatasetRef into a real RemoteDataset which contains references of RemoteTensors and
+            // has no information about privacy_limit and nb_samples (we intentionally remove those parts because they are not
+            // useful for fetching).
+
+            // The goal is to effectively fetch the internal tensors related to the dataset.
+            let read_lock = self.dataset_remote_dataset_relation.read().unwrap();
+            let remote_dataset_ref = read_lock
                 .get(&identifier)
-                .ok_or_else(|| Status::not_found("Dataset not found"))?;
-            tcherror_to_status(artifact.serialize())?
+                .ok_or(Status::failed_precondition(format!(
+                    "Could not find dataset {identifier}"
+                )))?
+                .clone();
+            let remote_dataset: RemoteDataset = remote_dataset_ref.into();
+
+            let serialized_dataset = serde_json::to_string(&remote_dataset)
+                .map_err(|e| Status::aborted(format!("Could not serialize RemoteDataset: {e}")))?;
+            self.convert_from_remote_dataset(&serialized_dataset)?
         };
+
+        let metadata = metadata.ok_or(Status::aborted("Cannot fetch a Lazy RemoteDataset. Please use the RemoteTensor.fetch API to fetch individual tensors"))?;
+        let artifact = Artifact {
+            data: dataset,
+            description: metadata.description,
+            name: metadata.name,
+            meta: metadata.meta,
+            client_info: None,
+            secret: Key::new(ring::hmac::HMAC_SHA256, &[0]),
+        };
+        let serialized = tcherror_to_status(artifact.serialize())?;
 
         Ok(stream_data(serialized, 4_194_285, "Dataset".to_string()).await)
     }
@@ -336,8 +413,44 @@ impl TorchService for BastionLabTorch {
     }
 
     async fn delete_dataset(&self, request: Request<Reference>) -> Result<Response<Empty>, Status> {
+        // Now that we have individual tensor access, it means that if a dataset is deleted, all the related tensors
+        // **must** be deleted as well.
+
+        // We use the [`RemoteDataset`] object which contains identifiers to all the related tensors of a particular
+        // dataset to delete all the related tensors.
+
+        // Also, we will delete the relationship between Dataset and RemoteDatasetRef
+
+        let mut tensors = self.tensors.write().unwrap();
+        let mut dataset_metadata = self.datasets_metadata.write().unwrap();
+        let mut dataset_remote_dataset_relations =
+            self.dataset_remote_dataset_relation.write().unwrap();
+
         let identifier = request.into_inner().identifier;
-        self.datasets.write().unwrap().remove(&identifier);
+
+        // This is an on-the-fly converted RemoteDataset from a stored relation.
+        let dataset: RemoteDataset = dataset_remote_dataset_relations
+            .get(&identifier)
+            .ok_or(Status::aborted(format!(
+                "Dataset not found: {:?}",
+                identifier
+            )))?
+            .clone()
+            .into();
+
+        // Deletes all associated inputs tensors from the database
+        dataset.inputs.iter().for_each(|t| {
+            tensors.remove(&t.identifier);
+        });
+
+        // Deletes labels associated tensor from the database
+        tensors.remove(&dataset.labels.identifier);
+
+        // Removes all relationships of the Dataset (DatasetMeta and DatasetRemoteSetRelations)
+        if !dataset.identifier.is_empty() {
+            dataset_metadata.remove(&dataset.identifier);
+            dataset_remote_dataset_relations.remove(&dataset.identifier);
+        }
         Ok(Response::new(Empty {}))
     }
 
@@ -353,7 +466,7 @@ impl TorchService for BastionLabTorch {
         let client_info = self.sess_manager.get_client_info(token)?;
         let config = request.into_inner();
 
-        let (dataset, dataset_id) = self.convert_from_remote_dataset(&config.dataset)?;
+        let (dataset, dataset_id, _) = self.convert_from_remote_dataset(&config.dataset)?;
 
         let binary_id = config
             .model
@@ -421,7 +534,7 @@ impl TorchService for BastionLabTorch {
         let client_info = self.sess_manager.get_client_info(token)?;
         let config = request.into_inner();
 
-        let (dataset, dataset_id) = self.convert_from_remote_dataset(&config.dataset)?;
+        let (dataset, dataset_id, _) = self.convert_from_remote_dataset(&config.dataset)?;
 
         let module_id = config
             .model
@@ -490,7 +603,7 @@ impl TorchService for BastionLabTorch {
         _request: Request<Empty>,
     ) -> Result<Response<References>, Status> {
         let list: Vec<Reference> = self
-            .datasets
+            .datasets_metadata
             .read()
             .unwrap()
             .iter()
@@ -546,21 +659,6 @@ impl TorchService for BastionLabTorch {
             Run::Error(e) => Err(Status::internal(e.message())),
         }
     }
-
-    // async fn update_dataset(
-    //     &self,
-    //     request: Request<UpdateMeta>,
-    // ) -> Result<Response<Empty>, Status> {
-    //     let (identifier, name, description, meta) = (
-    //         request.get_ref().identifier.clone(),
-    //         request.get_ref().name.clone(),
-    //         request.get_ref().description.clone(),
-    //         request.get_ref().meta.clone(),
-    //     );
-
-    //     self.update_dataset(&identifier, name, meta, description)?;
-    //     Ok(Response::new(Empty {}))
-    // }
 
     async fn send_tensor(
         &self,

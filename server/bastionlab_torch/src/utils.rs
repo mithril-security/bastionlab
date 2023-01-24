@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use tch::{Kind, TchError, Tensor};
 use tonic::Status;
 
+use crate::torch_proto::RemoteDatasetReference;
+
 /// Converts a [`tch::TchError`]-based result into a [`tonic::Status`]-based one.
 pub fn tcherror_to_status<T>(input: Result<T, TchError>) -> Result<T, Status> {
     input.map_err(|err| Status::internal(format!("Torch error: {}", err)))
@@ -19,6 +21,35 @@ pub struct RemoteDataset {
     pub labels: RemoteTensor,
     pub nb_samples: usize,
     pub privacy_limit: f64,
+    pub identifier: String,
+}
+
+impl From<RemoteDatasetReference> for RemoteDataset {
+    fn from(dataset: RemoteDatasetReference) -> Self {
+        let inputs = dataset
+            .inputs
+            .iter()
+            .map(|i| RemoteTensor {
+                identifier: i.identifier.clone(),
+            })
+            .collect::<Vec<_>>();
+
+        let labels = RemoteTensor {
+            identifier: dataset.labels.unwrap().identifier,
+        };
+
+        let identifier = match dataset.identifier {
+            Some(id) => id,
+            None => String::from(""),
+        };
+        Self {
+            inputs,
+            labels,
+            nb_samples: 0,
+            privacy_limit: -1.0,
+            identifier,
+        }
+    }
 }
 
 pub fn get_kind(kind: &str) -> Result<Kind, Status> {
