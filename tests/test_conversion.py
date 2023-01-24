@@ -150,6 +150,7 @@ class TestingConnection(unittest.TestCase):
         self.assertEqual(remote_tensor.shape, torch.Size((4, 1)))
         self.assertEqual(remote_tensor.dtype, torch.float)
 
+
 if __name__ == "__main__":
 
     unittest.main()
