@@ -468,7 +468,7 @@ impl PolarsService for BastionLabPolars {
         request: Request<ReferenceRequest>,
     ) -> Result<Response<ReferenceResponse>, Status>  {
         let identifier = &request.get_ref().identifier;
-        let dfs = self.dataframes.write().unwrap(); 
+        let dfs = self.dataframes.read().unwrap(); 
         let artifact = dfs.get(identifier).ok_or_else(|| {
             Status::not_found(format!(
                 "Could not find dataframe: identifier={}",
@@ -476,7 +476,6 @@ impl PolarsService for BastionLabPolars {
             ))
         })?;
         let new_df = artifact.dataframe.describe(None);
-        log::info!("{}", new_df);
         let pol = Policy{
             safe_zone: True,
             unsafe_handling: Log,
@@ -489,12 +488,9 @@ impl PolarsService for BastionLabPolars {
             blacklist: Vec::new(),
             query_details: String::from("upload dataframe"),
         };
-        log::info!("about to insert");
         let header = get_df_header(&df.dataframe)?;
-        log::info!("header is: {}", header);
-        drop(dfs);
+        drop(dfs); //need to drop as if not blocks on insert_df
         let id = self.insert_df(df);
-        log::info!("new id is: {}", id);
         Ok(Response::new(ReferenceResponse { identifier: id.to_string(), header}))
     }
 

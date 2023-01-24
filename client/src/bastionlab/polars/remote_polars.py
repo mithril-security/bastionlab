@@ -1028,6 +1028,7 @@ class FetchableLazyFrame(RemoteLazyFrame):
     def delete(self):
         return self._meta._client._delete_df(self._identifier)
 
+    # second method provided here since different ways to grab identifier for fetchable and RemoteLazyFrame
     def describe(self: LDF) -> "FetchableLazyFrame":
         """appends df2 to df1 provided columns have the same name/type
         Returns:
