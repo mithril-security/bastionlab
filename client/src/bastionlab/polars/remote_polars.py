@@ -983,6 +983,22 @@ class RemoteLazyFrame:
         method_to: str = None,
         cols: Optional[Union[str, List[str]]] = None,
     ) -> "RemoteLazyFrame":
+        """
+        Support for string manipulation methods can be improved to include more string operations.
+        Currently, these methods are the only ones supported.
+
+            - `split`
+            - `contains`
+            - `replace`
+            - `replace_all`
+            - `findall`
+            - `contains`
+            - `match`
+            - `fuzzy_match`
+            - `extract`
+            - `extract_all`
+        """
+
         cols = (
             self.columns if cols is None else cols if isinstance(cols, list) else [cols]
         )
