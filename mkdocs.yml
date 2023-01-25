@@ -71,7 +71,8 @@ extra_css:
 
 extra_javascript:
   - "https://code.jquery.com/jquery-3.3.1.min.js"
-  - javascripts/navbar.js
+  - javascripts/navbar_expand.js
+  - javascripts/navbar_pos.js
 
 # Extensions
 markdown_extensions:
