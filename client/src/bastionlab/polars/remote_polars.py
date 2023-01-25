@@ -56,11 +56,13 @@ def delegate(
     return inner
 
 
-def delegate_properties(*names: str, target: str) -> Callable[[Callable], Callable]:
+def delegate_properties(
+    *names: str, target_attr: str
+) -> Callable[[Callable], Callable]:
     def inner(cls: Callable) -> Callable:
         def prop(name):
             def f(_self):
-                return getattr(getattr(_self, target), name)
+                return getattr(getattr(_self, target_attr), name)
 
             return property(f)
 
@@ -198,7 +200,7 @@ class Metadata:
 # cleared
 # Map
 # Joins
-@delegate_properties("dtypes", "schema", target="_inner")
+@delegate_properties("dtypes", "schema", target_attr="_inner")
 @delegate(
     target_cls=pl.LazyFrame,
     target_attr="_inner",
@@ -1391,7 +1393,7 @@ def train_test_split(
     random_state: Optional[int] = None,
 ) -> List["RemoteArray"]:
     """
-    Split RemoteDataFrames into train and test subsets.
+    Split RemoteArrays into train and test subsets.
 
     Args:
         train_size (Optional[float] = None):
