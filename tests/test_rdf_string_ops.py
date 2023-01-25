@@ -24,7 +24,7 @@ class TestingConnection(unittest.TestCase):
             {
                 "a": [
                     "Welcome to ChatGPT. ChatGPT is the best",
-                    "ChatGPT is at capacity right now",
+                    "ChatGPT is at capacity right now. chatgpt",
                 ]
             }
         )
@@ -77,13 +77,23 @@ class TestingConnection(unittest.TestCase):
 
     def test_findall(self):
         remote_findall = df_to_list(self.rdf.findall("(?i)chatgpt").collect().fetch())
-        local_findall = [["ChatGPT", "ChatGPT"], ["ChatGPT"]]
+        local_findall = [["ChatGPT", "ChatGPT"], ["ChatGPT", "chatgpt"]]
 
         self.assertListEqual(remote_findall, local_findall)
 
     def test_extract(self):
-        remote_extract = df_to_list(self.rdf.extract("(?i)chatgpt").collect().fetch())
-        local_extract = [["ChatGPT", "ChatGPT"], ["ChatGPT"]]
+        remote_extract = df_to_list(
+            self.rdf.extract("(?i)(chatgpt|welcome)").collect().fetch()
+        )
+        local_extract = ["Welcome", "ChatGPT"]
+
+        self.assertListEqual(remote_extract, local_extract)
+
+    def test_extract_all(self):
+        remote_extract = df_to_list(
+            self.rdf.extract_all("(?i)(chatgpt|welcome)").collect().fetch()
+        )
+        local_extract = [["Welcome", "ChatGPT", "ChatGPT"], ["ChatGPT", "chatgpt"]]
 
         self.assertListEqual(remote_extract, local_extract)
 

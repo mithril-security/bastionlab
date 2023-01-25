@@ -112,7 +112,7 @@ pub fn apply_method(method: &StringMethod, series: &Series) -> Result<Series, St
             for elem in series.into_iter() {
                 let value = match elem {
                     Some(r) => {
-                        let s = r.split(&pat).into_vec();
+                        let s = r.split(&pat).collect::<Vec<_>>();
                         let v =
                             AnyValue::List(Utf8Chunked::from_slice("col", &s[..]).into_series());
                         v
@@ -225,6 +225,14 @@ pub fn apply_method(method: &StringMethod, series: &Series) -> Result<Series, St
             s
         }
         "extract" => {
+            let pat = get_inner_opt(pattern)?;
+            let re = create_regex(&pat)?;
+            series
+                .extract(&re.as_str(), 0)
+                .map_err(|e| Status::aborted(format!("Could not execute extract on Series: {e}")))?
+                .into_series()
+        }
+        "extract_all" => {
             let pat = get_inner_opt(pattern)?;
             let re = create_regex(&pat)?;
             series
