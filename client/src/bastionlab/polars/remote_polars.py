@@ -940,9 +940,9 @@ class RemoteLazyFrame:
         self: LDF,
         x: str = None,
         y: str = None,
-        ax = None,
+        ax=None,
     ):
-        #todo check error handling if data owner rejects
+        # todo check error handling if data owner rejects
         boxes = []
         if x == None or y == None:
             if y == None:
@@ -975,30 +975,30 @@ class RemoteLazyFrame:
             q1s = self.groupby(col_x).agg(col_y.quantile(0.25)).sort(col_x)
             q3s = self.groupby(col_x).agg(col_y.quantile(0.75)).sort(col_x)
             iqrs = self.groupby(col_x).agg(col_y.quantile(0.25)).sort(col_x)
-            labels = mins.collect().fetch().to_numpy()[:,0]
-
+            labels = mins.collect().fetch().to_numpy()[:, 0]
 
             for x in range(len(labels)):
                 boxes.append(
-                {
-                    "label": labels[x],
-                    "whislo": mins.collect().fetch().to_numpy()[x, 1],
-                    "q1": q1s.collect().fetch().to_numpy()[x, 1],
-                    "med": meds.collect().fetch().to_numpy()[x, 1],
-                    "q3": q3s.collect().fetch().to_numpy()[x, 1],
-                    "iqr": iqrs.collect().fetch().to_numpy()[x, 1],
-                    "whishi": maxes.collect().fetch().to_numpy()[x, 1],
-                }
-            )
+                    {
+                        "label": labels[x],
+                        "whislo": mins.collect().fetch().to_numpy()[x, 1],
+                        "q1": q1s.collect().fetch().to_numpy()[x, 1],
+                        "med": meds.collect().fetch().to_numpy()[x, 1],
+                        "q3": q3s.collect().fetch().to_numpy()[x, 1],
+                        "iqr": iqrs.collect().fetch().to_numpy()[x, 1],
+                        "whishi": maxes.collect().fetch().to_numpy()[x, 1],
+                    }
+                )
         return boxes
 
     def boxplot(
         self: LDF,
         x: str = None,
         y: str = None,
-        hue: str = None,
         with_outliers: bool = True,
-        colors = [],
+        colors=[],
+        vertical: bool = True,
+        ax=None,
         **kwargs,
     ):
         """Draws a boxplot based on x, y and hue values.
@@ -1019,9 +1019,10 @@ class RemoteLazyFrame:
             various exceptions: Note that exceptions may be raised from Seaborn when the lineplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details."""
 
-        #TODO check we have at least an x or y
+        if ax == None:
+            ax = plt.gca()
         selects = []
-        for col in [x, y, hue]:
+        for col in [x, y]:
             if col != None:
                 if col not in self.columns:
                     raise ValueError("Column ", col, " not found in dataframe")
@@ -1030,12 +1031,7 @@ class RemoteLazyFrame:
         if selects == []:
             raise ValueError("Please specify at least an X or Y value")
 
-        if hue != None:
-            kwargs["hue"] = hue
-
-        #TODO: color
         if not with_outliers:
-            _, ax = plt.subplots()
             boxes = self._calculate_boxes(x, y, ax)
             medianprops = dict(linestyle="-", color="black")
             boxprops = dict(facecolor="#1f77b4")
@@ -1046,12 +1042,24 @@ class RemoteLazyFrame:
                 medianprops=medianprops,
                 boxprops=boxprops,
                 patch_artist=True,
+                vert=vertical,
             )
 
             if colors == []:
-                colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
-          
-            for patch, color in zip(bplot['boxes'], colors):
+                colors = [
+                    "#1f77b4",
+                    "#ff7f0e",
+                    "#2ca02c",
+                    "#d62728",
+                    "#9467bd",
+                    "#8c564b",
+                    "#e377c2",
+                    "#7f7f7f",
+                    "#bcbd22",
+                    "#17becf",
+                ]
+
+            for patch, color in zip(bplot["boxes"], colors):
                 patch.set_facecolor(color)
             plt.show()
 
@@ -1059,7 +1067,10 @@ class RemoteLazyFrame:
             tmp = self.select([pl.col(x) for x in selects]).collect().fetch()
             RequestRejected.check_valid_df(tmp)
             df = tmp.to_pandas()
-            sns.boxplot(data=df, x=x, y=y, **kwargs)
+            if vertical:
+                sns.boxplot(data=df, x=x, y=y, **kwargs)
+            else:
+                sns.boxplot(data=df, x=x, y=y, orient="h", **kwargs)
 
     def facet(
         self: LDF, col: Optional[str] = None, row: Optional[str] = None, **kwargs
