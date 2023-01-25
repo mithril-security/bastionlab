@@ -989,9 +989,6 @@ class FetchableLazyFrame(RemoteLazyFrame):
                 return [values], getattr(pl, k)(v)
 
         def get_series(name, dtype):
-            # if isinstance(dtype, str):
-            #     return pl.Series(name, values=[None], dtype=get_dtype(dtype))
-            # else:
             values, dtype = get_dtype(dtype)
             return pl.Series(name, values=values, dtype=dtype)
 
