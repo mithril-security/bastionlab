@@ -8,7 +8,7 @@ RUN apt-get update && \
         libssl-dev pkg-config \
         git curl python3 python3-pip && \
     add-apt-repository -y ppa:ubuntu-toolchain-r/test && \
-    gcc-10 g++-10 cpp-10 && \
+    apt-get install -y gcc-11 g++-11 cpp-11 && \
     update-alternatives \
         --install /usr/bin/gcc gcc /usr/bin/gcc-11 100 \
         --slave /usr/bin/g++ g++ /usr/bin/g++-11 \
@@ -34,5 +34,3 @@ WORKDIR /app/bastionlab/server
 RUN LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all
 WORKDIR /app/bastionlab/server/bin
 CMD ["./bastionlab_app"]
-
-#https://ahelpme.com/linux/ubuntu/install-and-make-gnu-gcc-10-default-in-ubuntu-20-04-focal/
