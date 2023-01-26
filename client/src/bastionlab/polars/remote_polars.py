@@ -1144,8 +1144,8 @@ class Facet:
         rows = []
         if self.col != None:
             tmp = (
-                self.inner_rdf.select(pl.col(self.col))
-                .unique()
+                self.inner_rdf.groupby(pl.col(self.col))
+                .agg(pl.count())
                 .sort(pl.col(self.col))
                 .collect()
                 .fetch()
@@ -1154,8 +1154,8 @@ class Facet:
             cols = tmp.to_pandas()[self.col].tolist()
         if self.row != None:
             tmp = (
-                self.inner_rdf.select(pl.col(self.row))
-                .unique()
+                self.inner_rdf.groupby(pl.col(self.row))
+                .agg(pl.count())
                 .sort(pl.col(self.row))
                 .collect()
                 .fetch()
@@ -1248,8 +1248,8 @@ class Facet:
         rows = []
         if self.col != None:
             tmp = (
-                self.inner_rdf.select(pl.col(self.col))
-                .unique()
+                self.inner_rdf.groupby(pl.col(self.col))
+                .agg(pl.count())
                 .sort(pl.col(self.col))
                 .collect()
                 .fetch()
@@ -1259,8 +1259,8 @@ class Facet:
 
         if self.row != None:
             tmp = (
-                self.inner_rdf.select(pl.col(self.row))
-                .unique()
+                self.inner_rdf.groupby(pl.col(self.row))
+                .agg(pl.count())
                 .sort(pl.col(self.row))
                 .collect()
                 .fetch()
