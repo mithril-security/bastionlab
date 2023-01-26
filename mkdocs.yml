@@ -105,6 +105,7 @@ nav:
   - 🌍 How-to-guides:
       - Data exploration:
         - Covid-19 cleaning and exploration: "docs/how-to-guides/covid_cleaning_exploration.ipynb"
+        - Fraud detection cleaning and exploration: "docs/how-to-guides/fraud_detection.ipynb"
       - Deep learning:
         - Fine Tuning Distilbert on BastionLab: "docs/how-to-guides/distilbert_example_notebook.ipynb"
   - 🛠️ API reference: "docs/resources/bastionlab/index.html"
