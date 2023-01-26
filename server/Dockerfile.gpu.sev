@@ -3,9 +3,17 @@ WORKDIR /app
 ENV DEBIAN_FRONTEND="noninteractive"
 RUN apt-get update && \
     apt-get install -y \
+        software-properties-common \
         build-essential patchelf \
         libssl-dev pkg-config \
         git curl python3 python3-pip && \
+    add-apt-repository -y ppa:ubuntu-toolchain-r/test && \
+    gcc-10 g++-10 cpp-10 && \
+    update-alternatives \
+        --install /usr/bin/gcc gcc /usr/bin/gcc-11 100 \
+        --slave /usr/bin/g++ g++ /usr/bin/g++-11 \
+        --slave /usr/bin/gcov gcov /usr/bin/gcov-11 && \
+    gcc -v && \
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > rustup.sh && \
     sh rustup.sh -y  && \
     pip3 install requests  && \
@@ -26,10 +34,5 @@ WORKDIR /app/bastionlab/server
 RUN LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all
 WORKDIR /app/bastionlab/server/bin
 CMD ["./bastionlab_app"]
-#apt-get install software-properties-common
-#add-apt-repository -y ppa:ubuntu-toolchain-r/test
-
-#apt install -y gcc-11
-#update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 100 --slave /usr/bin/g++ g++ /usr/bin/g++-11 --slave /usr/bin/gcov gcov /usr/bin/gcov-11
 
 #https://ahelpme.com/linux/ubuntu/install-and-make-gnu-gcc-10-default-in-ubuntu-20-04-focal/
