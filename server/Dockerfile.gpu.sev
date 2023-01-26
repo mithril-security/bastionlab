@@ -22,7 +22,7 @@ RUN apt-get update && \
 WORKDIR /app/bastionlab
 RUN echo 'import requests; \
     open("libtorch.zip", "wb").write( \
-        requests.get(__torch_url__).content \
+        requests.get("https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.13.1%2Bcpu.zip").content \
         )' | python3 -i client/src/bastionlab/version.py && \
     unzip libtorch.zip
 
