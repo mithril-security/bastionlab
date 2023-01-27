@@ -165,27 +165,6 @@ class StackPlanSegment(CompositePlanSegment):
 
 
 @dataclass
-class StringTransformerPlanSegment(CompositePlanSegment):
-    """
-    Accepts a UDF for row-wise DataFrame transformation.
-    """
-
-    model: str
-    _columns: List[str]
-
-    def serialize(self) -> str:
-        """
-        returns serialized string of this plan segment
-
-        Returns:
-            str: serialized string of this plan segment
-        """
-        columns = ",".join([f'"{c}"' for c in self._columns])
-        model = base64.b64encode(self.model.encode("utf8")).decode("utf8")
-        return f'{{"StringTransformerPlanSegment":{{"columns":[{columns}],"model":"{model}"}}}}'
-
-
-@dataclass
 class Metadata:
     """
     A class containing metadata related to your dataframe
@@ -418,21 +397,6 @@ class RemoteLazyFrame:
                     *self._meta._prev_segments,
                     PolarsPlanSegment(self._inner),
                     StackPlanSegment(),
-                ],
-            ),
-        )
-
-    def convert(self, columns: List[str], model: str) -> LDF:
-        df = pl.DataFrame(
-            [pl.Series(k, dtype=v) for k, v in self._inner.schema.items()]
-        )
-        return RemoteLazyFrame(
-            df.lazy(),
-            Metadata(
-                self._meta._polars_client,
-                [
-                    *self._meta._prev_segments,
-                    StringTransformerPlanSegment(model, columns),
                 ],
             ),
         )

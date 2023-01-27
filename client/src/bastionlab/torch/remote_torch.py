@@ -3,7 +3,7 @@ import hashlib
 import io
 from typing import Iterator, TYPE_CHECKING, List, Optional
 from dataclasses import dataclass
-from .utils import DataWrapper, Chunk, TensorDataset
+from .utils import DataWrapper, Chunk, TensorDataset, send_tensor
 from ..pb.bastionlab_torch_pb2 import UpdateTensor, RemoteDatasetReference
 from ..pb.bastionlab_pb2 import Reference
 from torch.utils.data import Dataset, DataLoader
@@ -11,7 +11,7 @@ from ..pb.bastionlab_pb2 import Reference, TensorMetaData
 import logging
 
 if TYPE_CHECKING:
-    from ..client import Client
+    from .client import BastionLabTorch
 
 
 @dataclass
@@ -24,7 +24,7 @@ class RemoteTensor:
     You can also change the dtype of the tensor through an API call
     """
 
-    _client: "Client"
+    _client: "BastionLabTorch"
     _identifier: str
     _dtype: torch.dtype
     _shape: torch.Size
@@ -37,13 +37,13 @@ class RemoteTensor:
         return f'{{"identifier": "{self.identifier}"}}'
 
     @staticmethod
-    def _send_tensor(client: "Client", tensor: torch.Tensor) -> "RemoteTensor":
-        tensor = TensorDataset([], tensor)
-        dataset = RemoteDataset._from_dataset(client, tensor, name=None)
-        return dataset.labels
+    def _send_tensor(client: "BastionLabTorch", tensor: torch.Tensor) -> "RemoteTensor":
+        res = client.stub.SendTensor(send_tensor(tensor))
+        dtype, shape = _get_tensor_metadata(res.meta)
+        return RemoteTensor(client, res.identifier, *dtype, *shape)
 
     @staticmethod
-    def _from_reference(ref: Reference, client: "Client") -> "RemoteTensor":
+    def _from_reference(ref: Reference, client: "BastionLabTorch") -> "RemoteTensor":
         dtypes, shape = _get_tensor_metadata(ref.meta)
         return RemoteTensor(client, ref.identifier, dtypes[0], shape[0])
 
@@ -118,6 +118,10 @@ def _tracer(dtypes: List[torch.dtype], shapes: List[torch.Size]):
     ]
 
 
+def _make_id_reference(id: str) -> Reference:
+    return Reference(identifier=id, description="", name="", meta=bytes())
+
+
 @dataclass
 class RemoteDataset:
     inputs: List[RemoteTensor]
@@ -135,14 +139,55 @@ class RemoteDataset:
 
     @property
     def nb_samples(self) -> int:
-        """
-        Returns the number of samples in the RemoteDataset
-        """
+        """Returns the number of samples in the RemoteDataset"""
         return self.labels.shape[0]
+
+    @property
+    def input_dtype(self) -> torch.dtype:
+        """Returns the input dtype of the tensors stored"""
+        return self.labels.dtype
+
+    @staticmethod
+    def _from_remote_tensors(
+        client: "BastionLabTorch",
+        inputs: List["RemoteTensor"],
+        labels: "RemoteTensor",
+        **kwargs,
+    ) -> "RemoteDataset":
+        name = kwargs.get("name", "")
+        description = kwargs.get("description", "")
+        privacy_limit = kwargs.get("privacy_limit", -1.0)
+        inputs = [_make_id_reference(input.identifier) for input in inputs]
+        labels = Reference(
+            identifier=labels.identifier,
+            description=description,
+            name=name,
+            meta=bytes(f'{{"privacy_limit": {privacy_limit}}}', encoding="ascii"),
+        )
+
+        res = client.stub.ConvToDataset(
+            RemoteDatasetReference(
+                identifier="",
+                inputs=inputs,
+                labels=labels,
+            )
+        )
+
+        inputs = [RemoteTensor._from_reference(ref, client) for ref in res.inputs]
+        labels = RemoteTensor._from_reference(res.labels, client)
+
+        return RemoteDataset(
+            inputs,
+            labels,
+            name=name,
+            description=description,
+            privacy_limit=privacy_limit,
+            identifier=res.identifier,
+        )
 
     @staticmethod
     def _from_dataset(
-        client: "Client", dataset: Dataset, *args, **kwargs
+        client: "BastionLabTorch", dataset: Dataset, *args, **kwargs
     ) -> "RemoteDataset":
         res: RemoteDatasetReference = client.send_dataset(dataset, *args, **kwargs)
         inputs = [RemoteTensor._from_reference(ref, client) for ref in res.inputs]

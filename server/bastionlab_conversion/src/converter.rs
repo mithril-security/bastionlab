@@ -1,15 +1,14 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use bastionlab_common::common_conversions::*;
 use bastionlab_common::session::SessionManager;
 use bastionlab_polars::BastionLabPolars;
 use bastionlab_torch::BastionLabTorch;
-use prost::Message;
 use tonic::{Request, Response, Status};
 
 use crate::conversion_proto::{conversion_service_server::ConversionService, ToTensor};
 
-use crate::bastionlab::{Reference, TensorMetaData};
+use crate::bastionlab::Reference;
 pub struct Converter {
     torch: Arc<BastionLabTorch>,
     polars: Arc<BastionLabPolars>,
@@ -41,33 +40,25 @@ impl ConversionService for Converter {
 
         let df = self.polars.get_df_unchecked(&identifier)?;
 
-        let tensor = {
-            let cols = df.get_column_names();
-            if cols.len() == 1 {
-                let series = to_status_error(df.column(cols[0]))?;
-                let data = series_to_tensor(series)?;
+        let mut tensor = df_to_tensor(&df)?;
+        // Important Note:
+        // DF -> Tensor always returns a 2-d tensor.
+        // For a single column DF, we will have to reshape Tensor as 1-d.
 
-                data
-            } else {
-                let tensor = df_to_tensor(&df)?;
-                tensor
-            }
-        };
-        let meta = TensorMetaData {
-            input_dtype: vec![format!("{:?}", tensor.kind())],
-            input_shape: tensor.size(),
-        };
+        if df.width() == 1 {
+            tensor = tensor.squeeze();
+        }
 
-        let tensor_id = self.torch.insert_tensor(tensor);
+        let (_, tensor_ref) = self.torch.insert_tensor(Arc::new(Mutex::new(tensor)));
 
         // Here, a dataframe has been converted and can be cleared from the Polars storage.
         self.polars.delete_dfs(identifier)?;
 
-        Ok(Response::new(Reference {
-            identifier: tensor_id,
-            name: String::new(),
-            description: String::new(),
-            meta: meta.encode_to_vec(),
-        }))
+        let tensor_ref = Reference {
+            identifier: tensor_ref.identifier,
+            meta: tensor_ref.meta,
+            ..Default::default()
+        };
+        Ok(Response::new(tensor_ref))
     }
 }

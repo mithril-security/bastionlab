@@ -110,7 +110,7 @@ class RemoteLearner:
         batch_size = batch_size if batch_size is not None else self.max_batch_size
         return TrainConfig(
             model=self.model_ref,
-            dataset=self.remote_dataset._serialize(),
+            dataset=self.remote_dataset.identifier,
             batch_size=batch_size,
             epochs=nb_epochs,
             device=self.device,
@@ -137,7 +137,7 @@ class RemoteLearner:
         batch_size = batch_size if batch_size is not None else self.max_batch_size
         return TestConfig(
             model=self.model_ref,
-            dataset=self.remote_dataset._serialize(),
+            dataset=self.remote_dataset.identifier,
             batch_size=batch_size,
             device=self.device,
             metric=metric if metric is not None else self.loss,

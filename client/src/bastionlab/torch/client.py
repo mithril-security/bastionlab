@@ -257,7 +257,16 @@ class BastionLabTorch:
         """
         from .remote_torch import RemoteDataset
 
-        return RemoteDataset._from_dataset(self, *args, **kwargs)
+        # Branch if inputs and labels are field with RemoteTensors
+        # The branch triggers a gRPC call to actually convert `RemoteTensors` to `Dataset` and return
+        # that Dataset (which will contain an identifier)
+        inputs = kwargs.get("inputs")
+        labels = kwargs.get("labels")
+
+        if inputs and labels:
+            return RemoteDataset._from_remote_tensors(self, inputs, labels)
+        else:
+            return RemoteDataset._from_dataset(self, *args, **kwargs)
 
     def RemoteLearner(self, *args, **kwargs) -> "RemoteLearner":
         """Returns a RemoteLearner object encapsulating a model and hyperparameters for

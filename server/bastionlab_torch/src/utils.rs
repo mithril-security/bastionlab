@@ -19,9 +19,7 @@ pub struct RemoteTensor {
 pub struct RemoteDataset {
     pub inputs: Vec<RemoteTensor>,
     pub labels: RemoteTensor,
-    pub nb_samples: usize,
     pub privacy_limit: f64,
-    pub identifier: String,
 }
 
 impl From<RemoteDatasetReference> for RemoteDataset {
@@ -38,16 +36,10 @@ impl From<RemoteDatasetReference> for RemoteDataset {
             identifier: dataset.labels.unwrap().identifier,
         };
 
-        let identifier = match dataset.identifier {
-            Some(id) => id,
-            None => String::from(""),
-        };
         Self {
             inputs,
             labels,
-            nb_samples: 0,
             privacy_limit: -1.0,
-            identifier,
         }
     }
 }

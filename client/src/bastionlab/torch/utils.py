@@ -314,13 +314,6 @@ def serialize_dataset(
         name=name,
         description=description,
         meta=bytes(),
-        # meta=Meta(
-        #     input_shape=[Meta.Shape(elem=input.size()) for input in dataset[0][0]],
-        #     input_dtype=[f"{input.dtype}" for input in dataset[0][0]],
-        #     nb_samples=len(dataset),  # type: ignore [arg-type]
-        #     privacy_limit=privacy_limit,
-        #     train_dataset=train_dataset,
-        # ).SerializeToString(),
         progress=progress,
     )
 
@@ -408,3 +401,17 @@ def bulk_deserialize(b: bytes) -> Any:
     buff.write(b)
     buff.seek(0)
     return torch.load(buff)
+
+
+def send_tensor(
+    tensor: torch.Tensor, chunk_size: Optional[int] = 32
+) -> Iterator[Chunk]:
+    buf = io.BytesIO()
+
+    torch.jit.save(torch.jit.script(DataWrapper([tensor], None)), buf)
+    buf.seek(0)
+    buf_len = len(buf.getvalue())
+    while buf.tell() < buf_len:
+        data = buf.read(chunk_size)
+
+        yield Chunk(data=data, description="", meta=bytes(), name="", secret=bytes())

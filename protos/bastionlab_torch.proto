@@ -114,10 +114,9 @@ message UpdateTensor {
 }
 
 message RemoteDatasetReference {
-    optional string identifier = 1;
+    string identifier = 1;
     repeated bastionlab.Reference inputs= 2;
     bastionlab.Reference labels = 3;
-    
 }
 
 service TorchService {
@@ -136,4 +135,5 @@ service TorchService {
     rpc Train (TrainConfig) returns (bastionlab.Reference) {}
     rpc Test (TestConfig) returns (bastionlab.Reference) {}
     rpc GetMetric (bastionlab.Reference) returns (Metric) {}
+    rpc ConvToDataset (RemoteDatasetReference) returns (RemoteDatasetReference) {}
 }

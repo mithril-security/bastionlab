@@ -15,7 +15,7 @@ from bastionlab.polars import train_test_split
 logging.basicConfig(level=logging.INFO)
 
 
-class TestingConnection(unittest.TestCase):
+class TestingDataConv(unittest.TestCase):
     def test_connection(self):
         connection = Connection("localhost")
         client = connection.client
@@ -147,7 +147,7 @@ class TestingConnection(unittest.TestCase):
         X = torch.tensor([[0.0], [1.0], [0.5], [0.2]])
         remote_tensor = client.torch.RemoteTensor(X)
 
-        self.assertEqual(remote_tensor.shape, torch.Size((4, 1)))
+        self.assertEqual(remote_tensor.shape, X.shape)
         self.assertEqual(remote_tensor.dtype, torch.float)
 
 

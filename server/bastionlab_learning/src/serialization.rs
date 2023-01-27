@@ -98,7 +98,6 @@ impl TryFrom<&SizedObjectsBytes> for tch::Tensor {
     fn try_from(value: &SizedObjectsBytes) -> Result<Self, Self::Error> {
         let object = value.0.clone();
         let data = Tensor::load_multi_from_stream_with_device(Cursor::new(object), Device::Cpu)?;
-        // Get first item in list
         let data = data[0].1.detach();
         Ok(data)
     }

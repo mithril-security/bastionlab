@@ -108,8 +108,16 @@ class TestingConnection(unittest.TestCase):
         dtype = train_inputs.dtype
         model = make_model(in_features, dtype)()
 
-        train_dataset = RemoteDataset(inputs=[train_inputs], labels=train_labels)
-        test_dataset = RemoteDataset(inputs=[test_inputs], labels=test_labels)
+        train_dataset = client.torch.RemoteDataset(
+            inputs=[train_inputs], labels=train_labels
+        )
+        test_dataset = client.torch.RemoteDataset(
+            inputs=[test_inputs], labels=test_labels
+        )
+
+        self.assertNotEqual(train_dataset.identifier, "")
+        self.assertNotEqual(test_dataset.identifier, "")
+
         remote_learner = connection.client.torch.RemoteLearner(
             model,
             train_dataset,
@@ -250,7 +258,6 @@ class TestingConnection(unittest.TestCase):
 
         after_count = len(client.torch.get_available_datasets())
 
-        print("before: ", count, "after: ", after_count)
         self.assertEqual(after_count, count + 2)
 
         connection.close()
