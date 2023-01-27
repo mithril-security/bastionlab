@@ -263,6 +263,7 @@ class StringUdfPlanSegmenet(CompositePlanSegment):
 
         return f'{{"StringUdfPlanSegment": {{"method": {self._method.serialize()}, "columns": [{columns}]}}}}'
 
+
 @dataclass
 class RowCountSegment(CompositePlanSegment):
     _name: str
@@ -272,6 +273,7 @@ class RowCountSegment(CompositePlanSegment):
 
     def serialize(self) -> str:
         return f'{{"RowCountSegment": "{self._name}"}}'
+
 
 @dataclass
 class Metadata:
@@ -1497,6 +1499,7 @@ class RemoteLazyFrame:
             ]
         )
         return rdf
+
 
 @dataclass
 class FetchableLazyFrame(RemoteLazyFrame):
