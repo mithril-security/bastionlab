@@ -10,6 +10,7 @@ build:
   jobs:
     post_install:
     - bash docs/generate_api_reference.sh
+    - bash docs/include_scripts.sh
 
 mkdocs:
   configuration: mkdocs.yml
