@@ -157,22 +157,110 @@ class StackPlanSegment(CompositePlanSegment):
 
 
 @dataclass
+class StringMethod(CompositePlanSegment):
+    def serialize(self) -> str:
+        raise NotImplementedError()
+
+
+@dataclass
+class Split(StringMethod):
+    _pattern: str
+
+    def serialize(self) -> str:
+        return f'{{"Split": {{"pattern": "{self._pattern}"}}}}'
+
+
+@dataclass
+class ToLowerCase(StringMethod):
+    def serialize(self) -> str:
+        return f'"ToLowerCase"'
+
+
+@dataclass
+class ToUpperCase(StringMethod):
+    def serialize(self) -> str:
+        return f'"ToUpperCase"'
+
+
+@dataclass
+class Replace(StringMethod):
+    _pattern: str
+    _to: str
+
+    def serialize(self) -> str:
+        return f'{{"Replace": {{"pattern": "{self._pattern}", "to": "{self._to}"}}}}'
+
+
+@dataclass
+class ReplaceAll(StringMethod):
+    _pattern: str
+    _to: str
+
+    def serialize(self) -> str:
+        return f'{{"ReplaceAll": {{"pattern": "{self._pattern}", "to": "{self._to}"}}}}'
+
+
+@dataclass
+class Contains(StringMethod):
+    _pattern: str
+
+    def serialize(self) -> str:
+        return f'{{"Contains": {{"pattern": "{self._pattern}"}}}}'
+
+
+@dataclass
+class Match(StringMethod):
+    _pattern: str
+
+    def serialize(self) -> str:
+        return f'{{"Match": {{"pattern": "{self._pattern}"}}}}'
+
+
+@dataclass
+class FindAll(StringMethod):
+    _pattern: str
+
+    def serialize(self) -> str:
+        return f'{{"FindAll": {{"pattern": "{self._pattern}"}}}}'
+
+
+@dataclass
+class Extract(StringMethod):
+    _pattern: str
+
+    def serialize(self) -> str:
+        return f'{{"Extract": {{"pattern": "{self._pattern}"}}}}'
+
+
+@dataclass
+class ExtractAll(StringMethod):
+    _pattern: str
+
+    def serialize(self) -> str:
+        return f'{{"ExtractAll": {{"pattern": "{self._pattern}"}}}}'
+
+
+@dataclass
+class FuzzyMatch(StringMethod):
+    _pattern: str
+
+    def serialize(self) -> str:
+        return f'{{"FuzzyMatch": {{"pattern": "{self._pattern}"}}}}'
+
+
+@dataclass
 class StringUdfPlanSegmenet(CompositePlanSegment):
     """
     Composite plan segment class responsible for string-based user defined functions
     """
 
-    _method: Dict[str, str]
+    _method: "StringMethod"
     _columns: List[str]
 
     def serialize(self) -> str:
         columns = ",".join([f'"{c}"' for c in self._columns])
-        name = self._method.get("name")
-        pattern = self._method.get("pattern")
-        to = self._method.get("to")
 
-        method = f'{{"name": "{name}", "pattern": "{pattern}", "to": "{to}"}}'
-        return f'{{"StringUdfPlanSegment": {{"method": {method}, "columns": [{columns}]}}}}'
+        return f'{{"StringUdfPlanSegment": {{"method": {self._method.serialize()}, "columns": [{columns}]}}}}'
 
 
 @dataclass
@@ -978,9 +1066,7 @@ class RemoteLazyFrame:
 
     def _make_string_udf_segment(
         self: RemoteLazyFrame,
-        method_name: str,
-        method_pattern: str = None,
-        method_to: str = None,
+        method: "StringMethod",
         cols: Optional[Union[str, List[str]]] = None,
     ) -> "RemoteLazyFrame":
         """
@@ -1011,11 +1097,7 @@ class RemoteLazyFrame:
                     *self._meta._prev_segments,
                     PolarsPlanSegment(self._inner),
                     StringUdfPlanSegmenet(
-                        {
-                            "name": method_name,
-                            "pattern": method_pattern,
-                            "to": method_to,
-                        },
+                        method,
                         cols,
                     ),
                 ],
@@ -1039,7 +1121,7 @@ class RemoteLazyFrame:
         Returns:
             RemoteLazyFrame.
         """
-        return self._make_string_udf_segment("split", sep, cols=cols)
+        return self._make_string_udf_segment(Split(sep), cols=cols)
 
     def to_lowercase(
         self, cols: Optional[Union[str, List[str]]] = None
@@ -1055,7 +1137,7 @@ class RemoteLazyFrame:
         Returns:
             RemoteLazyFrame.
         """
-        return self._make_string_udf_segment("to_lowercase", cols=cols)
+        return self._make_string_udf_segment(ToLowerCase(), cols=cols)
 
     def to_uppercase(
         self, cols: Optional[Union[str, List[str]]] = None
@@ -1071,7 +1153,7 @@ class RemoteLazyFrame:
         Returns:
             RemoteLazyFrame.
         """
-        return self._make_string_udf_segment("to_uppercase", cols=cols)
+        return self._make_string_udf_segment(ToUpperCase(), cols=cols)
 
     def replace(
         self, pattern: str, to: str, cols: Optional[Union[str, List[str]]] = None
@@ -1091,9 +1173,7 @@ class RemoteLazyFrame:
         Returns:
             RemoteLazyFrame.
         """
-        return self._make_string_udf_segment(
-            method_name="replace", method_pattern=pattern, method_to=to, cols=cols
-        )
+        return self._make_string_udf_segment(Replace(pattern, to), cols=cols)
 
     def replace_all(
         self, pattern: str, to: str, cols: Optional[Union[str, List[str]]] = None
@@ -1113,9 +1193,7 @@ class RemoteLazyFrame:
         Returns:
             RemoteLazyFrame.
         """
-        return self._make_string_udf_segment(
-            method_name="replace_all", method_pattern=pattern, method_to=to, cols=cols
-        )
+        return self._make_string_udf_segment(ReplaceAll(pattern, to), cols=cols)
 
     def contains(
         self,
@@ -1136,9 +1214,7 @@ class RemoteLazyFrame:
         Returns:
             RemoteLazyFrame.
         """
-        return self._make_string_udf_segment(
-            method_name="contains", method_pattern=pattern, cols=cols
-        )
+        return self._make_string_udf_segment(Contains(pattern), cols=cols)
 
     def match(
         self,
@@ -1158,9 +1234,7 @@ class RemoteLazyFrame:
         Returns:
             RemoteLazyFrame.
         """
-        return self._make_string_udf_segment(
-            method_name="match", method_pattern=pattern, cols=cols
-        )
+        return self._make_string_udf_segment(Match(pattern), cols=cols)
 
     def fuzzy_match(
         self,
@@ -1180,9 +1254,7 @@ class RemoteLazyFrame:
         Returns:
             RemoteLazyFrame.
         """
-        return self._make_string_udf_segment(
-            method_name="fuzzy_match", method_pattern=pattern, cols=cols
-        )
+        return self._make_string_udf_segment(FuzzyMatch(pattern), cols=cols)
 
     def findall(
         self,
@@ -1202,9 +1274,7 @@ class RemoteLazyFrame:
         Returns:
             RemoteLazyFrame.
         """
-        return self._make_string_udf_segment(
-            method_name="findall", method_pattern=pattern, cols=cols
-        )
+        return self._make_string_udf_segment(FindAll(pattern), cols=cols)
 
     def extract(
         self,
@@ -1224,9 +1294,7 @@ class RemoteLazyFrame:
         Returns:
             RemoteLazyFrame.
         """
-        return self._make_string_udf_segment(
-            method_name="extract", method_pattern=pattern, cols=cols
-        )
+        return self._make_string_udf_segment(Extract(pattern), cols=cols)
 
     def extract_all(
         self,
@@ -1246,9 +1314,7 @@ class RemoteLazyFrame:
         Returns:
             RemoteLazyFrame.
         """
-        return self._make_string_udf_segment(
-            method_name="extract_all", method_pattern=pattern, cols=cols
-        )
+        return self._make_string_udf_segment(ExtractAll(pattern), cols=cols)
 
 
 @dataclass

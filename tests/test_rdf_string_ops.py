@@ -16,7 +16,7 @@ def df_to_list(df):
     return list(df.to_dict().values())[0].to_list()
 
 
-class TestingConnection(unittest.TestCase):
+class TestingRdfStringOps(unittest.TestCase):
     def setUp(self) -> None:
         self.connection = Connection("localhost", 50056)
         self.client = self.connection.client
