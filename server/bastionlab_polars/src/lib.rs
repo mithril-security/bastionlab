@@ -36,6 +36,13 @@ use access_control::*;
 
 mod utils;
 
+mod cache;
+mod differential_privacy;
+mod errors;
+mod init;
+mod state_tree;
+mod visit;
+
 pub mod prelude {
     pub use bastionlab_common::prelude::*;
 }

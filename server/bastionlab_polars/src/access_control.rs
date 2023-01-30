@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use tonic::Status;
 
-use crate::composite_plan::StatsEntry;
+use crate::differential_privacy::PrivacyStatsEntry;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Policy {
@@ -53,7 +53,7 @@ pub enum Rule {
 
 #[derive(Debug, Clone)]
 pub struct Context {
-    pub stats: StatsEntry,
+    pub stats: PrivacyStatsEntry,
     pub user_id: String,
     pub df_identifier: String,
 }
@@ -86,16 +86,19 @@ impl Rule {
                 RuleMatch::Mismatch(String::from("UserId mismatch"))
             }),
             Rule::Aggregation(min_allowed_agg_size) => {
-                let min_allowed_agg_size = *min_allowed_agg_size * ctx.stats.join_scaling;
-                Ok(if ctx.stats.agg_size >= min_allowed_agg_size {
-                    RuleMatch::Match
-                } else {
+                // let min_allowed_agg_size = *min_allowed_agg_size * ctx.stats.join_scaling;
+                Ok(
+                //     if ctx.stats.agg_size >= min_allowed_agg_size {
+                //     RuleMatch::Match
+                // } 
+                // else {
                     RuleMatch::Mismatch(format!(
                         "Cannot fetch a result DataFrame that does not aggregate at least {} rows of DataFrame {}.",
                         min_allowed_agg_size,
                         ctx.df_identifier,
                     ))
-                })
+                // }
+            )
             }
             Rule::True => Ok(RuleMatch::Match),
             Rule::False => Ok(RuleMatch::Mismatch(String::from(

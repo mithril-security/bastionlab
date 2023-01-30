@@ -1,3 +1,5 @@
+use std::error::Error;
+
 use polars::prelude::*;
 use tch::{kind::Element, Tensor};
 use tonic::Status;
@@ -79,4 +81,8 @@ pub fn lazy_frame_from_logical_plan(plan: LogicalPlan) -> LazyFrame {
     let mut ldf = LazyFrame::default();
     ldf.logical_plan = plan;
     ldf
+}
+
+pub fn polars_to_status_error<T, E: Error>(res: Result<T, E>) -> Result<T, Status> {
+    res.map_err(|e| Status::internal(format!("Internal Error: {e}")))
 }
