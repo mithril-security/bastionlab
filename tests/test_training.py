@@ -82,7 +82,7 @@ class TestingConnection(unittest.TestCase):
             ]
         )
         label_col = "covid_res"
-        cols = list(filter(lambda a: a != label_col, rdf.column_names))
+        cols = list(filter(lambda a: a != label_col, rdf.columns))
 
         rdf = rdf.with_column(
             pl.when(pl.col(label_col) == 2).then(1).otherwise(0).alias(label_col)
@@ -299,8 +299,8 @@ class TestingConnection(unittest.TestCase):
 
         fetched_tensor_train = client.torch.fetch_dataset(train_dataset)
         self.assertListEqual(
-            list_tensor_to_list_list(fetched_tensor_train.column_names),
-            list_tensor_to_list_list(tensor_train.column_names),
+            list_tensor_to_list_list(fetched_tensor_train.columns),
+            list_tensor_to_list_list(tensor_train.columns),
         )
 
         connection.close()

@@ -52,15 +52,15 @@ class TensorDataset(Dataset):
 
     def __init__(self, columns: List[Tensor], labels: Optional[Tensor]) -> None:
         super().__init__()
-        self.column_names = columns
+        self.columns = columns
         self.labels = labels
 
     def __len__(self) -> int:
-        return len(self.column_names[0])
+        return len(self.columns[0])
 
     def __getitem__(self, idx: int) -> Tuple[List[Tensor], Optional[Tensor]]:
         return (
-            [column[idx] for column in self.column_names],
+            [column[idx] for column in self.columns],
             self.labels[idx] if self.labels is not None else None,
         )
 
