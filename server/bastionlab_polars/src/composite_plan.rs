@@ -203,7 +203,6 @@ pub enum CompositePlanSegment {
         method: StringMethod,
         columns: Vec<String>,
     },
-    RowCountSegment(String),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -323,16 +322,6 @@ impl CompositePlan {
                         series.rename(&col);
                     }
                     stack.push(frame);
-                }
-                CompositePlanSegment::RowCountSegment(name) => {
-                    let frame = stack.pop().ok_or(Status::invalid_argument(
-                        "Could not apply with_row_count: no input data frame",
-                    ))?;
-                    let df = frame.df.with_row_count(&name, Some(0)).map_err(|e| {
-                        Status::invalid_argument(format!("Error while running with_row_count: {}", e))
-                    })?;
-                    let stats = frame.stats;
-                    stack.push(StackFrame { df, stats });
                 }
             }
         }
