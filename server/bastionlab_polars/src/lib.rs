@@ -598,7 +598,7 @@ impl PolarsService for BastionLabPolars {
             let df_height = df.height() as f64 * 1.0;
 
             let train_size = (df_height * train_size).floor() as usize;
-            let test_size = (df_height * test_size).floor() as usize;
+            let test_size = df_height as usize - train_size;
 
             let train_df = shuffle_df(df.head(Some(train_size)))?;
             let test_df = shuffle_df(df.tail(Some(test_size)))?;

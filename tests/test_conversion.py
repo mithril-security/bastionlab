@@ -43,6 +43,22 @@ class TestingDataConv(unittest.TestCase):
         )
         connection.close()
 
+    def test_split_remote_array_with_negs(self):
+        connection = Connection("localhost")
+        client = connection.client
+        df = pl.DataFrame(
+            {
+                "a": [0, 1, 2, 3, 4],
+                "b": [2, 3, 5, 6, 7],
+            }
+        ).with_column((pl.col("a") * pl.col("b")).alias("c"))
+
+        rdf = client.polars.send_df(df, Policy(TrueRule(), Log(), False))
+        arr = rdf.to_array()
+
+        with self.assertRaises(ValueError) as ve:
+            train_test_split(arr, test_size=-0.4, shuffle=False)
+
     def test_split_remote_array(self):
         connection = Connection("localhost")
         client = connection.client
@@ -67,7 +83,7 @@ class TestingDataConv(unittest.TestCase):
         def splitter(df: pl.DataFrame, ratio: float):
             height = df.height * 1.0
             test_size = int(math.floor(height * ratio))
-            train_size = int(math.floor(height * (1 - ratio)))
+            train_size = int(height) - test_size
             return df.head(train_size).to_numpy(), df.tail(test_size).to_numpy()
 
         sk_train_X, sk_test_X = splitter(df, ratio)

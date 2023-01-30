@@ -412,7 +412,6 @@ class RemoteLazyFrame:
             ),
         )
 
-
     @property
     def column_names(self) -> List[str]:
         """Gets the column names of the RemoteDataFrame
@@ -1567,6 +1566,9 @@ def train_test_split(
 
     train_size = 1 - test_size if train_size is None else train_size
     test_size = 1 - train_size if test_size is None else test_size
+
+    if test_size < 0.0 or train_size < 0.0:
+        raise ValueError("Neither train_size nor test_size can be a negative value")
 
     arrays: List[ReferenceRequest] = [
         ReferenceRequest(identifier=rdf.identifier) for rdf in arrays
