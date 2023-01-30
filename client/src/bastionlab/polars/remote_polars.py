@@ -936,6 +936,142 @@ class RemoteLazyFrame:
         else:
             sns.barplot(data=df, x=x, y=y, **kwargs)
 
+    def _calculate_boxes(
+        self: LDF,
+        x: str = None,
+        y: str = None,
+        ax=None,
+    ):
+        # todo check error handling if data owner rejects
+        boxes = []
+        if x == None or y == None:
+            if y == None:
+                col_x = pl.col(x)
+            else:
+                col_x = pl.col(y)
+            ax.set_ylabel(x if x is not None else y)
+            q1 = self.select(col_x.quantile(0.25)).collect().fetch().to_numpy()[0]
+            q3 = self.select(col_x.quantile(0.75)).collect().fetch().to_numpy()[0]
+            boxes.append(
+                {
+                    "label": x,
+                    "whislo": self.select(col_x.min()).collect().fetch().to_numpy()[0],
+                    "q1": q1,
+                    "med": self.select(col_x.median()).collect().fetch().to_numpy()[0],
+                    "q3": q3,
+                    "iqr": q3 - q1,
+                    "whishi": self.select(col_x.max()).collect().fetch().to_numpy()[0],
+                }
+            )
+
+        else:
+            col_x = pl.col(x)
+            col_y = pl.col(y)
+            ax.set_ylabel(y)
+            ax.set_xlabel(x)
+            mins = self.groupby(col_x).agg(col_y.min()).sort(col_x)
+            maxes = self.groupby(col_x).agg(col_y.max()).sort(col_x)
+            meds = self.groupby(col_x).agg(col_y.median()).sort(col_x)
+            q1s = self.groupby(col_x).agg(col_y.quantile(0.25)).sort(col_x)
+            q3s = self.groupby(col_x).agg(col_y.quantile(0.75)).sort(col_x)
+            iqrs = self.groupby(col_x).agg(col_y.quantile(0.25)).sort(col_x)
+            labels = mins.collect().fetch().to_numpy()[:, 0]
+
+            for x in range(len(labels)):
+                boxes.append(
+                    {
+                        "label": labels[x],
+                        "whislo": mins.collect().fetch().to_numpy()[x, 1],
+                        "q1": q1s.collect().fetch().to_numpy()[x, 1],
+                        "med": meds.collect().fetch().to_numpy()[x, 1],
+                        "q3": q3s.collect().fetch().to_numpy()[x, 1],
+                        "iqr": iqrs.collect().fetch().to_numpy()[x, 1],
+                        "whishi": maxes.collect().fetch().to_numpy()[x, 1],
+                    }
+                )
+        return boxes
+
+    def boxplot(
+        self: LDF,
+        x: str = None,
+        y: str = None,
+        with_outliers: bool = True,
+        colors=[],
+        vertical: bool = True,
+        ax=None,
+        **kwargs,
+    ):
+        """Draws a boxplot based on x, y and hue values.
+
+        boxplot filters data down to necessary columns only and then calls Seaborn's boxplot function with this scaled down dataframe.
+
+        boxplot accepts any additional options supported by Seaborn's boxplot as kwargs, which can be viewed in Seaborn's documentation.
+
+        Args:
+            x (str): The name of column to be used for x axes.
+            y (str): The name of column to be used for y axes.
+            hue (str = None): The name of the column to be used as a grouping variable that will produce boxes with different colors.
+            with_outliers: If set to false, the boxplot will be built with aggregated queries, thus avoiding any potential privacy policy breaches, but notably
+            leading to the loss of outlier data in the boxplot.
+            kwargs: Other keyword arguments that will be passed to Seaborn's boxplot function.
+        Raises:
+            ValueError: Incorrect column name given
+            various exceptions: Note that exceptions may be raised from Seaborn when the lineplot function is called,
+            for example, where kwargs keywords are not expected. See Seaborn documentation for further details."""
+
+        if ax == None:
+            ax = plt.gca()
+        selects = []
+        for col in [x, y]:
+            if col != None:
+                if col not in self.columns:
+                    raise ValueError("Column ", col, " not found in dataframe")
+                else:
+                    selects.append(col)
+        if selects == []:
+            raise ValueError("Please specify at least an X or Y value")
+
+        if not with_outliers:
+            boxes = self._calculate_boxes(x, y, ax)
+            medianprops = dict(linestyle="-", color="black")
+            boxprops = dict(facecolor="#1f77b4")
+            bplot = ax.bxp(
+                boxes,
+                showfliers=False,
+                widths=0.75,
+                medianprops=medianprops,
+                boxprops=boxprops,
+                patch_artist=True,
+                vert=vertical,
+            )
+
+            if colors == []:
+                colors = [
+                    "#1f77b4",
+                    "#ff7f0e",
+                    "#2ca02c",
+                    "#d62728",
+                    "#9467bd",
+                    "#8c564b",
+                    "#e377c2",
+                    "#7f7f7f",
+                    "#bcbd22",
+                    "#17becf",
+                ]
+
+            for patch, color in zip(bplot["boxes"], colors):
+                patch.set_facecolor(color)
+            plt.show()
+
+        else:
+            tmp = self.select([pl.col(x) for x in selects]).collect().fetch()
+            RequestRejected.check_valid_df(tmp)
+            df = tmp.to_pandas()
+            if vertical:
+                sns.boxplot(data=df, x=x, y=y, **kwargs)
+            else:
+                sns.boxplot(data=df, x=x, y=y, orient="h", **kwargs)
+
     def facet(
         self: LDF, col: Optional[str] = None, row: Optional[str] = None, **kwargs
     ) -> any:
