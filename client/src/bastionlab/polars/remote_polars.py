@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, make_dataclass
 from typing import Callable, Generic, List, Optional, TypeVar, Sequence, Union, Dict
 import seaborn as sns
 import polars as pl
@@ -15,6 +15,7 @@ from .utils import ApplyBins
 import matplotlib.pyplot as plt
 from typing import TYPE_CHECKING
 from ..errors import RequestRejected
+import types
 
 
 LDF = TypeVar("LDF", bound="pl.LazyFrame")
@@ -170,12 +171,27 @@ class StringMethod(CompositePlanSegment):
         raise NotImplementedError()
 
 
-@dataclass
-class Split(StringMethod):
-    _pattern: str
+def pattern_operator_serializer(operator: str):
+    """
+    This method creates the following dataclass type on-the-fly.
 
-    def serialize(self) -> str:
-        return f'{{"Split": {{"pattern": "{self._pattern}"}}}}'
+    ```python
+        @dataclass
+        class [`operator`](StringMethod):
+            _pattern: str
+
+            def serialize(self):
+                return f'{{"{operator}": {{"pattern": "{self._pattern}"}}}}'
+    ```
+    """
+    return make_dataclass(
+        operator,
+        bases=(StringMethod,),
+        fields=[("_pattern", str)],
+        namespace={
+            "serialize": lambda self: f'{{"{operator}": {{"pattern": "{self._pattern}"}}}}'
+        },
+    )
 
 
 @dataclass
@@ -209,55 +225,7 @@ class ReplaceAll(StringMethod):
 
 
 @dataclass
-class Contains(StringMethod):
-    _pattern: str
-
-    def serialize(self) -> str:
-        return f'{{"Contains": {{"pattern": "{self._pattern}"}}}}'
-
-
-@dataclass
-class Match(StringMethod):
-    _pattern: str
-
-    def serialize(self) -> str:
-        return f'{{"Match": {{"pattern": "{self._pattern}"}}}}'
-
-
-@dataclass
-class FindAll(StringMethod):
-    _pattern: str
-
-    def serialize(self) -> str:
-        return f'{{"FindAll": {{"pattern": "{self._pattern}"}}}}'
-
-
-@dataclass
-class Extract(StringMethod):
-    _pattern: str
-
-    def serialize(self) -> str:
-        return f'{{"Extract": {{"pattern": "{self._pattern}"}}}}'
-
-
-@dataclass
-class ExtractAll(StringMethod):
-    _pattern: str
-
-    def serialize(self) -> str:
-        return f'{{"ExtractAll": {{"pattern": "{self._pattern}"}}}}'
-
-
-@dataclass
-class FuzzyMatch(StringMethod):
-    _pattern: str
-
-    def serialize(self) -> str:
-        return f'{{"FuzzyMatch": {{"pattern": "{self._pattern}"}}}}'
-
-
-@dataclass
-class StringUdfPlanSegmenet(CompositePlanSegment):
+class StringUdfPlanSegment(CompositePlanSegment):
     """
     Composite plan segment class responsible for string-based user defined functions
     """
@@ -1107,7 +1075,7 @@ class RemoteLazyFrame:
                 [
                     *self._meta._prev_segments,
                     PolarsPlanSegment(self._inner),
-                    StringUdfPlanSegmenet(
+                    StringUdfPlanSegment(
                         method,
                         cols,
                     ),
@@ -1132,7 +1100,9 @@ class RemoteLazyFrame:
         Returns:
             RemoteLazyFrame.
         """
-        return self._make_string_udf_segment(Split(sep), cols=cols)
+        return self._make_string_udf_segment(
+            pattern_operator_serializer("Split")(sep), cols=cols
+        )
 
     def to_lowercase(
         self, cols: Optional[Union[str, List[str]]] = None
@@ -1225,7 +1195,9 @@ class RemoteLazyFrame:
         Returns:
             RemoteLazyFrame.
         """
-        return self._make_string_udf_segment(Contains(pattern), cols=cols)
+        return self._make_string_udf_segment(
+            pattern_operator_serializer("Contains")(pattern), cols=cols
+        )
 
     def match(
         self,
@@ -1245,7 +1217,9 @@ class RemoteLazyFrame:
         Returns:
             RemoteLazyFrame.
         """
-        return self._make_string_udf_segment(Match(pattern), cols=cols)
+        return self._make_string_udf_segment(
+            pattern_operator_serializer("Match")(pattern), cols=cols
+        )
 
     def fuzzy_match(
         self,
@@ -1265,7 +1239,9 @@ class RemoteLazyFrame:
         Returns:
             RemoteLazyFrame.
         """
-        return self._make_string_udf_segment(FuzzyMatch(pattern), cols=cols)
+        return self._make_string_udf_segment(
+            pattern_operator_serializer("FuzzyMatch")(pattern), cols=cols
+        )
 
     def findall(
         self,
@@ -1285,7 +1261,9 @@ class RemoteLazyFrame:
         Returns:
             RemoteLazyFrame.
         """
-        return self._make_string_udf_segment(FindAll(pattern), cols=cols)
+        return self._make_string_udf_segment(
+            pattern_operator_serializer("FindAll")(pattern), cols=cols
+        )
 
     def extract(
         self,
@@ -1305,7 +1283,9 @@ class RemoteLazyFrame:
         Returns:
             RemoteLazyFrame.
         """
-        return self._make_string_udf_segment(Extract(pattern), cols=cols)
+        return self._make_string_udf_segment(
+            pattern_operator_serializer("Extract")(pattern), cols=cols
+        )
 
     def extract_all(
         self,
@@ -1325,7 +1305,9 @@ class RemoteLazyFrame:
         Returns:
             RemoteLazyFrame.
         """
-        return self._make_string_udf_segment(ExtractAll(pattern), cols=cols)
+        return self._make_string_udf_segment(
+            pattern_operator_serializer("ExtractAll")(pattern), cols=cols
+        )
 
 
 @dataclass

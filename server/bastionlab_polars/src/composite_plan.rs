@@ -35,28 +35,33 @@ pub enum StringMethod {
 }
 
 impl StringMethod {
+    pub fn process_series<T>(&self, series: &Utf8Chunked, operator: T) -> Result<Series, Status>
+    where
+        T: Fn(&str) -> AnyValue,
+    {
+        let mut out = Vec::with_capacity(series.len());
+        for elem in series.into_iter() {
+            let value = match elem {
+                Some(r) => operator(r),
+                None => {
+                    return Err(Status::aborted(format!("Could not apply split to null")));
+                }
+            };
+
+            out.push(value);
+        }
+        let s = vec_any_values_to_series(&out[..])?;
+        Ok(s)
+    }
     fn execute(&self, series: &ChunkedArray<Utf8Type>) -> Result<Series, Status> {
         let series = match self {
             StringMethod::Split { pattern } => {
                 let pattern = pattern;
-                let mut out = vec![];
-                for elem in series.into_iter() {
-                    let value = match elem {
-                        Some(r) => {
-                            let s = r.split(&*pattern).collect::<Vec<_>>();
-                            let v = AnyValue::List(
-                                Utf8Chunked::from_slice("col", &s[..]).into_series(),
-                            );
-                            v
-                        }
-                        None => {
-                            return Err(Status::aborted(format!("Could not apply split to null")));
-                        }
-                    };
-                    out.push(value);
-                }
-                let s = vec_any_values_to_series(&out[..])?;
-                s
+                self.process_series(series, |s| {
+                    let s = s.split(&*pattern).collect::<Vec<_>>();
+                    let v = AnyValue::List(Utf8Chunked::from_slice("col", &s[..]).into_series());
+                    v
+                })?
             }
             StringMethod::ToLowerCase => series.to_lowercase().into_series(),
             StringMethod::ToUpperCase => series.to_uppercase().into_series(),
@@ -89,63 +94,35 @@ impl StringMethod {
                     .into_series()
             }
             StringMethod::Match { pattern } => {
-                let mut out = Vec::with_capacity(series.len());
-
                 let re = create_regex_from_str(&*pattern)?;
-
-                for elem in series.into_iter() {
-                    let value = match elem {
-                        Some(r) => {
-                            let s = if re.find_iter(r).last().is_none() {
-                                false
-                            } else {
-                                true
-                            };
-
-                            AnyValue::Boolean(s)
-                        }
-                        None => {
-                            return Err(Status::aborted(format!("Could not apply split to null")));
-                        }
+                self.process_series(series, |s| {
+                    let s = if re.find_iter(s).last().is_none() {
+                        false
+                    } else {
+                        true
                     };
 
-                    out.push(value);
-                }
-
-                let s = vec_any_values_to_series(&out[..])?;
-                s
+                    AnyValue::Boolean(s)
+                })?
             }
             StringMethod::FindAll { pattern } => {
-                let mut out = Vec::with_capacity(series.len());
-
                 let re = create_regex_from_str(&*pattern)?;
-                for elem in series.into_iter() {
-                    let value = match elem {
-                        Some(r) => {
-                            let s = re
-                                .find_iter(r)
-                                .map(|s| s.as_str().to_owned())
-                                .collect::<Vec<_>>();
+                self.process_series(series, |r| {
+                    let s = re
+                        .find_iter(r)
+                        .map(|s| s.as_str().to_owned())
+                        .collect::<Vec<_>>();
 
-                            let s = Utf8Chunked::from_slice("", &s[..]);
-                            let s = if !s.is_empty() {
-                                s
-                            } else {
-                                let s: Vec<String> = vec![];
-                                Utf8Chunked::from_slice("", &s[..])
-                            };
-
-                            AnyValue::List(s.into_series())
-                        }
-                        None => {
-                            return Err(Status::aborted(format!("Could not apply split to null")));
-                        }
+                    let s = Utf8Chunked::from_slice("", &s[..]);
+                    let s = if !s.is_empty() {
+                        s
+                    } else {
+                        let s: Vec<String> = vec![];
+                        Utf8Chunked::from_slice("", &s[..])
                     };
 
-                    out.push(value);
-                }
-                let s = vec_any_values_to_series(&out[..])?;
-                s
+                    AnyValue::List(s.into_series())
+                })?
             }
             StringMethod::Extract { pattern } => {
                 let re = create_regex_from_str(&*pattern)?;
@@ -167,26 +144,13 @@ impl StringMethod {
             }
             StringMethod::FuzzyMatch { pattern } => {
                 let m = SkimMatcherV2::default();
-                let mut out = vec![];
-                for elem in series.into_iter() {
-                    let value = match elem {
-                        Some(s) => {
-                            let v = m.fuzzy_indices(s, &*pattern);
-                            match v {
-                                Some(_) => AnyValue::Utf8(s),
-                                None => AnyValue::Null,
-                            }
-                        }
-                        None => {
-                            return Err(Status::aborted(format!("Could not apply split to null")));
-                        }
-                    };
-
-                    out.push(value);
-                }
-
-                let s = vec_any_values_to_series(&out[..])?;
-                s
+                self.process_series(series, |r| {
+                    let v = m.fuzzy_indices(r, &*pattern);
+                    match v {
+                        Some(_) => AnyValue::Utf8(r),
+                        None => AnyValue::Null,
+                    }
+                })?
             }
         };
 
@@ -228,14 +192,6 @@ impl CompositePlan {
         let plan_str = serde_json::to_string(&self.0).map_err(|e| {
             Status::invalid_argument(format!("Could not parse composite plan: {e}"))
         })?;
-        let column_to_idx = |col: &str, df: &DataFrame| -> Result<usize, Status> {
-            Ok(df.get_column_names().iter().position(|x| x == &col).ok_or(
-                Status::invalid_argument(format!(
-                    "Could not apply udf: no column `{}` in data frame",
-                    col
-                )),
-            )?)
-        };
         for seg in self.0 {
             match seg {
                 CompositePlanSegment::PolarsPlanSegment(mut plan) => {
@@ -309,7 +265,7 @@ impl CompositePlan {
                     ))?;
 
                     for col in columns {
-                        let idx = column_to_idx(&col, &frame.df)?;
+                        let idx = column_names_to_idx(&col, &frame.df)?;
                         let series = frame.df.get_columns_mut().get_mut(idx).unwrap();
 
                         if series.dtype().ne(&DataType::Utf8) {

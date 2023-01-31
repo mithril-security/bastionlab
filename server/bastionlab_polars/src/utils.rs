@@ -91,3 +91,13 @@ pub fn vec_any_values_to_series(v: &[AnyValue]) -> Result<Series, Status> {
 pub fn create_regex_from_str(pat: &str) -> Result<Regex, Status> {
     Regex::new(pat).map_err(|e| Status::aborted(format!("Could not create regex from {pat}: {e}")))
 }
+pub fn column_names_to_idx(col: &str, df: &DataFrame) -> Result<usize, Status> {
+    Ok(df
+        .get_column_names()
+        .iter()
+        .position(|x| x == &col)
+        .ok_or(Status::invalid_argument(format!(
+            "Could not apply udf: no column `{}` in data frame",
+            col
+        )))?)
+}
