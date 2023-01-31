@@ -1,0 +1,67 @@
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      ##### Set VERSION to release tag X.Y.Z #####
+      - name: Setup env
+        run: |
+          TAG=${{ github.event.release.tag_name }}
+          echo "VERSION=${TAG:1}" >> $GITHUB_ENV
+          echo ${VERSION}
+
+      ##### ManyLinux 2014 server compilation #####
+      - name: Docker run action
+        uses: addnab/docker-run-action@v3
+        with:
+          image: quay.io/pypa/manylinux2014_x86_64
+          options: -v ${{ github.workspace }}:/io
+          run: |
+            echo "Release version:" ${{ env.VERSION }}
+
+            cd io/
+
+            # Dependencies installation
+            yum -y install python3 \
+              zip openssl-devel \
+              devtoolset-11-toolchain
+
+            # Libtorch installation
+            pip3 install requests
+            echo 'import requests; \
+            open("libtorch.zip", "wb").write( \
+                requests.get(__torch_url__).content \
+                )' | python3 -i client/src/bastionlab/version.py
+            unzip libtorch.zip
+            export LIBTORCH=$PWD/libtorch
+            export LD_LIBRARY_PATH=$LIBTORCH/lib:$LD_LIBRARY_PATH
+
+            # Rustup installation
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > rustup.sh
+            sh rustup.sh -y
+            export PATH=$HOME/.cargo/bin:$PATH
+
+            cd server/
+
+            # Build server binary
+            scl enable devtoolset-11 'LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all'
+
+            # Compress server binary
+            zip basionlab-${{ env.VERSION }}-linux.zip \
+              bin/bastionlab \
+              bin/config.toml \
+              bin/data_frames/
+
+      ##### Upload binary to release #####
+      - name: Upload server binary to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ./server/basionlab-${{ env.VERSION }}-linux.zip

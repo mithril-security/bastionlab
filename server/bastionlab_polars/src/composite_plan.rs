@@ -1,4 +1,7 @@
 use base64;
+use bastionlab_common::common_conversions::{
+    lazy_frame_from_logical_plan, series_to_tensor, tensor_to_series,
+};
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use polars::{lazy::dsl::Expr, prelude::*};
 use serde::{Deserialize, Serialize};
