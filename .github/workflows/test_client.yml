@@ -60,6 +60,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install flake8 mypy pytest-cov
           wget 'https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv'
+          wget 'https://raw.githubusercontent.com/rinbaruah/COVID_preconditions_Kaggle/master/Data/covid.csv' 
 
       - name: Test with pytest
         id: test-client

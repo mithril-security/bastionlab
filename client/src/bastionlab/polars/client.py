@@ -4,22 +4,16 @@ import io
 from grpc import StatusCode
 import polars as pl
 from colorama import Fore
-from ..pb.bastionlab_polars_pb2 import (
-    ReferenceRequest,
-    Query,
-    Empty,
-)
+from ..pb.bastionlab_polars_pb2 import ReferenceRequest, Empty, Query
 from ..pb.bastionlab_polars_pb2_grpc import PolarsServiceStub
 from ..errors import GRPCException
-from .utils import (
-    deserialize_dataframe,
-    serialize_dataframe,
-)
+from .utils import deserialize_dataframe, serialize_dataframe
 from .policy import Policy, DEFAULT_POLICY
 
 
 if TYPE_CHECKING:
-    from .remote_polars import RemoteLazyFrame, FetchableLazyFrame
+    from .remote_polars import FetchableLazyFrame
+    from ..converter import BastionLabConverter
     from ..client import Client
 
 
@@ -34,12 +28,9 @@ class BastionLabPolars:
             The gRPC service for BastionLab Polars. This define all the API calls for BastionLab Polars.
     """
 
-    def __init__(
-        self,
-        client: "Client",
-    ):
-        self.client = client
+    def __init__(self, client: "Client"):
         self.stub = PolarsServiceStub(client._channel)
+        self.client = client
 
     def send_df(
         self,

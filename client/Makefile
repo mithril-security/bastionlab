@@ -1,7 +1,7 @@
 .PHONY: all venv build dev-install test clean
 
 VENV := env
-BASTIONLAB_VERSION := $(shell cat src/bastionlab/version.py | cut -d '"' -f 2)
+BASTIONLAB_VERSION := $(shell echo 'print(__version__)' | python3 -i src/bastionlab/version.py)
 
 all: build
 

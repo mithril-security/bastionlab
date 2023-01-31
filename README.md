@@ -19,7 +19,7 @@ Where data owners and data scientists can securely collaborate without exposing 
 
 ## ⚙️ What is BastionLab?
 
-**BastionLab is a simple privacy framework for data science collaboration, covering data exploration and AI traning.** 
+**BastionLab is a simple privacy framework for data science collaboration, covering data exploration and AI training.** 
 
 It acts like an **access control solution**, for data owners to protect the privacy of their datasets, and **stands as a guard**, to enforce that only privacy-friendly operations are allowed on the data and anonymized outputs are shown to the data scientist. 
 
