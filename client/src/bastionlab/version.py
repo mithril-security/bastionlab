@@ -14,5 +14,12 @@ __all__ = [
 
 __version__ = "0.3.7"
 __torch_version__ = "1.13.1"
-__torch_url__ = _base_url + "libtorch-shared-with-deps-" + __torch_version__ + "%2Bcpu.zip"
-__torch_cxx11_url__ = _base_url + "libtorch-cxx11-abi-shared-with-deps-" + __torch_version__ + "%2Bcpu.zip"
+__torch_url__ = (
+    _base_url + "libtorch-shared-with-deps-" + __torch_version__ + "%2Bcpu.zip"
+)
+__torch_cxx11_url__ = (
+    _base_url
+    + "libtorch-cxx11-abi-shared-with-deps-"
+    + __torch_version__
+    + "%2Bcpu.zip"
+)

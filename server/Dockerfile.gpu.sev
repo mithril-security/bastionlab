@@ -5,5 +5,5 @@ RUN git clone -b deployment-cloud "https://github.com/mithril-security/bastionla
 WORKDIR /app/bastionlab/server/
 RUN sh build.sh
 WORKDIR /app/bastionlab/server/bin
-#EXPOSE 50051
+EXPOSE 50056
 CMD ["./bastionlab_app"]
