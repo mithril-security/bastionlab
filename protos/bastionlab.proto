@@ -3,6 +3,22 @@ package bastionlab;
 
 message Empty {}
 
+message Reference {
+    string identifier = 1;
+    string name = 2;
+    string description = 3;
+    bytes meta = 4;
+}
+
+message TensorMetaData {
+    // This message represents metadata about Tensor.
+    // input_dtype --> tch::Tensor::kind() which we map onto PyTorch dtypes
+    // input_shape --> List of integers representing the shape. This is transformed into PyTorch Shape
+    
+    repeated int64 input_shape = 1;
+    repeated string input_dtype = 2;
+}
+
 message ChallengeResponse {
     bytes value = 1;
 }

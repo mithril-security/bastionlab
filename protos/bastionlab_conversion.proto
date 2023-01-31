@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package bastionlab_conversion;
+import "bastionlab.proto";
+
+message ToTensor {
+    string identifier = 1;
+}
+
+message ToDataFrame {
+    repeated string inputs_col_names = 1;
+    string labels_col_name = 2;
+    string inputs_conv_fn = 3;
+    string labels_conv_fn = 4;
+    string identifier = 5;
+}
+
+service ConversionService {
+    rpc ConvToTensor(ToTensor) returns (bastionlab.Reference) {}
+}
