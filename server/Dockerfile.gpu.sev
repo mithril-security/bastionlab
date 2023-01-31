@@ -1,7 +1,7 @@
 FROM nvcr.io/nvidia/pytorch:22.12-py3
 WORKDIR /app
 ENV DEBIAN_FRONTEND="noninteractive"
-RUN git clone -b deployment-cloud "https://github.com/mithril-security/bastionlab.git"
+RUN git clone "https://github.com/mithril-security/bastionlab.git"
 WORKDIR /app/bastionlab/server/
 RUN sh build.sh
 WORKDIR /app/bastionlab/server/bin
