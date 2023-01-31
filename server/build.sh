@@ -30,7 +30,12 @@ install_common()
 
     # Libtorch env
     export LIBTORCH=$PWD/libtorch
-    export LD_LIBRARY_PATH=$LIBTORCH/lib:$LD_LIBRARY_PATH
+    if [ -d "/usr/local/cuda" ]; then
+	export CUDA="/usr/local/cuda"
+	export LD_LIBRARY_PATH=$CUDA/lib64:$LIBTORCH/lib:$LD_LIBRARY_PATH
+    else
+	export LD_LIBRARY_PATH=$LIBTORCH/lib:$LD_LIBRARY_PATH
+    fi
 
     # Rustup installation
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > rustup.sh
@@ -45,14 +50,21 @@ if [ -f "/etc/debian_version" ] ; then
     # Dependencies installation
     apt-get update
     apt-get -y install \
-	 build-essential \
-	 patchelf \
-	 libssl-dev \
-	 pkg-config \
-	 curl \
-	 unzip
+	 software-properties-common \
+	 build-essential patchelf \
+	 libssl-dev pkg-config \
+	 curl unzip python3 python3-pip
+
+    add-apt-repository -y ppa:ubuntu-toolchain-r/test
+    apt-get install -y gcc-11 g++-11 cpp-11
+    update-alternatives \
+        --install /usr/bin/gcc gcc /usr/bin/gcc-11 100 \
+        --slave /usr/bin/g++ g++ /usr/bin/g++-11 \
+        --slave /usr/bin/gcov gcov /usr/bin/gcov-11
 
     install_common "__torch_cxx11_url__"
+    
+    LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all
     
 elif [ -f "/etc/redhat-release" ] ; then
     # Dependencies installation
