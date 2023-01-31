@@ -5,15 +5,21 @@ install_common()
     cd $(dirname $(pwd))
 
     # Libtorch installation
-    pip3 install requests
-    echo 'import requests; \
-    open("libtorch.zip", "wb").write( \
-        requests.get('$1').content \
-        )' | python3 -i client/src/bastionlab/version.py
+    if [ ! -d "libtorch" ] ; then
+	
+	pip3 install requests
+	echo 'import requests; \
+    	open("libtorch.zip", "wb").write( \
+      	    requests.get('$1').content \
+            )' | python3 -i client/src/bastionlab/version.py
 
-    if [ ! -f "libtorch.zip" ] ; then
-	echo "Failed to download libtorch.zip file"
-	exit 1
+	if [ ! -f "libtorch.zip" ] ; then
+	    echo "Failed to download libtorch.zip file"
+	    exit 1
+	fi
+	unzip libtorch.zip
+    else
+	echo "libtorch.zip is already installed at $(dirname $(pwd))libtorch"
     fi
 
     # Libtorch env
@@ -46,11 +52,12 @@ elif [ -f "/etc/redhat-release" ] ; then
     # Dependencies installation
     yum -y install \
 	python3 python3-pip \
-        zip openssl-devel \
-        devtoolset-11-toolchain
+	make gcc gcc-c++ zip \
+        openssl-devel \
+	gcc-toolset-11
 
-    install_common "__torch_url__"
-
+    install_common "__torch_cxx11_url__"
+    scl enable gcc-toolset-11 'LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all'
 else
     exit
 fi
