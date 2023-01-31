@@ -206,7 +206,8 @@ pub fn series_to_tokenized_series(
     s: &Series,
     name: &str,
     model: &str,
-) -> Result<DataFrame, Status> {
+    add_special_tokens: bool,
+) -> Result<Vec<Series>, Status> {
     let tokenizer = get_tokenizer(model)?;
     let mut batched_seqs = Vec::new();
 
@@ -243,7 +244,7 @@ pub fn series_to_tokenized_series(
     }
 
     let tokens_vec = tokenizer
-        .encode_batch(batched_seqs, false)
+        .encode_batch(batched_seqs, add_special_tokens)
         .map_err(|_| Status::aborted("Failed to tokenize string"))?;
 
     let rows = tokens_vec.iter().map(to_row).collect::<Vec<_>>();
@@ -255,7 +256,7 @@ pub fn series_to_tokenized_series(
     let col_names = df.get_column_names_owned();
     to_status_error(df.rename(&col_names[0], &ids_names))?;
     to_status_error(df.rename(&col_names[1], &mask_names))?;
-    Ok(df)
+    Ok(df.get_columns().to_vec())
 }
 
 pub fn chunked_array_to_tensor<T>(series: &ChunkedArray<T>) -> Result<Tensor, Status>

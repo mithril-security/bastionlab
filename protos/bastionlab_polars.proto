@@ -32,8 +32,8 @@ message FetchChunk {
     }
 }
 
-message Query {
-    string composite_plan = 1;
+message QueryBytes {
+    bytes data = 1;
 }
 
 message Empty {}
@@ -48,7 +48,7 @@ message SplitRequest {
 
 service PolarsService {
     rpc SendDataFrame (stream SendChunk) returns (ReferenceResponse) {}
-    rpc RunQuery (Query) returns (ReferenceResponse) {}
+    rpc RunQuery (stream QueryBytes) returns (ReferenceResponse) {}
     rpc FetchDataFrame (ReferenceRequest) returns (stream FetchChunk) {}
     rpc ListDataFrames (Empty) returns (ReferenceList) {}
     rpc GetDataFrameHeader (ReferenceRequest) returns (ReferenceResponse) {}

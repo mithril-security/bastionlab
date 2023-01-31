@@ -165,6 +165,43 @@ class StackPlanSegment(CompositePlanSegment):
 
 
 @dataclass
+class StringTransformerPlanSegment(CompositePlanSegment):
+    """
+    Accepts a UDF for row-wise DataFrame transformation.
+    """
+
+    model: str
+    _columns: List[str]
+    add_special_tokens: bool
+
+    def serialize(self) -> str:
+        """
+        returns serialized string of this plan segment
+
+        Returns:
+            str: serialized string of this plan segment
+        """
+        columns = ",".join([f'"{c}"' for c in self._columns])
+        model = base64.b64encode(self.model.encode("utf8")).decode("utf8")
+        add_special_tokens = 1 if self.add_special_tokens else 0
+        return f'{{"StringTransformerPlanSegment":{{"columns":[{columns}],"model":"{model}","add_special_tokens":{add_special_tokens}}}}}'
+
+
+@dataclass
+class UdfTransformerPlanSegment(CompositePlanSegment):
+    """
+    Accepts a UDF for row-wise DataFrame transformation.
+    """
+
+    _name: str
+    _columns: List[str]
+
+    def serialize(self) -> str:
+        pass
+
+
+@dataclass
+>>>>>>> origin/remote-tokenizers
 class Metadata:
     """
     A class containing metadata related to your dataframe
@@ -400,6 +437,30 @@ class RemoteLazyFrame:
                 ],
             ),
         )
+
+    def _convert(self, columns: List[str], model: str, add_special_tokens: bool) -> LDF:
+        df = pl.DataFrame(
+            [pl.Series(k, dtype=v) for k, v in self._inner.schema.items()]
+        )
+        return RemoteLazyFrame(
+            df.lazy(),
+            Metadata(
+                self._meta._polars_client,
+                [
+                    *self._meta._prev_segments,
+                    StringTransformerPlanSegment(model, columns, add_special_tokens),
+                ],
+            ),
+        )
+
+    @property
+    def column_names(self) -> List[str]:
+        """Gets the column names of the RemoteDataFrame
+
+        Returns:
+            List[str]: List of column names in the RemoteDataFrame
+        """
+        return self._inner.columns
 
     def join(
         self: LDF,
