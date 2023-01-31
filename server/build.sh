@@ -1,4 +1,10 @@
 #!/bin/sh
+#
+# Depends on:
+#   bastionlab/client/src/bastionlab/version.py
+# Dependents:
+#   bastionlab/.github/workflows/release_bin.yml
+#   bastionlab/server/Dockerfile.gpu.sev
 
 install_common()
 {
@@ -9,14 +15,14 @@ install_common()
 	
 	pip3 install requests
 	echo 'import requests; \
-    	open("libtorch.zip", "wb").write( \
-      	    requests.get('$1').content \
+    open("libtorch.zip", "wb").write( \
+          requests.get('$1').content \
             )' | python3 -i client/src/bastionlab/version.py
 
 	if [ ! -f "libtorch.zip" ] ; then
-	    echo "Failed to download libtorch.zip file"
-	    exit 1
-	fi
+	        echo "Failed to download libtorch.zip file"
+		    exit 1
+		    fi
 	unzip libtorch.zip
     else
 	echo "libtorch.zip is already installed at $(dirname $(pwd))libtorch"
@@ -53,11 +59,20 @@ elif [ -f "/etc/redhat-release" ] ; then
     yum -y install \
 	python3 python3-pip \
 	make gcc gcc-c++ zip \
-        openssl-devel \
-	gcc-toolset-11
+        openssl-devel
 
-    install_common "__torch_cxx11_url__"
-    scl enable gcc-toolset-11 'LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all'
+    # CentOS based distros
+    if [ "$(cat /etc/centos-release | awk '{print $1}')" == "CentOS" ]; then
+	yum -y install \
+	        devtoolset-11-toolchain
+	install_common "__torch_url__"
+	scl enable devtoolset-11 'LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all'
+    else # RHEL based distros
+	yum -y install \
+	        gcc-toolset-11
+	install_common "__torch_cxx11_url__"
+	scl enable gcc-toolset-11 'LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all'
+    fi
 else
     exit
 fi
