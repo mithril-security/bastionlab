@@ -19,6 +19,7 @@ declare -a deb_dependencies=(
     [10]=g++-11
     [11]=cpp-11
     [12]=python3-venv
+    [13]=sudo
 )
 
 declare -a rhel_dependencies=(
@@ -31,6 +32,7 @@ declare -a rhel_dependencies=(
     [7]=openssl-devel
     [8]=openssl
     [9]=python3-virtualenv
+    [10]=sudo
 )
 
 unrecognized_distro()
