@@ -1047,8 +1047,8 @@ class RemoteLazyFrame:
                 columns.append(x)
         rdf = self.with_columns(
             [
-                (pl.col(x) - pl.col(x).min())
-                / (pl.col(x).max() - pl.col(x).mean()).alias(x)
+                (pl.col(x) - pl.col(x).mean())
+                / (pl.col(x).max() - pl.col(x).min()).alias(x)
                 for x in columns
             ]
         )
