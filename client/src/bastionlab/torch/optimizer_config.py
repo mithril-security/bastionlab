@@ -22,7 +22,8 @@ class OptimizerConfig:
 class SGD(OptimizerConfig):
     """SGD optimizer configuration.
 
-    Parameters are the same as in Pytorch: https://pytorch.org/docs/stable/generated/torch.optim.SGD.html#torch.optim.SGD"""
+    Parameters are the same as in Pytorch: https://pytorch.org/docs/stable/generated/torch.optim.SGD.html#torch.optim.SGD
+    """
 
     momentum: float = 0.0
     dampening: float = 0.0
@@ -46,7 +47,8 @@ class SGD(OptimizerConfig):
 class Adam(OptimizerConfig):
     """Adam optimizer configuration.
 
-    Parameters are the same as in Pytorch: https://pytorch.org/docs/stable/generated/torch.optim.Adam.html#torch.optim.Adam"""
+    Parameters are the same as in Pytorch: https://pytorch.org/docs/stable/generated/torch.optim.Adam.html#torch.optim.Adam
+    """
 
     lr: float = 0.001
     betas: Tuple[float, float] = (0.9, 0.999)
