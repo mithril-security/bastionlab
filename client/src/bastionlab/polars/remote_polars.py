@@ -11,8 +11,9 @@ import torch
 from ..pb.bastionlab_conversion_pb2 import ToTensor
 from ..pb.bastionlab_polars_pb2 import ReferenceResponse, SplitRequest, ReferenceRequest
 from .client import BastionLabPolars
-from .utils import ApplyBins
+from .utils import ApplyBins, Palettes
 import matplotlib.pyplot as plt
+import matplotlib as mat
 from typing import TYPE_CHECKING
 from ..errors import RequestRejected
 
@@ -1007,7 +1008,7 @@ class RemoteLazyFrame:
         x: str = None,
         y: str = None,
         with_outliers: bool = True,
-        colors=[],
+        colors: Union[str, list[str]] = Palettes.dict["light"],
         vertical: bool = True,
         ax=None,
         **kwargs,
@@ -1030,6 +1031,14 @@ class RemoteLazyFrame:
             various exceptions: Note that exceptions may be raised from Seaborn when the lineplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details."""
 
+        if isinstance(colors, str):
+            x = colors
+            if x in Palettes.dict:
+                colors = [Palettes.dict[x]]
+            if x in mat.colors.cnames:
+                colors = [mat.colors.cnames[x]]
+            else:
+                raise ValueError("Color not found")
         if ax == None:
             ax = plt.gca()
         selects = []
@@ -1055,33 +1064,24 @@ class RemoteLazyFrame:
                 patch_artist=True,
                 vert=vertical,
             )
-
-            if colors == []:
-                colors = [
-                    "#1f77b4",
-                    "#ff7f0e",
-                    "#2ca02c",
-                    "#d62728",
-                    "#9467bd",
-                    "#8c564b",
-                    "#e377c2",
-                    "#7f7f7f",
-                    "#bcbd22",
-                    "#17becf",
-                ]
-
-            for patch, color in zip(bplot["boxes"], colors):
-                patch.set_facecolor(color)
-            plt.show()
-
         else:
             tmp = self.select([pl.col(x) for x in selects]).collect().fetch()
             RequestRejected.check_valid_df(tmp)
-            df = tmp.to_pandas()
-            if vertical:
-                sns.boxplot(data=df, x=x, y=y, **kwargs)
-            else:
-                sns.boxplot(data=df, x=x, y=y, orient="h", **kwargs)
+            df = tmp.to_numpy()
+            bplot = ax.boxplot(df, vert=vertical, patch_artist=True, widths=0.75, **kwargs)
+            i = -1
+            for fly in bplot["fliers"]:
+                i = i + 1
+                fly.update(dict(markerfacecolor=colors[i % len(colors)],
+                                marker="d",
+                                markeredgecolor="black",
+                                markersize=5))
+            for med in bplot["medians"]:
+                med.update(dict(color="black",
+                            linewidth=0.75))
+        for patch, color in zip(bplot["boxes"], colors):
+            patch.set_facecolor(color)
+        plt.show()
 
     def facet(
         self: LDF, col: Optional[str] = None, row: Optional[str] = None, **kwargs

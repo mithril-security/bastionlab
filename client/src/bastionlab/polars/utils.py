@@ -85,3 +85,12 @@ class ApplyBins(torch.nn.Module):
     def forward(self, x):
         bins = self.bin_size * torch.ones_like(x)
         return round(x // bins) * bins
+
+class Palettes:
+    dict = {
+        "standard": [ "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b",  "#e377c2", "#7f7f7f", "#bcbd22",  "#17becf"],
+        "light": ["#add8e6", "#ffb6c1", "#cbc3e3", "#ff8520", "#7ded7f", "#92f7e4"],
+        "rainbow": ["#ff0000", "#ffa500", "#ffff00", "#008000", "#0000ff", "#4b0082", "#ee82ee"],
+        "mithril": ["#f0ba2d", "#0b2440", "#030e1a", "#ffffff"],
+        "ocean": ["#006A94", "#2999BC", "#3EBDC8", "#69D1CB", "#83DEF1", "#01BFFF"]
+    }
