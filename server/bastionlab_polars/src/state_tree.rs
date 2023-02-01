@@ -1,4 +1,4 @@
-use std::{ops::Deref, rc::Rc, cell::RefCell};
+use std::{cell::RefCell, ops::Deref, rc::Rc};
 
 use polars::prelude::*;
 
@@ -106,7 +106,7 @@ impl<S> StateTree<S> {
     pub fn try_unwrap(self) -> Result<StateNode<S>, BastionLabPolarsError> {
         drop(self.ptr);
         drop(self.prev);
-        
+
         Rc::try_unwrap(self.root).map_err(|_| BastionLabPolarsError::BadState)
     }
 }

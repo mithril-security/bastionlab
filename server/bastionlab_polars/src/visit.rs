@@ -1,5 +1,5 @@
-use polars::prelude::*;
 use crate::errors::BastionLabPolarsError;
+use polars::prelude::*;
 
 macro_rules! visitor_trait {
     ($($visitor_trait:ident  { $($mut:tt)? } {
@@ -11,7 +11,7 @@ macro_rules! visitor_trait {
             fn $visit_logical_plan(&mut self, node: &$($mut)? LogicalPlan) -> Result<(), BastionLabPolarsError> {
                 $visit_logical_plan(self, node)
             }
-        
+
             fn $visit_expr(&mut self, node: &$($mut)? Expr) -> Result<(), BastionLabPolarsError> {
                 $visit_expr(self, node)
             }
@@ -62,10 +62,10 @@ macro_rules! visitor_trait {
                     return Err(BastionLabPolarsError::UnsupportedLogicalPlanVariant)
                 }
             }
-        
+
             Ok(())
         }
-        
+
         pub fn $visit_expr<V: $visitor_trait + ?Sized>(v: &mut V, node: &$($mut)? Expr) -> Result<(), BastionLabPolarsError> {
             match node {
                 Expr::Alias(nested, _) => v.$visit_expr(nested)?,
@@ -128,13 +128,13 @@ macro_rules! visitor_trait {
                     return Err(BastionLabPolarsError::UnsupportedExprVariant)
                 }
             }
-        
+
             Ok(())
         }
-        
+
         pub fn $visit_agg_expr<V: $visitor_trait + ?Sized>(v: &mut V, node: &$($mut)? AggExpr) -> Result<(), BastionLabPolarsError> {
             match node {
-                AggExpr::Min { input, .. } => v.$visit_expr(input)?, 
+                AggExpr::Min { input, .. } => v.$visit_expr(input)?,
                 AggExpr::Max { input, .. } => v.$visit_expr(input)?,
                 AggExpr::Median(e) => v.$visit_expr(e)?,
                 AggExpr::NUnique(e) => v.$visit_expr(e)?,
@@ -149,7 +149,7 @@ macro_rules! visitor_trait {
                 AggExpr::Std(e, _) => v.$visit_expr(e)?,
                 AggExpr::Var(e, _) => v.$visit_expr(e)?,
             }
-        
+
             Ok(())
         }
     )*};

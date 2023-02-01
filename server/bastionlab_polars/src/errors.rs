@@ -2,6 +2,7 @@ use polars::prelude::PolarsError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
+#[allow(dead_code)]
 pub enum BastionLabPolarsError {
     #[error("Could not run logical plan: not enough input data frames")]
     EmptyStack,

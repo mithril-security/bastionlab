@@ -63,7 +63,6 @@ impl CompositePlan {
                     polars_to_status_error(init.visit_logical_plan_mut(&mut plan))?;
 
                     let initial_states = init.initial_states();
-                    println!("Initializer setup");
 
                     // Differential Privacy Analysis
                     let dp_initial_states: Vec<_> = initial_states
@@ -73,31 +72,22 @@ impl CompositePlan {
 
                     let mut registry_builder =
                         StateTreeBuilder::from_initial_states(dp_initial_states);
-                    polars_to_status_error(registry_builder.visit_logical_plan(&plan))?;
 
-                    println!("DP Initial State setup");
+                    polars_to_status_error(registry_builder.visit_logical_plan(&plan))?;
 
                     let mut cache_builder = StateTreeBuilder::new();
                     polars_to_status_error(cache_builder.visit_logical_plan(&plan))?;
-
-                    println!("Cache setup");
 
                     let mut dp_analyzer = DPAnalyzerBasePass::new(
                         polars_to_status_error(registry_builder.state_tree())?,
                         polars_to_status_error(cache_builder.state_tree())?,
                     );
 
-                    println!("DP Analyzer created");
                     polars_to_status_error(dp_analyzer.visit_logical_plan(&plan))?;
-                    println!("DP Analyzer Visit logical Plan");
                     let (stats, mut cache) = polars_to_status_error(dp_analyzer.into_inner())?;
-
-                    println!("DP Analyzer run");
 
                     // Apply cached results
                     polars_to_status_error(cache.visit_logical_plan_mut(&mut plan))?;
-
-                    println!("Ready for Logical Plan ");
 
                     // Actual run
                     let df = run_logical_plan(plan)?;

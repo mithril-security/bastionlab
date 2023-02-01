@@ -22,6 +22,7 @@ fn usize_item(df_res: Result<DataFrame, PolarsError>) -> Result<usize, PolarsErr
 /// Encodes the sensibility of a function evaluation w.r.t. its input expressed
 /// either in `LInfinity` or `L2` norm. The `Unbounded` variant is used
 /// when the sensibility cannot be automatically infered.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LInfinitySensibility {
     Unbounded,
@@ -58,6 +59,7 @@ impl StructuralDependence {
 
 /// Represents a privacy budget (epsilon) that is possibly infinite (`NotPrivate`).
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[allow(dead_code)]
 pub enum PrivacyBudget {
     NotPrivate,
     Private(f32),
@@ -76,6 +78,7 @@ pub struct PrivacyContext {
     nb_samples: usize,
 }
 
+#[allow(dead_code, unused_variables)]
 impl PrivacyContext {
     pub fn new(limit: PrivacyBudget, nb_samples: usize) -> Self {
         PrivacyContext {
@@ -188,14 +191,24 @@ pub struct DPAnalyzerBasePass {
     registry: StateTree<PrivacyStats>,
     cache: Cache,
 }
+impl DPAnalyzerBasePass {
+    fn next(&mut self) {
+        self.registry.next();
+        self.cache.0.next();
+    }
 
+    fn prev(&mut self) {
+        self.registry.prev();
+        self.cache.0.prev();
+    }
+}
 impl Visitor for DPAnalyzerBasePass {
     fn visit_logical_plan(
         &mut self,
         node: &LogicalPlan,
     ) -> Result<(), crate::errors::BastionLabPolarsError> {
-        self.registry.next();
-        self.cache.0.next();
+        self.next();
+
         visit::visit_logical_plan(self, node)?;
 
         match node {
@@ -275,18 +288,24 @@ impl Visitor for DPAnalyzerBasePass {
             // LogicalPlan::Aggregate {
             //     input, keys, aggs, ..
             // } => {}
-            _ => (),
+            _ => {
+                self.prev();
+
+                let StateNodeChildren::Unary(node) = &self.registry.children else {
+                    return Err(BastionLabPolarsError::BadState)
+                };
+
+                *self.registry.state.borrow_mut() = node.state.borrow().clone();
+                self.next();
+            }
         }
 
-        self.registry.prev();
-        self.cache.0.prev();
-
+        self.prev();
         Ok(())
     }
 
     fn visit_expr(&mut self, node: &Expr) -> Result<(), BastionLabPolarsError> {
         visit::visit_expr(self, node)?;
-        println!("Visiting expression");
         // match node {
         //     Expr::Column(_) | Expr::Columns(_) => self.expr_stack.push(self.main_stack.last().ok_or(BastionLabPolarsError::EmptyStack)?.clone()),
         //     Expr::DtypeColumn(_) => self.expr_stack.push(PrivacyStats::new()),
@@ -307,7 +326,6 @@ impl DPAnalyzerBasePass {
 
     pub fn into_inner(self) -> Result<(PrivacyStats, Cache), BastionLabPolarsError> {
         let node = self.registry.try_unwrap()?;
-
         let stats = node
             .state
             .into_inner()
