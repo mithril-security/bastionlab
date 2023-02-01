@@ -45,48 +45,103 @@ install_common()
     cd server
 }
 
+verify_deb_deps()
+{
+    if [ "$(id -u)" -ne 0 ]; then
+	while [ $# -ne 0 ]; do
+	    dpkg -s $1 > /dev/null 2>&1
+	    if [ "$(echo $?)" -ne 0 ]; then
+		echo "You have missing packages, please run as superuser" >&2
+		exit 1
+	    fi
+	    shift
+	done
+    fi
+}
+
+verify_rhel_deps()
+{
+    if [ "$(id -u)" -ne 0 ]; then
+	while [ $# -ne 0 ]; do
+	    yum list installed $1 > /dev/null 2>&1
+	    if [ "$(echo $?)" -ne 0 ]; then
+		echo "You have missing packages, please run as superuser" >&2
+		exit 1
+	    fi
+	    shift
+	done
+    fi
+}
+
 # For Debian based distros
 if [ -f "/etc/debian_version" ] ; then
-    # Dependencies installation
-    apt-get update
-    apt-get -y install \
-	 software-properties-common \
-	 build-essential patchelf \
-	 libssl-dev pkg-config \
-	 curl unzip python3 python3-pip
 
-    add-apt-repository -y ppa:ubuntu-toolchain-r/test
-    apt-get install -y gcc-11 g++-11 cpp-11
-    update-alternatives \
-        --install /usr/bin/gcc gcc /usr/bin/gcc-11 100 \
-        --slave /usr/bin/g++ g++ /usr/bin/g++-11 \
-        --slave /usr/bin/gcov gcov /usr/bin/gcov-11
+    set software-properties-common \
+	build-essential patchelf \
+	libssl-dev pkg-config \
+	curl unzip python3 python3-pip \
+	gcc-11 g++-11 cpp-11
+
+    verify_deb_deps
+    
+    if [ "$(id -u)" -eq 0 ]; then
+	# Dependencies installation
+	apt-get update
+	apt-get -y install \
+		software-properties-common \
+		build-essential patchelf \
+		libssl-dev pkg-config \
+		curl unzip python3 python3-pip
+
+	add-apt-repository -y ppa:ubuntu-toolchain-r/test
+	apt-get install -y gcc-11 g++-11 cpp-11
+	update-alternatives \
+            --install /usr/bin/gcc gcc /usr/bin/gcc-11 100 \
+            --slave /usr/bin/g++ g++ /usr/bin/g++-11 \
+            --slave /usr/bin/gcov gcov /usr/bin/gcov-11
+    fi
 
     install_common "__torch_cxx11_url__"
     
     LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all
-    
+
+# For RHEL based distros    
 elif [ -f "/etc/redhat-release" ] ; then
-    # Dependencies installation
-    yum -y install \
-	python3 python3-pip \
-	make gcc gcc-c++ zip \
+    set python3 python3-pip \
+	make gcc gcc-c++, zip \
         openssl-devel openssl
 
-    # CentOS based distros
-    if [ "$(cat /etc/centos-release | awk '{print $1}')" == "CentOS" ]; then
+    verify_rhel_deps
+
+    if [ "$(id -u)" -eq 0 ]; then
+	# Dependencies installation
 	yum -y install \
-	        devtoolset-11-toolchain
-	install_common "__torch_url__"
-	scl enable devtoolset-11 'LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all' \
-	    || LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all
-    else # RHEL based distros
-	yum -y install \
-	        gcc-toolset-11
-	install_common "__torch_cxx11_url__"
-	scl enable gcc-toolset-11 'LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all' \
-	    || LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all
+	    python3 python3-pip \
+	    make gcc gcc-c++ zip \
+            openssl-devel openssl
+	case "$(cat /etc/centos-release  > /dev/null 2>&1 | awk '{print $1}')" in
+	    "CentOS") # CentOS based distros
+		yum -y install devtoolset-11-toolchain
+		;;
+	    *) # Other RHEL based distros
+		yum -y install gcc-toolset-11
+		;;
+	esac
     fi
+    case "$(cat /etc/centos-release  > /dev/null 2>&1 | awk '{print $1}')" in
+	"CentOS") # CentOS based distros
+	    install_common "__torch_url__"
+	    scl enable devtoolset-11 'LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all' \
+		|| LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all
+	    ;;
+	*) # Other RHEL based distros
+	    install_common "__torch_cxx11_url__"
+	    scl enable gcc-toolset-11 'LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all' \
+		|| LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all
+	    ;;
+    esac
 else
-    exit
+    echo "Unrecognized linux version, needs manual installation, check the documentation:\n\
+    	  https://bastionlab.readthedocs.io/en/latest/docs/getting-started/installation/" >&2
+    exit 1
 fi
