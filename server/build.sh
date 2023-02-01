@@ -113,7 +113,7 @@ if [ "$(id -u)" -ne 0 ] || [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
 	    sudo $0
 	    EXIT_STATUS=$?
 	    if ! (exit $EXIT_STATUS) ; then
-		break
+		exit $EXIT_STATUS
 	    fi
 	fi
 	# Install cargo and torch
@@ -135,8 +135,9 @@ if [ "$(id -u)" -ne 0 ] || [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
 	esac
 	if ! (exit $EXIT_STATUS) || ! (exit $?) ; then
 	    sudo $0
-	    if ! (exit $EXIT_STATUS) || ! (exit $?) ; then
-		break
+	    EXIT_STATUS=$?
+	    if ! (exit $EXIT_STATUS) ; then
+		exit $EXIT_STATUS
 	    fi
 	fi
 	case "$(cat /etc/centos-release > /dev/null 2>&1 | awk '{print $1}')" in
@@ -161,7 +162,7 @@ if [ "$(id -u)" -ne 0 ] || [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
     fi
     exit $?
 else
-    echo "The script must not be runned as superuser for building the server"
+    echo "The script must not be ran as superuser for building the server"
     echo "Installing dependencies..."
 fi
 # Install as superuser
