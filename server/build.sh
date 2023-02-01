@@ -71,7 +71,9 @@ install_common()
     fi
 
     # Rustup installation
-    if [ ! -d "$HOME/.cargo/bin" ]; then
+    command -v cargo > /dev/null 2>&1
+    EXIT_STATUS=$?
+    if ! (exit $EXIT_STATUS) ; then
 	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > /tmp/rustup.sh
 	sh /tmp/rustup.sh -y
 	export PATH=$HOME/.cargo/bin:$PATH
