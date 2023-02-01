@@ -8,14 +8,19 @@ from torch.jit import ScriptFunction
 import base64
 import json
 import torch
-from ..pb.bastionlab_polars_pb2 import ReferenceResponse
+from ..pb.bastionlab_conversion_pb2 import ToTensor
+from ..pb.bastionlab_polars_pb2 import ReferenceResponse, SplitRequest, ReferenceRequest
 from .client import BastionLabPolars
 from .utils import ApplyBins
-from .utils import ApplyAbs
 import matplotlib.pyplot as plt
+from typing import TYPE_CHECKING
 from ..errors import RequestRejected
 
+
 LDF = TypeVar("LDF", bound="pl.LazyFrame")
+
+if TYPE_CHECKING:
+    from ..torch.remote_torch import RemoteTensor
 
 
 def delegate(
@@ -51,11 +56,13 @@ def delegate(
     return inner
 
 
-def delegate_properties(*names: str) -> Callable[[Callable], Callable]:
+def delegate_properties(
+    *names: str, target_attr: str
+) -> Callable[[Callable], Callable]:
     def inner(cls: Callable) -> Callable:
         def prop(name):
             def f(_self):
-                return getattr(_self._inner, name)
+                return getattr(getattr(_self, target_attr), name)
 
             return property(f)
 
@@ -158,23 +165,12 @@ class StackPlanSegment(CompositePlanSegment):
 
 
 @dataclass
-class RowCountSegment(CompositePlanSegment):
-    _name: str
-    """
-    Composite plan segment class responsible for with_row_count function
-    """
-
-    def serialize(self) -> str:
-        return f'{{"RowCountSegment": "{self._name}"}}'
-
-
-@dataclass
 class Metadata:
     """
     A class containing metadata related to your dataframe
     """
 
-    _client: BastionLabPolars
+    _polars_client: BastionLabPolars
     _prev_segments: List[CompositePlanSegment] = field(default_factory=list)
 
 
@@ -183,11 +179,7 @@ class Metadata:
 # cleared
 # Map
 # Joins
-@delegate_properties(
-    "columns",
-    "dtypes",
-    "schema",
-)
+@delegate_properties("columns", "dtypes", "schema", target_attr="_inner")
 @delegate(
     target_cls=pl.LazyFrame,
     target_attr="_inner",
@@ -221,6 +213,7 @@ class Metadata:
         "tail",
         "last",
         "first",
+        "with_row_count",
         "take_every",
         "fill_null",
         "fill_nan",
@@ -258,7 +251,6 @@ class RemoteLazyFrame:
     A class to represent a RemoteLazyFrame.
 
     Delegate attributes:
-        columns (str): Get column names.
         dtypes: Get dtypes of columns in LazyFrame.
         schema (dict[column name, DataType]): Get dataframe's schema
 
@@ -307,7 +299,10 @@ class RemoteLazyFrame:
         Returns:
             FetchableLazyFrame: FetchableLazyFrame of datarame after any queries have been performed
         """
-        return self._meta._client._run_query(self.composite_plan)
+        return self._meta._polars_client._run_query(self.composite_plan)
+
+    def to_array(self: LDF) -> "RemoteArray":
+        return RemoteArray(self)
 
     @staticmethod
     def sql(query: str, *rdfs: LDF) -> LDF:
@@ -320,7 +315,12 @@ class RemoteLazyFrame:
         """
         if len(rdfs) == 0:
             raise Exception("The SQL query must at least use one RemoteLazyFrame")
-        if any([rdf._meta._client is not rdfs[0]._meta._client for rdf in rdfs]):
+        if any(
+            [
+                rdf._meta._polars_client is not rdfs[0]._meta._polars_client
+                for rdf in rdfs
+            ]
+        ):
             raise Exception(
                 "Cannot use remote data frames from two different servers in an SQL query"
             )
@@ -344,7 +344,7 @@ class RemoteLazyFrame:
         return RemoteLazyFrame(
             res,
             Metadata(
-                rdfs[0]._meta._client,
+                rdfs[0]._meta._polars_client,
                 [
                     seg
                     for segs in reversed(unique_rdfs)
@@ -368,7 +368,7 @@ class RemoteLazyFrame:
         return RemoteLazyFrame(
             df.lazy(),
             Metadata(
-                self._meta._client,
+                self._meta._polars_client,
                 [
                     *self._meta._prev_segments,
                     PolarsPlanSegment(self._inner),
@@ -390,7 +390,7 @@ class RemoteLazyFrame:
         return RemoteLazyFrame(
             df.lazy(),
             Metadata(
-                self._meta._client,
+                self._meta._polars_client,
                 [
                     *df2._meta._prev_segments,
                     PolarsPlanSegment(df2._inner),
@@ -400,31 +400,6 @@ class RemoteLazyFrame:
                 ],
             ),
         )
-
-    def with_row_count(self: LDF, name: str = "index") -> LDF:
-        """adds new column with row count
-        Args:
-            name (String): The name of the new index column.
-        Returns:
-            RemoteLazyFrame: The RemoteLazyFrame with new row count/index column
-        """
-        df = pl.DataFrame(
-            [pl.Series(k, dtype=v) for k, v in self._inner.schema.items()]
-        )
-        ret = RemoteLazyFrame(
-            df.lazy(),
-            Metadata(
-                self._meta._client,
-                [
-                    *self._meta._prev_segments,
-                    PolarsPlanSegment(self._inner),
-                    RowCountSegment(name),
-                ],
-            ),
-        )
-        # Either we need to collect before returning OR we need to make it clear to users they need to call collect() with this function
-        # because if not this leads to panics etc. when we follow this with other operations that use the new column before next using collect()
-        return ret.collect()
 
     def join(
         self: LDF,
@@ -452,7 +427,7 @@ class RemoteLazyFrame:
         Returns:
             RemoteLazyFrame: An updated RemoteLazyFrame after join performed
         """
-        if self._meta._client is not other._meta._client:
+        if self._meta._polars_client is not other._meta._polars_client:
             raise Exception("Cannot join remote data frames from two different servers")
         res = self._inner.join(
             other._inner,
@@ -467,7 +442,7 @@ class RemoteLazyFrame:
         return RemoteLazyFrame(
             res,
             Metadata(
-                self._meta._client,
+                self._meta._polars_client,
                 [*other._meta._prev_segments, *self._meta._prev_segments],
             ),
         )
@@ -508,7 +483,7 @@ class RemoteLazyFrame:
         Returns:
             RemoteLazyFrame: An updated RemoteLazyFrame after join performed
         """
-        if self._meta._client is not other._meta._client:
+        if self._meta._polars_client is not other._meta._polars_client:
             raise Exception("Cannot join remote data frames from two different servers")
         res = self._inner.join_asof(
             other._inner,
@@ -527,7 +502,7 @@ class RemoteLazyFrame:
         return RemoteLazyFrame(
             res,
             Metadata(
-                self._meta._client,
+                self._meta._polars_client,
                 [*other._meta._prev_segments, *self._meta._prev_segments],
             ),
         )
@@ -993,7 +968,7 @@ class RemoteLazyFrame:
                     raise ValueError("Column ", x, " not found in dataframe")
         return Facet(inner_rdf=self, col=col, row=row, kwargs=kwargs)
 
-    def minmax_scale(self: LDF, cols: Union[str, List[str]]) -> LDF:
+def minmax_scale(self: LDF, cols: Union[str, List[str]]) -> LDF:
         """Rescales data using the Min/Max or normalization method to a range of [0,1]
         by subtracting the overall minimum value of the data and then dividing the result by the difference between the minimum and maximum values.
 
@@ -1164,21 +1139,20 @@ class FetchableLazyFrame(RemoteLazyFrame):
     def _from_reference(client: BastionLabPolars, ref: ReferenceResponse) -> LDF:
         header = json.loads(ref.header)["inner"]
 
-        def get_dtype(v):
+        def get_dtype(v: Union[str, Dict]):
             if isinstance(v, str):
-                return getattr(pl, v)()
+                return [None], getattr(pl, v)()
             else:
                 k, v = list(v.items())[0]
-                v = get_dtype(v)
-                return getattr(pl, k)(v)
+                values, v = get_dtype(v)
+                return [values], getattr(pl, k)(v)
 
         def get_series(name, dtype):
-            if isinstance(dtype, str):
-                return pl.Series(name, dtype=get_dtype(dtype))
-            else:
-                return pl.Series(name, values=[[]], dtype=get_dtype(dtype))
+            values, dtype = get_dtype(dtype)
+            return pl.Series(name, values=values, dtype=dtype)
 
         df = pl.DataFrame([get_series(k, v) for k, v in header.items()])
+
         return FetchableLazyFrame(
             _identifier=ref.identifier,
             _inner=df.lazy(),
@@ -1196,13 +1170,13 @@ class FetchableLazyFrame(RemoteLazyFrame):
         Returns:
             Polars.DataFrame: returns a Polars DataFrame instance of your FetchableLazyFrame
         """
-        return self._meta._client._fetch_df(self._identifier)
+        return self._meta._polars_client._fetch_df(self._identifier)
 
     def save(self):
-        return self._meta._client._persist_df(self._identifier)
+        return self._meta._polars_client._persist_df(self._identifier)
 
     def delete(self):
-        return self._meta._client._delete_df(self._identifier)
+        return self._meta._polars_client._delete_df(self._identifier)
 
 
 @dataclass
@@ -1328,8 +1302,8 @@ class Facet:
         rows = []
         if self.col != None:
             tmp = (
-                self.inner_rdf.select(pl.col(self.col))
-                .unique()
+                self.inner_rdf.groupby(pl.col(self.col))
+                .agg(pl.count())
                 .sort(pl.col(self.col))
                 .collect()
                 .fetch()
@@ -1338,8 +1312,8 @@ class Facet:
             cols = tmp.to_pandas()[self.col].tolist()
         if self.row != None:
             tmp = (
-                self.inner_rdf.select(pl.col(self.row))
-                .unique()
+                self.inner_rdf.groupby(pl.col(self.row))
+                .agg(pl.count())
                 .sort(pl.col(self.row))
                 .collect()
                 .fetch()
@@ -1432,8 +1406,8 @@ class Facet:
         rows = []
         if self.col != None:
             tmp = (
-                self.inner_rdf.select(pl.col(self.col))
-                .unique()
+                self.inner_rdf.groupby(pl.col(self.col))
+                .agg(pl.count())
                 .sort(pl.col(self.col))
                 .collect()
                 .fetch()
@@ -1443,8 +1417,8 @@ class Facet:
 
         if self.row != None:
             tmp = (
-                self.inner_rdf.select(pl.col(self.row))
-                .unique()
+                self.inner_rdf.groupby(pl.col(self.row))
+                .agg(pl.count())
                 .sort(pl.col(self.row))
                 .collect()
                 .fetch()
@@ -1511,3 +1485,101 @@ class Facet:
 class RemoteLazyGroupBy(Generic[LDF]):
     _inner: pl.internals.lazyframe.groupby.LazyGroupBy[LDF]
     _meta: Metadata
+
+
+def train_test_split(
+    *arrays: List["RemoteArray"],
+    train_size: Optional[float] = None,
+    test_size: Optional[float] = 0.25,
+    shuffle: Optional[bool] = False,
+    random_state: Optional[int] = None,
+) -> List["RemoteArray"]:
+    """
+    Split RemoteArrays into train and test subsets.
+
+    Args:
+        train_size (Optional[float] = None):
+            It should be between 0.0 and 1.0 and represent the proportion of the dataset to include in the train split.
+            If None, the value is automatically set to the complement of the test size.
+        test_size (Optional[float] =0.25):
+            It should be between 0.0 and 1.0 and represent the proportion of the dataset to include in the test split.
+            If None, the value is set to the complement of the train size.
+            If train_size is also None, it will be set to 0.25.
+        shuffle (Optional[bool] = False):
+            Whether or not to shuffle the data before splitting.
+        random_state (Optional[int] = -1):
+            Controls the shuffling applied to the data before applying the split.
+            Pass an int for reproducible output across multiple function calls.
+    """
+
+    from .remote_polars import FetchableLazyFrame
+
+    if len(arrays) == 0:
+        raise ValueError("At least one RemoteDataFrame required as input")
+
+    _train_rdf: RemoteArray = arrays[0]
+
+    train_size = 1 - test_size if train_size is None else train_size
+    test_size = 1 - train_size if test_size is None else test_size
+
+    if test_size < 0.0 or train_size < 0.0:
+        raise ValueError("Neither train_size nor test_size can be a negative value")
+
+    arrays: List[ReferenceRequest] = [
+        ReferenceRequest(identifier=rdf.identifier) for rdf in arrays
+    ]
+
+    res = _train_rdf._meta._polars_client.stub.Split(
+        SplitRequest(
+            arrays=arrays,
+            train_size=train_size,
+            test_size=test_size,
+            shuffle=shuffle,
+            random_state=random_state,
+        )
+    )
+    res = [
+        FetchableLazyFrame._from_reference(
+            _train_rdf._meta._polars_client, ref
+        ).to_array()
+        for ref in res.list
+    ]
+    return res
+
+
+class RemoteArray(RemoteLazyFrame):
+    def __init__(self, rdf: "RemoteLazyFrame") -> None:
+        def _verify_schema(rdf: "RemoteLazyFrame"):
+            dtypes = rdf.schema.values()
+            if pl.Utf8 in list(dtypes):
+                raise TypeError("Utf8 column cannot be converted into RemoteArray")
+
+            if len(set(dtypes)) > 1:
+                raise TypeError("DataTypes for all columns should be the same")
+            return rdf.collect()
+
+        rdf = _verify_schema(rdf)
+        self._inner = rdf._inner
+        self._meta: Metadata = rdf._meta
+        self.identifier = rdf.identifier
+
+    def to_tensor(self) -> "RemoteTensor":
+        """
+        Converts `RemoteArray` to `RemoteTensor`
+
+        `RemoteArray` is BastionLab's internal intermediate representation which is akin to
+        numpy arrays but are essentially pointers to a `DataFrame` on the server which when `to_tensor`
+        is called converts the `DataFrame` to `Tensor` on the server.
+
+        Returns:
+            RemoteTensor
+        """
+        from ..torch.remote_torch import RemoteTensor
+
+        res = self._meta._polars_client.client._converter._stub.ConvToTensor(
+            ToTensor(identifier=self.identifier)
+        )
+        return RemoteTensor._from_reference(res, self._meta._polars_client.client)
+
+    def __str__(self) -> str:
+        return f"RemoteArray(identifier={self.identifier}"

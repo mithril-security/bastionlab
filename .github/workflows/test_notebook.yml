@@ -67,6 +67,7 @@ jobs:
           rm ./converted/distilbert_example_notebook.ipynb
           rm ./converted/nbagg_uat.ipynb
           rm ./converted/quick-tour.ipynb
+          rm ./converted/fraud_detection.ipynb
           rm ./converted/authentication.ipynb
           for file in ./converted/*.ipynb; do 
             sed -i 's/"!pip install bastionlab"/""/g' $file
