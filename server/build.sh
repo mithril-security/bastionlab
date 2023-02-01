@@ -53,7 +53,7 @@ install_common()
             )' | python3 -i client/src/bastionlab/version.py
 	
 	if [ ! -f "libtorch.zip" ] ; then
-	    echo "[❌] Failed to download libtorch.zip file"
+	    echo "[❌] Failed to download libtorch.zip file" >&2
 	    exit 1
 	fi
 	unzip libtorch.zip
@@ -102,7 +102,7 @@ verify_deps()
 }
 
 # Build as user
-if [ "$(id -u)" -ne 0 ]; then
+if [ "$(id -u)" -ne 0 ] || [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
     EXIT_STATUS=0
     
     # For Debian based distros
@@ -160,6 +160,9 @@ if [ "$(id -u)" -ne 0 ]; then
 	unrecognized_distro
     fi
     exit $?
+else
+    echo "The script must not be runned as superuser for building the server"
+    echo "Installing dependencies..."
 fi
 # Install as superuser
 if [ -f "/etc/debian_version" ] ; then
@@ -177,10 +180,18 @@ elif [ -f "/etc/redhat-release" ] ; then
     yum -y install "${rhel_dependencies[@]}"
     case "$(cat /etc/centos-release > /dev/null 2>&1 | awk '{print $1}')" in
 	"CentOS") # CentOS based distros
-	    yum -y install devtoolset-11-toolchain
+	    yum -y install devtoolset-11-toolchain > /dev/null 2>&1
+	    EXIT_STATUS=$?
+	    if ! (exit $EXIT_STATUS) ; then
+		echo "Warning: Failed to install devtoolset-11-toolchain" >&2
+	    fi
 	    ;;
 	*) # Other RHEL based distros
-	    yum -y install gcc-toolset-11
+	    yum -y install gcc-toolset-11 > /dev/null 2>&1
+	    EXIT_STATUS=$?
+	    if ! (exit $EXIT_STATUS) ; then
+		echo "Warning: Failed to install gcc-toolset-11" >&2
+	    fi
 	    ;;
     esac
 
