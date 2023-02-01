@@ -212,6 +212,8 @@ impl Visitor for DPAnalyzerBasePass {
         visit::visit_logical_plan(self, node)?;
 
         match node {
+            LogicalPlan::DataFrameScan { .. } => (),
+
             LogicalPlan::Join {
                 input_left,
                 input_right,
@@ -279,24 +281,12 @@ impl Visitor for DPAnalyzerBasePass {
                     }
                 }
             }
-            // These are not currently supported
-            // LogicalPlan::ExtContext { .. } => *state = false,
-            // LogicalPlan::Union { .. } => *state = false,
-
-            // LogicalPlan::Projection { expr, .. } => {}
-            // LogicalPlan::LocalProjection { expr, .. } => {}
-            // LogicalPlan::Aggregate {
-            //     input, keys, aggs, ..
-            // } => {}
             _ => {
-                self.prev();
-
                 let StateNodeChildren::Unary(node) = &self.registry.children else {
                     return Err(BastionLabPolarsError::BadState)
                 };
 
                 *self.registry.state.borrow_mut() = node.state.borrow().clone();
-                self.next();
             }
         }
 
@@ -306,11 +296,6 @@ impl Visitor for DPAnalyzerBasePass {
 
     fn visit_expr(&mut self, node: &Expr) -> Result<(), BastionLabPolarsError> {
         visit::visit_expr(self, node)?;
-        // match node {
-        //     Expr::Column(_) | Expr::Columns(_) => self.expr_stack.push(self.main_stack.last().ok_or(BastionLabPolarsError::EmptyStack)?.clone()),
-        //     Expr::DtypeColumn(_) => self.expr_stack.push(PrivacyStats::new()),
-        //     _ => (),
-        // }
 
         Ok(())
     }
