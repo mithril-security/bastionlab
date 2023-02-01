@@ -141,7 +141,6 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
         self,
         composite_plan: str,
     ) -> "FetchableLazyFrame":
-
         """
         Executes a Composite Plan on the BastionLab server.
         A composite plan is BastionLab's internal instruction set.
