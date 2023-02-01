@@ -50,7 +50,6 @@ class TestingConnection(unittest.TestCase):
             self.assertTrue(is_truthy(df, df2))
 
     def test_mixed_types_dataframe(self):
-
         connection = Connection("localhost")
         client = connection.client
         frames = [

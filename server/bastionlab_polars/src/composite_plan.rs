@@ -1,4 +1,7 @@
 use base64;
+use bastionlab_common::common_conversions::{
+    lazy_frame_from_logical_plan, series_to_tensor, tensor_to_series,
+};
 use polars::{lazy::dsl::Expr, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io::Cursor};
@@ -7,7 +10,6 @@ use tonic::Status;
 
 use crate::{
     access_control::{Context, Policy, VerificationResult},
-    utils::*,
     visitable::{Visitable, VisitableMut},
     BastionLabPolars, DataFrameArtifact,
 };
