@@ -71,19 +71,21 @@ elif [ -f "/etc/redhat-release" ] ; then
     yum -y install \
 	python3 python3-pip \
 	make gcc gcc-c++ zip \
-        openssl-devel
+        openssl-devel openssl
 
     # CentOS based distros
     if [ "$(cat /etc/centos-release | awk '{print $1}')" == "CentOS" ]; then
 	yum -y install \
 	        devtoolset-11-toolchain
 	install_common "__torch_url__"
-	scl enable devtoolset-11 'LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all'
+	scl enable devtoolset-11 'LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all' \
+	    || LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all
     else # RHEL based distros
 	yum -y install \
 	        gcc-toolset-11
 	install_common "__torch_cxx11_url__"
-	scl enable gcc-toolset-11 'LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all'
+	scl enable gcc-toolset-11 'LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all' \
+	    || LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all
     fi
 else
     exit
