@@ -90,17 +90,19 @@ verify_deps()
     args=("$@")
     checkcmd=("${args[0]}")
     packages=("${args[@]:1}")
+    EXIT_STATUS=0
     for package in "${packages[@]}"; do
 	$checkcmd $package > /dev/null 2>&1
-	if [ "$(echo $?)" -ne 0 ]; then
+	EXIT_STATUS=$?
+	if [ "$(echo $EXIT_STATUS)" -ne 0 ]; then
 	    echo $package
-	    echo "You have missing packages to install, running as superuser" >&2
-	    break
+	    echo "You have missing packages, installing them..." >&2
+	    return $EXIT_STATUS
 	else
 	    echo "[✔️ ]" $package
 	fi
     done
-    return
+    return $EXIT_STATUS
 }
 
 # Debian-based dependencies installation
