@@ -122,7 +122,7 @@ install_deb_deps()
 install_rhel_deps()
 {
     yum -y install "${rhel_dependencies[@]}"
-    case "$(cat /etc/centos-release > /dev/null 2>&1 | awk '{print $1}')" in
+    case "$(cat /etc/centos-release | awk '{print $1}')" in
 	"CentOS") # CentOS based distros
 	    yum -y install devtoolset-11-toolchain > /dev/null 2>&1
 	    EXIT_STATUS=$?
@@ -168,7 +168,7 @@ if [ "$(id -u)" -ne 0 ] || [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
     elif [ -f "/etc/redhat-release" ] ; then
 	verify_deps 'yum list installed' "${rhel_dependencies[@]}"
 	EXIT_STATUS=$?
-	case "$(cat /etc/centos-release > /dev/null 2>&1 | awk '{print $1}')" in
+	case "$(cat /etc/centos-release | awk '{print $1}')" in
 	    "CentOS") # CentOS based distros
 		verify_deps 'yum list installed' devtoolset-11-toolchain
 		;;
@@ -187,7 +187,7 @@ if [ "$(id -u)" -ne 0 ] || [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
 		exit $EXIT_STATUS
 	    fi
 	fi
-	case "$(cat /etc/centos-release > /dev/null 2>&1 | awk '{print $1}')" in
+	case "$(cat /etc/centos-release | awk '{print $1}')" in
 	    "CentOS") # CentOS based distros
 		# Install cargo and torch
 		install_common "__torch_url__"
@@ -211,12 +211,13 @@ if [ "$(id -u)" -ne 0 ] || [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
 else
     echo "The script must not be ran as superuser for building the server"
     echo "Installing dependencies..."
-fi
-# Install dependencies as superuser
-if [ -f "/etc/debian_version" ] ; then
-    install_deb_deps
-elif [ -f "/etc/redhat-release" ] ; then
-    install_rhel_deps
-else
-    unrecognized_distro
+elif [ -z "${BASTIONLAB_BUILD_AS_ROOT}" ]
+     # Install dependencies as superuser
+     if [ -f "/etc/debian_version" ] ; then
+	 install_deb_deps
+     elif [ -f "/etc/redhat-release" ] ; then
+	 install_rhel_deps
+     else
+	 unrecognized_distro
+     fi
 fi
