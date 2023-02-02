@@ -19,7 +19,8 @@ theme:
     - search.highlight
     - content.tabs.link
     - navigation.sections
-    - navigation.expand
+    - navigation.indexes
+    # - navigation.expand
   logo: assets/logo.png
   favicon: assets/logo.png
   palette:
@@ -71,6 +72,7 @@ extra_css:
 
 extra_javascript:
   - "https://code.jquery.com/jquery-3.3.1.min.js"
+  - javascripts/navbar.js
 
 # Extensions
 markdown_extensions:
@@ -100,42 +102,22 @@ nav:
       - Installation: "docs/getting-started/installation.md"
   - 📙 Tutorials:
       - Authentication: "docs/tutorials/authentication.ipynb"
+      - Defining a privacy policy: "docs/tutorials/defining_policy_privacy.ipynb"
       - Combining datasets: "docs/tutorials/combining_datasets.ipynb"
       - Data cleaning: "docs/tutorials/data_cleaning.ipynb"
-      - Data visualization: "docs/tutorials/visualization.ipynb"
-      - Defining a privacy policy: "docs/tutorials/defining_policy_privacy.ipynb"
-      - Saving DataFrames: "docs/tutorials/saving_dataframes.ipynb"
       - SQL queries: "docs/tutorials/SQL_queries.ipynb"
+      - Data visualization: "docs/tutorials/visualization.ipynb"
+      - Saving DataFrames: "docs/tutorials/saving_dataframes.ipynb"
   - 🌍 How-to-guides:
       - Data exploration:
           - Covid-19 cleaning and exploration: "docs/how-to-guides/covid_cleaning_exploration.ipynb"
       - Deep learning:
           - Fine Tuning Distilbert on BastionLab: "docs/how-to-guides/distilbert_example_notebook.ipynb"
-  - 🛠️ API reference: "docs/resources/bastionlab/index.md"
+  - 🛠️ API reference:
+      - Submodules:
   - 💡 Concepts:
       - Remote data science: "docs/concepts-guides/remote_data_science.md"
-  - 🛠️ Reference guides:
-      - API Reference: "docs/resources/bastionlab/index.md"
-      - bastionlab.client: "docs/resources/bastionlab/client.md"
-      - bastionlab.errors: "docs/resources/bastionlab/errors.md"
-      - bastionlab.keys: "docs/resources/bastionlab/keys.md"
-      - bastionlab.pb:
-          - bastionlab.pb.bastion_pb2_grpc: "docs/resources/bastionlab/pb/bastionlab_pb2_grpc.md"
-          - bastionlab.pb.bastionlab_polars_pb2_grpc: "docs/resources/bastionlab/pb/bastionlab_polars_pb2_grpc.md"
-          - bastionlab.pb.bastionlab_torch_pb2_grpc: "docs/resources/bastionlab/pb/bastionlab_torch_pb2_grpc.md"
-      - bastionlab.polars:
-          - bastionlab.polars.client: "docs/resources/bastionlab/polars/client.md"
-          - bastionlab.polars.policy: "docs/resources/bastionlab/polars/policy.md"
-          - bastionlab.polars.remote_polars: "docs/resources/bastionlab/polars/remote_polars.md"
-          - bastionlab.polars.utils: "docs/resources/bastionlab/polars/utils.md"
-      - bastionlab.torch:
-          - bastionlab.torch.client: "docs/resources/bastionlab/torch/client.md"
-          - bastionlab.torch.learner: "docs/resources/bastionlab/torch/learner.md"
-          - bastionlab.torch.optimizer_config: "docs/resources/bastionlab/torch/optimizer_config.md"
-          - bastionlab.torch.utils: "docs/resources/bastionlab/torch/utils.md"
-          - bastionlab.torch.psg:
-              - bastionlab.torch.psg.convert: "docs/resources/bastionlab/torch/psg/convert.md"
-              - bastionlab.torch.psg.nn: docs/resources/bastionlab/torch/psg/nn.md
+  # - 🛠️ Reference guides
   - 🔒 Security:
       - Threat model: "docs/security/threat_model_data_owner_owns_infrastructure.md"
       - Authentication specifications: "docs/security/authenticated_sessions.md"

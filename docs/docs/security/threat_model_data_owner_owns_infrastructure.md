@@ -15,7 +15,7 @@ The parties involved are depicted below:
 
 ![](../../assets/BastionLab_Docu_Threat_Model_Scheme.png)
 
-In green rectangle are out trusted parties: the data owner and his infrastructure. The untrusted party is the data scientist, which represents the threat. The data scientist, through external queries, could try to exfiltrate data from the data owner infrastructure without their knowledge. We provide one such example [here](), where model trained on-premise is used to steal data.
+In the gold rectangle are out trusted parties: the data owner and his infrastructure. The untrusted party is the data scientist, which represents the threat. The data scientist, through external queries, could try to exfiltrate data from the data owner infrastructure without their knowledge. We provide one such example [here](), where model trained on-premise is used to steal data.
 
 
 Let’s look at threats to the data and how BastionLab defends against them:
