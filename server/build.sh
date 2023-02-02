@@ -211,7 +211,7 @@ if [ "$(id -u)" -ne 0 ] || [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
 else
     echo "The script must not be ran as superuser for building the server"
     echo "Installing dependencies..."
-elif [ -z "${BASTIONLAB_BUILD_AS_ROOT}" ]
+elif [ -z "${BASTIONLAB_BUILD_AS_ROOT}" ] ; then
      # Install dependencies as superuser
      if [ -f "/etc/debian_version" ] ; then
 	 install_deb_deps
