@@ -3,7 +3,7 @@
 # Depends on:
 #   bastionlab/client/src/bastionlab/version.py
 # Dependents:
-#   bastionlab/.github/workflows/release_bin.yml
+#   bastionlab/server/Dockerfile.gpu.sev
 
 declare -a deb_dependencies=(
     [0]=software-properties-common
@@ -105,6 +105,41 @@ verify_deps()
     return
 }
 
+# Debian-based dependencies installation
+install_deb_deps()
+{
+    apt-get update
+    apt-get -y install software-properties-common
+    add-apt-repository -y ppa:ubuntu-toolchain-r/test
+    apt-get -y install "${deb_dependencies[@]:1}"
+    update-alternatives \
+        --install /usr/bin/gcc gcc /usr/bin/gcc-11 100 \
+        --slave /usr/bin/g++ g++ /usr/bin/g++-11 \
+        --slave /usr/bin/gcov gcov /usr/bin/gcov-11
+}
+
+# RHEL-based dependencies installation
+install_rhel_deps()
+{
+    yum -y install "${rhel_dependencies[@]}"
+    case "$(cat /etc/centos-release > /dev/null 2>&1 | awk '{print $1}')" in
+	"CentOS") # CentOS based distros
+	    yum -y install devtoolset-11-toolchain > /dev/null 2>&1
+	    EXIT_STATUS=$?
+	    if ! (exit $EXIT_STATUS) ; then
+		echo "Warning: Failed to install devtoolset-11-toolchain" >&2
+	    fi
+	    ;;
+	*) # Other RHEL based distros
+	    yum -y install gcc-toolset-11 > /dev/null 2>&1
+	    EXIT_STATUS=$?
+	    if ! (exit $EXIT_STATUS) ; then
+		echo "Warning: Failed to install gcc-toolset-11" >&2
+	    fi
+	    ;;
+    esac
+}
+
 # Build as user
 if [ "$(id -u)" -ne 0 ] || [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
     EXIT_STATUS=0
@@ -114,7 +149,11 @@ if [ "$(id -u)" -ne 0 ] || [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
 	verify_deps 'dpkg -s' "${deb_dependencies[@]}"
 	EXIT_STATUS=$?
 	if ! (exit $EXIT_STATUS) ; then
-	    sudo $0
+	    if [ -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
+		sudo $0
+	    else
+		install_deb_deps
+	    fi
 	    EXIT_STATUS=$?
 	    if ! (exit $EXIT_STATUS) ; then
 		exit $EXIT_STATUS
@@ -138,7 +177,11 @@ if [ "$(id -u)" -ne 0 ] || [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
 		;;
 	esac
 	if ! (exit $EXIT_STATUS) || ! (exit $?) ; then
-	    sudo $0
+	    if [ -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
+		sudo $0
+	    else
+		install_rhel_deps
+	    fi
 	    EXIT_STATUS=$?
 	    if ! (exit $EXIT_STATUS) ; then
 		exit $EXIT_STATUS
@@ -169,37 +212,11 @@ else
     echo "The script must not be ran as superuser for building the server"
     echo "Installing dependencies..."
 fi
-# Install as superuser
+# Install dependencies as superuser
 if [ -f "/etc/debian_version" ] ; then
-    # Dependencies installation
-    apt-get update
-    apt-get -y install software-properties-common
-    add-apt-repository -y ppa:ubuntu-toolchain-r/test
-    apt-get -y install "${deb_dependencies[@]:1}"
-    update-alternatives \
-        --install /usr/bin/gcc gcc /usr/bin/gcc-11 100 \
-        --slave /usr/bin/g++ g++ /usr/bin/g++-11 \
-        --slave /usr/bin/gcov gcov /usr/bin/gcov-11
+    install_deb_deps
 elif [ -f "/etc/redhat-release" ] ; then
-    # Dependencies installation
-    yum -y install "${rhel_dependencies[@]}"
-    case "$(cat /etc/centos-release > /dev/null 2>&1 | awk '{print $1}')" in
-	"CentOS") # CentOS based distros
-	    yum -y install devtoolset-11-toolchain > /dev/null 2>&1
-	    EXIT_STATUS=$?
-	    if ! (exit $EXIT_STATUS) ; then
-		echo "Warning: Failed to install devtoolset-11-toolchain" >&2
-	    fi
-	    ;;
-	*) # Other RHEL based distros
-	    yum -y install gcc-toolset-11 > /dev/null 2>&1
-	    EXIT_STATUS=$?
-	    if ! (exit $EXIT_STATUS) ; then
-		echo "Warning: Failed to install gcc-toolset-11" >&2
-	    fi
-	    ;;
-    esac
-
+    install_rhel_deps
 else
     unrecognized_distro
 fi
