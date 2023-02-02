@@ -90,18 +90,16 @@ verify_deps()
     args=("$@")
     checkcmd=("${args[0]}")
     packages=("${args[@]:1}")
-    if [ "$(id -u)" -ne 0 ]; then
-	for package in "${packages[@]}"; do
-	    $checkcmd $package > /dev/null 2>&1
-	    if [ "$(echo $?)" -ne 0 ]; then
-		echo $package
-		echo "You have missing packages to install, running as superuser" >&2
-		break
-	    else
-		echo "[✔️ ]" $package
-	    fi
-	done
-    fi
+    for package in "${packages[@]}"; do
+	$checkcmd $package > /dev/null 2>&1
+	if [ "$(echo $?)" -ne 0 ]; then
+	    echo $package
+	    echo "You have missing packages to install, running as superuser" >&2
+	    break
+	else
+	    echo "[✔️ ]" $package
+	fi
+    done
     return
 }
 
