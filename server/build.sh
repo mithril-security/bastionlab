@@ -108,7 +108,8 @@ verify_deps()
 # Debian-based dependencies installation
 install_deb_deps()
 {
-    apt-get update
+    apt-get -y update
+    apt-get -y upgrade
     apt-get -y install software-properties-common
     add-apt-repository -y ppa:ubuntu-toolchain-r/test
     apt-get -y install "${deb_dependencies[@]:1}"
