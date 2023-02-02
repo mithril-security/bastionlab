@@ -9,6 +9,7 @@ members = [
   "bastionlab_common",
   "bastionlab_torch",
   "bastionlab_learning",
+  "bastionlab_conversion",
   "bastionlab_polars",
 ]
 resolver = "2"
@@ -40,6 +41,7 @@ env_logger = "0.9.0"
 bastionlab_common = { path = "./bastionlab_common" }
 bastionlab_polars = { path = "./bastionlab_polars" }
 bastionlab_torch = { path = "./bastionlab_torch" }
+bastionlab_conversion = { path = "./bastionlab_conversion" }
 
 [dependencies.uuid]
 version = "1.1.2"

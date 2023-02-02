@@ -88,11 +88,13 @@ pub async fn stream_data(
     });
 
     info!(
-    target: "BastionAI",
-            "{}",
-                format!("{} fetched successfully in {}ms", stream_type,
-                start_time.elapsed().as_millis())
-            );
+        "{}",
+        format!(
+            "{} fetched successfully in {}ms",
+            stream_type,
+            start_time.elapsed().as_millis()
+        )
+    );
 
     Response::new(ReceiverStream::new(rx))
 }
