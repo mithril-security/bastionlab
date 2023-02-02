@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mat
 from typing import TYPE_CHECKING
 from ..errors import RequestRejected
+import numpy as np
 
 
 LDF = TypeVar("LDF", bound="pl.LazyFrame")
@@ -1007,36 +1008,44 @@ class RemoteLazyFrame:
         self: LDF,
         x: str = None,
         y: str = None,
-        with_outliers: bool = True,
-        colors: Union[str, list[str]] = Palettes.dict["light"],
+        colors: Union[str, list[str]] = Palettes.dict["standard"],
         vertical: bool = True,
-        ax=None,
+        ax: mat.axes = None,
+        widths: float = 0.75,
+        median_linestyle: str = "-",
+        median_color: str = "black",
+        median_linewidth: float = 0.75,
         **kwargs,
     ):
-        """Draws a boxplot based on x, y and hue values.
+        """Draws a boxplot based on x and y values.
 
-        boxplot filters data down to necessary columns only and then calls Seaborn's boxplot function with this scaled down dataframe.
+        boxplot uses aggregated queries to get data necessary to create a boxplot using matplotlib's boxplot
 
-        boxplot accepts any additional options supported by Seaborn's boxplot as kwargs, which can be viewed in Seaborn's documentation.
+        kwargs arguments are fowarded to matplotlib's Axes.bxp boxplot function
 
         Args:
             x (str): The name of column to be used for x axes.
             y (str): The name of column to be used for y axes.
-            hue (str = None): The name of the column to be used as a grouping variable that will produce boxes with different colors.
-            with_outliers: If set to false, the boxplot will be built with aggregated queries, thus avoiding any potential privacy policy breaches, but notably
-            leading to the loss of outlier data in the boxplot.
-            kwargs: Other keyword arguments that will be passed to Seaborn's boxplot function.
+            colors (Union[str, list[str]]): The color(s) or name of builtin BastionLab color palette to be used for boxes
+            vertical (bool): Option for vertical or horizontal orientation
+            ax (matplotlib.axes): axes to plot on. A new axes is created if set to None.
+            widths (float): boxes' widths
+            median_linestyle (str): linestyle for median line
+            median_color (str): color for median line
+            median_linewidth (float): boxes' widths
+            **kwargs: keyword arguments that will be passed to Matplolib's bxp function
         Raises:
             ValueError: Incorrect column name given
             various exceptions: Note that exceptions may be raised from Seaborn when the lineplot function is called,
-            for example, where kwargs keywords are not expected. See Seaborn documentation for further details."""
+            for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
+        """
 
         if isinstance(colors, str):
-            x = colors
-            if x in Palettes.dict:
-                colors = [Palettes.dict[x]]
-            if x in mat.colors.cnames:
-                colors = [mat.colors.cnames[x]]
+            c = colors
+            if c in Palettes.dict:
+                colors = Palettes.dict[c]
+            elif c in mat.colors.cnames:
+                colors = [mat.colors.cnames[c]]
             else:
                 raise ValueError("Color not found")
         if ax == None:
@@ -1050,37 +1059,28 @@ class RemoteLazyFrame:
                     selects.append(col)
         if selects == []:
             raise ValueError("Please specify at least an X or Y value")
-
-        if not with_outliers:
-            boxes = self._calculate_boxes(x, y, ax)
-            medianprops = dict(linestyle="-", color="black")
-            boxprops = dict(facecolor="#1f77b4")
-            bplot = ax.bxp(
-                boxes,
-                showfliers=False,
-                widths=0.75,
-                medianprops=medianprops,
-                boxprops=boxprops,
-                patch_artist=True,
-                vert=vertical,
-            )
-        else:
-            tmp = self.select([pl.col(x) for x in selects]).collect().fetch()
-            RequestRejected.check_valid_df(tmp)
-            df = tmp.to_numpy()
-            bplot = ax.boxplot(df, vert=vertical, patch_artist=True, widths=0.75, **kwargs)
-            i = -1
-            for fly in bplot["fliers"]:
-                i = i + 1
-                fly.update(dict(markerfacecolor=colors[i % len(colors)],
-                                marker="d",
-                                markeredgecolor="black",
-                                markersize=5))
-            for med in bplot["medians"]:
-                med.update(dict(color="black",
-                            linewidth=0.75))
-        for patch, color in zip(bplot["boxes"], colors):
-            patch.set_facecolor(color)
+        boxes = self._calculate_boxes(x, y, ax)
+        medianprops = dict(
+            linestyle=median_linestyle, color=median_color, linewidth=median_linewidth
+        )
+        boxprops = dict(facecolor="#1f77b4")
+        bplot = ax.bxp(
+            boxes,
+            showfliers=False,
+            widths=widths,
+            medianprops=medianprops,
+            boxprops=boxprops,
+            patch_artist=True,
+            vert=vertical,
+        )
+        i = -1
+        for patch in bplot["boxes"]:
+            i = i + 1
+            patch.set_facecolor(colors[i % len(colors)])
+        if vertical is False:
+            tmp = ax.get_xlabel()
+            ax.set_xlabel(ax.get_ylabel())
+            ax.set_ylabel(tmp)
         plt.show()
 
     def facet(
