@@ -32,7 +32,6 @@ def make_model(in_features: int, dtype: torch.dtype):
 
 def get_covid_dataset():
     def runcmd(cmd, verbose=False, *args, **kwargs):
-
         process = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=True
         )
@@ -307,5 +306,4 @@ class TestingConnection(unittest.TestCase):
 
 
 if __name__ == "__main__":
-
     unittest.main()
