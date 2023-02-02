@@ -182,7 +182,6 @@ class Connection:
     def _verify_user(
         server_target, server_creds, options, signing_key: Optional[SigningKey] = None
     ):
-
         """Set up initial connection to BastionLab for verification
         if pubkey not known:
            Drop connection and fail fast authentication
