@@ -141,6 +141,15 @@ install_rhel_deps()
     esac
 }
 
+############## main ##############
+
+if [ "$(id -u)" -eq 0 ]; then
+    echo "Running with superuser privileges..."
+fi
+if [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
+    echo "Environmental variable for building server as root is set!"
+fi
+
 # Build as user
 if [ "$(id -u)" -ne 0 ] || [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
     
