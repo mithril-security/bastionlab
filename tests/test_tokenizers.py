@@ -4,7 +4,6 @@ import unittest
 import torch
 from tokenizers import Tokenizer
 from bastionlab import Connection
-from bastionlab.tokenizers import RemoteTokenizer
 from bastionlab.polars.policy import (
     Policy,
     TrueRule,
@@ -15,23 +14,13 @@ logging.basicConfig(level=logging.INFO)
 
 
 class TestingRemoteTokenizer(unittest.TestCase):
+    def setUp(self) -> None:
+        self.distilbert = "distilbert-base-uncased"
+
     def test_connection(self):
         connection = Connection("localhost")
         client = connection.client
         self.assertNotEqual(client, None)
-        connection.close()
-
-    def test_remote_tokenizer_local_tokenizer(self):
-        connection = Connection("localhost")
-        client = connection.client
-        distilbert = "distilbert-base-uncased"
-        remote_tokenizer = RemoteTokenizer.from_hugging_face_pretrained(
-            client, distilbert
-        )
-
-        local_tokenizer = Tokenizer.from_pretrained(distilbert)
-
-        self.assertEqual(remote_tokenizer.to_str(), local_tokenizer.to_str())
         connection.close()
 
     def test_tokenizers_encode_tensors(self):
@@ -41,8 +30,8 @@ class TestingRemoteTokenizer(unittest.TestCase):
         df = pl.DataFrame({"words": ["I am here", "where are you going"]})
         rdf = client.polars.send_df(df, Policy(TrueRule(), Log(), False))
 
-        remote_tokenizer = RemoteTokenizer.from_hugging_face_pretrained(
-            client, "distilbert-base-uncased"
+        remote_tokenizer = client.tokenizers.from_hugging_face_pretrained(
+            "distilbert-base-uncased"
         )
 
         local_tokenizer = Tokenizer.from_pretrained("distilbert-base-uncased")
@@ -78,5 +67,4 @@ class TestingRemoteTokenizer(unittest.TestCase):
 
 
 if __name__ == "__main__":
-
     unittest.main()

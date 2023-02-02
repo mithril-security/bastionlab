@@ -35,11 +35,10 @@ class TestingDataConv(unittest.TestCase):
         rdf = client.polars.send_df(df, Policy(TrueRule(), Log(), False))
 
         arr = rdf.to_array()
-
-        df_tensor = arr.to_tensor()
+        tensor = arr.to_tensor()
         torch_tensor = torch.tensor(df.to_numpy())
         self.assertEqual(
-            df_tensor.shape, torch_tensor.shape, "Tensors are not the same Shape"
+            tensor.shape, torch_tensor.shape, "Tensors are not the same Shape"
         )
         connection.close()
 
@@ -84,6 +83,7 @@ class TestingDataConv(unittest.TestCase):
             height = df.height * 1.0
             test_size = int(math.floor(height * ratio))
             train_size = int(height) - test_size
+
             return df.head(train_size).to_numpy(), df.tail(test_size).to_numpy()
 
         sk_train_X, sk_test_X = splitter(df, ratio)
@@ -168,5 +168,4 @@ class TestingDataConv(unittest.TestCase):
 
 
 if __name__ == "__main__":
-
     unittest.main()

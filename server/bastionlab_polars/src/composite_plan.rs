@@ -1,7 +1,6 @@
 use base64;
 use bastionlab_common::common_conversions::{
-    lazy_frame_from_logical_plan, series_to_tensor, series_to_tokenized_series, tensor_to_series,
-    to_status_error,
+    lazy_frame_from_logical_plan, series_to_tensor, tensor_to_series,
 };
 use polars::{lazy::dsl::Expr, prelude::*};
 use serde::{Deserialize, Serialize};
@@ -21,15 +20,7 @@ pub struct CompositePlan(Vec<CompositePlanSegment>);
 #[derive(Debug, Serialize, Deserialize)]
 pub enum CompositePlanSegment {
     PolarsPlanSegment(LogicalPlan),
-    StringTransformerPlanSegment {
-        columns: Vec<String>,
-        model: String,
-        add_special_tokens: u8,
-    },
-    UdfPlanSegment {
-        columns: Vec<String>,
-        udf: String,
-    },
+    UdfPlanSegment { columns: Vec<String>, udf: String },
     EntryPointPlanSegment(String),
     StackPlanSegment,
 }
@@ -121,47 +112,6 @@ impl CompositePlan {
                     let mut stats = frame1.stats;
                     stats.merge(frame2.stats);
                     stack.push(StackFrame { df, stats });
-                }
-                CompositePlanSegment::StringTransformerPlanSegment {
-                    columns,
-                    model,
-                    add_special_tokens,
-                } => {
-                    let add_special_tokens = if add_special_tokens == 1 { true } else { false };
-                    let frame = stack.pop().ok_or(Status::invalid_argument(
-                        "Could not apply udf: no input data frame",
-                    ))?;
-                    let mut df = frame.df;
-
-                    for name in columns {
-                        let idx = df
-                            .get_column_names()
-                            .iter()
-                            .position(|x| x == &&name)
-                            .ok_or(Status::invalid_argument(format!(
-                                "Could not apply udf: no column `{}` in data frame",
-                                name
-                            )))?;
-                        let series = df.get_columns().get(idx).unwrap();
-
-                        let out = if series.dtype().eq(&DataType::Utf8) {
-                            series_to_tokenized_series(series, &name, &model, add_special_tokens)?
-                        } else {
-                            return Err(Status::aborted(format!(
-                                "Non-string columns cannot be tokenized"
-                            )));
-                        };
-                        let _ = to_status_error(df.drop_in_place(&name))?;
-
-                        out.into_iter().for_each(|v| {
-                            df.with_column(v).unwrap();
-                        });
-                    }
-
-                    stack.push(StackFrame {
-                        df,
-                        stats: frame.stats,
-                    });
                 }
             }
         }

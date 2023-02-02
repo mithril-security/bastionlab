@@ -8,7 +8,10 @@ from torch.jit import ScriptFunction
 import base64
 import json
 import torch
-from ..pb.bastionlab_conversion_pb2 import ToTensor
+from ..pb.bastionlab_conversion_pb2 import (
+    RemoteArray as PbRemoteArray,
+    RemoteDataFrame as PbRemoteDataFrame,
+)
 from ..pb.bastionlab_polars_pb2 import ReferenceResponse, SplitRequest, ReferenceRequest
 from .client import BastionLabPolars
 from .utils import ApplyBins
@@ -21,6 +24,7 @@ LDF = TypeVar("LDF", bound="pl.LazyFrame")
 
 if TYPE_CHECKING:
     from ..torch.remote_torch import RemoteTensor
+    from ..client import Client
 
 
 def delegate(
@@ -165,29 +169,6 @@ class StackPlanSegment(CompositePlanSegment):
 
 
 @dataclass
-class StringTransformerPlanSegment(CompositePlanSegment):
-    """
-    Accepts a UDF for row-wise DataFrame transformation.
-    """
-
-    model: str
-    _columns: List[str]
-    add_special_tokens: bool
-
-    def serialize(self) -> str:
-        """
-        returns serialized string of this plan segment
-
-        Returns:
-            str: serialized string of this plan segment
-        """
-        columns = ",".join([f'"{c}"' for c in self._columns])
-        model = base64.b64encode(self.model.encode("utf8")).decode("utf8")
-        add_special_tokens = 1 if self.add_special_tokens else 0
-        return f'{{"StringTransformerPlanSegment":{{"columns":[{columns}],"model":"{model}","add_special_tokens":{add_special_tokens}}}}}'
-
-
-@dataclass
 class UdfTransformerPlanSegment(CompositePlanSegment):
     """
     Accepts a UDF for row-wise DataFrame transformation.
@@ -201,7 +182,6 @@ class UdfTransformerPlanSegment(CompositePlanSegment):
 
 
 @dataclass
->>>>>>> origin/remote-tokenizers
 class Metadata:
     """
     A class containing metadata related to your dataframe
@@ -338,9 +318,6 @@ class RemoteLazyFrame:
         """
         return self._meta._polars_client._run_query(self.composite_plan)
 
-    def to_array(self: LDF) -> "RemoteArray":
-        return RemoteArray(self)
-
     @staticmethod
     def sql(query: str, *rdfs: LDF) -> LDF:
         """Parses given SQL query and interpolates {} placeholders with given RemoteLazyFrames.
@@ -438,23 +415,8 @@ class RemoteLazyFrame:
             ),
         )
 
-    def _convert(self, columns: List[str], model: str, add_special_tokens: bool) -> LDF:
-        df = pl.DataFrame(
-            [pl.Series(k, dtype=v) for k, v in self._inner.schema.items()]
-        )
-        return RemoteLazyFrame(
-            df.lazy(),
-            Metadata(
-                self._meta._polars_client,
-                [
-                    *self._meta._prev_segments,
-                    StringTransformerPlanSegment(model, columns, add_special_tokens),
-                ],
-            ),
-        )
-
     @property
-    def column_names(self) -> List[str]:
+    def columns(self) -> List[str]:
         """Gets the column names of the RemoteDataFrame
 
         Returns:
@@ -1038,6 +1000,19 @@ class FetchableLazyFrame(RemoteLazyFrame):
 
     _identifier: str
 
+    def to_array(self: "FetchableLazyFrame") -> "RemoteArray":
+        """
+        Converts a FetchableLazyFrame into a RemoteArray
+
+        Returns:
+            RemoteArray
+        """
+        client = self._meta._polars_client.client
+        res = client._converter._stub.ConvToArray(
+            PbRemoteDataFrame(identifier=self._identifier)
+        )
+        return RemoteArray(client, res.identifier)
+
     @property
     def identifier(self) -> str:
         """
@@ -1425,12 +1400,10 @@ def train_test_split(
             Pass an int for reproducible output across multiple function calls.
     """
 
-    from .remote_polars import FetchableLazyFrame
-
     if len(arrays) == 0:
         raise ValueError("At least one RemoteDataFrame required as input")
 
-    _train_rdf: RemoteArray = arrays[0]
+    _train_remote_array: RemoteArray = arrays[0]
 
     train_size = 1 - test_size if train_size is None else train_size
     test_size = 1 - train_size if test_size is None else test_size
@@ -1442,7 +1415,7 @@ def train_test_split(
         ReferenceRequest(identifier=rdf.identifier) for rdf in arrays
     ]
 
-    res = _train_rdf._meta._polars_client.stub.Split(
+    res = _train_remote_array._client.polars.stub.Split(
         SplitRequest(
             arrays=arrays,
             train_size=train_size,
@@ -1451,30 +1424,14 @@ def train_test_split(
             random_state=random_state,
         )
     )
-    res = [
-        FetchableLazyFrame._from_reference(
-            _train_rdf._meta._polars_client, ref
-        ).to_array()
-        for ref in res.list
-    ]
+    res = [RemoteArray(_train_remote_array._client, ref.identifier) for ref in res.list]
     return res
 
 
 class RemoteArray(RemoteLazyFrame):
-    def __init__(self, rdf: "RemoteLazyFrame") -> None:
-        def _verify_schema(rdf: "RemoteLazyFrame"):
-            dtypes = rdf.schema.values()
-            if pl.Utf8 in list(dtypes):
-                raise TypeError("Utf8 column cannot be converted into RemoteArray")
-
-            if len(set(dtypes)) > 1:
-                raise TypeError("DataTypes for all columns should be the same")
-            return rdf.collect()
-
-        rdf = _verify_schema(rdf)
-        self._inner = rdf._inner
-        self._meta: Metadata = rdf._meta
-        self.identifier = rdf.identifier
+    def __init__(self, client: "Client", identifier: str) -> None:
+        self._client = client
+        self.identifier = identifier
 
     def to_tensor(self) -> "RemoteTensor":
         """
@@ -1489,10 +1446,10 @@ class RemoteArray(RemoteLazyFrame):
         """
         from ..torch.remote_torch import RemoteTensor
 
-        res = self._meta._polars_client.client._converter._stub.ConvToTensor(
-            ToTensor(identifier=self.identifier)
+        res = self._client._converter._stub.ConvToTensor(
+            PbRemoteArray(identifier=self.identifier)
         )
-        return RemoteTensor._from_reference(res, self._meta._polars_client.client)
+        return RemoteTensor._from_reference(res, self._client)
 
     def __str__(self) -> str:
-        return f"RemoteArray(identifier={self.identifier}"
+        return f"RemoteArray(identifier={self.identifier})"

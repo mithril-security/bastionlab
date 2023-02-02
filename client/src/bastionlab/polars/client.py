@@ -6,13 +6,14 @@ import polars as pl
 from colorama import Fore
 from ..pb.bastionlab_polars_pb2 import ReferenceRequest, Empty
 from ..pb.bastionlab_polars_pb2_grpc import PolarsServiceStub
+from ..pb.bastionlab_pb2 import Reference
 from ..errors import GRPCException
 from .utils import deserialize_dataframe, serialize_dataframe, serialize_query
 from .policy import Policy, DEFAULT_POLICY
 
 
 if TYPE_CHECKING:
-    from .remote_polars import FetchableLazyFrame
+    from .remote_polars import FetchableLazyFrame, RemoteArray
     from ..converter import BastionLabConverter
     from ..client import Client
 
@@ -132,7 +133,6 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
         self,
         composite_plan: str,
     ) -> "FetchableLazyFrame":
-
         """
         Executes a Composite Plan on the BastionLab server.
         A composite plan is BastionLab's internal instruction set.
@@ -228,3 +228,14 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
         res = GRPCException.map_error(
             lambda: self.stub.DeleteDataFrame(ReferenceRequest(identifier=identifier))
         )
+
+    def RemoteArray(
+        self, identifier: Optional[str] = None, reference: Optional[Reference] = None
+    ) -> "RemoteArray":
+        if not identifier and not reference:
+            raise Exception("Please pass an identifier [str, RemoteArray]")
+        if reference:
+            if reference:
+                identifier = reference.identifier
+
+        return RemoteArray(self, identifier)

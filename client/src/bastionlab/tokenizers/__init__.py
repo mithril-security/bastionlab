@@ -1,1 +1,1 @@
-from .remote_tokenizers import RemoteTokenizer
+from .client import BastionLabTokenizers

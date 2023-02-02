@@ -5,8 +5,10 @@ use bastionlab_common::{
     telemetry::{self, TelemetryEventProps},
 };
 
-use polars::export::ahash::HashSet;
+use ndarray::{Array, Axis, Dim, IxDynImpl};
+use ndarray_rand::{RandomExt, SamplingStrategy};
 use polars::prelude::*;
+use rand::rngs::ThreadRng;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::fs::{create_dir, read_dir, OpenOptions};
@@ -94,9 +96,94 @@ impl DataFrameArtifact {
         }
     }
 }
+
+#[derive(Debug, Clone)]
+pub enum ArrayStore {
+    AxdynI64(Array<i64, Dim<IxDynImpl>>),
+    AxdynF64(Array<f64, Dim<IxDynImpl>>),
+    AxdynF32(Array<f32, Dim<IxDynImpl>>),
+    AxdynI32(Array<i32, Dim<IxDynImpl>>),
+}
+fn shuffle<A>(array: &Array<A, Dim<IxDynImpl>>, mut rng: &mut ThreadRng) -> Array<A, Dim<IxDynImpl>>
+where
+    A: Copy + Clone,
+{
+    array.sample_axis_using(
+        Axis(0),
+        array.dim()[0],
+        SamplingStrategy::WithReplacement,
+        &mut rng,
+    )
+}
+
+fn split<A>(
+    array: &Array<A, Dim<IxDynImpl>>,
+    ratios: (f64, f64),
+) -> (Array<A, Dim<IxDynImpl>>, Array<A, Dim<IxDynImpl>>)
+where
+    A: Clone,
+{
+    let height = array.dim()[0];
+    let upper = (height as f64 * ratios.0).floor() as usize;
+    let lower = height - upper;
+
+    let upper = array.select(Axis(0), &(0..upper).collect::<Vec<_>>()[..]);
+    let lower = array.select(Axis(0), &((height - lower)..height).collect::<Vec<_>>()[..]);
+
+    (upper, lower)
+}
+impl ArrayStore {
+    pub fn height(&self) -> usize {
+        match self {
+            ArrayStore::AxdynF32(a) => a.dim()[0],
+            ArrayStore::AxdynI64(a) => a.dim()[0],
+            ArrayStore::AxdynF64(a) => a.dim()[0],
+            ArrayStore::AxdynI32(a) => a.dim()[0],
+        }
+    }
+
+    pub fn shuffle(&self, mut rng: &mut ThreadRng) -> Self {
+        match self {
+            ArrayStore::AxdynF32(a) => Self::AxdynF32(shuffle::<f32>(a, &mut rng)),
+            ArrayStore::AxdynF64(a) => Self::AxdynF64(shuffle::<f64>(a, &mut rng)),
+            ArrayStore::AxdynI32(a) => Self::AxdynI32(shuffle::<i32>(a, &mut rng)),
+            ArrayStore::AxdynI64(a) => Self::AxdynI64(shuffle::<i64>(a, &mut rng)),
+        }
+    }
+
+    pub fn split(&self, ratios: (f64, f64)) -> (Self, Self) {
+        /*
+            Arrays could be split on a several axes but in this implementation, we are
+            only splitting on the Oth Axis.
+        */
+        match self {
+            ArrayStore::AxdynI64(a) => {
+                let (upper, lower) = split::<i64>(a, ratios);
+                (ArrayStore::AxdynI64(upper), ArrayStore::AxdynI64(lower))
+            }
+            ArrayStore::AxdynF64(a) => {
+                let (upper, lower) = split::<f64>(a, ratios);
+
+                (ArrayStore::AxdynF64(upper), ArrayStore::AxdynF64(lower))
+            }
+            ArrayStore::AxdynF32(a) => {
+                let (upper, lower) = split::<f32>(a, ratios);
+
+                (ArrayStore::AxdynF32(upper), ArrayStore::AxdynF32(lower))
+            }
+            ArrayStore::AxdynI32(a) => {
+                let (upper, lower) = split::<i32>(a, ratios);
+
+                (ArrayStore::AxdynI32(upper), ArrayStore::AxdynI32(lower))
+            }
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct BastionLabPolars {
     dataframes: Arc<RwLock<HashMap<String, DataFrameArtifact>>>,
+    arrays: Arc<RwLock<HashMap<String, ArrayStore>>>,
     sess_manager: Arc<SessionManager>,
 }
 
@@ -104,6 +191,7 @@ impl BastionLabPolars {
     pub fn new(sess_manager: Arc<SessionManager>) -> Self {
         Self {
             dataframes: Arc::new(RwLock::new(HashMap::new())),
+            arrays: Arc::new(RwLock::new(HashMap::new())),
             sess_manager,
         }
     }
@@ -311,6 +399,24 @@ Reason: {}",
         let identifier = format!("{}", Uuid::new_v4());
         dfs.insert(identifier.clone(), df);
         identifier
+    }
+
+    pub fn insert_array(&self, array: ArrayStore) -> String {
+        let mut arrays = self.arrays.write().unwrap();
+        let identifier = format!("{}", Uuid::new_v4());
+        arrays.insert(identifier.clone(), array);
+        identifier
+    }
+
+    pub fn get_array(&self, identifier: &str) -> Result<ArrayStore, Status> {
+        let arrays = self.arrays.read().unwrap();
+        let arr = arrays
+            .get(identifier)
+            .cloned()
+            .ok_or(Status::invalid_argument(format!(
+                "Could not find Array: {identifier}"
+            )))?;
+        Ok(arr)
     }
 
     fn persist_df(&self, identifier: &str) -> Result<(), Status> {
@@ -560,56 +666,25 @@ impl PolarsService for BastionLabPolars {
             request.get_ref().random_state,
         );
 
-        let mut dfs = Vec::new();
-
+        let mut out_arrays_store = vec![];
+        let mut out_arrays = vec![];
         for array in arrays {
-            dfs.push(self.get_df_unchecked(&array.identifier)?);
+            out_arrays_store.push(self.get_array(&array.identifier)?);
+        }
+        for array in out_arrays_store.iter() {
+            let (upper, lower) = array.split((train_size, test_size));
+            out_arrays.append(&mut vec![
+                ReferenceResponse {
+                    identifier: self.insert_array(upper),
+                    header: String::default(),
+                },
+                ReferenceResponse {
+                    identifier: self.insert_array(lower),
+                    header: String::default(),
+                },
+            ])
         }
 
-        // Verify that all dfs have equal lengths, if not abort.
-        let set = HashSet::from_iter(dfs.iter().map(|df| df.height()));
-        if set.len() > 1 {
-            return Err(Status::aborted("RDFs should have the same height"));
-        }
-        let mut out_dfs = vec![];
-
-        // Inherit other features (`policy`, `fetachable`, `blacklist`, etc) from parent DataFrame
-        let inherit = |id: &String, df: DataFrame| {
-            self.with_df_artifact_ref(&id, |artifact| artifact.inherit(df.clone()))
-        };
-
-        let make_response = |df: DataFrameArtifact| -> Result<ReferenceResponse, Status> {
-            let identifier = self.insert_df(df);
-            Ok(ReferenceResponse {
-                identifier: identifier.clone(),
-                header: self.get_header(&identifier)?,
-            })
-        };
-
-        let shuffle_df = |df: DataFrame| -> Result<DataFrame, Status> {
-            if shuffle {
-                df.sample_n(df.height(), true, true, random_state)
-                    .map_err(|e| Status::aborted(format!("Could not shuffle DataFrame: {e}")))
-            } else {
-                Ok(df)
-            }
-        };
-        for (df, id) in dfs.iter().zip(arrays) {
-            let df_height = df.height() as f64 * 1.0;
-
-            let train_size = (df_height * train_size).floor() as usize;
-            let test_size = df_height as usize - train_size;
-
-            let train_df = shuffle_df(df.head(Some(train_size)))?;
-            let test_df = shuffle_df(df.tail(Some(test_size)))?;
-
-            // Push train_df either shuffled or not.
-            out_dfs.push(make_response(inherit(&id.identifier, train_df)?)?);
-
-            // Push train_df either shuffled or not.
-            out_dfs.push(make_response(inherit(&id.identifier, test_df)?)?);
-        }
-
-        Ok(Response::new(ReferenceList { list: out_dfs }))
+        Ok(Response::new(ReferenceList { list: out_arrays }))
     }
 }
