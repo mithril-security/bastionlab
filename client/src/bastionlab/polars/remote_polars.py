@@ -11,10 +11,12 @@ import torch
 from ..pb.bastionlab_conversion_pb2 import ToTensor
 from ..pb.bastionlab_polars_pb2 import ReferenceResponse, SplitRequest, ReferenceRequest
 from .client import BastionLabPolars
-from .utils import ApplyBins, ApplyAbs
+from .utils import ApplyBins, Palettes, ApplyAbs
 import matplotlib.pyplot as plt
+import matplotlib as mat
 from typing import TYPE_CHECKING
 from ..errors import RequestRejected
+import numpy as np
 
 
 LDF = TypeVar("LDF", bound="pl.LazyFrame")
@@ -981,6 +983,140 @@ class RemoteLazyFrame:
             sns.barplot(data=df, x=x, **kwargs)
         else:
             sns.barplot(data=df, x=x, y=y, **kwargs)
+
+    def _calculate_boxes(
+        self: LDF,
+        x: str = None,
+        y: str = None,
+        ax=None,
+    ):
+        # todo check error handling if data owner rejects
+        boxes = []
+        if x == None or y == None:
+            if y == None:
+                col_x = pl.col(x)
+            else:
+                col_x = pl.col(y)
+            ax.set_ylabel(x if x is not None else y)
+            q1 = self.select(col_x.quantile(0.25)).collect().fetch().to_numpy()[0]
+            q3 = self.select(col_x.quantile(0.75)).collect().fetch().to_numpy()[0]
+            boxes.append(
+                {
+                    "label": x,
+                    "whislo": self.select(col_x.min()).collect().fetch().to_numpy()[0],
+                    "q1": q1,
+                    "med": self.select(col_x.median()).collect().fetch().to_numpy()[0],
+                    "q3": q3,
+                    "iqr": q3 - q1,
+                    "whishi": self.select(col_x.max()).collect().fetch().to_numpy()[0],
+                }
+            )
+
+        else:
+            col_x = pl.col(x)
+            col_y = pl.col(y)
+            ax.set_ylabel(y)
+            ax.set_xlabel(x)
+            mins = self.groupby(col_x).agg(col_y.min()).sort(col_x)
+            maxes = self.groupby(col_x).agg(col_y.max()).sort(col_x)
+            meds = self.groupby(col_x).agg(col_y.median()).sort(col_x)
+            q1s = self.groupby(col_x).agg(col_y.quantile(0.25)).sort(col_x)
+            q3s = self.groupby(col_x).agg(col_y.quantile(0.75)).sort(col_x)
+            iqrs = self.groupby(col_x).agg(col_y.quantile(0.25)).sort(col_x)
+            labels = mins.collect().fetch().to_numpy()[:, 0]
+
+            for x in range(len(labels)):
+                boxes.append(
+                    {
+                        "label": labels[x],
+                        "whislo": mins.collect().fetch().to_numpy()[x, 1],
+                        "q1": q1s.collect().fetch().to_numpy()[x, 1],
+                        "med": meds.collect().fetch().to_numpy()[x, 1],
+                        "q3": q3s.collect().fetch().to_numpy()[x, 1],
+                        "iqr": iqrs.collect().fetch().to_numpy()[x, 1],
+                        "whishi": maxes.collect().fetch().to_numpy()[x, 1],
+                    }
+                )
+        return boxes
+
+    def boxplot(
+        self: LDF,
+        x: str = None,
+        y: str = None,
+        colors: Union[str, list[str]] = Palettes.dict["standard"],
+        vertical: bool = True,
+        ax: mat.axes = None,
+        widths: float = 0.75,
+        median_linestyle: str = "-",
+        median_color: str = "black",
+        median_linewidth: float = 0.75,
+        **kwargs,
+    ):
+        """Draws a boxplot based on x and y values.
+
+        boxplot uses aggregated queries to get data necessary to create a boxplot using matplotlib's boxplot
+
+        kwargs arguments are fowarded to matplotlib's Axes.bxp boxplot function
+
+        Args:
+            x (str): The name of column to be used for x axes.
+            y (str): The name of column to be used for y axes.
+            colors (Union[str, list[str]]): The color(s) or name of builtin BastionLab color palette to be used for boxes
+            vertical (bool): Option for vertical or horizontal orientation
+            ax (matplotlib.axes): axes to plot on. A new axes is created if set to None.
+            widths (float): boxes' widths
+            median_linestyle (str): linestyle for median line
+            median_color (str): color for median line
+            median_linewidth (float): boxes' widths
+            **kwargs: keyword arguments that will be passed to Matplolib's bxp function
+        Raises:
+            ValueError: Incorrect column name given
+            various exceptions: Note that exceptions may be raised from Seaborn when the lineplot function is called,
+            for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
+        """
+
+        if isinstance(colors, str):
+            c = colors
+            if c in Palettes.dict:
+                colors = Palettes.dict[c]
+            elif c in mat.colors.cnames:
+                colors = [mat.colors.cnames[c]]
+            else:
+                raise ValueError("Color not found")
+        if ax == None:
+            ax = plt.gca()
+        selects = []
+        for col in [x, y]:
+            if col != None:
+                if col not in self.columns:
+                    raise ValueError("Column ", col, " not found in dataframe")
+                else:
+                    selects.append(col)
+        if selects == []:
+            raise ValueError("Please specify at least an X or Y value")
+        boxes = self._calculate_boxes(x, y, ax)
+        medianprops = dict(
+            linestyle=median_linestyle, color=median_color, linewidth=median_linewidth
+        )
+        boxprops = dict(facecolor="#1f77b4")
+        bplot = ax.bxp(
+            boxes,
+            showfliers=False,
+            widths=widths,
+            medianprops=medianprops,
+            boxprops=boxprops,
+            patch_artist=True,
+            vert=vertical,
+        )
+        i = -1
+        for patch in bplot["boxes"]:
+            i = i + 1
+            patch.set_facecolor(colors[i % len(colors)])
+        if vertical is False:
+            tmp = ax.get_xlabel()
+            ax.set_xlabel(ax.get_ylabel())
+            ax.set_ylabel(tmp)
+        plt.show()
 
     def facet(
         self: LDF, col: Optional[str] = None, row: Optional[str] = None, **kwargs
