@@ -597,9 +597,13 @@ class RemoteLazyFrame:
         x: str = None,
         y: str = None,
         estimator: str = "mean",
-        hue: str = None,
         vertical: bool = True,
+        title: str = None,
+        auto_label: bool = True,
+        x_label: str = None,
+        y_label: str = None,
         colors: Union[str, list[str]] = Palettes.dict["standard"],
+        ax: mat.axes = None,
         **kwargs,
     ):
         """Draws a barchart
@@ -607,9 +611,15 @@ class RemoteLazyFrame:
         Args:
             x (str) = None: The name of column to be used for x axes.
             y (str) = None: The name of column to be used for y axes.
-            estimator (str) = "mean": string represenation of estimator to be used in aggregated query. Options are: "mean", "median", "count", "max", "min", "std" and "sum"
-            hue (str) = None: The name of column to be used for colour encoding.
-            **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function.
+            estimator (str) = "mean": string representation of estimator to be used in aggregated query. Options are: "mean", "median", "count", "max", "min", "std" and "sum"
+            vertical (bool) = True: option for vertical (True) or horizontal barplot (False)
+            title (str) = None: string title for plot
+            auto_label (bool) = True: If True, labels for axes will be derived from x/y columns automatically. If false, x_label and y_label arguments used
+            x_label (str) = None: label for x axes if auto_label set to false
+            y_label (str) = None: label for y axes if auto_label set to false
+            colors (Union[str, list[str]]) = Palettes.dict["standard"]: colors for bars
+            ax (matpltlib.axes) = None: matplotlib axes to be used for plot- a new axes is generated if not supplied
+            **kwargs: Other keyword arguments that will be passed to Matplotlib's bar/barh() function.
         Raises:
             ValueError: Incorrect column name given, no x or y values provided, estimator function not recognised
             RequestRejected: Could not continue in function as data owner rejected a required access request
@@ -629,27 +639,12 @@ class RemoteLazyFrame:
         else:
             selects = [x] if x != None else [y]
         groups = [x]
-        if hue != None:
-            kwargs["hue"] = hue
-            if hue != x:
-                groups.append(hue)
-            if hue != x and hue != y:
-                selects.append(hue)
-
         for col in selects:
             if not col in self.columns:
                 raise ValueError("Column ", col, " not found in dataframe")
-        
-        if isinstance(colors, str):
-            c = colors
-            if c in Palettes.dict:
-                colors = Palettes.dict[c]
-            elif c in mat.colors.cnames:
-                colors = [mat.colors.cnames[c]]
-            else:
-                raise ValueError("Color not found")
 
-        fig, ax = plt.subplots()
+        if isinstance(colors, str) and colors in Palettes.dict:
+            colors = Palettes.dict[colors]
 
         agg = y if y != None else x
         agg_dict = {
@@ -661,6 +656,7 @@ class RemoteLazyFrame:
             "sum": pl.col(agg).sum(),
             "median": pl.col(agg).median(),
         }
+        ax = self.ax if self.ax else plt.gca()
         if x == None or y == None:
             c = x if x != None else y
             tmp = (
@@ -671,6 +667,22 @@ class RemoteLazyFrame:
             )
             RequestRejected.check_valid_df(tmp)
             df = tmp.to_pandas()
+            values = [0.5]
+            height = df[x if x != None else y].to_list()
+            if y == None:
+                vertical = False
+            if vertical is True:
+                ax.bar(x=values, height=height, color=colors, **kwargs)
+                ax.set_xticks(numpy.arange(len(height)), labels=height)
+                ax.set_xlabel(y if auto_label else x_label)
+                ax.set_ylabel(estimator if auto_label else y_label)
+                plt.tick_params(labelbottom=False)
+            else:
+                ax.barh(y=values, width=height, color=colors, **kwargs)
+                ax.set_yticks(numpy.arange(len(height)), labels=height)
+                ax.set_ylabel(x if auto_label else y_label)
+                ax.set_xlabel(estimator if auto_label else x_label)
+                plt.tick_params(labelleft=False)
         else:
             agg_fn = pl.col(y).mean()
             tmp = (
@@ -684,25 +696,21 @@ class RemoteLazyFrame:
             )
             RequestRejected.check_valid_df(tmp)
             df = tmp.to_pandas()
-        # run query
-        if x == None:
-            values = df[y].to_list()
-            height = df["count"].to_list()
-        elif y == None:
-            values = df[x].to_list()
-            height = df["count"].to_list
-        else:
-            values = df[x].to_list()
+            labels = df[x].to_list()
+            values = numpy.arange(len(labels))
             height = df[y].to_list()
-        if vertical is True:
-            plot = ax.bar(x=values, height=height, color=colors, **kwargs)
-            ax.set_xticks(numpy.arange(len(values) + 1), labels=[ None, *values])
-        else:
-            plot = plt.barh(y=values, width=height, color=colors)
-            dists = numpy.arange(len(values))
-            ax.set_yticks(numpy.arange(len(values) + 1), labels=[ None, *values], **kwargs)
-
-       
+            if vertical is True:
+                ax.bar(x=values, height=height, color=colors, **kwargs)
+                ax.set_xticks(numpy.arange(len(labels)), labels=labels)
+                ax.set_xlabel(x if auto_label else x_label)
+                ax.set_ylabel(y if auto_label else y_label)
+            else:
+                ax.barh(y=values, width=height, color=colors, **kwargs)
+                ax.set_yticks(numpy.arange(len(labels)), labels=labels)
+                ax.set_xlabel(y if auto_label else x_label)
+                ax.set_ylabel(x if auto_label else y_label)
+            if title:
+                ax.set_title(title)
 
     def histplot(
         self: LDF, x: str = "count", y: str = "count", bins: int = 10, **kwargs
