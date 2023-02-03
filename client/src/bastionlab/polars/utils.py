@@ -87,20 +87,13 @@ class ApplyBins(torch.nn.Module):
         return round(x // bins) * bins
 
 
-def create_byte_chunk(data: bytes) -> Iterator[bytes]:
-    """This method chunks bytes into sub-bytes of len `CHUNK_SIZE = 32KB`.
-    If `data` is less than 32KB, it returns directly the `data`.
-    Otherwise, it iteratively yields 32KB until the last chunk of bytes.
-    Args:
-        data : bytes
-            Bytes to be chunked.
-    Returns:
-        Iterator[bytes]
+class ApplyAbs(torch.nn.Module):
+    """BastionLab internal class used to serialize user-defined functions (UDF) in TorchScript.
+    It uses `torch.nn.Module` and applies abs() to the input value.
     """
-    sent_bytes = 0
-    while sent_bytes < len(data):
-        yield bytes(
-            data[sent_bytes : sent_bytes + min(CHUNK_SIZE, len(data) - sent_bytes)]
-        )
 
-        sent_bytes += min(CHUNK_SIZE, len(data) - sent_bytes)
+    def __init__(self) -> None:
+        super().__init__()
+
+    def forward(self, x):
+        return torch.abs(x)
