@@ -31,7 +31,7 @@ log = "0.4.17"
 bastionlab_common = { path = "../bastionlab_common" }
 
 [dependencies.polars]
-version = "0.25.1"
+path = "/home/cchudant/polars/polars"
 default-features = false
 features = [
   "dynamic_groupby",

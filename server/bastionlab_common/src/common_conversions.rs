@@ -3,28 +3,32 @@ use std::{error::Error, io::Cursor};
 use ndarray::{prelude::*, CowRepr, Data, RawData};
 use polars::{
     export::ahash::HashSet,
-    prelude::{
-        row::{AnyValueBuffer, Row},
-        *,
-    },
+    frame::row::{AnyValueBuffer, Row},
+    prelude::*,
 };
 use tch::{kind::Element, CModule, Tensor};
 use tokenizers::{Encoding, Tokenizer};
 use tonic::Status;
 
-pub fn list_dtype_to_tensor(series: &Series) -> Result<Vec<Tensor>, Status> {
-    let rows = to_status_error(series.list())?;
+use crate::prelude::*;
+
+pub fn list_dtype_to_tensor(series: &Series) -> PolarsResult<Vec<Tensor>> {
+    let rows = series.list()?;
     let mut out = vec![];
     for s in rows.into_iter() {
         match s.as_ref() {
             Some(s) => out.push(series_to_tensor(s)?),
-            None => return Err(Status::aborted("Could not iterate over series.")),
+            None => {
+                return Err(PolarsError::ComputeError(
+                    "Could not iterate over series.".into(),
+                ))
+            }
         }
     }
 
     Ok(out)
 }
-pub fn series_to_tensor(series: &Series) -> Result<Tensor, Status> {
+pub fn series_to_tensor(series: &Series) -> PolarsResult<Tensor> {
     Ok(match series.dtype() {
         DataType::Float32 => chunked_array_to_tensor(series.f32().unwrap())?,
         DataType::Float64 => chunked_array_to_tensor(series.f64().unwrap())?,
@@ -33,12 +37,12 @@ pub fn series_to_tensor(series: &Series) -> Result<Tensor, Status> {
         DataType::Int16 => chunked_array_to_tensor(series.i16().unwrap())?,
         DataType::Int8 => chunked_array_to_tensor(series.i8().unwrap())?,
         DataType::UInt32 => {
-            let s = to_status_error(series.cast(&DataType::Int64))?;
+            let s = series.cast(&DataType::Int64)?;
             chunked_array_to_tensor(s.i64().unwrap())?
         }
         DataType::List(_) => {
             let mut shape = vec![];
-            let first = series.get(0);
+            let first = series.get(0)?;
             shape.push(series.len() as i64);
             if let AnyValue::List(l) = first {
                 shape.push(l.len() as i64);
@@ -55,10 +59,9 @@ pub fn series_to_tensor(series: &Series) -> Result<Tensor, Status> {
             zeros
         }
         d => {
-            return Err(Status::invalid_argument(format!(
-                "Unsuported data type in series: {}",
-                d
-            )))
+            return Err(PolarsError::ComputeError(
+                format!("Unsuported data type in series: {}", d).into(),
+            ))
         }
     })
 }
@@ -74,7 +77,7 @@ pub fn vec_series_to_tensor(
         None => 0,
     };
     for s in v_series {
-        let t = series_to_tensor(s)?;
+        let t = series_to_tensor(s).or_invalid_argument()?;
         shapes.push(t.size()[1]);
         dtypes.push(format!("{:?}", t.kind()));
         ts.push(t);
@@ -153,6 +156,31 @@ pub fn df_to_tensor(df: &DataFrame) -> Result<Tensor, Status> {
             return Err(Status::aborted(format!("Unsupported datatype {}", dtype)));
         }
     }
+}
+
+pub fn tensor_to_series2(name: &str, tensor: Tensor) -> PolarsResult<Series> {
+    Ok(match tensor.kind() {
+        tch::Kind::Uint8 => Series::from(tensor_to_chunked_array::<UInt8Type>(&name, tensor)),
+        tch::Kind::Int8 => Series::from(tensor_to_chunked_array::<Int8Type>(&name, tensor)),
+        tch::Kind::Int16 => Series::from(tensor_to_chunked_array::<Int16Type>(&name, tensor)),
+        tch::Kind::Int => Series::from(tensor_to_chunked_array::<Int32Type>(&name, tensor)),
+        tch::Kind::Int64 => Series::from(tensor_to_chunked_array::<Int64Type>(&name, tensor)),
+        tch::Kind::Float => Series::from(tensor_to_chunked_array::<Float32Type>(&name, tensor)),
+        tch::Kind::Double => Series::from(tensor_to_chunked_array::<Float64Type>(&name, tensor)),
+        d @ (tch::Kind::Bool
+        | tch::Kind::Half
+        | tch::Kind::ComplexHalf
+        | tch::Kind::ComplexFloat
+        | tch::Kind::ComplexDouble
+        | tch::Kind::QInt8
+        | tch::Kind::QUInt8
+        | tch::Kind::QInt32
+        | tch::Kind::BFloat16) => {
+            return Err(PolarsError::ComputeError(
+                format!("Unsuported data type in resulting tensor: {:?}", d).into(),
+            ))
+        }
+    })
 }
 
 pub fn tensor_to_series(name: &str, dtype: &DataType, tensor: Tensor) -> Result<Series, Status> {
@@ -258,7 +286,7 @@ pub fn series_to_tokenized_series(
     Ok(df)
 }
 
-pub fn chunked_array_to_tensor<T>(series: &ChunkedArray<T>) -> Result<Tensor, Status>
+pub fn chunked_array_to_tensor<T>(series: &ChunkedArray<T>) -> PolarsResult<Tensor>
 where
     T: PolarsNumericType,
     T::Native: Element,
@@ -267,8 +295,8 @@ where
         Ok(slice) => Tensor::from(slice),
         Err(_) => {
             if !series.has_validity() {
-                return Err(Status::invalid_argument(
-                    "Cannot apply udf on a column that contains empty values",
+                return Err(PolarsError::ComputeError(
+                    "Cannot apply udf on a column that contains empty values".into(),
                 ));
             }
             let v: Vec<T::Native> = series.into_no_null_iter().collect();

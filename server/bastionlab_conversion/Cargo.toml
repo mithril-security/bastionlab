@@ -16,7 +16,7 @@ bastionlab_torch = { path = "../bastionlab_torch" }
 bastionlab_common = { path = "../bastionlab_common" }
 bastionlab_learning = { path = "../bastionlab_learning" }
 ring = "0.16.20"
-polars = "0.25.1"
+polars = { path = "/home/cchudant/polars/polars" }
 tokenizers = "0.13.2"
 
 [dependencies.uuid]
