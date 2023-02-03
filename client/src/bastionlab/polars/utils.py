@@ -86,6 +86,7 @@ class ApplyBins(torch.nn.Module):
         bins = self.bin_size * torch.ones_like(x)
         return round(x // bins) * bins
 
+
 class Palettes:
     dict = {
         "standard": [

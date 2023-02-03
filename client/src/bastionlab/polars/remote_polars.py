@@ -691,7 +691,7 @@ class RemoteLazyFrame:
             "sum": pl.col(agg).sum(),
             "median": pl.col(agg).median(),
         }
-        ax = self.ax if self.ax else plt.gca()
+        ax = ax if ax else plt.gca()
         if x == None or y == None:
             c = x if x != None else y
             tmp = (
