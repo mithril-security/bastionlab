@@ -1,5 +1,4 @@
 use super::polars_proto::{fetch_chunk, FetchChunk, SendChunk};
-use crate::polars_proto::QueryBytes;
 use crate::prelude::*;
 use crate::{DataFrameArtifact, DelayedDataFrame, FetchStatus};
 use polars::prelude::*;
@@ -129,20 +128,4 @@ pub async fn serialize_delayed_dataframe(
     });
 
     Response::new(ReceiverStream::new(rx))
-}
-
-// This method is used to convert the streamed composite plan into a string.
-pub async fn unstream_query_request(
-    mut stream: tonic::Streaming<QueryBytes>,
-) -> Result<String, Status> {
-    let mut bytes: Vec<u8> = Vec::new();
-
-    while let Some(chunk) = stream.next().await {
-        let mut query = chunk?;
-        bytes.append(&mut query.data);
-    }
-
-    let query = String::from_utf8(bytes)
-        .map_err(|_| Status::invalid_argument(format!("Could not decode composite plan string")))?;
-    Ok(query)
 }

@@ -25,7 +25,7 @@ pub mod polars_proto {
 }
 
 use polars_proto::{
-    polars_service_server::PolarsService, Empty, FetchChunk, QueryBytes, ReferenceList,
+    polars_service_server::PolarsService, Empty, FetchChunk, Query, ReferenceList,
     ReferenceRequest, ReferenceResponse, SendChunk, SplitRequest,
 };
 
@@ -492,17 +492,18 @@ impl PolarsService for BastionLabPolars {
 
     async fn run_query(
         &self,
-        request: Request<Streaming<QueryBytes>>,
+        request: Request<Query>,
     ) -> Result<Response<ReferenceResponse>, Status> {
         let token = self.sess_manager.verify_request(&request)?;
 
-        let composite_plan = unstream_query_request(request.into_inner()).await?;
-        let composite_plan: CompositePlan = serde_json::from_str(&composite_plan).map_err(|e| {
-            Status::invalid_argument(format!(
-                "Could not deserialize composite plan: {}{}",
-                e, &composite_plan
-            ))
-        })?;
+        let composite_plan: CompositePlan = serde_json::from_str(&request.get_ref().composite_plan)
+            .map_err(|e| {
+                Status::invalid_argument(format!(
+                    "Could not deserialize composite plan: {}{}",
+                    e,
+                    &request.get_ref().composite_plan
+                ))
+            })?;
         let user_id = self.sess_manager.get_user_id(token.clone())?;
 
         let start_time = Instant::now();
