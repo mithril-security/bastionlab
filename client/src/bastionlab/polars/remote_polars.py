@@ -11,10 +11,12 @@ import torch
 from ..pb.bastionlab_conversion_pb2 import ToTensor
 from ..pb.bastionlab_polars_pb2 import ReferenceResponse, SplitRequest, ReferenceRequest
 from .client import BastionLabPolars
-from .utils import ApplyBins
+from .utils import ApplyBins, Palettes
 import matplotlib.pyplot as plt
+import matplotlib as mat
 from typing import TYPE_CHECKING
 from ..errors import RequestRejected
+import numpy
 
 
 LDF = TypeVar("LDF", bound="pl.LazyFrame")
@@ -596,6 +598,8 @@ class RemoteLazyFrame:
         y: str = None,
         estimator: str = "mean",
         hue: str = None,
+        vertical: bool = True,
+        colors: Union[str, list[str]] = Palettes.dict["standard"],
         **kwargs,
     ):
         """Draws a barchart
@@ -635,6 +639,17 @@ class RemoteLazyFrame:
         for col in selects:
             if not col in self.columns:
                 raise ValueError("Column ", col, " not found in dataframe")
+        
+        if isinstance(colors, str):
+            c = colors
+            if c in Palettes.dict:
+                colors = Palettes.dict[c]
+            elif c in mat.colors.cnames:
+                colors = [mat.colors.cnames[c]]
+            else:
+                raise ValueError("Color not found")
+
+        fig, ax = plt.subplots()
 
         agg = y if y != None else x
         agg_dict = {
@@ -671,11 +686,23 @@ class RemoteLazyFrame:
             df = tmp.to_pandas()
         # run query
         if x == None:
-            sns.barplot(data=df, y=y, **kwargs)
+            values = df[y].to_list()
+            height = df["count"].to_list()
         elif y == None:
-            sns.barplot(data=df, x=x, **kwargs)
+            values = df[x].to_list()
+            height = df["count"].to_list
         else:
-            sns.barplot(data=df, x=x, y=y, **kwargs)
+            values = df[x].to_list()
+            height = df[y].to_list()
+        if vertical is True:
+            plot = ax.bar(x=values, height=height, color=colors, **kwargs)
+            ax.set_xticks(numpy.arange(len(values) + 1), labels=[ None, *values])
+        else:
+            plot = plt.barh(y=values, width=height, color=colors)
+            dists = numpy.arange(len(values))
+            ax.set_yticks(numpy.arange(len(values) + 1), labels=[ None, *values], **kwargs)
+
+       
 
     def histplot(
         self: LDF, x: str = "count", y: str = "count", bins: int = 10, **kwargs
@@ -859,93 +886,6 @@ class RemoteLazyFrame:
         df = tmp.to_pandas()
         # run query
         sns.scatterplot(data=df, x=x, y=y, **kwargs)
-
-    def barplot(
-        self: LDF,
-        x: str = None,
-        y: str = None,
-        estimator: str = "mean",
-        hue: str = None,
-        **kwargs,
-    ):
-        """Draws a barchart
-        barplot filters data down to necessary columns only and then calls Seaborn's barplot function.
-        Args:
-            x (str) = None: The name of column to be used for x axes.
-            y (str) = None: The name of column to be used for y axes.
-            estimator (str) = "mean": string represenation of estimator to be used in aggregated query. Options are: "mean", "median", "count", "max", "min", "std" and "sum"
-            hue (str) = None: The name of column to be used for colour encoding.
-            **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function.
-        Raises:
-            ValueError: Incorrect column name given, no x or y values provided, estimator function not recognised
-            RequestRejected: Could not continue in function as data owner rejected a required access request
-            various exceptions: Note that exceptions may be raised from Seaborn when the barplot function is called,
-            for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
-        """
-        # if there is a hue argument add them to cols and no duplicates
-        if x == None and y == None:
-            raise ValueError("Please provide a x or y column name")
-
-        allowed_fns = ["mean", "count", "max", "min", "std", "sum", "median"]
-
-        if estimator not in allowed_fns:
-            raise ValueError("Column ", col, " not found in dataframe")
-        if x != None and y != None:
-            selects = [x, y] if x != y else [x]
-        else:
-            selects = [x] if x != None else [y]
-        groups = [x]
-        if hue != None:
-            kwargs["hue"] = hue
-            if hue != x:
-                groups.append(hue)
-            if hue != x and hue != y:
-                selects.append(hue)
-
-        for col in selects:
-            if not col in self.columns:
-                raise ValueError("Column ", col, " not found in dataframe")
-
-        agg = y if y != None else x
-        agg_dict = {
-            "mean": pl.col(agg).mean(),
-            "count": pl.col(agg).count(),
-            "max": pl.col(agg).max(),
-            "min": pl.col(agg).min(),
-            "std": pl.col(agg).std(),
-            "sum": pl.col(agg).sum(),
-            "median": pl.col(agg).median(),
-        }
-        if x == None or y == None:
-            c = x if x != None else y
-            tmp = (
-                self.filter(pl.col(c) != None)
-                .select(agg_dict[estimator])
-                .collect()
-                .fetch()
-            )
-            RequestRejected.check_valid_df(tmp)
-            df = tmp.to_pandas()
-        else:
-            agg_fn = pl.col(y).mean()
-            tmp = (
-                self.filter(pl.col(x) != None)
-                .select(pl.col(y) for y in selects)
-                .groupby(pl.col(y) for y in groups)
-                .agg(agg_dict[estimator])
-                .sort(pl.col(x))
-                .collect()
-                .fetch()
-            )
-            RequestRejected.check_valid_df(tmp)
-            df = tmp.to_pandas()
-        # run query
-        if x == None:
-            sns.barplot(data=df, y=y, **kwargs)
-        elif y == None:
-            sns.barplot(data=df, x=x, **kwargs)
-        else:
-            sns.barplot(data=df, x=x, y=y, **kwargs)
 
     def facet(
         self: LDF, col: Optional[str] = None, row: Optional[str] = None, **kwargs
