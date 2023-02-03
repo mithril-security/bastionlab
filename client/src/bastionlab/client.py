@@ -295,3 +295,9 @@ class Connection:
         """
         self._client = None
         self.channel.close()
+
+
+__all__ = [
+    "Client",
+    "Connection",
+]

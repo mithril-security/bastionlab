@@ -1,6 +1,16 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Callable, Generic, List, Optional, TypeVar, Sequence, Union, Dict
+from typing import (
+    Callable,
+    Generic,
+    List,
+    Optional,
+    TypeVar,
+    Sequence,
+    Union,
+    Dict,
+    Any,
+)
 import seaborn as sns
 import polars as pl
 from polars.internals.sql.context import SQLContext
@@ -81,13 +91,7 @@ class CompositePlanSegment:
     Composite plan segment class which handles segment plans that have not been implemented
     """
 
-    def serialize(self) -> str:
-        """
-        will raise NotImplementedError
-
-        raises:
-            NotImplementedError
-        """
+    def _serialize(self) -> Any:
         raise NotImplementedError()
 
 
@@ -99,14 +103,8 @@ class EntryPointPlanSegment(CompositePlanSegment):
 
     _inner: str
 
-    def serialize(self) -> str:
-        """
-        returns serialized string of this plan segment
-
-        Returns:
-            str: serialized string of this plan segment
-        """
-        return f'{{"EntryPointPlanSegment":"{self._inner}"}}'
+    def _serialize(self) -> Any:
+        return {"EntryPointPlanSegment": self._inner}
 
 
 @dataclass
@@ -117,13 +115,7 @@ class PolarsPlanSegment(CompositePlanSegment):
 
     _inner: LDF
 
-    def serialize(self) -> str:
-        """
-        returns serialized string of this plan segment
-
-        Returns:
-            str: serialized string of this plan segment
-        """
+    def _serialize(self) -> Any:
 
         # HACK: when getting using the schema attribute, polars returns
         #  the proper error messages (polars.NotFoundError etc) when it is invalid.
@@ -131,8 +123,7 @@ class PolarsPlanSegment(CompositePlanSegment):
         #  message. So, we get the schema beforehand :)
         self._inner.schema
 
-        json_str = self._inner.write_json()
-        return f'{{"PolarsPlanSegment":{json_str}}}'
+        return {"PolarsPlanSegment": json.loads(self._inner.write_json())}
 
 
 @dataclass
@@ -144,16 +135,13 @@ class UdfPlanSegment(CompositePlanSegment):
     _inner: ScriptFunction
     _columns: List[str]
 
-    def serialize(self) -> str:
-        """
-        returns serialized string of this plan segment
-
-        Returns:
-            str: serialized string of this plan segment
-        """
-        columns = ",".join([f'"{c}"' for c in self._columns])
-        b64str = base64.b64encode(self._inner.save_to_buffer()).decode("ascii")
-        return f'{{"UdfPlanSegment":{{"columns":[{columns}],"udf":"{b64str}"}}}}'
+    def _serialize(self) -> Any:
+        return {
+            "UdfPlanSegment": {
+                "columns": self._columns,
+                "udf": base64.b64encode(self._inner.save_to_buffer()).decode("ascii"),
+            }
+        }
 
 
 @dataclass
@@ -162,8 +150,8 @@ class StackPlanSegment(CompositePlanSegment):
     Composite plan segment class responsible for vstack function
     """
 
-    def serialize(self) -> str:
-        return '"StackPlanSegment"'
+    def _serialize(self) -> Any:
+        return "StackPlanSegment"
 
 
 @dataclass
@@ -183,8 +171,8 @@ class RowCountSegment(CompositePlanSegment):
     Composite plan segment class responsible for with_row_count function
     """
 
-    def serialize(self) -> str:
-        return f'{{"RowCountSegment": "{self._name}"}}'
+    def _serialize(self) -> Any:
+        return {"RowCountSegment": self._name}
 
 
 # TODO
@@ -298,13 +286,12 @@ class RemoteLazyFrame:
         Returns:
             Composite_plan as str
         """
-        segments = ",".join(
+        return json.dumps(
             [
-                seg.serialize()
+                seg._serialize()
                 for seg in [*self._meta._prev_segments, PolarsPlanSegment(self._inner)]
             ]
         )
-        return f"[{segments}]"
 
     def collect(self: LDF) -> LDF:
         """runs any pending queries/actions on RemoteLazyFrame that have not yet been performed.

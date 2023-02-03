@@ -1,14 +1,14 @@
 from dataclasses import dataclass
-from typing import List
+from typing import List, Any
 
 
 class Rule:
-    def serialize(self) -> str:
+    def _serialize(self) -> Any:
         raise NotImplementedError
 
 
 @dataclass
-class AtLeastNof(Rule):
+class AtLeastNOf(Rule):
     """
     specifies a collection of `Rule`s.
 
@@ -22,9 +22,8 @@ class AtLeastNof(Rule):
     n: int
     of: List[Rule]
 
-    def serialize(self) -> str:
-        of_repr = ",".join([x.serialize() for x in self.of])
-        return f'{{"AtLeastNOf":[{self.n},[{of_repr}]]}}'
+    def _serialize(self) -> Any:
+        return {"AtLeastNOf": [self.n, [x._serialize() for x in self.of]]}
 
 
 @dataclass
@@ -39,8 +38,8 @@ class UserId(Rule):
 
     id: str
 
-    def serialize(self) -> str:
-        return f'{{"UserId":"{self.id}"}}'
+    def _serialize(self) -> Any:
+        return {"UserId": self.id}
 
 
 @dataclass
@@ -55,8 +54,8 @@ class Aggregation(Rule):
 
     min_agg_size: int
 
-    def serialize(self) -> str:
-        return f'{{"Aggregation":{self.min_agg_size}}}'
+    def _serialize(self) -> Any:
+        return {"Aggregation": self.min_agg_size}
 
 
 @dataclass
@@ -65,8 +64,8 @@ class TrueRule(Rule):
     BastionLab instruction `Rule` for boolean logic `True`.
     """
 
-    def serialize(self) -> str:
-        return '"True"'
+    def _serialize(self) -> Any:
+        return "True"
 
 
 @dataclass
@@ -75,12 +74,12 @@ class FalseRule(Rule):
     BastionLab instruction `Rule` for boolean logic `False`.
     """
 
-    def serialize(self) -> str:
-        return '"False"'
+    def _serialize(self) -> Any:
+        return "False"
 
 
 class UnsafeAction:
-    def serialize(self) -> str:
+    def _serialize(self) -> Any:
         raise NotImplementedError
 
 
@@ -91,8 +90,8 @@ class Log(UnsafeAction):
     Remote DataFrame.
     """
 
-    def serialize(self) -> str:
-        return '"Log"'
+    def _serialize(self) -> Any:
+        return "Log"
 
 
 @dataclass
@@ -101,8 +100,8 @@ class Review(UnsafeAction):
     Instructs the BastionLab server to request a review from the owner of the Remote DataFrame.
     """
 
-    def serialize(self) -> str:
-        return '"Review"'
+    def _serialize(self) -> Any:
+        return "Review"
 
 
 @dataclass
@@ -111,8 +110,8 @@ class Reject(UnsafeAction):
     Instructs the BastionLab server to reject the request.
     """
 
-    def serialize(self) -> str:
-        return '"Reject"'
+    def _serialize(self) -> Any:
+        return "Reject"
 
 
 @dataclass
@@ -133,15 +132,30 @@ class Policy:
     unsafe_handling: UnsafeAction
     savable: bool
 
-    def serialize(self) -> str:
-        if self.savable:
-            savable_str = "true"
-        else:
-            savable_str = "false"
-        return f'{{"safe_zone":{self.safe_zone.serialize()},"unsafe_handling":{self.unsafe_handling.serialize()},"savable":{savable_str}}}'
+    def _serialize(self) -> Any:
+        return {
+            "safe_zone": self.safe_zone._serialize(),
+            "unsafe_handling": self.unsafe_handling._serialize(),
+            "savable": self.savable,
+        }
 
 
 DEFAULT_POLICY = Policy(Aggregation(10), Review(), True)
 """
 Default BastionLab Client Policy `Policy(Aggregation(10), Review(), True)`
 """
+
+__all__ = [
+    "Rule",
+    "AtLeastNOf",
+    "UserId",
+    "Aggregation",
+    "TrueRule",
+    "FalseRule",
+    "UnsafeAction",
+    "Log",
+    "Review",
+    "Reject",
+    "Policy",
+    "DEFAULT_POLICY",
+]

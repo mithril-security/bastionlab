@@ -12,3 +12,16 @@ from .keys import SigningKey, PublicKey, Identity
 
 from . import polars
 from . import torch
+from .errors import RequestRejected, GRPCException
+
+__all__ = [
+    "Connection",
+    "SigningKey",
+    "PublicKey",
+    "Identity",
+    "polars",
+    "torch",
+    "errors",
+    "RequestRejected",
+    "GRPCException",
+]
