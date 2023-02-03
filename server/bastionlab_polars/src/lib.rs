@@ -59,7 +59,7 @@ pub struct DelayedDataFrame {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataFrameArtifact {
     dataframe: DataFrame,
-    policy: Policy,
+    pub policy: Policy,
     fetchable: VerificationResult,
     blacklist: Vec<String>,
     query_details: String,
@@ -249,6 +249,19 @@ Reason: {}",
                 }
             }
         })
+    }
+
+    pub fn get_df_artifact(&self, identifier: &str) -> Result<DataFrameArtifact, Status> {
+        let dfs = self.dataframes.read().unwrap();
+        Ok(dfs
+            .get(identifier)
+            .ok_or_else(|| {
+                Status::not_found(format!(
+                    "Could not find dataframe: identifier={}",
+                    identifier
+                ))
+            })?
+            .clone())
     }
 
     pub fn get_df_unchecked(&self, identifier: &str) -> Result<DataFrame, Status> {

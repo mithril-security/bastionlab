@@ -63,7 +63,7 @@ class TestingConnection(unittest.TestCase):
         client = connection.client
         get_covid_dataset()
         df = pl.read_csv("covid.csv").limit(200)
-        policy = Policy(safe_zone=TrueRule(), unsafe_handling=Log(), savable=True)
+        policy = Policy(safe_zone=TrueRule(), unsafe_handling=Log(), savable=True, convertable=True)
         rdf = client.polars.send_df(df, policy=policy, sanitized_columns=["Name"])
         rdf = rdf.drop(
             [

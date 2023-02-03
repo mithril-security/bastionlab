@@ -32,7 +32,7 @@ class TestingDataConv(unittest.TestCase):
             }
         ).with_column((pl.col("a") * pl.col("b")).alias("c"))
 
-        rdf = client.polars.send_df(df, Policy(TrueRule(), Log(), False))
+        rdf = client.polars.send_df(df, Policy(TrueRule(), Log(), False, True))
 
         arr = rdf.to_array()
 
@@ -53,7 +53,7 @@ class TestingDataConv(unittest.TestCase):
             }
         ).with_column((pl.col("a") * pl.col("b")).alias("c"))
 
-        rdf = client.polars.send_df(df, Policy(TrueRule(), Log(), False))
+        rdf = client.polars.send_df(df, Policy(TrueRule(), Log(), False, True))
         arr = rdf.to_array()
 
         with self.assertRaises(ValueError) as ve:
@@ -69,7 +69,7 @@ class TestingDataConv(unittest.TestCase):
             }
         ).with_column((pl.col("a") * pl.col("b")).alias("c"))
 
-        rdf = client.polars.send_df(df, Policy(TrueRule(), Log(), False))
+        rdf = client.polars.send_df(df, Policy(TrueRule(), Log(), False, True))
 
         arr = rdf.to_array()
 
