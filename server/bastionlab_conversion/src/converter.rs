@@ -38,6 +38,7 @@ impl Converter {
             ArrayStore::AxdynF64(a) => ndarray_to_tensor::<OwnedRepr<f64>, Dim<IxDynImpl>>(a),
             ArrayStore::AxdynF32(a) => ndarray_to_tensor::<OwnedRepr<f32>, Dim<IxDynImpl>>(a),
             ArrayStore::AxdynI32(a) => ndarray_to_tensor::<OwnedRepr<i32>, Dim<IxDynImpl>>(a),
+            ArrayStore::AxdynI16(a) => ndarray_to_tensor::<OwnedRepr<i16>, Dim<IxDynImpl>>(a),
         };
 
         tensor
@@ -106,6 +107,115 @@ impl Converter {
         let identifier = self.polars.insert_array(arr);
         Ok(identifier)
     }
+
+    pub fn list_series_to_list_array(&self, series: &Series) -> Result<ArrayStore, Status>
+where {
+        let get_shape = |series: &Series| -> Option<Vec<usize>> {
+            let _0th = series.len();
+            // FIXME: Update this to Result type once get_shape is unsed for other types, ideally 1-d types.
+            // We can boldly call unwrap because this will be used in a list series
+            let _1st = if let AnyValue::List(inner) = series.get(0) {
+                inner.len()
+            } else {
+                return None;
+            };
+            Some(vec![_0th, _1st])
+        };
+
+        /*
+           In this function, we are only working with list series types.
+
+           The function serves as a helper function to convert series into a list to
+           reconstruct into ArrayBase<T>
+        */
+        let dtype = series.dtype();
+
+        let arraystore = match dtype {
+            DataType::List(inner) => {
+                /*
+                   In Polars, we do not expect List[List[Primitive]].
+                   Only List[Primitive] is allowed.
+                */
+                let res = match inner.as_ref() {
+                    DataType::Float64 => {
+                        let shape = get_shape(series).ok_or(Status::aborted(
+                            "Only List Series are supported in get_shape",
+                        ))?;
+                        let exploded = to_status_error(series.explode())?;
+                        let arr = to_status_error(exploded.f64())?;
+                        let slice = to_status_error(arr.cont_slice())?;
+                        ArrayStore::AxdynF64(to_status_error(list_to_ndarray(
+                            slice.to_vec(),
+                            shape,
+                        ))?)
+                    }
+
+                    DataType::Float32 => {
+                        let shape = get_shape(series).ok_or(Status::aborted(
+                            "Only List Series are supported in get_shape",
+                        ))?;
+                        let exploded = to_status_error(series.explode())?;
+                        let arr = to_status_error(exploded.f32())?;
+                        let slice = to_status_error(arr.cont_slice())?;
+                        ArrayStore::AxdynF32(to_status_error(list_to_ndarray(
+                            slice.to_vec(),
+                            shape,
+                        ))?)
+                    }
+
+                    DataType::Int64 => {
+                        let shape = get_shape(series).ok_or(Status::aborted(
+                            "Only List Series are supported in get_shape",
+                        ))?;
+                        let exploded = to_status_error(series.explode())?;
+                        let arr = to_status_error(exploded.i64())?;
+                        let slice = to_status_error(arr.cont_slice())?;
+                        ArrayStore::AxdynI64(to_status_error(list_to_ndarray(
+                            slice.to_vec(),
+                            shape,
+                        ))?)
+                    }
+
+                    DataType::Int32 => {
+                        let shape = get_shape(series).ok_or(Status::aborted(
+                            "Only List Series are supported in get_shape",
+                        ))?;
+                        let exploded = to_status_error(series.explode())?;
+                        let arr = to_status_error(exploded.i32())?;
+                        let slice = to_status_error(arr.cont_slice())?;
+                        ArrayStore::AxdynI32(to_status_error(list_to_ndarray(
+                            slice.to_vec(),
+                            shape,
+                        ))?)
+                    }
+
+                    DataType::Int16 => {
+                        let shape = get_shape(series).ok_or(Status::aborted(
+                            "Only List Series are supported in get_shape",
+                        ))?;
+                        let exploded = to_status_error(series.explode())?;
+                        let arr = to_status_error(exploded.i16())?;
+                        let slice = to_status_error(arr.cont_slice())?;
+                        ArrayStore::AxdynI16(to_status_error(list_to_ndarray(
+                            slice.to_vec(),
+                            shape,
+                        ))?)
+                    }
+                    _ => {
+                        return Err(Status::aborted(format!("{inner:?} not supported")));
+                    }
+                };
+                res
+            }
+            _ => {
+                return Err(Status::failed_precondition(
+                    "Only series of List type can be converted into a list",
+                ));
+            }
+        };
+
+        Ok(arraystore)
+    }
 }
 
 #[tonic::async_trait]
@@ -145,22 +255,47 @@ impl ConversionService for Converter {
 
         let df = self.polars.get_df_unchecked(&identifier)?;
 
-        let dtypes = df.dtypes();
+        let dtypes = df
+            .dtypes()
+            .iter()
+            .map(|d| d.to_string())
+            .collect::<Vec<_>>();
 
-        let arr = if !dtypes.contains(&DataType::List(Box::default()))
-            && !dtypes.contains(&DataType::Utf8)
-        {
+        let dtype_exists =
+            |dtype: &str| -> bool { dtypes.iter().find(|s| s.contains(dtype)).is_some() };
+        let arr = if !(dtype_exists("list") || dtype_exists("utf8")) {
             RemoteArray {
                 identifier: (self.df_to_ndarray(&df)?),
             }
-        } else if dtypes.contains(&DataType::List(Box::default())) {
+        } else if dtype_exists("list") {
             /*
                Here, we assume we have a List[PrimitiveType]
                The idea would be to convert columns into ArrayBase -> merge Vec<ArrayBase> -> ArrayBase
             */
-            return Err(Status::unavailable(
-                "List[Primitive] conversion into ndarray not yet supported",
-            ));
+            let col_names = df.get_column_names();
+            let vec_series = df
+                .columns(&col_names[..])
+                .map_err(|e| Status::aborted(format!("Could not get Series in DataFrame: {e}")))?;
+
+            let mut out = vec![];
+            for series in vec_series {
+                out.push(to_status_error(self.list_series_to_list_array(series))?);
+            }
+            /*
+                TODO:
+                    - Implement From<Vec<ArrayStore>> for ArrayStore
+                      This converter is responsible for combining several ArrayBase<T, Dim<IxdynImpl>>
+                      into a single ArrayBase<T, Dim<IxdynImpl>> while increasing the dimension.
+
+                    - We could also leave the implementation here by leaving the DataFrame split on columns as
+                    array store.
+                      Once we do that, we will have to return Vec<RemoteArray> to the server
+
+                    - To pass the CI, I am currently returning the first RemoteArray
+            */
+            RemoteArray {
+                identifier: self.polars.insert_array(out[0].clone()),
+            }
         } else {
             return Err(
                 Status::aborted("DataFrame with str columns cannot be converted directly to RemoteArray. Please tokenize strings first"));

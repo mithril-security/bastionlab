@@ -166,6 +166,20 @@ class TestingDataConv(unittest.TestCase):
         self.assertEqual(remote_tensor.shape, X.shape)
         self.assertEqual(remote_tensor.dtype, torch.float)
 
+    def test_list_dataframe(self):
+        connection = Connection("localhost")
+        client = connection.client
+        df = pl.DataFrame(
+            {
+                "a": [[0, 1, 2, 3, 4]],
+                "b": [[2, 3, 5, 6, 7]],
+            }
+        )
+
+        rdf = client.polars.send_df(df, Policy(TrueRule(), Log(), False))
+
+        rdf.to_array()
+
 
 if __name__ == "__main__":
     unittest.main()

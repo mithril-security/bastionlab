@@ -104,6 +104,7 @@ pub enum ArrayStore {
     AxdynF64(Array<f64, Dim<IxDynImpl>>),
     AxdynF32(Array<f32, Dim<IxDynImpl>>),
     AxdynI32(Array<i32, Dim<IxDynImpl>>),
+    AxdynI16(Array<i16, Dim<IxDynImpl>>),
 }
 fn shuffle<A>(array: &Array<A, Dim<IxDynImpl>>, indices: &[usize]) -> Array<A, Dim<IxDynImpl>>
 where
@@ -135,6 +136,7 @@ impl ArrayStore {
             ArrayStore::AxdynI64(a) => a.dim()[0],
             ArrayStore::AxdynF64(a) => a.dim()[0],
             ArrayStore::AxdynI32(a) => a.dim()[0],
+            ArrayStore::AxdynI16(a) => a.dim()[0],
         }
     }
 
@@ -144,6 +146,7 @@ impl ArrayStore {
             ArrayStore::AxdynF64(a) => Self::AxdynF64(shuffle::<f64>(a, indices)),
             ArrayStore::AxdynI32(a) => Self::AxdynI32(shuffle::<i32>(a, indices)),
             ArrayStore::AxdynI64(a) => Self::AxdynI64(shuffle::<i64>(a, indices)),
+            ArrayStore::AxdynI16(a) => Self::AxdynI16(shuffle::<i16>(a, indices)),
         }
     }
 
@@ -172,9 +175,21 @@ impl ArrayStore {
 
                 (ArrayStore::AxdynI32(upper), ArrayStore::AxdynI32(lower))
             }
+
+            ArrayStore::AxdynI16(a) => {
+                let (upper, lower) = split::<i16>(a, ratios);
+
+                (ArrayStore::AxdynI16(upper), ArrayStore::AxdynI16(lower))
+            }
         }
     }
 }
+
+// impl From<Vec<ArrayStore>> for ArrayStore {
+//     fn from(list: Vec<ArrayStore>) -> Self {
+//         Array::
+//     }
+// }
 
 #[derive(Clone)]
 pub struct BastionLabPolars {
