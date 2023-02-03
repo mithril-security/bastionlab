@@ -105,3 +105,15 @@ class Palettes:
         "mithril": ["#f0ba2d", "#0b2440", "#030e1a", "#ffffff", "#F74C00"],
         "ocean": ["#006A94", "#2999BC", "#3EBDC8", "#69D1CB", "#83DEF1", "#01BFFF"],
     }
+
+
+class ApplyAbs(torch.nn.Module):
+    """BastionLab internal class used to serialize user-defined functions (UDF) in TorchScript.
+    It uses `torch.nn.Module` and applies abs() to the input value.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+
+    def forward(self, x):
+        return torch.abs(x)
