@@ -4,7 +4,7 @@ use ndarray::{prelude::*, Data, IxDynImpl, RawData};
 use polars::{export::rayon::prelude::ParallelIterator, prelude::*};
 use serde::{Deserialize, Serialize};
 use tch::{kind::Element, CModule, Tensor};
-use tokenizers::{PaddingParams, Tokenizer, TruncationParams};
+use tokenizers::{FromPretrainedParameters, PaddingParams, Tokenizer, TruncationParams};
 use tonic::Status;
 
 pub fn list_dtype_to_tensor(series: &Series) -> Result<Vec<Tensor>, Status> {
@@ -128,15 +128,27 @@ pub fn load_udf(udf: String) -> Result<CModule, Status> {
     )
 }
 
-fn get_tokenizer(model: &str, config: &str) -> Result<Tokenizer, Status> {
+fn get_tokenizer(
+    model: &str,
+    config: &str,
+    revision: &str,
+    auth_token: &str,
+) -> Result<Tokenizer, Status> {
     let config: TokenizerParams = serde_json::from_str(config).map_err(|e| {
         Status::failed_precondition(format!(
             "Could not deserilize configuration for Tokenizer: {e}"
         ))
     })?;
 
-    let mut tokenizer: Tokenizer = Tokenizer::from_pretrained(model, None)
-        .map_err(|_| Status::invalid_argument("Could not deserialize Hugging Face Tokenizer"))?;
+    let mut tokenizer: Tokenizer = Tokenizer::from_pretrained(
+        model,
+        Some(FromPretrainedParameters {
+            revision: revision.to_string(),
+            auth_token: Some(auth_token.to_string()),
+            ..Default::default()
+        }),
+    )
+    .map_err(|_| Status::invalid_argument("Could not deserialize Hugging Face Tokenizer"))?;
     tokenizer.with_padding(config.padding_params);
     tokenizer.with_truncation(config.truncation_params);
     Ok(tokenizer)
@@ -165,8 +177,10 @@ pub fn series_to_tokenized_series<'a>(
     model: &str,
     config: &str,
     add_special_tokens: bool,
+    revision: &str,
+    auth_token: &str,
 ) -> Result<(Array<i64, Dim<IxDynImpl>>, Array<i64, Dim<IxDynImpl>>), Status> {
-    let tokenizer = get_tokenizer(model, config)?;
+    let tokenizer = get_tokenizer(model, config, revision, auth_token)?;
 
     let out_ids = Arc::new(Mutex::new(Vec::new()));
     let ids_shape = Arc::new(Mutex::new(Vec::new()));

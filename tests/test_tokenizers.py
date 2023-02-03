@@ -31,10 +31,10 @@ class TestingRemoteTokenizer(unittest.TestCase):
         rdf = client.polars.send_df(df, Policy(TrueRule(), Log(), False))
 
         remote_tokenizer = client.tokenizers.from_hugging_face_pretrained(
-            "distilbert-base-uncased"
+            self.distilbert
         )
 
-        local_tokenizer = Tokenizer.from_pretrained("distilbert-base-uncased")
+        local_tokenizer = Tokenizer.from_pretrained(self.distilbert)
 
         remote_tokenizer.enable_padding(length=5)
         local_tokenizer.enable_padding(length=5)

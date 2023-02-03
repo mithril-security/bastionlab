@@ -22,15 +22,17 @@ message RemoteDataFrame {
 message RemoteArrays {
     repeated RemoteArray list = 1;
 }
-message ToArray {
+message ToTokenizedArrays {
     string identifier = 1;
     int32 add_special_tokens = 2;
     string model = 3;
     string config = 4;
+    string revision = 5;
+    optional string auth_token = 6;
 }
 
 service ConversionService {
     rpc ConvToTensor(RemoteArray) returns (bastionlab.Reference) {}
-    rpc TokenizeDataFrame(ToArray) returns (RemoteArrays) {}
+    rpc TokenizeDataFrame(ToTokenizedArrays) returns (RemoteArrays) {}
     rpc ConvToArray(RemoteDataFrame) returns (RemoteArray) {}
 }

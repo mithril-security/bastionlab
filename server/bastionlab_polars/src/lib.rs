@@ -6,9 +6,10 @@ use bastionlab_common::{
 };
 
 use ndarray::{Array, Axis, Dim, IxDynImpl};
-use ndarray_rand::{RandomExt, SamplingStrategy};
 use polars::prelude::*;
-use rand::rngs::ThreadRng;
+use rand::rngs::StdRng;
+use rand::seq::SliceRandom;
+use rand::{thread_rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::fs::{create_dir, read_dir, OpenOptions};
@@ -104,16 +105,11 @@ pub enum ArrayStore {
     AxdynF32(Array<f32, Dim<IxDynImpl>>),
     AxdynI32(Array<i32, Dim<IxDynImpl>>),
 }
-fn shuffle<A>(array: &Array<A, Dim<IxDynImpl>>, mut rng: &mut ThreadRng) -> Array<A, Dim<IxDynImpl>>
+fn shuffle<A>(array: &Array<A, Dim<IxDynImpl>>, indices: &[usize]) -> Array<A, Dim<IxDynImpl>>
 where
     A: Copy + Clone,
 {
-    array.sample_axis_using(
-        Axis(0),
-        array.dim()[0],
-        SamplingStrategy::WithReplacement,
-        &mut rng,
-    )
+    array.select(Axis(0), indices)
 }
 
 fn split<A>(
@@ -142,19 +138,19 @@ impl ArrayStore {
         }
     }
 
-    pub fn shuffle(&self, mut rng: &mut ThreadRng) -> Self {
+    pub fn shuffle(&self, indices: &[usize]) -> Self {
         match self {
-            ArrayStore::AxdynF32(a) => Self::AxdynF32(shuffle::<f32>(a, &mut rng)),
-            ArrayStore::AxdynF64(a) => Self::AxdynF64(shuffle::<f64>(a, &mut rng)),
-            ArrayStore::AxdynI32(a) => Self::AxdynI32(shuffle::<i32>(a, &mut rng)),
-            ArrayStore::AxdynI64(a) => Self::AxdynI64(shuffle::<i64>(a, &mut rng)),
+            ArrayStore::AxdynF32(a) => Self::AxdynF32(shuffle::<f32>(a, indices)),
+            ArrayStore::AxdynF64(a) => Self::AxdynF64(shuffle::<f64>(a, indices)),
+            ArrayStore::AxdynI32(a) => Self::AxdynI32(shuffle::<i32>(a, indices)),
+            ArrayStore::AxdynI64(a) => Self::AxdynI64(shuffle::<i64>(a, indices)),
         }
     }
 
     pub fn split(&self, ratios: (f64, f64)) -> (Self, Self) {
         /*
             Arrays could be split on a several axes but in this implementation, we are
-            only splitting on the Oth Axis.
+            only splitting on the Oth Axis (row-wise).
         */
         match self {
             ArrayStore::AxdynI64(a) => {
@@ -504,8 +500,7 @@ impl PolarsService for BastionLabPolars {
         let composite_plan: CompositePlan = serde_json::from_str(&composite_plan).map_err(|e| {
             Status::invalid_argument(format!(
                 "Could not deserialize composite plan: {}{}",
-                e,
-                &composite_plan[..1000]
+                e, &composite_plan
             ))
         })?;
         let user_id = self.sess_manager.get_user_id(token.clone())?;
@@ -671,7 +666,42 @@ impl PolarsService for BastionLabPolars {
         for array in arrays {
             out_arrays_store.push(self.get_array(&array.identifier)?);
         }
+
+        /*
+         - We use StdRng to shuffle indexes of the array.
+
+         -  We then use ArrayBase::select([indices]) to select the respective indices
+            along the Axis(0).
+
+         -  The reason why we are not using `rand::sample_axis_using` is that
+            for shuffling arrays, if the are multiple, we will want to have the same indexes
+            shuffled across.
+
+            This is very important for ML/DL because you wouldn't want to match a different input
+            to a different output.
+        */
+        let mut rng = if let Some(seed) = random_state {
+            StdRng::seed_from_u64(seed)
+        } else {
+            StdRng::from_rng(thread_rng()).unwrap()
+        };
+
+        let mut shuffled = false;
+        let mut indices = vec![];
+
         for array in out_arrays_store.iter() {
+            if !shuffled {
+                indices = (0..array.height()).collect();
+                indices.shuffle(&mut rng);
+                shuffled = true;
+            }
+            let array = if shuffle {
+                let array = array.shuffle(&indices[..]);
+                array
+            } else {
+                array.clone()
+            };
+
             let (upper, lower) = array.split((train_size, test_size));
             out_arrays.append(&mut vec![
                 ReferenceResponse {

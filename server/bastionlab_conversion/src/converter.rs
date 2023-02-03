@@ -10,7 +10,7 @@ use polars::prelude::*;
 use tch::Tensor;
 use tonic::{Request, Response, Status};
 
-use crate::conversion_proto::{conversion_service_server::ConversionService, ToArray};
+use crate::conversion_proto::{conversion_service_server::ConversionService, ToTokenizedArrays};
 use crate::conversion_proto::{RemoteArray, RemoteArrays, RemoteDataFrame};
 
 use crate::bastionlab::Reference;
@@ -156,9 +156,10 @@ impl ConversionService for Converter {
         } else if dtypes.contains(&DataType::List(Box::default())) {
             /*
                Here, we assume we have a List[PrimitiveType]
+               The idea would be to convert columns into ArrayBase -> merge Vec<ArrayBase> -> ArrayBase
             */
             return Err(Status::unavailable(
-                "List[Primitive] to ndarray not supported yet",
+                "List[Primitive] conversion into ndarray not yet supported",
             ));
         } else {
             return Err(
@@ -170,13 +171,15 @@ impl ConversionService for Converter {
 
     async fn tokenize_data_frame(
         &self,
-        request: Request<ToArray>,
+        request: Request<ToTokenizedArrays>,
     ) -> Result<Response<RemoteArrays>, Status> {
-        let (identifier, add_special_tokens, model, config) = (
+        let (identifier, add_special_tokens, model, config, revision, auth_token) = (
             request.get_ref().identifier.clone(),
             request.get_ref().add_special_tokens,
             request.get_ref().model.clone(),
             request.get_ref().config.clone(),
+            request.get_ref().revision.clone(),
+            request.get_ref().auth_token(),
         );
 
         let add_special_tokens = add_special_tokens != 0;
@@ -195,7 +198,14 @@ impl ConversionService for Converter {
             let series = df.get_columns().get(idx).unwrap();
 
             let (ids, masks) = if series.dtype().eq(&DataType::Utf8) {
-                series_to_tokenized_series(series, &model, &config, add_special_tokens)?
+                series_to_tokenized_series(
+                    series,
+                    &model,
+                    &config,
+                    add_special_tokens,
+                    &revision,
+                    auth_token,
+                )?
             } else {
                 return Err(Status::aborted(format!(
                     "Non-string columns cannot be tokenized"

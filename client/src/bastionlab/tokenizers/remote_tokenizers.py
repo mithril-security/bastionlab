@@ -4,7 +4,7 @@ import polars as pl
 import json
 from tokenizers import Tokenizer
 from ..polars.remote_polars import RemoteArray, Metadata, delegate, delegate_properties
-from ..pb.bastionlab_conversion_pb2 import ToArray
+from ..pb.bastionlab_conversion_pb2 import ToTokenizedArrays
 
 if TYPE_CHECKING:
     from ..polars.remote_polars import RemoteLazyFrame, RemoteArray, Metadata
@@ -38,10 +38,15 @@ class RemoteTokenizer:
     _client: "Client"
     _tokenizer: Optional["Tokenizer"] = None
     _model_name: Optional[str] = None
+    _revision: Optional[str] = "main"
+    _auth_token: Optional[str] = None
 
     @staticmethod
     def _from_hugging_face_pretrained(
-        client: "Client", model: str
+        client: "Client",
+        model: str,
+        revision: Optional[str] = "main",
+        auth_token: Optional[str] = None,
     ) -> "RemoteTokenizer":
         """
         Loads a Hugging Face tokenizer model with the checkpoint name.
@@ -52,7 +57,13 @@ class RemoteTokenizer:
         """
         from tokenizers import Tokenizer
 
-        return RemoteTokenizer(client, Tokenizer.from_pretrained(model), model)
+        return RemoteTokenizer(
+            client,
+            Tokenizer.from_pretrained(model, revision=revision, auth_token=auth_token),
+            model,
+            revision,
+            auth_token,
+        )
 
     def encode(
         self,
@@ -73,11 +84,13 @@ class RemoteTokenizer:
                 Returns a tuple of the tokenized entries (first RemoteArray contains input_ids and the other, attention_mask)
         """
         ids, masks = self._client._converter._stub.TokenizeDataFrame(
-            ToArray(
+            ToTokenizedArrays(
                 identifier=rdf.identifier,
                 add_special_tokens=add_special_tokens,
                 model=self._model_name,
                 config=self._serialize(),
+                revision=self._revision,
+                auth_token=self._auth_token,
             )
         ).list
 
