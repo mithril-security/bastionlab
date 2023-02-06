@@ -9,20 +9,22 @@
 #   when building in a docker image as root.
 
 declare -a deb_dependencies=(
-    [0]=software-properties-common
-    [1]=build-essential
-    [2]=patchelf
-    [3]=libssl-dev
-    [4]=pkg-config
-    [5]=curl
-    [6]=unzip
-    [7]=python3
-    [8]=python3-pip
-    [9]=gcc-11
-    [10]=g++-11
-    [11]=cpp-11
-    [12]=python3-venv
-    [13]=sudo
+    [0]=lsb-release
+    [1]=software-properties-common
+    [2]=gcc-11
+    [3]=g++-11
+    [4]=cpp-11
+
+    [5]=build-essential
+    [6]=patchelf
+    [7]=libssl-dev
+    [8]=pkg-config
+    [9]=curl
+    [10]=unzip
+    [11]=python3
+    [12]=python3-pip
+    [13]=python3-venv
+    [14]=sudo
 )
 
 declare -a rhel_dependencies=(
@@ -104,7 +106,7 @@ verify_deps()
     for package in "${packages[@]}"; do
 	$checkcmd $package > /dev/null 2>&1
 	EXIT_STATUS=$?
-	if [ "$(echo $EXIT_STATUS)" -ne 0 ]; then
+	if ! (exit $EXIT_STATUS) ; then
 	    echo $package
 	    echo "You have missing packages, installing them..." >&2
 	    return $EXIT_STATUS
@@ -121,12 +123,28 @@ install_deb_deps()
     apt-get update
     apt-get -y upgrade
     apt-get -y install software-properties-common
-    add-apt-repository -y ppa:ubuntu-toolchain-r/test
-    apt-get -y install "${deb_dependencies[@]:1}"
-    update-alternatives \
-        --install /usr/bin/gcc gcc /usr/bin/gcc-11 100 \
-        --slave /usr/bin/g++ g++ /usr/bin/g++-11 \
-        --slave /usr/bin/gcov gcov /usr/bin/gcov-11
+    EXIT_STATUS=$?
+    if ! (exit $EXIT_STATUS) ; then
+	apt-get -y install lsb-release
+	VRELEASE=$(lsb_release -c | awk '{print $2}')
+	DEB_TOOLCHAIN="https://ppa.launchpadcontent.net/ubuntu-toolchain-r/test/ubuntu ${VRELEASE} main"
+	echo "deb" $DEB_TOOLCHAIN | tee -a /etc/apt/sources.list.d/toolchain.list
+	echo "deb-src" $DEB_TOOLCHAIN | tee -a /etc/apt/sources.list.d/toolchain.list
+	sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 1E9377A2BA9EF27F
+	apt-get update	
+    else
+	add-apt-repository -y ppa:ubuntu-toolchain-r/test
+    fi
+    EXIT_STATUS=$?
+    if ! (exit $EXIT_STATUS) ; then
+	apt-get -y install "${deb_dependencies[@]:5}"
+    else
+	apt-get -y install "${deb_dependencies[@]:2}"
+	update-alternatives \
+            --install /usr/bin/gcc gcc /usr/bin/gcc-11 100 \
+            --slave /usr/bin/g++ g++ /usr/bin/g++-11 \
+            --slave /usr/bin/gcov gcov /usr/bin/gcov-11
+    fi
 }
 
 # RHEL-based dependencies installation
