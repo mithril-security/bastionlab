@@ -105,7 +105,6 @@ verify_deps()
 	$checkcmd $package > /dev/null 2>&1
 	EXIT_STATUS=$?
 	if ! (exit $EXIT_STATUS) ; then
-	    echo $package
 	    echo "You have missing packages, installing them..." >&2
 	    return $EXIT_STATUS
 	else
