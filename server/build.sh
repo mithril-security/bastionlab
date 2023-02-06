@@ -54,17 +54,15 @@ install_common()
     # Libtorch installation
     if [ ! -d "libtorch" ] ; then
 	if [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ] && [ "$(id -u)" -eq 0 ]; then
-	    python3 -m venv /opt/venv
-	    source /opt/venv/bin/activate
+	    export VIRTUAL_ENV=/opt/venv
+	    python3 -m venv $VIRTUAL_ENV
+	    export PATH="$VIRTUAL_ENV/bin:$PATH"
 	fi
 	pip3 install requests
 	echo 'import requests; \
     open("libtorch.zip", "wb").write( \
           requests.get('$1').content \
             )' | python3 -i client/src/bastionlab/version.py
-	if [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ] && [ "$(id -u)" -eq 0 ]; then
-	    deactivate
-	fi
 	
 	if [ ! -f "libtorch.zip" ] ; then
 	    echo "[❌] Failed to download libtorch.zip file" >&2
@@ -123,8 +121,10 @@ install_deb_deps()
     apt-get update
     apt-get -y upgrade
     apt-get -y install software-properties-common
+    command -v add-apt-repository > /dev/null 2>&1
     EXIT_STATUS=$?
     if ! (exit $EXIT_STATUS) ; then
+	echo "Adding toolchain repository to the /etc/apt/sources.list.d/toolchain.list file..."
 	apt-get -y install lsb-release
 	VRELEASE=$(lsb_release -c | awk '{print $2}')
 	DEB_TOOLCHAIN="https://ppa.launchpadcontent.net/ubuntu-toolchain-r/test/ubuntu ${VRELEASE} main"
