@@ -4,6 +4,9 @@
 #   bastionlab/client/src/bastionlab/version.py
 # Dependents:
 #   bastionlab/server/Dockerfile.gpu.sev
+#
+# Env variable "BASTIONLAB_BUILD_AS_ROOT" can be useful
+#   when building in a docker image as root.
 
 declare -a deb_dependencies=(
     [0]=software-properties-common
@@ -48,11 +51,18 @@ install_common()
 
     # Libtorch installation
     if [ ! -d "libtorch" ] ; then
+	if [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ] && [ "$(id -u)" -eq 0 ]; then
+	    python3 -m venv /opt/venv
+	    source /opt/venv/bin/activate
+	fi
 	pip3 install --user requests
 	echo 'import requests; \
     open("libtorch.zip", "wb").write( \
           requests.get('$1').content \
             )' | python3 -i client/src/bastionlab/version.py
+	if [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ] && [ "$(id -u)" -eq 0 ]; then
+	    deactivate
+	fi
 	
 	if [ ! -f "libtorch.zip" ] ; then
 	    echo "[❌] Failed to download libtorch.zip file" >&2
@@ -108,7 +118,7 @@ verify_deps()
 # Debian-based dependencies installation
 install_deb_deps()
 {
-    apt-get -y update
+    apt-get update
     apt-get -y upgrade
     apt-get -y install software-properties-common
     add-apt-repository -y ppa:ubuntu-toolchain-r/test
