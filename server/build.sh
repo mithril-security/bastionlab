@@ -120,6 +120,7 @@ install_deb_deps()
 {
     apt-get update
     apt-get -y upgrade
+    # Configuring repositories
     apt-get -y install software-properties-common
     command -v add-apt-repository > /dev/null 2>&1
     EXIT_STATUS=$?
@@ -131,11 +132,11 @@ install_deb_deps()
 	echo "deb" $DEB_TOOLCHAIN | tee -a /etc/apt/sources.list.d/toolchain.list
 	echo "deb-src" $DEB_TOOLCHAIN | tee -a /etc/apt/sources.list.d/toolchain.list
 	sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 1E9377A2BA9EF27F
-	apt-get update	
     else
 	add-apt-repository -y ppa:ubuntu-toolchain-r/test
     fi
     EXIT_STATUS=$?
+    apt-get update
     if ! (exit $EXIT_STATUS) ; then
 	apt-get -y install "${deb_dependencies[@]:5}"
     else
