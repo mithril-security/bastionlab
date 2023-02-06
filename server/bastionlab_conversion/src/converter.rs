@@ -1,10 +1,9 @@
 use std::sync::{Arc, Mutex};
 
-use bastionlab_common::common_conversions::*;
-use bastionlab_common::session::SessionManager;
-use bastionlab_polars::{ArrayStore, BastionLabPolars};
+use bastionlab_common::{array_store::ArrayStore, common_conversions::*, session::SessionManager};
+use bastionlab_polars::BastionLabPolars;
 use bastionlab_torch::BastionLabTorch;
-use ndarray::{Dim, IxDynImpl, OwnedRepr};
+use ndarray::{Axis, Dim, IxDynImpl, OwnedRepr};
 use polars::export::ahash::HashSet;
 use polars::prelude::*;
 use tch::Tensor;
@@ -108,12 +107,10 @@ impl Converter {
         Ok(identifier)
     }
 
-    pub fn list_series_to_list_array(&self, series: &Series) -> Result<ArrayStore, Status>
+    pub fn list_series_to_array_store(&self, series: &Series) -> Result<ArrayStore, Status>
 where {
         let get_shape = |series: &Series| -> Option<Vec<usize>> {
             let _0th = series.len();
-            // FIXME: Update this to Result type once get_shape is unsed for other types, ideally 1-d types.
-            // We can boldly call unwrap because this will be used in a list series
             let _1st = if let AnyValue::List(inner) = series.get(0) {
                 inner.len()
             } else {
@@ -126,7 +123,7 @@ where {
            In this function, we are only working with list series types.
 
            The function serves as a helper function to convert series into a list to
-           reconstruct into ArrayBase<T>
+           reconstruct into ArrayStore(ArrayBase<T>)
         */
         let dtype = series.dtype();
 
@@ -245,6 +242,7 @@ impl ConversionService for Converter {
         &self,
         request: Request<RemoteDataFrame>,
     ) -> Result<Response<RemoteArray>, Status> {
+        self.sess_manager.verify_request(&request)?;
         let identifier = request.into_inner().identifier;
 
         /*
@@ -279,22 +277,15 @@ impl ConversionService for Converter {
 
             let mut out = vec![];
             for series in vec_series {
-                out.push(to_status_error(self.list_series_to_list_array(series))?);
+                out.push(to_status_error(self.list_series_to_array_store(series))?);
             }
+
             /*
-                TODO:
-                    - Implement From<Vec<ArrayStore>> for ArrayStore
-                      This converter is responsible for combining several ArrayBase<T, Dim<IxdynImpl>>
-                      into a single ArrayBase<T, Dim<IxdynImpl>> while increasing the dimension.
-
-                    - We could also leave the implementation here by leaving the DataFrame split on columns as
-                    array store.
-                      Once we do that, we will have to return Vec<RemoteArray> to the server
-
-                    - To pass the CI, I am currently returning the first RemoteArray
+                Here, we stack on Axis(1) because we would want to create [n_rows, m_cols, k_elems_in_each_item];
             */
+            let array = ArrayStore::stack(Axis(1), &out[..])?;
             RemoteArray {
-                identifier: self.polars.insert_array(out[0].clone()),
+                identifier: self.polars.insert_array(array),
             }
         } else {
             return Err(
@@ -308,6 +299,8 @@ impl ConversionService for Converter {
         &self,
         request: Request<ToTokenizedArrays>,
     ) -> Result<Response<RemoteArrays>, Status> {
+        self.sess_manager.verify_request(&request)?;
+
         let (identifier, add_special_tokens, model, config, revision, auth_token) = (
             request.get_ref().identifier.clone(),
             request.get_ref().add_special_tokens,
@@ -333,7 +326,7 @@ impl ConversionService for Converter {
             let series = df.get_columns().get(idx).unwrap();
 
             let (ids, masks) = if series.dtype().eq(&DataType::Utf8) {
-                series_to_tokenized_series(
+                series_to_tokenized_arrays(
                     series,
                     &model,
                     &config,

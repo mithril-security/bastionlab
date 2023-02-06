@@ -1,11 +1,11 @@
 use bastionlab_common::prelude::*;
 use bastionlab_common::{
+    array_store::ArrayStore,
     session::SessionManager,
     session_proto::ClientInfo,
     telemetry::{self, TelemetryEventProps},
 };
 
-use ndarray::{Array, Axis, Dim, IxDynImpl};
 use polars::prelude::*;
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
@@ -97,99 +97,6 @@ impl DataFrameArtifact {
         }
     }
 }
-
-#[derive(Debug, Clone)]
-pub enum ArrayStore {
-    AxdynI64(Array<i64, Dim<IxDynImpl>>),
-    AxdynF64(Array<f64, Dim<IxDynImpl>>),
-    AxdynF32(Array<f32, Dim<IxDynImpl>>),
-    AxdynI32(Array<i32, Dim<IxDynImpl>>),
-    AxdynI16(Array<i16, Dim<IxDynImpl>>),
-}
-fn shuffle<A>(array: &Array<A, Dim<IxDynImpl>>, indices: &[usize]) -> Array<A, Dim<IxDynImpl>>
-where
-    A: Copy + Clone,
-{
-    array.select(Axis(0), indices)
-}
-
-fn split<A>(
-    array: &Array<A, Dim<IxDynImpl>>,
-    ratios: (f64, f64),
-) -> (Array<A, Dim<IxDynImpl>>, Array<A, Dim<IxDynImpl>>)
-where
-    A: Clone,
-{
-    let height = array.dim()[0];
-    let upper = (height as f64 * ratios.0).floor() as usize;
-    let lower = height - upper;
-
-    let upper = array.select(Axis(0), &(0..upper).collect::<Vec<_>>()[..]);
-    let lower = array.select(Axis(0), &((height - lower)..height).collect::<Vec<_>>()[..]);
-
-    (upper, lower)
-}
-impl ArrayStore {
-    pub fn height(&self) -> usize {
-        match self {
-            ArrayStore::AxdynF32(a) => a.dim()[0],
-            ArrayStore::AxdynI64(a) => a.dim()[0],
-            ArrayStore::AxdynF64(a) => a.dim()[0],
-            ArrayStore::AxdynI32(a) => a.dim()[0],
-            ArrayStore::AxdynI16(a) => a.dim()[0],
-        }
-    }
-
-    pub fn shuffle(&self, indices: &[usize]) -> Self {
-        match self {
-            ArrayStore::AxdynF32(a) => Self::AxdynF32(shuffle::<f32>(a, indices)),
-            ArrayStore::AxdynF64(a) => Self::AxdynF64(shuffle::<f64>(a, indices)),
-            ArrayStore::AxdynI32(a) => Self::AxdynI32(shuffle::<i32>(a, indices)),
-            ArrayStore::AxdynI64(a) => Self::AxdynI64(shuffle::<i64>(a, indices)),
-            ArrayStore::AxdynI16(a) => Self::AxdynI16(shuffle::<i16>(a, indices)),
-        }
-    }
-
-    pub fn split(&self, ratios: (f64, f64)) -> (Self, Self) {
-        /*
-            Arrays could be split on a several axes but in this implementation, we are
-            only splitting on the Oth Axis (row-wise).
-        */
-        match self {
-            ArrayStore::AxdynI64(a) => {
-                let (upper, lower) = split::<i64>(a, ratios);
-                (ArrayStore::AxdynI64(upper), ArrayStore::AxdynI64(lower))
-            }
-            ArrayStore::AxdynF64(a) => {
-                let (upper, lower) = split::<f64>(a, ratios);
-
-                (ArrayStore::AxdynF64(upper), ArrayStore::AxdynF64(lower))
-            }
-            ArrayStore::AxdynF32(a) => {
-                let (upper, lower) = split::<f32>(a, ratios);
-
-                (ArrayStore::AxdynF32(upper), ArrayStore::AxdynF32(lower))
-            }
-            ArrayStore::AxdynI32(a) => {
-                let (upper, lower) = split::<i32>(a, ratios);
-
-                (ArrayStore::AxdynI32(upper), ArrayStore::AxdynI32(lower))
-            }
-
-            ArrayStore::AxdynI16(a) => {
-                let (upper, lower) = split::<i16>(a, ratios);
-
-                (ArrayStore::AxdynI16(upper), ArrayStore::AxdynI16(lower))
-            }
-        }
-    }
-}
-
-// impl From<Vec<ArrayStore>> for ArrayStore {
-//     fn from(list: Vec<ArrayStore>) -> Self {
-//         Array::
-//     }
-// }
 
 #[derive(Clone)]
 pub struct BastionLabPolars {

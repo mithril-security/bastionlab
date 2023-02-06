@@ -172,7 +172,7 @@ where
     Ok(arr)
 }
 
-pub fn series_to_tokenized_series<'a>(
+pub fn series_to_tokenized_arrays<'a>(
     s: &Series,
     model: &str,
     config: &str,

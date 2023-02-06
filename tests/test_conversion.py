@@ -1,6 +1,7 @@
 from bastionlab.torch.utils import TensorDataset
 import polars as pl
 import torch
+import numpy as np
 import logging
 import unittest
 from bastionlab import Connection
@@ -166,7 +167,7 @@ class TestingDataConv(unittest.TestCase):
         self.assertEqual(remote_tensor.shape, X.shape)
         self.assertEqual(remote_tensor.dtype, torch.float)
 
-    def test_list_dataframe(self):
+    def test_list_dataframe_same_type(self):
         connection = Connection("localhost")
         client = connection.client
         df = pl.DataFrame(
@@ -178,7 +179,53 @@ class TestingDataConv(unittest.TestCase):
 
         rdf = client.polars.send_df(df, Policy(TrueRule(), Log(), False))
 
-        rdf.to_array()
+        remote_tensor = rdf.to_array().to_tensor()
+        local_tensor = torch.tensor(df.to_numpy().tolist())
+
+        self.assertEqual(remote_tensor.shape, local_tensor.shape)
+        self.assertEqual(remote_tensor.dtype, local_tensor.dtype)
+
+    def test_list_dataframe_of_diff_types(self):
+        connection = Connection("localhost")
+        client = connection.client
+        df = pl.DataFrame(
+            {
+                "a": [[0, 1, 2, 3, 4]],
+                "b": [[2.0, 3.1, 0.5, 1.6, 0.317]],
+            }
+        )
+
+        rdf = client.polars.send_df(df, Policy(TrueRule(), Log(), False))
+
+        # We expect this test to fail because the dataframe contains lists of different types
+        with self.assertRaises(Exception) as context:
+            rdf.to_array()
+
+        self.assertTrue(
+            "DataTypes for all columns should be the same"
+            in context.exception.details()
+        )
+
+    def test_dataframe_with_diff_types(self):
+        connection = Connection("localhost")
+        client = connection.client
+        df = pl.DataFrame(
+            {
+                "a": [0, 1, 2, 3, 4],
+                "b": [2.0, 3.1, 0.5, 1.6, 0.317],
+            }
+        )
+
+        rdf = client.polars.send_df(df, Policy(TrueRule(), Log(), False))
+
+        # We expect this test to fail because the dataframe contains lists of different types
+        with self.assertRaises(Exception) as context:
+            rdf.to_array()
+
+        self.assertTrue(
+            "DataTypes for all columns should be the same"
+            in context.exception.details()
+        )
 
 
 if __name__ == "__main__":

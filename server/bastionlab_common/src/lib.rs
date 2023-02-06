@@ -1,3 +1,4 @@
+pub mod array_store;
 pub mod auth;
 pub mod common_conversions;
 pub mod config;
