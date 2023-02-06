@@ -11,7 +11,7 @@ import torch
 from ..pb.bastionlab_conversion_pb2 import ToTensor
 from ..pb.bastionlab_polars_pb2 import ReferenceResponse, SplitRequest, ReferenceRequest
 from .client import BastionLabPolars
-from .utils import ApplyBins, Palettes, ApplyAbs
+from .utils import ApplyBins, Palettes, ApplyAbs, VisTools
 import matplotlib.pyplot as plt
 import matplotlib as mat
 from typing import TYPE_CHECKING
@@ -631,6 +631,7 @@ class RemoteLazyFrame:
         self: LDF,
         x: str = None,
         y: str = None,
+        hue: str = None,
         estimator: str = "mean",
         vertical: bool = True,
         title: str = None,
@@ -638,6 +639,8 @@ class RemoteLazyFrame:
         x_label: str = None,
         y_label: str = None,
         colors: Union[str, list[str]] = Palettes.dict["standard"],
+        width: float = 0.75,
+        hue_width: float = 0.2,
         ax: mat.axes = None,
         **kwargs,
     ):
@@ -661,96 +664,105 @@ class RemoteLazyFrame:
             various exceptions: Note that exceptions may be raised from Seaborn when the barplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
-        # if there is a hue argument add them to cols and no duplicates
-        if x == None and y == None:
-            raise ValueError("Please provide a x or y column name")
+        # get columns and no do error checking
+        selects = VisTools._get_all_cols(self, x, y, hue)
 
+        # check estimator input is valid and get correct agg function
         allowed_fns = ["mean", "count", "max", "min", "std", "sum", "median"]
-
         if estimator not in allowed_fns:
             raise ValueError(
                 "Estimator ", estimator, " not in list of accepted estimators"
             )
-        if x != None and y != None:
-            selects = [x, y] if x != y else [x]
-        else:
-            selects = [x] if x != None else [y]
-        groups = [x]
-        for col in selects:
-            if not col in self.columns:
-                raise ValueError("Column ", col, " not found in dataframe")
+        agg = y if y else x
+        agg_dict = VisTools._get_estimator_dict(agg)
 
+        # check color input is valid
         if isinstance(colors, str) and colors in Palettes.dict:
             colors = Palettes.dict[colors]
 
-        agg = y if y != None else x
-        agg_dict = {
-            "mean": pl.col(agg).mean(),
-            "count": pl.col(agg).count(),
-            "max": pl.col(agg).max(),
-            "min": pl.col(agg).min(),
-            "std": pl.col(agg).std(),
-            "sum": pl.col(agg).sum(),
-            "median": pl.col(agg).median(),
-        }
+        # setup ax
         ax = ax if ax else plt.gca()
-        if x == None or y == None:
-            c = x if x != None else y
-            tmp = (
-                self.filter(pl.col(c) != None)
-                .select(agg_dict[estimator])
-                .collect()
-                .fetch()
-            )
-            RequestRejected.check_valid_df(tmp)
-            df = tmp.to_pandas()
-            values = [0.5]
-            height = df[x if x != None else y].to_list()
-            if y == None:
-                vertical = False
-            if vertical is True:
-                ax.bar(x=values, height=height, color=colors, **kwargs)
-                ax.set_xticks(np.arange(len(height)), labels=height)
-                ax.set_xlabel(y if auto_label else x_label)
-                ax.set_ylabel(estimator if auto_label else y_label)
-                ax.tick_params(labelbottom=False)
+        
+        # set up labels
+        labels = VisTools._get_unique_values(self, x if x and vertical is True else y)
+        if None in labels:
+            labels.remove(None)
+
+        # set up hues
+        hues = VisTools._get_unique_values(self, hue) if hue else ["default"]
+
+        # iterate over hue values or enter loop once if no hue value    
+        for val, index in zip(hues, range(len(hues))):
+
+            # filter data by hue if hue provided
+            tmp = self.filter(pl.col(hue) == val) if hue else self
+            print(tmp)
+            
+            # X or Y only plot
+            if x == None or y == None:
+                # run aggregated query for bar plot
+                c = x if x != None else y
+                tmp = (
+                    tmp.filter(pl.col(c) != None)
+                    .select(agg_dict[estimator])
+                    .collect()
+                    .fetch()
+                )
+                RequestRejected.check_valid_df(tmp)
+                df = tmp.to_pandas()
+                values = VisTools._bar_get_x_position(values, index, width) if hue else [0.5]
+                height = df[(x if x else y)].to_list()
+                for v in height:
+                    if type(v) != int and type(v) != float:
+                        raise ValueError("Y axes must plot numerical data")
+                vertical = vertical if y else False
+                if vertical is True:
+                    ax.bar(x=values, height=height, color=colors[index] if hue else colors, width=width, **kwargs)
+                    ax.tick_params(labelbottom=False)
+                else:
+                    ax.barh(y=values, width=height, color=colors, **kwargs)
+                    ax.tick_params(labelleft=False)
             else:
-                ax.barh(y=values, width=height, color=colors, **kwargs)
-                ax.set_yticks(np.arange(len(height)), labels=height)
-                ax.set_ylabel(x if auto_label else y_label)
-                ax.set_xlabel(estimator if auto_label else x_label)
-                ax.tick_params(labelleft=False)
-        else:
-            agg_fn = pl.col(y).mean()
-            tmp = (
-                self.filter(pl.col(x) != None)
-                .select(pl.col(y) for y in selects)
-                .groupby(pl.col(y) for y in groups)
-                .agg(agg_dict[estimator])
-                .sort(pl.col(x))
-                .collect()
-                .fetch()
-            )
-            RequestRejected.check_valid_df(tmp)
-            df = tmp.to_pandas()
-            labels = df[x].to_list()
-            values = np.arange(len(labels))
-            height = df[y].to_list()
-            if vertical is True:
-                ax.bar(x=values, height=height, color=colors, **kwargs)
+                tmp = self.filter(pl.col(hue) == val) if hue else self
+                tmp = (
+                    tmp.filter(pl.col(x) != None)
+                    .select(pl.col(i) for i in selects)
+                    .groupby(pl.col(x))
+                    .agg(agg_dict[estimator])
+                    .sort(pl.col(x))
+                    .collect()
+                    .fetch()
+                )
+                RequestRejected.check_valid_df(tmp)
+                df = tmp.to_pandas()
+                x_values = df[x].to_list()
+                values = VisTools._bar_get_x_position(values, index, width) if hue else np.arange(len(x_values))
+                height = df[y].to_list()
+                if vertical is True:
+                    ax.bar(x=values if hue else values, height=height, width=width, color=colors[index] if hue else colors, label=val if hue else None, **kwargs)
+                else:
+                    ax.barh(y=values, width=height, color=colors, **kwargs)
+
+        # label axes and add title and color key
+        if vertical is True:
+            ax.set_xlabel(x if auto_label else x_label)
+            ax.set_ylabel(y if auto_label else y_label)
+            if hue:
+                ax.set_xticks(np.arange(len(labels)) + (((width) * (len(hues) / 2)) - width / 2), labels=labels)
+            else:
                 ax.set_xticks(np.arange(len(labels)), labels=labels)
-                ax.set_xlabel(x if auto_label else x_label)
-                ax.set_ylabel(y if auto_label else y_label)
-                ax.tick_params(labelbottom=False)
+        else:
+            ax.set_xlabel(y if auto_label else x_label)
+            ax.set_ylabel(x if auto_label else y_label)
+            if hue:
+                ax.set_yticks(np.arange(len(labels)) + (((width) * (len(hues) / 2)) - width / 2), labels=labels)
             else:
-                ax.barh(y=values, width=height, color=colors, **kwargs)
                 ax.set_yticks(np.arange(len(labels)), labels=labels)
-                ax.set_xlabel(y if auto_label else x_label)
-                ax.set_ylabel(x if auto_label else y_label)
-                ax.tick_params(labelleft=False, labelbottom=False)
-            if title:
-                ax.set_title(title)
-            return ax
+        if title:
+            ax.set_title(title)
+        if hue:
+            ax.legend(loc="best", title=hue)
+        return ax
 
     def histplot(
         self: LDF, x: str = "count", y: str = "count", bins: int = 10, **kwargs
@@ -1376,6 +1388,7 @@ class Facet:
             for example, if kwargs keywords are not expected. See Seaborn/Matplotlib documentation for further details.
         """
         self.__bastion_map("histplot", x, y, None, bins, **kwargs)
+    
 
     def barplot(
         self: Facet,
@@ -1439,28 +1452,8 @@ class Facet:
                     raise ValueError("Column ", to_add, " not found in dataframe")
 
         #    get unique row and col values
-        cols = []
-        rows = []
-        if self.col != None:
-            tmp = (
-                self.inner_rdf.groupby(pl.col(self.col))
-                .agg(pl.count())
-                .sort(pl.col(self.col))
-                .collect()
-                .fetch()
-            )
-            RequestRejected.check_valid_df(tmp)
-            cols = tmp.to_pandas()[self.col].tolist()
-        if self.row != None:
-            tmp = (
-                self.inner_rdf.groupby(pl.col(self.row))
-                .agg(pl.count())
-                .sort(pl.col(self.row))
-                .collect()
-                .fetch()
-            )
-            RequestRejected.check_valid_df(tmp)
-            rows = tmp.to_pandas()[self.row].tolist()
+        cols = VisTools._get_unique_values(self.inner_rdf, self.col) if self.col else []
+        rows = VisTools._get_unique_values(self.inner_rdf, self.row) if self.col else []
 
         # mapping
         r_len = len(rows) if len(rows) != 0 else 1

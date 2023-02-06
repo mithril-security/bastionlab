@@ -4,6 +4,9 @@ import polars as pl
 import io
 from ..pb.bastionlab_polars_pb2 import SendChunk, FetchChunk
 from .policy import Policy
+from ..errors import RequestRejected
+import statistics
+
 
 CHUNK_SIZE = 32 * 1024
 
@@ -117,3 +120,58 @@ class ApplyAbs(torch.nn.Module):
 
     def forward(self, x):
         return torch.abs(x)
+
+class VisTools:
+    def _get_estimator_dict(
+        agg: str
+        ):
+        return  {
+            "mean": pl.col(agg).mean(),
+            "count": pl.col(agg).count(),
+            "max": pl.col(agg).max(),
+            "min": pl.col(agg).min(),
+            "std": pl.col(agg).std(),
+            "sum": pl.col(agg).sum(),
+            "median": pl.col(agg).median(),
+        }
+    def _get_unique_values(
+            self,
+            col: str,
+        ):
+            tmp = (
+                    self.groupby(pl.col(col))
+                    .agg(pl.count())
+                    .sort(pl.col(col))
+                    .collect()
+                    .fetch()
+                )
+            RequestRejected.check_valid_df(tmp)
+            return tmp.to_pandas()[col].tolist()
+
+
+    def _bar_get_x_position(points, index, width):
+        # even numbers of bars
+        new_points = []
+        for i in points:
+            new_points.append(points[i] + (width * index))
+        print(new_points)
+        return(new_points)
+
+    def _get_all_cols(
+        rdf,
+        x: str,
+        y: str,
+        hue: str = None,
+    ):
+        if x == None and y == None:
+            raise ValueError("Please provide a x or y column name")
+        if x != None and y != None:
+            selects = [x, y] if x != y else [x]
+        else:
+            selects = [x] if x != None else [y]
+        if hue:
+            selects.append(hue)
+        for col in selects:
+            if not col in rdf.columns:
+                raise ValueError("Column ", col, " not found in dataframe")
+        return zip(selects)
