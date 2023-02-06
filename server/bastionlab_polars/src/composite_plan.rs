@@ -144,8 +144,9 @@ impl StringMethod {
             }
             StringMethod::FuzzyMatch { pattern } => {
                 let m = SkimMatcherV2::default();
+                let re = create_regex_from_str(&*pattern)?;
                 self.process_series(series, |r| {
-                    let v = m.fuzzy_indices(r, &*pattern);
+                    let v = m.fuzzy_match(r, &*re.as_str());
                     match v {
                         Some(_) => AnyValue::Utf8(r),
                         None => AnyValue::Null,

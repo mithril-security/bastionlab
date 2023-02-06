@@ -235,7 +235,6 @@ class StringUdfPlanSegment(CompositePlanSegment):
 
     def serialize(self) -> str:
         columns = ",".join([f'"{c}"' for c in self._columns])
-
         return f'{{"StringUdfPlanSegment": {{"method": {self._method.serialize()}, "columns": [{columns}]}}}}'
 
 
