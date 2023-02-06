@@ -653,10 +653,10 @@ class RemoteLazyFrame:
             x_label (str) = None: label for x axes if auto_label set to false
             y_label (str) = None: label for y axes if auto_label set to false
             colors (Union[str, list[str]]) = Palettes.dict["standard"]: colors for bars
-            ax (matpltlib.axes) = None: matplotlib axes to be used for plot- a new axes is generated if not supplied
+            ax (matplotlib.axes) = None: matplotlib axes to be used for plot- a new axes is generated if not supplied
             **kwargs: Other keyword arguments that will be passed to Matplotlib's bar/barh() function.
         Raises:
-            ValueError: Incorrect column name given, no x or y values provided, estimator function not recognised
+            ValueError: Incorrect column name given, no x or y values provided, estimator function not recognized
             RequestRejected: Could not continue in function as data owner rejected a required access request
             various exceptions: Note that exceptions may be raised from Seaborn when the barplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
@@ -668,7 +668,9 @@ class RemoteLazyFrame:
         allowed_fns = ["mean", "count", "max", "min", "std", "sum", "median"]
 
         if estimator not in allowed_fns:
-            raise ValueError("Column ", col, " not found in dataframe")
+            raise ValueError(
+                "Estimator ", estimator, " not in list of accepted estimators"
+            )
         if x != None and y != None:
             selects = [x, y] if x != y else [x]
         else:
@@ -711,13 +713,13 @@ class RemoteLazyFrame:
                 ax.set_xticks(np.arange(len(height)), labels=height)
                 ax.set_xlabel(y if auto_label else x_label)
                 ax.set_ylabel(estimator if auto_label else y_label)
-                plt.tick_params(labelbottom=False)
+                ax.tick_params(labelbottom=False)
             else:
                 ax.barh(y=values, width=height, color=colors, **kwargs)
                 ax.set_yticks(np.arange(len(height)), labels=height)
                 ax.set_ylabel(x if auto_label else y_label)
                 ax.set_xlabel(estimator if auto_label else x_label)
-                plt.tick_params(labelleft=False)
+                ax.tick_params(labelleft=False)
         else:
             agg_fn = pl.col(y).mean()
             tmp = (
@@ -739,13 +741,16 @@ class RemoteLazyFrame:
                 ax.set_xticks(np.arange(len(labels)), labels=labels)
                 ax.set_xlabel(x if auto_label else x_label)
                 ax.set_ylabel(y if auto_label else y_label)
+                ax.tick_params(labelbottom=False)
             else:
                 ax.barh(y=values, width=height, color=colors, **kwargs)
                 ax.set_yticks(np.arange(len(labels)), labels=labels)
                 ax.set_xlabel(y if auto_label else x_label)
                 ax.set_ylabel(x if auto_label else y_label)
+                ax.tick_params(labelleft=False, labelbottom=False)
             if title:
                 ax.set_title(title)
+            return ax
 
     def histplot(
         self: LDF, x: str = "count", y: str = "count", bins: int = 10, **kwargs
@@ -1349,7 +1354,7 @@ class Facet:
         self.__map(sns.lineplot, x=x, y=y, **kwargs)
 
     def histplot(
-        self: LDF,
+        self: Facet,
         x: str = None,
         y: str = None,
         bins: int = 10,
@@ -1370,20 +1375,25 @@ class Facet:
             various exceptions: Note that exceptions may be raised from internal Seaborn (scatterplot) or Matplotlib.pyplot functions (subplots, set_title),
             for example, if kwargs keywords are not expected. See Seaborn/Matplotlib documentation for further details.
         """
-        kwargs["bins"] = bins
-        self.__bastion_map("histplot", x=x, y=y, **kwargs)
+        self.__bastion_map("histplot", x, y, None, bins, **kwargs)
 
     def barplot(
-        self: LDF,
+        self: Facet,
         x: str = None,
         y: str = None,
-        hue: str = None,
         estimator: str = "mean",
+        vertical: bool = True,
+        title: str = None,
+        auto_label: bool = True,
+        x_label: str = None,
+        y_label: str = None,
+        colors: Union[str, list[str]] = Palettes.dict["standard"],
+        ax: mat.axes = None,
         **kwargs,
     ) -> None:
         """Draws a bar chart for each subset in row/column facet grid.
 
-         barplot filters data down to necessary columns only and then calls Seaborn's barplot function.
+        barplot filters data down to necessary columns only and then calls Seaborn's barplot function.
         Args:
             x (str) = None: The name of column to be used for x axes.
             y (str) = None: The name of column to be used for y axes.
@@ -1397,23 +1407,38 @@ class Facet:
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
 
         """
-        kwargs["estimator"] = estimator
-        kwargs["hue"] = hue
-        self.__bastion_map("barplot", x=x, y=y, **kwargs)
+        return self.__bastion_map(
+            "barplot",
+            x,
+            y,
+            ax,
+            estimator,
+            vertical,
+            title,
+            auto_label,
+            x_label,
+            y_label,
+            colors,
+            **kwargs,
+        )
 
-    def __bastion_map(self, fn: str, x: str = None, y: str = None, **kwargs):
-        # create list of all columns needed for query
-        hue = kwargs["hue"] if "hue" in kwargs else None
+    def __bastion_map(
+        self,
+        fn,
+        x: str,
+        y: str,
+        axes: mat.axes,
+        *args,
+    ):
+        #    create list of all columns needed for query
         selects = []
-        for to_add in [x, y, self.col, self.row, hue]:
+        for to_add in [x, y, self.col, self.row]:
             if to_add != None:
                 selects.append(to_add)
+                if to_add not in self.inner_rdf.columns:
+                    raise ValueError("Column ", to_add, " not found in dataframe")
 
-        for col in selects:
-            if col not in self.inner_rdf.columns:
-                raise ValueError("Column ", col, " not found in dataframe")
-
-        # get unique row and col values
+        #    get unique row and col values
         cols = []
         rows = []
         if self.col != None:
@@ -1437,23 +1462,12 @@ class Facet:
             RequestRejected.check_valid_df(tmp)
             rows = tmp.to_pandas()[self.row].tolist()
 
-        if fn == "histplot":
-            bins = kwargs["bins"] if "bins" in kwargs else 10
-            del kwargs["bins"]
-        if fn == "barplot":
-            del kwargs["hue"]
-            estimator = kwargs["estimator"] if "estimator" in kwargs else None
-            del kwargs["estimator"]
-
         # mapping
         r_len = len(rows) if len(rows) != 0 else 1
         c_len = len(cols) if len(cols) != 0 else 1
-        if self.kwargs == None:
-            fig, axes = plt.subplots(r_len, c_len, figsize=((5 * c_len), (5 * r_len)))
-        else:
-            if "figsize" not in self.kwargs:
-                self.kwargs["figsize"] = ((5 * c_len), (5 * r_len))
-            fig, axes = plt.subplots(r_len, c_len, **self.kwargs)
+        if axes == None:
+            figsize = ((5 * c_len), (5 * r_len))
+            fig, axes = plt.subplots(r_len, c_len, figsize=figsize)
         cols_len = len(cols)
         rows_len = len(rows)
         if (cols_len != 0) and (rows_len != 0):
@@ -1473,20 +1487,14 @@ class Facet:
                         + str(cols[col_count])
                     )
                     if fn == "histplot":
-                        df.select([pl.col(x) for x in selects]).histplot(
-                            x, y, bins, ax=axes[row_count, col_count], **kwargs
+                        df.select([pl.col(col) for col in selects]).histplot(
+                            x, y, *args, ax=axes[row_count, col_count]
                         )
                     else:
-                        df.select([pl.col(x) for x in selects]).barplot(
-                            x,
-                            y,
-                            hue=hue,
-                            estimator=estimator,
-                            ax=axes[row_count, col_count],
-                            **kwargs,
+                        df.select([pl.col(col) for col in selects]).barplot(
+                            x, y, *args, ax=axes[row_count, col_count]
                         )
                     axes[row_count, col_count].set_title(t1)
-
         else:
             col_check = True if cols_len != 0 else False
             max_len = cols_len if col_check else rows_len
@@ -1496,14 +1504,15 @@ class Facet:
                 df = self.inner_rdf.clone().filter((pl.col(t) == my_list[count]))
                 t1 = t + ": " + str(my_list[count])
                 if fn == "histplot":
-                    df.select([pl.col(x) for x in selects]).histplot(
-                        x, y, bins, ax=axes[count], **kwargs
+                    df.select([pl.col(col) for col in selects]).histplot(
+                        x, y, *args, ax=axes[count]
                     )
                 else:
-                    df.select([pl.col(x) for x in selects]).barplot(
-                        x, y, hue=hue, estimator=estimator, ax=axes[count], **kwargs
+                    df.select([pl.col(col) for col in selects]).barplot(
+                        x, y, *args, ax=axes[count]
                     )
                 axes[count].set_title(t1)
+        return axes
 
     def __map(self: LDF, func, **kwargs) -> None:
         # create list of all columns needed for query
@@ -1548,7 +1557,7 @@ class Facet:
         if self.kwargs == None:
             fig, axes = plt.subplots(r_len, c_len, figsize=((5 * c_len), (5 * r_len)))
         else:
-            if "figsize" not in self.kwargs:
+            if "figsize" not in kwargs:
                 self.kwargs["figsize"] = ((5 * c_len), (5 * r_len))
             fig, axes = plt.subplots(r_len, c_len, **self.kwargs)
         cols_len = len(cols)
