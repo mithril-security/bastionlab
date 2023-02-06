@@ -42,7 +42,7 @@ unrecognized_distro()
 {
     echo "Unrecognized linux version, needs manual installation, check the documentation:">&2
     echo "https://bastionlab.readthedocs.io/en/latest/docs/getting-started/installation/" >&2
-    return 1
+    exit 1
 }
 
 install_common()
@@ -55,7 +55,7 @@ install_common()
 	    python3 -m venv /opt/venv
 	    source /opt/venv/bin/activate
 	fi
-	pip3 install --user requests
+	pip3 install requests
 	echo 'import requests; \
     open("libtorch.zip", "wb").write( \
           requests.get('$1').content \
