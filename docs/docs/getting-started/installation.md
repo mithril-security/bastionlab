@@ -95,9 +95,10 @@ docker run -p 50056:50056 -d bastionlab
 Visit the ![NVIDIA drivers page](https://www.nvidia.com/Download/index.aspx) for downloading and installing the appropriate drivers.
 Reboot your system and make sure your GPU is running and accessible.
 
-Then Install *nvidia-container-runtime* (for Debian-like systems or [others](https://nvidia.github.io/nvidia-container-runtime/))
+#### Install nvidia-container-runtime
+For Debian-like systems or [others](https://nvidia.github.io/nvidia-container-runtime/).
 
-Repository configuration:
+Add the *nvidia-container-runtime* repository to your list of repositories:
 ```bash
 # Get the GPG key
 curl -s -L https://nvidia.github.io/nvidia-container-runtime/gpgkey | \
@@ -110,12 +111,12 @@ curl -s -L https://nvidia.github.io/nvidia-container-runtime/$distribution/nvidi
 
 sudo apt update
 ```
-Install nvidia-container-runtime and restart docker service:
+Install *nvidia-container-runtime* and restart docker service:
 ```bash
 sudo apt install nvidia-container-runtime
 sudo systemctl restart docker 
 ```
-
+#### Build and run the image
 Clone the repository and build the image using the Dockerfile:
 ```bash
 git clone https://github.com/mithril-security/bastionlab.git
@@ -129,9 +130,9 @@ docker run --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 -p 
 ### From source
 
 #### Automated build
-Before using the automated build, make sure to run it in a RHEL or Debian based linux distro. The script will detect on the run on which is running.
+Before using the automated build, make sure to run it in a RHEL or Debian based linux distro. The script will detect on the run on which distro it is running.
 
-The **build.sh** script must be runned inside the *server's directory*, it will check and install all the necessary dependencies to build the server, if needed, and then it will start building it.
+The **build.sh** script must be ran inside the *server's directory*, it will check and install all the necessary dependencies to build the server, if needed, and then it will start building it.
 
 ```bash
 git clone https://github.com/mithril-security/bastionlab.git
@@ -141,7 +142,7 @@ cd bastionlab/server/
 ##### Environmental variables
 - `BASTIONLAB_BUILD_AS_ROOT`
   - If it is necessary to build the project as the **root user**, you need to set this variable before running the script.
-  - If the variable is not set when running as root, the dependencies will be installed but the project will not be build.
+  - If the variable is not set when running as root, the dependencies will be installed but the project will not be built.
   ```bash
   export BASTIONLAB_BUILD_AS_ROOT=1
   ./build.sh
@@ -167,18 +168,18 @@ flowchart LR
     end
     subgraph Main flow
         direction LR
-        A[Install\ndependencies] --> D{Running as user\nor\nBUILD_AS_ROOT set?}
+        A[Install\ndependencies] ===> D{Ran script as user\nor flag\nBUILD_AS_ROOT is set?}
         D -.Yes.-> B
         B[Build server]
-        D ==> C(End)
-        B --No--> C
+        D ==No==> C(End)
+        B ---> C
     end
         b ==> A
         d -.No.-> B
 ```
 
 
-#### Manuall build
+#### Manual build
 
 First make sure that the following build dependencies (Debian-like systems) are installed on your machine:
 ```bash
