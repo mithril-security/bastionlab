@@ -164,7 +164,7 @@ install_deb_opt()
     else
 	add-apt-repository -y ppa:ubuntu-toolchain-r/test
 	EXIT_STATUS=$?
-	if ! (exit $EXIT_STATUS); then
+	if ! (exit $EXIT_STATUS) ; then
 	    return failed_toolchain
 	fi
     fi
@@ -228,20 +228,19 @@ if [ "$(id -u)" -ne 0 ] || [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
 
 	# Verifying dependencies
 	verify_deps 'dpkg -s' "${deb_dependencies[@]}"
+	EXIT_STATUS=$?
+	EXIT_STATUS2=0
 	if [ ! -z "${BASTIONLAB_CPP11}" ]; then
 	    verify_deps 'dpkg -s' "${deb_optionals[@]}"
+	    EXIT_STATUS=$?
 	fi
 
 	# If dependencies missing, installing them
-	EXIT_STATUS=$?
-	if ! (exit $EXIT_STATUS) ; then
+	if ! (exit $EXIT_STATUS) || ! (exit $EXIT_STATUS2) ; then
 	    if [ -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
 		sudo $0
 	    else
 		install_deb_deps
-		if [ ! -z "${BASTIONLAB_CPP11}" ]; then
-		    install_deb_opt
-		fi
 	    fi
 	    EXIT_STATUS=$?
 	    if ! (exit $EXIT_STATUS) ; then
@@ -323,14 +322,15 @@ if [ "$(id -u)" -ne 0 ] || [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
 else
     # Install dependencies as superuser
     echo "Installing dependencies..."
-     if [ -f "/etc/debian_version" ] ; then
-	 install_deb_deps
-	 if [ ! -z "${BASTIONLAB_CPP11}" ]; then
-	     install_deb_opt
-	 fi
-     elif [ -f "/etc/redhat-release" ] ; then
-	 install_rhel_deps
-     else
-	 unrecognized_distro
-     fi
+    if [ -f "/etc/debian_version" ] ; then
+	install_deb_deps
+    elif [ -f "/etc/redhat-release" ] ; then
+	install_rhel_deps
+    else
+	unrecognized_distro
+    fi
+    EXIT_STATUS=$?
+    if ! (exit $EXIT_STATUS) ; then
+	exit $EXIT_STATUS
+    fi
 fi
