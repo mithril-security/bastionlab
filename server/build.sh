@@ -84,7 +84,7 @@ install_common()
 	fi
 	unzip libtorch.zip
     else
-	echo "libtorch.zip is already installed at $(dirname $(pwd))libtorch"
+	echo "libtorch.zip is already installed at $(dirname $(pwd))/libtorch"
     fi
 
     # Libtorch env
@@ -190,6 +190,7 @@ install_deb_deps()
 # RHEL-based dependencies installation
 install_rhel_deps()
 {
+    yum update
     yum -y install "${rhel_dependencies[@]}"
     if [ ! -z "${BASTIONLAB_CPP11}" ]; then
 	case "$(cat /etc/centos-release | awk '{print $1}')" in
