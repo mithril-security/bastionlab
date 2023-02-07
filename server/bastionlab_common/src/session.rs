@@ -34,10 +34,10 @@ pub struct Session {
     pub client_info: ClientInfo,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct SessionManager {
     keys: Option<Mutex<KeyManagement>>,
-    sessions: Arc<RwLock<HashMap<[u8; 32], Session>>>,
+    pub sessions: Arc<RwLock<HashMap<[u8; 32], Session>>>,
     session_expiry: u64,
     challenges: Mutex<HashSet<[u8; 32]>>,
 }
@@ -54,6 +54,20 @@ impl SessionManager {
 
     pub fn auth_enabled(&self) -> bool {
         self.keys.is_some()
+    }
+
+    /// Returns the access token in the request
+    pub fn get_token<T>(&self, req: &Request<T>) -> Result<Option<Bytes>, Status> {
+        let meta = req
+            .metadata()
+            .get_bin("accesstoken-bin")
+            .ok_or_else(|| Status::invalid_argument("No access token in request metadata"))?;
+
+        let access_token = meta
+            .to_bytes()
+            .map_err(|_| Status::invalid_argument("Could not decode accesstoken"))?;
+
+        Ok(Some(access_token))
     }
 
     /// Get the user pubkey hash from a token
