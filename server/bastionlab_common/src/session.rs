@@ -34,7 +34,7 @@ pub struct Session {
     pub client_info: ClientInfo,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct SessionManager {
     keys: Option<Mutex<KeyManagement>>,
     pub sessions: Arc<RwLock<HashMap<[u8; 32], Session>>>,
