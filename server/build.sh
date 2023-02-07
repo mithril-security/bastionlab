@@ -66,7 +66,7 @@ install_common()
     # Libtorch installation
     if [ ! -d "libtorch" ] ; then
 	
-	if [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ] && [ "$(id -u)" -eq 0 ]; then
+	if [ "$(id -u)" -eq 0 ]; then
 	    export VIRTUAL_ENV=/opt/venv
 	    python3 -m venv $VIRTUAL_ENV
 	    export PATH="$VIRTUAL_ENV/bin:$PATH"
@@ -190,7 +190,6 @@ install_deb_deps()
 # RHEL-based dependencies installation
 install_rhel_deps()
 {
-    yum update
     yum -y install "${rhel_dependencies[@]}"
     if [ ! -z "${BASTIONLAB_CPP11}" ]; then
 	case "$(cat /etc/centos-release | awk '{print $1}')" in
@@ -220,6 +219,9 @@ fi
 if [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
     echo "Environmental variable for building server as root is set!"
 fi
+if [ ! -z "${BASTIONLAB_CPP11}" ]; then
+    echo "Environmental variable for building server with C++11 is set!"
+fi
 
 # Build as user
 if [ "$(id -u)" -ne 0 ] || [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
@@ -238,7 +240,7 @@ if [ "$(id -u)" -ne 0 ] || [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
 
 	# If dependencies missing, installing them
 	if ! (exit $EXIT_STATUS) || ! (exit $EXIT_STATUS2) ; then
-	    if [ -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
+	    if [ "$(id -u)" -ne 0 ]; then
 		sudo $0
 	    else
 		install_deb_deps
@@ -276,7 +278,7 @@ if [ "$(id -u)" -ne 0 ] || [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
 
 	# If dependencies missing, installing them
 	if ! (exit $EXIT_STATUS) || ! (exit $EXIT_STATUS2) ; then
-	    if [ -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
+	    if [ "$(id -u)" -ne 0 ]; then
 		sudo $0
 	    else
 		install_rhel_deps
