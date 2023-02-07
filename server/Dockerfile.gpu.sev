@@ -7,6 +7,6 @@ WORKDIR /app/bastionlab/server/
 RUN echo 'APT::Get::Install-Recommends "false";' > /etc/apt/apt.conf.d/00norecommends \
     && ./build.sh \
     && rm -rf /var/lib/apt/lists/*
-WORKDIR /app/bastionlab/server/bin
+WORKDIR /app/bastionlab/server
 EXPOSE 50056
-CMD ["./bastionlab_app"]
+CMD ["make", "run"]
