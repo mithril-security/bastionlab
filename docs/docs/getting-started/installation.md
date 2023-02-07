@@ -89,6 +89,43 @@ Then run a container based on the image:
 docker run -p 50056:50056 -d bastionlab
 ```
 
+### Building the Docker image with GPU access
+
+#### Prerequisites
+Visit the ![NVIDIA drivers page](https://www.nvidia.com/Download/index.aspx) for downloading and installing the appropriate drivers.
+Reboot your system and make sure your GPU is running and accessible.
+
+Then Install *nvidia-container-runtime* (for Debian-like systems or [others](https://nvidia.github.io/nvidia-container-runtime/))
+
+Repository configuration:
+```bash
+# Get the GPG key
+curl -s -L https://nvidia.github.io/nvidia-container-runtime/gpgkey | \
+  sudo apt-key add -
+# Get the distribution
+distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+# Add repository to list
+curl -s -L https://nvidia.github.io/nvidia-container-runtime/$distribution/nvidia-container-runtime.list | \
+  sudo tee /etc/apt/sources.list.d/nvidia-container-runtime.list
+
+sudo apt update
+```
+Install nvidia-container-runtime and restart docker service:
+```bash
+sudo apt install nvidia-container-runtime
+sudo systemctl restart docker 
+```
+
+Clone the repository and build the image using the Dockerfile:
+```bash
+git clone https://github.com/mithril-security/bastionlab.git
+cd ./bastionlab/server
+docker build -t bastionlab:0.3.7-gpu -f Dockerfile.gpu.sev .
+```
+Then run a container based on the image, exposing the GPUs for use and with NVIDIA recommended flags:
+```bash
+docker run --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 -p 50056:50056 bastionlab:0.3.7-gpu
+```
 ### From source
 
 #### Automated build
@@ -110,7 +147,7 @@ cd bastionlab/server/
   ./build.sh
   ```
 - `BASTIONLAB_CPP11`
-  - If it is necessary to build the project using **C++11**, you need to set this variable before running the script. 
+  - If it is necessary to build the project using C++11, you need to set this variable before running the script. 
   - It will install and setup C++11 before building. 
   ```bash
   export BASTIONLAB_CPP11=1
@@ -128,7 +165,7 @@ flowchart LR
         a -.No.-> c[Run as user] -.-> d{Dependencies\nmissing?}
         d -.Yes.-> b
     end
-    subgraph Core flow
+    subgraph Main flow
         direction LR
         A[Install\ndependencies] --> D{Running as user\nor\nBUILD_AS_ROOT set?}
         D -.Yes.-> B
