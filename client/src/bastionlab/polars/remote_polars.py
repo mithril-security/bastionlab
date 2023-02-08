@@ -1,16 +1,6 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
-from typing import (
-    Callable,
-    Generic,
-    List,
-    Optional,
-    TypeVar,
-    Sequence,
-    Union,
-    Dict,
-    Any,
-)
+from dataclasses import dataclass
+from typing import Callable, Generic, List, Optional, TypeVar, Sequence, Union, Dict
 import seaborn as sns
 import polars as pl
 from polars.internals.sql.context import SQLContext
@@ -27,6 +17,8 @@ import matplotlib as mat
 from typing import TYPE_CHECKING
 from ..errors import RequestRejected
 import numpy as np
+from serde import serde, InternalTagging, field
+from serde.json import to_json
 
 
 LDF = TypeVar("LDF", bound="pl.LazyFrame")
@@ -91,39 +83,32 @@ class CompositePlanSegment:
     Composite plan segment class which handles segment plans that have not been implemented
     """
 
-    def _serialize(self) -> Any:
-        raise NotImplementedError()
-
 
 @dataclass
+@serde
 class EntryPointPlanSegment(CompositePlanSegment):
     """
     Composite plan segment class responsible for new entry points
     """
 
-    _inner: str
-
-    def _serialize(self) -> Any:
-        return {"EntryPointPlanSegment": self._inner}
+    identifier: str
 
 
 @dataclass
+@serde
 class PolarsPlanSegment(CompositePlanSegment):
     """
     Composite plan segment class responsible for Polars queries
     """
 
-    _inner: LDF
-
-    def _serialize(self) -> Any:
-
-        # HACK: when getting using the schema attribute, polars returns
-        #  the proper error messages (polars.NotFoundError etc) when it is invalid.
-        #  This is not the case for write_json(), which returns a confusing error
-        #  message. So, we get the schema beforehand :)
-        self._inner.schema
-
-        return {"PolarsPlanSegment": json.loads(self._inner.write_json())}
+    # HACK: when getting using the schema attribute, polars returns
+    #  the proper error messages (polars.NotFoundError etc) when it is invalid.
+    #  This is not the case for write_json(), which returns a confusing error
+    #  message. So, we get the schema beforehand :)
+    plan: LDF = field(
+        serializer=lambda val: val.schema and json.loads(val.write_json()),
+        deserializer=lambda _: None,
+    )
 
 
 @dataclass
@@ -132,26 +117,43 @@ class UdfPlanSegment(CompositePlanSegment):
     Composite plan segment class responsible for user defined functions
     """
 
-    _inner: ScriptFunction
-    _columns: List[str]
-
-    def _serialize(self) -> Any:
-        return {
-            "UdfPlanSegment": {
-                "columns": self._columns,
-                "udf": base64.b64encode(self._inner.save_to_buffer()).decode("ascii"),
-            }
-        }
+    columns: List[str]
+    udf: ScriptFunction = field(
+        serializer=lambda val: base64.b64encode(val.save_to_buffer()).decode("ascii"),
+        deserializer=lambda _: None,
+    )
 
 
 @dataclass
+@serde
 class StackPlanSegment(CompositePlanSegment):
     """
     Composite plan segment class responsible for vstack function
     """
 
-    def _serialize(self) -> Any:
-        return "StackPlanSegment"
+
+@dataclass
+@serde
+class RowCountSegment(CompositePlanSegment):
+    """
+    Composite plan segment class responsible for with_row_count function
+    """
+
+    row: str
+
+
+@dataclass
+@serde(tagging=InternalTagging("type"))
+class PlanSegments:
+    segments: List[
+        Union[
+            PolarsPlanSegment,
+            UdfPlanSegment,
+            EntryPointPlanSegment,
+            StackPlanSegment,
+            RowCountSegment,
+        ]
+    ]
 
 
 @dataclass
@@ -162,17 +164,6 @@ class Metadata:
 
     _polars_client: BastionLabPolars
     _prev_segments: List[CompositePlanSegment] = field(default_factory=list)
-
-
-@dataclass
-class RowCountSegment(CompositePlanSegment):
-    _name: str
-    """
-    Composite plan segment class responsible for with_row_count function
-    """
-
-    def _serialize(self) -> Any:
-        return {"RowCountSegment": self._name}
 
 
 # TODO
@@ -286,11 +277,10 @@ class RemoteLazyFrame:
         Returns:
             Composite_plan as str
         """
-        return json.dumps(
-            [
-                seg._serialize()
-                for seg in [*self._meta._prev_segments, PolarsPlanSegment(self._inner)]
-            ]
+        return to_json(
+            PlanSegments(
+                segments=[*self._meta._prev_segments, PolarsPlanSegment(self._inner)]
+            )
         )
 
     def collect(self: LDF) -> LDF:

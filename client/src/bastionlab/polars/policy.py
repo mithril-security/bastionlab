@@ -1,10 +1,10 @@
 from dataclasses import dataclass
-from typing import List, Any
+from typing import List, Union
+from serde import serde, InternalTagging
 
 
 class Rule:
-    def _serialize(self) -> Any:
-        raise NotImplementedError
+    pass
 
 
 @dataclass
@@ -20,13 +20,11 @@ class AtLeastNOf(Rule):
     """
 
     n: int
-    of: List[Rule]
-
-    def _serialize(self) -> Any:
-        return {"AtLeastNOf": [self.n, [x._serialize() for x in self.of]]}
+    of: Union["AtLeastNOf", "Aggregation", "TrueRule", "FalseRule", "UserId"]
 
 
 @dataclass
+@serde
 class UserId(Rule):
     """
     BastionLab instruction `Rule` that attaches a user identifier to the safe zone.
@@ -38,11 +36,9 @@ class UserId(Rule):
 
     id: str
 
-    def _serialize(self) -> Any:
-        return {"UserId": self.id}
-
 
 @dataclass
+@serde
 class Aggregation(Rule):
     """
     Specifies a `Rule` for the number of rows an operation on a Remote DataFrame can aggregate.
@@ -54,66 +50,56 @@ class Aggregation(Rule):
 
     min_agg_size: int
 
-    def _serialize(self) -> Any:
-        return {"Aggregation": self.min_agg_size}
-
 
 @dataclass
+@serde
 class TrueRule(Rule):
     """
     BastionLab instruction `Rule` for boolean logic `True`.
     """
 
-    def _serialize(self) -> Any:
-        return "True"
-
 
 @dataclass
+@serde
 class FalseRule(Rule):
     """
     BastionLab instruction `Rule` for boolean logic `False`.
     """
 
-    def _serialize(self) -> Any:
-        return "False"
-
 
 class UnsafeAction:
-    def _serialize(self) -> Any:
-        raise NotImplementedError
+    pass
 
 
 @dataclass
+@serde
 class Log(UnsafeAction):
     """
     Instructs the BastionLab server to _log_ the operation performed on the associated
     Remote DataFrame.
     """
 
-    def _serialize(self) -> Any:
-        return "Log"
-
 
 @dataclass
+@serde
 class Review(UnsafeAction):
     """
     Instructs the BastionLab server to request a review from the owner of the Remote DataFrame.
     """
 
-    def _serialize(self) -> Any:
-        return "Review"
-
 
 @dataclass
+@serde
 class Reject(UnsafeAction):
     """
     Instructs the BastionLab server to reject the request.
     """
 
-    def _serialize(self) -> Any:
-        return "Reject"
+
+serde(AtLeastNOf)
 
 
+@serde(tagging=InternalTagging("type"))
 @dataclass
 class Policy:
     """
@@ -128,16 +114,9 @@ class Policy:
             Describes what should happen if a user violates the `safe_zone`. For example (logging operations)
     """
 
-    safe_zone: Rule
-    unsafe_handling: UnsafeAction
+    safe_zone: Union[AtLeastNOf, Aggregation, TrueRule, FalseRule, UserId]
+    unsafe_handling: Union[Reject, Review, Log]
     savable: bool
-
-    def _serialize(self) -> Any:
-        return {
-            "safe_zone": self.safe_zone._serialize(),
-            "unsafe_handling": self.unsafe_handling._serialize(),
-            "savable": self.savable,
-        }
 
 
 DEFAULT_POLICY = Policy(Aggregation(10), Review(), True)
