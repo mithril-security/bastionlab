@@ -148,7 +148,9 @@ fn get_tokenizer(
             ..Default::default()
         }),
     )
-    .map_err(|_| Status::invalid_argument("Could not deserialize Hugging Face Tokenizer"))?;
+    .map_err(|e| Status::invalid_argument(e.to_string()))?;
+    //.map_err(|_| Status::invalid_argument("Could not deserialize Hugging Face Tokenizer"))?;
+    
     tokenizer.with_padding(config.padding_params);
     tokenizer.with_truncation(config.truncation_params);
     Ok(tokenizer)
