@@ -6,7 +6,6 @@ from .nn import LayerNorm, Linear, Embedding, Conv1d, Conv2d, Conv3d
 def _set_weight_and_bias(
     destination_layer: torch.nn.Module, source_layer: torch.nn.Module
 ) -> None:
-
     if (
         hasattr(source_layer, "weight")
         and source_layer.weight is not None

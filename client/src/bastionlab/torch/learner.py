@@ -1,112 +1,20 @@
-from typing import Optional, Union, List
+from typing import Optional, Union, List, Callable, TYPE_CHECKING
 from time import sleep
 from tqdm import tqdm  # type: ignore [import]
 from grpc import StatusCode
 from torch.nn import Module
 from torch.utils.data import Dataset
 import torch
-from ..pb.bastionlab_torch_pb2 import Metric, Reference, TestConfig, TrainConfig  # type: ignore [import]
+from ..pb.bastionlab_torch_pb2 import Metric, TestConfig, TrainConfig  # type: ignore [import]
+from ..pb.bastionlab_pb2 import Reference, TensorMetaData
 from ..errors import GRPCException
 from .psg import expand_weights
 from .client import BastionLabTorch
 from .optimizer_config import *
+from ..torch.remote_torch import RemoteDataset
 
-from .utils import bulk_deserialize
-
-
-class RemoteDataset:
-    """Represents a remote dataloader on the BlindAI server encapsulating a training
-    and optional testing datasets along with dataloading parameters.
-
-    Args:
-        client: A BastionAI client to be used to access server resources.
-        train_dataset: A `torch.utils.data.Dataset` instance for training that will be uploaded on the server.
-        test_dataset: An optional `torch.utils.data.Dataset` instance for testing that will be uploaded on the server.
-        name: A name for the uploaded dataset.
-        description: A string description of the dataset being uploaded.
-    """
-
-    def __init__(
-        self,
-        client: BastionLabTorch,
-        train_dataset: Union[Dataset, Reference],
-        test_dataset: Optional[Union[Dataset, Reference]] = None,
-        privacy_limit: Optional[float] = None,
-        name: Optional[str] = None,
-        description: str = "",
-        progress: bool = True,
-    ) -> None:
-        if isinstance(train_dataset, Dataset):
-            self.train_dataset_ref = client.send_dataset(
-                train_dataset,
-                name=name if name is not None else type(train_dataset).__name__,
-                description=description,
-                privacy_limit=privacy_limit,
-                progress=progress,
-            )
-            self.name = name
-            self.description = description
-            self.trace_input = [input.unsqueeze(0) for input in train_dataset[0][0]]
-            self.nb_samples = len(train_dataset)  # type: ignore [arg-type]
-            self.privacy_limit = privacy_limit
-        else:
-            self.train_dataset_ref = train_dataset
-            self.name = self.train_dataset_ref.name
-            self.description = self.train_dataset_ref.description
-            meta = bulk_deserialize(train_dataset.meta)
-            self.trace_input = [
-                torch.zeros(s, dtype=dtype)
-                if dtype
-                in [torch.uint8, torch.int8, torch.int16, torch.int32, torch.int64]
-                else torch.randn(s, dtype=dtype)
-                for s, dtype in zip(meta["input_shape"], meta["input_dtype"])
-            ]
-            self.nb_samples = meta["nb_samples"]
-            self.privacy_limit = meta["privacy_limit"]
-        if test_dataset is not None and isinstance(test_dataset, Dataset):
-            self.test_dataset_ref = client.send_dataset(
-                test_dataset,
-                name=f"{name} (test)"
-                if name is not None
-                else type(test_dataset).__name__,
-                description=description,
-                privacy_limit=privacy_limit,
-                train_dataset=self.train_dataset_ref,
-                progress=progress,
-            )
-        else:
-            self.test_dataset_ref = test_dataset
-        self.client = client
-
-    @staticmethod
-    def list_available(client: BastionLabTorch) -> List["RemoteDataset"]:
-        """Returns the list of `RemoteDataset`s available on the server."""
-        refs = client.get_available_datasets()
-        ds = [(ref, bulk_deserialize(ref.meta)["train_dataset"]) for ref in refs]
-        return [RemoteDataset(client, d[1], d[0]) for d in ds if d[1] is not None]
-
-    def __str__(self) -> str:
-        return f"{self.name} ({self.train_dataset_ref.identifier}): size={self.nb_samples}, desc={self.description if len(self.description) > 0 else 'N/A'}"
-
-    def __format__(self, __format_spec: str) -> str:
-        return self.__str__()
-
-    def _set_test_dataset(
-        self, test_dataset: Union[Dataset, Reference], progress: bool = True
-    ) -> None:
-        if not type(test_dataset) == Reference:
-            self.test_dataset_ref = self.client.send_dataset(
-                test_dataset,
-                name=f"{self.name} (test)"
-                if self.description is not None
-                else type(test_dataset).__name__,
-                description=self.description,
-                privacy_limit=self.privacy_limit,
-                train_dataset=self.train_dataset_ref,
-                progress=progress,
-            )
-        else:
-            self.test_dataset_ref = test_dataset
+if TYPE_CHECKING:
+    from ..torch.remote_torch import RemoteDataset
 
 
 class RemoteLearner:
@@ -136,7 +44,7 @@ class RemoteLearner:
         self,
         client: BastionLabTorch,
         model: Union[Module, Reference],
-        remote_dataset: Union[RemoteDataset, Reference],
+        remote_dataset: "RemoteDataset",
         loss: str,
         max_batch_size: int,
         optimizer: OptimizerConfig = Adam(),
@@ -160,7 +68,7 @@ class RemoteLearner:
                 model = torch.jit.trace(  # Compile the model with the tracing strategy
                     # Wrapp the model to use the first output only (and drop the others)
                     model,
-                    [x.unsqueeze(0) for x in remote_dataset.trace_input],
+                    [x.unsqueeze(0) for x in remote_dataset._trace_input],
                 )
             self.model_ref = client.send_model(
                 model,
@@ -170,11 +78,8 @@ class RemoteLearner:
             )
         else:
             self.model_ref = model
-        self.remote_dataset = (
-            remote_dataset
-            if type(remote_dataset) == RemoteDataset
-            else RemoteDataset(client, remote_dataset)
-        )
+
+        self.remote_dataset = remote_dataset
         self.client = client
         self.loss = loss
         self.optimizer = optimizer
@@ -205,7 +110,7 @@ class RemoteLearner:
         batch_size = batch_size if batch_size is not None else self.max_batch_size
         return TrainConfig(
             model=self.model_ref,
-            dataset=self.remote_dataset.train_dataset_ref,
+            dataset=self.remote_dataset.identifier,
             batch_size=batch_size,
             epochs=nb_epochs,
             device=self.device,
@@ -232,7 +137,7 @@ class RemoteLearner:
         batch_size = batch_size if batch_size is not None else self.max_batch_size
         return TestConfig(
             model=self.model_ref,
-            dataset=self.remote_dataset.test_dataset_ref,
+            dataset=self.remote_dataset.identifier,
             batch_size=batch_size,
             device=self.device,
             metric=metric if metric is not None else self.loss,
@@ -356,7 +261,7 @@ class RemoteLearner:
             metric_eps: Global privacy budget for loss disclosure for the whole training that overrides
                         the default per-batch budget.
             timeout: Timeout in seconds between two updates of the loss on the server side. When elapsed without updates,
-                     polling ends and the progress bar is terminated.
+                        polling ends and the progress bar is terminated.
             poll_delay: Delay in seconds between two polling requests for the loss.
         """
         run = self.client.train(
@@ -397,11 +302,9 @@ class RemoteLearner:
             metric_eps: Global privacy budget for metric disclosure for the whole testing procedure that overrides
                         the default per-batch budget.
             timeout: Timeout in seconds between two updates of the metric on the server side. When elapsed without updates,
-                     polling ends and the progress bar is terminated.
+                        polling ends and the progress bar is terminated.
             poll_delay: Delay in seconds between two polling requests for the metric.
         """
-        if test_dataset is not None:
-            self.remote_dataset._set_test_dataset(test_dataset)
         run = self.client.test(self._test_config(batch_size, metric, metric_eps))
         self._poll_metric(
             run,
