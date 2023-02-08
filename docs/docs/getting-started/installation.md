@@ -130,7 +130,7 @@ docker run --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 -p 
 ### From source
 
 #### Automated build
-Before using the automated build, make sure to run it in a RHEL or Debian based linux distro. The script will detect on the run on which distro it is running.
+Before using the automated build, make sure to run it in a RHEL, Debian or Arch based linux distro. The script will detect on the run on which distro it is running.
 
 The **build.sh** script must be ran inside the *server's directory*, it will check and install all the necessary dependencies to build the server, if needed, and then it will start building it.
 
