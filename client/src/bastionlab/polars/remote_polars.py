@@ -439,12 +439,21 @@ class RemoteLazyFrame:
         return ret.collect()
 
     def describe(self: LDF) -> "FetchableLazyFrame":
-        """appends df2 to df1 provided columns have the same name/type
+        """
+        Provides the following summary statistics for our RemoteLazyFrame:
+        - count
+        - mean
+        - std
+        - min
+        - 1st quartile
+        - 2nd quartile/median
+        - 3rd quartile
+        - max
         Returns:
-            RemoteLazyFrame: A RemoteLazyFrame
+            RemoteLazyFrame: A RemoteLazyFrame containing statistical information
         """
         id = self.collect()._identifier
-        return self._meta._client._describe_df(id)
+        return self._meta._polars_client._describe_df(id)
 
     def join(
         self: LDF,
@@ -1355,15 +1364,6 @@ class FetchableLazyFrame(RemoteLazyFrame):
 
     def delete(self):
         return self._meta._polars_client._delete_df(self._identifier)
-
-    # second method provided here since different ways to grab identifier for fetchable and RemoteLazyFrame
-    def describe(self: LDF) -> "FetchableLazyFrame":
-        """appends df2 to df1 provided columns have the same name/type
-        Returns:
-            RemoteLazyFrame: A RemoteLazyFrame
-        """
-        id = self._identifier
-        return self._meta._client._describe_df(id)
 
 
 @dataclass
