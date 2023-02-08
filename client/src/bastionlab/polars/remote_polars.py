@@ -112,6 +112,7 @@ class PolarsPlanSegment(CompositePlanSegment):
 
 
 @dataclass
+@serde
 class UdfPlanSegment(CompositePlanSegment):
     """
     Composite plan segment class responsible for user defined functions
