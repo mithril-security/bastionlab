@@ -108,6 +108,7 @@ nav:
       - SQL queries: "docs/tutorials/SQL_queries.ipynb"
       - Data visualization: "docs/tutorials/visualization.ipynb"
       - Saving DataFrames: "docs/tutorials/saving_dataframes.ipynb"
+      - Scaling DataFrames: "docs/tutorials/normalization.ipynb"
   - 🌍 How-to-guides:
       - Data exploration:
         - Covid-19 cleaning and exploration: "docs/how-to-guides/covid_cleaning_exploration.ipynb"
@@ -116,7 +117,7 @@ nav:
           - Fine Tuning Distilbert on BastionLab: "docs/how-to-guides/distilbert_example_notebook.ipynb"
   - 💡 Concepts:
       - Remote data science: "docs/concepts-guides/remote_data_science.md"
-  - 🛠️ API reference:
+  - 🛠️ API Reference:
       - Sub-modules:
   - 🔒 Security:
       - Threat model: "docs/security/threat_model_data_owner_owns_infrastructure.md"
