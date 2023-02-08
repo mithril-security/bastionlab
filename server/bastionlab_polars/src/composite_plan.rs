@@ -1,4 +1,7 @@
 use base64;
+use bastionlab_common::common_conversions::{
+    lazy_frame_from_logical_plan, series_to_tensor, tensor_to_series,
+};
 use polars::{lazy::dsl::Expr, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io::Cursor};
@@ -7,7 +10,7 @@ use tonic::Status;
 
 use crate::{
     access_control::{Context, Policy, VerificationResult},
-    utils::*,
+    utils::apply_method,
     visitable::{Visitable, VisitableMut},
     BastionLabPolars, DataFrameArtifact,
 };
@@ -35,6 +38,7 @@ pub enum CompositePlanSegment {
         method: StringMethod,
         columns: Vec<String>,
     },
+    RowCountSegment(String),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -151,6 +155,19 @@ impl CompositePlan {
                         series.rename(&col);
                     }
                     stack.push(frame);
+                }
+                CompositePlanSegment::RowCountSegment(name) => {
+                    let frame = stack.pop().ok_or(Status::invalid_argument(
+                        "Could not apply with_row_count: no input data frame",
+                    ))?;
+                    let df = frame.df.with_row_count(&name, Some(0)).map_err(|e| {
+                        Status::invalid_argument(format!(
+                            "Error while running with_row_count: {}",
+                            e
+                        ))
+                    })?;
+                    let stats = frame.stats;
+                    stack.push(StackFrame { df, stats });
                 }
             }
         }

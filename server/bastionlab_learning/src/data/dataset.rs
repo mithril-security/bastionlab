@@ -10,8 +10,8 @@ use tch::{Device, IndexOp, TchError, Tensor};
 /// Simple in-memory dataset that keeps track of its usage in terms of privacy budget
 #[derive(Debug)]
 pub struct Dataset {
-    samples_inputs: Vec<Mutex<Tensor>>,
-    labels: Mutex<Tensor>,
+    pub samples_inputs: Vec<Arc<Mutex<Tensor>>>,
+    pub labels: Arc<Mutex<Tensor>>,
     privacy_context: Arc<RwLock<PrivacyContext>>,
 }
 
@@ -21,6 +21,21 @@ pub struct DatasetIter<'a> {
     indexes: Vec<i64>,
     batch_size: usize,
     batch_id: usize,
+}
+
+/// This type stores the meta data about a dataset for use in [`available_datasets`] API call.
+///
+/// This is necessary because now that we have updated the design with single (individual) tensor access
+/// it makes sense that [`Dataset`] becomes just a symbolic DataLoader for when we are training or testing.
+///
+/// And, it also gives direct tensor access to the underlying tensors.
+///
+#[derive(Clone, Debug)]
+pub struct DatasetMetadata {
+    pub identifier: String,
+    pub name: String,
+    pub description: String,
+    pub meta: Vec<u8>,
 }
 
 impl<'a> Iterator for DatasetIter<'a> {
@@ -81,6 +96,24 @@ impl<'a> Iterator for DatasetIter<'a> {
 }
 
 impl Dataset {
+    pub fn new(
+        samples_inputs: Vec<Arc<Mutex<Tensor>>>,
+        labels: Arc<Mutex<Tensor>>,
+        privacy_limit: f64,
+    ) -> Self {
+        let nb_samples = labels.lock().unwrap().size()[0] as usize;
+        let limit = if privacy_limit == -1.0 {
+            PrivacyBudget::NotPrivate
+        } else {
+            PrivacyBudget::Private(privacy_limit as f32)
+        };
+
+        Dataset {
+            samples_inputs,
+            labels,
+            privacy_context: Arc::new(RwLock::new(PrivacyContext::new(limit, nb_samples))),
+        }
+    }
     /// Returns an iterator over this dataset.
     pub fn iter_shuffle<'a>(&'a self, batch_size: usize) -> DatasetIter<'a> {
         let mut rng = thread_rng();
@@ -112,8 +145,8 @@ impl TryFrom<SizedObjectsBytes> for Dataset {
     type Error = TchError;
 
     fn try_from(value: SizedObjectsBytes) -> Result<Self, Self::Error> {
-        let mut samples_inputs: Vec<Option<Mutex<Tensor>>> = Vec::new();
-        let mut labels: Option<Mutex<Tensor>> = None;
+        let mut samples_inputs: Vec<Option<Arc<Mutex<Tensor>>>> = Vec::new();
+        let mut labels: Option<Arc<Mutex<Tensor>>> = None;
         #[allow(unused_variables)]
         let mut privacy_limit = PrivacyBudget::Private(0.0);
 
@@ -128,7 +161,7 @@ impl TryFrom<SizedObjectsBytes> for Dataset {
                             *labels = Tensor::f_cat(&[&*labels, &tensor], 0)?;
                         }
                         None => {
-                            labels = Some(Mutex::new(tensor));
+                            labels = Some(Arc::new(Mutex::new(tensor)));
                         }
                     },
                     "privacy_limit" => {
@@ -158,7 +191,7 @@ impl TryFrom<SizedObjectsBytes> for Dataset {
                                     *samples_input = Tensor::f_cat(&[&*samples_input, &tensor], 0)?;
                                 }
                                 None => {
-                                    samples_inputs[idx] = Some(Mutex::new(tensor));
+                                    samples_inputs[idx] = Some(Arc::new(Mutex::new(tensor)));
                                 }
                             }
                         } else {
