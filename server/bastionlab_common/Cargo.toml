@@ -29,7 +29,7 @@ once_cell = "1.13.1"
 log = "0.4.17"
 env_logger = "0.9.0"
 polars = "0.25.1"
-tokenizers = "0.13.2"
+tokenizers = { version = "0.13.2", features = ["http"] }
 tch = "0.10.1"
 torch-sys = "0.10.0"
 ndarray = "0.15.6"
