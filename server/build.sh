@@ -45,6 +45,17 @@ declare -a rhel_dependencies=(
     [10]=sudo
 )
 
+declare -a arch_dependencies=(
+    [0]=sudo
+    [1]=python3
+    [2]=python-pip
+    [3]=python-virtualenv
+    [4]=make
+    [5]=gcc
+    [6]=unzip
+    [7]=openssl
+)
+
 unrecognized_distro()
 {
     echo "Unrecognized linux version, needs manual installation, check the documentation:">&2
@@ -211,6 +222,14 @@ install_rhel_deps()
     fi
 }
 
+# Arch-based dependencies installation
+install_arch_deps()
+{
+    pacman -Syyu --noconfirm
+    pacman-db-upgrade
+    pacman -S --noconfirm "${arch_dependencies[@]}"
+}
+
 ############## main ##############
 
 if [ "$(id -u)" -eq 0 ]; then
@@ -235,7 +254,7 @@ if [ "$(id -u)" -ne 0 ] || [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
 	EXIT_STATUS2=0
 	if [ ! -z "${BASTIONLAB_CPP11}" ]; then
 	    verify_deps 'dpkg -s' "${deb_optionals[@]}"
-	    EXIT_STATUS=$?
+	    EXIT_STATUS2=$?
 	fi
 
 	# If dependencies missing, installing them
@@ -317,7 +336,34 @@ if [ "$(id -u)" -ne 0 ] || [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
 		fi
 		;;
 	esac
+
+    elif [ -f "/etc/arch-release" ] ; then
+	
+	# Verifying dependencies
+	verify_deps 'pacman -Qi' "${arch_dependencies[@]}"
+	EXIT_STATUS=$?
+
+	# If dependencies missing, installing them
+	if ! (exit $EXIT_STATUS) ; then
+	    if [ "$(id -u)" -ne 0 ]; then
+		sudo $0
+	    else
+		install_arch_deps
+	    fi
+	    EXIT_STATUS=$?
+	    if ! (exit $EXIT_STATUS) ; then
+		exit $EXIT_STATUS
+	    fi
+	fi
+	
 	# Install cargo and torch
+	install_common "__torch_cxx11_url__"
+	export OPENSSL_INCLUDE_DIR='/usr/include/openssl/'
+	export OPENSSL_LIB_DIR='/usr/lib/'
+	
+	# Build server
+	LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all
+
     else
 	unrecognized_distro
     fi
@@ -329,6 +375,8 @@ else
 	install_deb_deps
     elif [ -f "/etc/redhat-release" ] ; then
 	install_rhel_deps
+    elif [ -f "/etc/arch-release" ] ; then
+	install_arch_deps
     else
 	unrecognized_distro
     fi
