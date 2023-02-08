@@ -362,7 +362,7 @@ class RemoteLazyFrame:
                 [
                     *self._meta._prev_segments,
                     PolarsPlanSegment(self._inner),
-                    UdfPlanSegment(ts_udf, columns),
+                    UdfPlanSegment(columns=columns, udf=ts_udf),
                 ],
             ),
         )
