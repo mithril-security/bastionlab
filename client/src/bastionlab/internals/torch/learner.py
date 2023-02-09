@@ -1,14 +1,14 @@
-from typing import Optional, Union, List, Callable, TYPE_CHECKING
+from typing import Optional, Union, List, TYPE_CHECKING
 from time import sleep
 from tqdm import tqdm  # type: ignore [import]
 from grpc import StatusCode
 from torch.nn import Module
 from torch.utils.data import Dataset
 import torch
-from ..pb.bastionlab_torch_pb2 import Metric, TestConfig, TrainConfig  # type: ignore [import]
-from ..pb.bastionlab_pb2 import Reference, TensorMetaData
+from bastionlab.pb.bastionlab_torch_pb2 import Metric, TestConfig, TrainConfig  # type: ignore [import]
+from bastionlab.pb.bastionlab_pb2 import Reference, TensorMetaData
 from ..errors import GRPCException
-from .psg import expand_weights
+from .psg.convert import expand_weights
 from .client import BastionLabTorch
 from .optimizer_config import *
 from ..torch.remote_torch import RemoteDataset

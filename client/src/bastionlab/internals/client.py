@@ -1,15 +1,13 @@
 from dataclasses import dataclass
 import ssl
-from threading import Thread
-from time import sleep
 from typing import Any, TYPE_CHECKING, Optional
 from hashlib import sha256
 import grpc
 from .keys import SigningKey
-from .pb.bastionlab_pb2 import Empty
-from .pb.bastionlab_pb2 import ClientInfo
-from .version import __version__ as app_version
-from .pb.bastionlab_pb2_grpc import SessionServiceStub
+from ..pb.bastionlab_pb2 import Empty
+from ..pb.bastionlab_pb2 import ClientInfo
+from ..version import __version__ as app_version
+from ..pb.bastionlab_pb2_grpc import SessionServiceStub
 import platform
 import socket
 import getpass
@@ -66,7 +64,7 @@ class Client:
     )
     _bastionlab_converter: "BastionLabConverter" = None  #: The BastionLabConverter object for converting internal objects (DF->Dataset, Dataset->DF).
     _channel: grpc.Channel  #: The underlying gRPC channel used to communicate with the server.
-    __session_expiry_time: float = 0.0  #: Time in seconds
+    _session_expiry_time: float = 0.0  #: Time in seconds
     _token: Optional[bytes] = None
     signing_key: Optional[SigningKey]
 
@@ -88,7 +86,7 @@ class Client:
     def refresh_session_if_needed(self):
         current_time = time.time()
 
-        if current_time > self.__session_expiry_time:
+        if current_time > self._session_expiry_time:
             self._token = None
             self.__create_session()
 
@@ -112,7 +110,7 @@ class Client:
         # So, just to be sure, we refresh our token early (30s).
         adjusted_expiry_delay = max(res.expiry_time - 30_000, 0)
 
-        self.__session_expiry_time = (
+        self._session_expiry_time = (
             time.time() + adjusted_expiry_delay / 1000  # convert to seconds
         )
         self._token = res.token
@@ -146,7 +144,7 @@ class Client:
         Returns the BastionLabPolars instance used by this client.
         """
         if self._bastionlab_converter is None:
-            from bastionlab.converter import BastionLabConverter
+            from .converter import BastionLabConverter
 
             self._bastionlab_converter = BastionLabConverter(self)
         return self._bastionlab_converter
@@ -295,9 +293,3 @@ class Connection:
         """
         self._client = None
         self.channel.close()
-
-
-__all__ = [
-    "Client",
-    "Connection",
-]

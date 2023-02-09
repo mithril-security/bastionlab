@@ -1,11 +1,10 @@
 from typing import List, TYPE_CHECKING, Union
 from torch.nn import Module
 from torch.utils.data import Dataset
-import grpc
 import torch
-from ..pb.bastionlab_torch_pb2 import Empty, Metric, TestConfig, TrainConfig  # type: ignore [import]
-from ..pb.bastionlab_pb2 import Reference
-from ..pb.bastionlab_torch_pb2_grpc import TorchServiceStub  # type: ignore [import]
+from bastionlab.pb.bastionlab_torch_pb2 import Empty, Metric, TestConfig, TrainConfig  # type: ignore [import]
+from bastionlab.pb.bastionlab_pb2 import Reference
+from bastionlab.pb.bastionlab_torch_pb2_grpc import TorchServiceStub  # type: ignore [import]
 from ..errors import GRPCException
 from .optimizer_config import *
 

@@ -1,14 +1,11 @@
 import torch
-import hashlib
-import io
-from typing import Iterator, TYPE_CHECKING, List, Optional, Any
+from typing import TYPE_CHECKING, List, Optional, Any
 from dataclasses import dataclass
-from .utils import DataWrapper, Chunk, TensorDataset, send_tensor
-from ..pb.bastionlab_torch_pb2 import UpdateTensor, RemoteDatasetReference
-from ..pb.bastionlab_pb2 import Reference
-from torch.utils.data import Dataset, DataLoader
-from ..pb.bastionlab_pb2 import Reference, TensorMetaData
-import logging
+from .utils import send_tensor
+from bastionlab.pb.bastionlab_torch_pb2 import UpdateTensor, RemoteDatasetReference
+from bastionlab.pb.bastionlab_pb2 import Reference
+from torch.utils.data import Dataset
+from bastionlab.pb.bastionlab_pb2 import Reference, TensorMetaData
 
 if TYPE_CHECKING:
     from .client import BastionLabTorch
@@ -104,7 +101,6 @@ def _get_tensor_metadata(meta_bytes: bytes):
     meta = TensorMetaData()
     meta.ParseFromString(meta_bytes)
 
-    print(meta.input_dtype)
     return [torch_dtypes[dt] for dt in meta.input_dtype], [
         torch.Size(list(meta.input_shape))
     ]

@@ -1,5 +1,5 @@
-from bastionlab.torch.remote_torch import RemoteDataset
-from bastionlab.torch.optimizer_config import SGD, Adam
+from bastionlab.torch import RemoteDataset
+from bastionlab.torch.optimizer import SGD, Adam
 from bastionlab.torch.utils import TensorDataset
 import polars as pl
 import os

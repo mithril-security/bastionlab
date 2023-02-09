@@ -1,11 +1,9 @@
 from typing import List, TYPE_CHECKING, Optional, Iterator
-import grpc
-import io
 from grpc import StatusCode
 import polars as pl
 from colorama import Fore
-from ..pb.bastionlab_polars_pb2 import ReferenceRequest, Empty, Query
-from ..pb.bastionlab_polars_pb2_grpc import PolarsServiceStub
+from bastionlab.pb.bastionlab_polars_pb2 import ReferenceRequest, Empty, Query
+from bastionlab.pb.bastionlab_polars_pb2_grpc import PolarsServiceStub
 from ..errors import GRPCException
 from .utils import deserialize_dataframe, serialize_dataframe
 from .policy import Policy, DEFAULT_POLICY

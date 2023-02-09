@@ -1,28 +1,32 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Generic, List, Optional, TypeVar, Sequence, Union, Dict
-import seaborn as sns
 import polars as pl
 from polars.internals.sql.context import SQLContext
 from torch.jit import ScriptFunction
 import base64
 import json
 import torch
-from ..pb.bastionlab_conversion_pb2 import ToTensor
-from ..pb.bastionlab_polars_pb2 import ReferenceResponse, SplitRequest, ReferenceRequest
+from bastionlab.pb.bastionlab_conversion_pb2 import ToTensor
+from bastionlab.pb.bastionlab_polars_pb2 import (
+    ReferenceResponse,
+    SplitRequest,
+    ReferenceRequest,
+)
 from .client import BastionLabPolars
 from .utils import ApplyBins, Palettes, ApplyAbs
-import matplotlib.pyplot as plt
-import matplotlib as mat
 from typing import TYPE_CHECKING
 from ..errors import RequestRejected
 from serde import serde, InternalTagging, field
 from serde.json import to_json
 
+# Note that we lazily import matplotlib and seaborn, so that we don't pay the cost of
+#  importing them when not needed
 
 LDF = TypeVar("LDF", bound="pl.LazyFrame")
 
 if TYPE_CHECKING:
+    import matplotlib as mat
     from ..torch.remote_torch import RemoteTensor
 
 
@@ -646,6 +650,7 @@ class RemoteLazyFrame:
             ValueError: Incorrect column name given as parts or labels argument.
             various exceptions: Note that exceptions may be raised from matplotlib pyplot's pie or subplots functions, for example if fig_kwargs keywords are not valid.
         """
+        import matplotlib.pyplot as plt
 
         if parts not in self.columns:
             raise ValueError("Parts column not found in dataframe")
@@ -719,6 +724,8 @@ class RemoteLazyFrame:
             various exceptions: Note that exceptions may be raised from Seaborn when the barplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
+        import seaborn as sns
+
         # if there is a hue argument add them to cols and no duplicates
         if x == None and y == None:
             raise ValueError("Please provide a x or y column name")
@@ -804,6 +811,7 @@ class RemoteLazyFrame:
             various exceptions: Note that exceptions may be raised from Seaborn when the barplot or heatmap function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
+        import seaborn as sns
 
         col_x = x if x != None else "count"
         col_y = y if y != None else "count"
@@ -909,6 +917,8 @@ class RemoteLazyFrame:
             various exceptions: Note that exceptions may be raised from Seaborn when the lineplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
+        import seaborn as sns
+
         selects = [x, y] if x != y else [x]
 
         for op in [hue, size, style, units]:
@@ -947,6 +957,8 @@ class RemoteLazyFrame:
             various exceptions: Note that exceptions may be raised from Seaborn when the scatterplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
+        import seaborn as sns
+
         # if there is a hue or style argument add them to cols
         cols = [x, y]
         if "hue" in kwargs:
@@ -989,6 +1001,8 @@ class RemoteLazyFrame:
             various exceptions: Note that exceptions may be raised from Seaborn when the barplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
+        import seaborn as sns
+
         # if there is a hue argument add them to cols and no duplicates
         if x == None and y == None:
             raise ValueError("Please provide a x or y column name")
@@ -1115,7 +1129,7 @@ class RemoteLazyFrame:
         y: str = None,
         colors: Union[str, list[str]] = Palettes.dict["standard"],
         vertical: bool = True,
-        ax: mat.axes = None,
+        ax: "mat.axes" = None,
         widths: float = 0.75,
         median_linestyle: str = "-",
         median_color: str = "black",
@@ -1144,6 +1158,8 @@ class RemoteLazyFrame:
             various exceptions: Note that exceptions may be raised from Seaborn when the lineplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
+        import matplotlib.pyplot as plt
+        import matplotlib as mat
 
         if isinstance(colors, str):
             c = colors
@@ -1190,7 +1206,7 @@ class RemoteLazyFrame:
 
     def facet(
         self: LDF, col: Optional[str] = None, row: Optional[str] = None, **kwargs
-    ) -> any:
+    ) -> "Facet":
         """Creates a multi-plot grid for plotting conditional relationships.
         Args:
             col (Optional[str] = None): column value for grid
@@ -1701,6 +1717,8 @@ class Facet:
             various exceptions: Note that exceptions may be raised from internal Seaborn (scatterplot) or Matplotlib.pyplot functions (subplots, set_title),
             for example, if kwargs keywords are not expected. See Seaborn/Matplotlib documentation for further details.
         """
+        import seaborn as sns
+
         self.__map(sns.scatterplot, *args, **kwargs)
 
     def lineplot(
@@ -1722,6 +1740,8 @@ class Facet:
             various exceptions: Note that exceptions may be raised from Seaborn when the lineplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
+        import seaborn as sns
+
         self.__map(sns.lineplot, x=x, y=y, **kwargs)
 
     def histplot(
@@ -1778,6 +1798,8 @@ class Facet:
         self.__bastion_map("barplot", x=x, y=y, **kwargs)
 
     def __bastion_map(self, fn: str, x: str = None, y: str = None, **kwargs):
+        import matplotlib.pyplot as plt
+
         # create list of all columns needed for query
         hue = kwargs["hue"] if "hue" in kwargs else None
         selects = []
@@ -1882,6 +1904,8 @@ class Facet:
                 axes[count].set_title(t1)
 
     def __map(self: LDF, func, **kwargs) -> None:
+        import matplotlib.pyplot as plt
+
         # create list of all columns needed for query
         selects = [self.col, self.row]
         if "x" in kwargs and not kwargs["x"] in selects:
