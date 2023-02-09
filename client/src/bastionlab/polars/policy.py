@@ -3,12 +3,12 @@ from typing import List, Union
 from serde import serde, InternalTagging
 
 
-class Rule:
-    pass
+Rule = Union["AtLeastNOf", "Aggregation", "TrueRule", "FalseRule", "UserId"]
+"""A Policy Rule."""
 
 
 @dataclass
-class AtLeastNOf(Rule):
+class AtLeastNOf:
     """
     specifies a collection of `Rule`s.
 
@@ -20,12 +20,12 @@ class AtLeastNOf(Rule):
     """
 
     n: int
-    of: Union["AtLeastNOf", "Aggregation", "TrueRule", "FalseRule", "UserId"]
+    of: List[Rule]
 
 
 @dataclass
 @serde
-class UserId(Rule):
+class UserId:
     """
     BastionLab instruction `Rule` that attaches a user identifier to the safe zone.
 
@@ -39,7 +39,7 @@ class UserId(Rule):
 
 @dataclass
 @serde
-class Aggregation(Rule):
+class Aggregation:
     """
     Specifies a `Rule` for the number of rows an operation on a Remote DataFrame can aggregate.
 
@@ -53,7 +53,7 @@ class Aggregation(Rule):
 
 @dataclass
 @serde
-class TrueRule(Rule):
+class TrueRule:
     """
     BastionLab instruction `Rule` for boolean logic `True`.
     """
@@ -61,19 +61,19 @@ class TrueRule(Rule):
 
 @dataclass
 @serde
-class FalseRule(Rule):
+class FalseRule:
     """
     BastionLab instruction `Rule` for boolean logic `False`.
     """
 
 
-class UnsafeAction:
-    pass
+UnsafeAction = Union["Log", "Review", "Reject"]
+"""Defines how unsafe actions should be handled."""
 
 
 @dataclass
 @serde
-class Log(UnsafeAction):
+class Log:
     """
     Instructs the BastionLab server to _log_ the operation performed on the associated
     Remote DataFrame.
@@ -82,7 +82,7 @@ class Log(UnsafeAction):
 
 @dataclass
 @serde
-class Review(UnsafeAction):
+class Review:
     """
     Instructs the BastionLab server to request a review from the owner of the Remote DataFrame.
     """
@@ -90,7 +90,7 @@ class Review(UnsafeAction):
 
 @dataclass
 @serde
-class Reject(UnsafeAction):
+class Reject:
     """
     Instructs the BastionLab server to reject the request.
     """
@@ -114,14 +114,16 @@ class Policy:
             Describes what should happen if a user violates the `safe_zone`. For example (logging operations)
     """
 
-    safe_zone: Union[AtLeastNOf, Aggregation, TrueRule, FalseRule, UserId]
-    unsafe_handling: Union[Reject, Review, Log]
+    safe_zone: Rule
+    unsafe_handling: UnsafeAction
     savable: bool
 
 
-DEFAULT_POLICY = Policy(Aggregation(10), Review(), True)
+DEFAULT_POLICY = Policy(
+    safe_zone=Aggregation(10), unsafe_handling=Review(), savable=True
+)
 """
-Default BastionLab Client Policy `Policy(Aggregation(10), Review(), True)`
+Default BastionLab Client Policy `Policy(safe_zone=Aggregation(10), unsafe_handling=Review(), savable=True)`
 """
 
 __all__ = [
