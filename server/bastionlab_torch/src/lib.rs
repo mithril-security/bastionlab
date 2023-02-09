@@ -172,7 +172,7 @@ impl TorchService for BastionLabTorch {
         &self,
         request: Request<Streaming<Chunk>>,
     ) -> Result<Response<RemoteDatasetReference>, Status> {
-        let token = self.sess_manager.verify_request(&request)?;
+        let token = self.sess_manager.get_token(&request)?;
         let client_info = self.sess_manager.get_client_info(token)?;
 
         let start_time = Instant::now();
@@ -216,8 +216,8 @@ impl TorchService for BastionLabTorch {
         request: Request<Streaming<Chunk>>,
     ) -> Result<Response<Reference>, Status> {
         let start_time = Instant::now();
+        let token = self.sess_manager.get_token(&request)?;
 
-        let token = self.sess_manager.verify_request(&request)?;
         let client_info = self.sess_manager.get_client_info(token)?;
         let artifact: Artifact<SizedObjectsBytes> = unstream_data(request.into_inner()).await?;
 
@@ -283,7 +283,8 @@ impl TorchService for BastionLabTorch {
         &self,
         request: Request<Reference>,
     ) -> Result<Response<Self::FetchModuleStream>, Status> {
-        let token = self.sess_manager.verify_request(&request)?;
+        let token = self.sess_manager.get_token(&request)?;
+
         let client_info = self.sess_manager.get_client_info(token)?;
         let identifier = request.into_inner().identifier;
 
@@ -344,7 +345,8 @@ impl TorchService for BastionLabTorch {
     }
 
     async fn train(&self, request: Request<TrainConfig>) -> Result<Response<Reference>, Status> {
-        let token = self.sess_manager.verify_request(&request)?;
+        let token = self.sess_manager.get_token(&request)?;
+
         let client_info = self.sess_manager.get_client_info(token)?;
         let config = request.into_inner();
 
@@ -418,7 +420,8 @@ impl TorchService for BastionLabTorch {
     }
 
     async fn test(&self, request: Request<TestConfig>) -> Result<Response<Reference>, Status> {
-        let token = self.sess_manager.verify_request(&request)?;
+        let token = self.sess_manager.get_token(&request)?;
+
         let client_info = self.sess_manager.get_client_info(token)?;
         let config = request.into_inner();
 

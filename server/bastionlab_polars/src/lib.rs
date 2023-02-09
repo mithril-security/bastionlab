@@ -392,7 +392,7 @@ impl PolarsService for BastionLabPolars {
         &self,
         request: Request<Query>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        let token = self.sess_manager.verify_request(&request)?;
+        let token = self.sess_manager.get_token(&request)?;
 
         let composite_plan: CompositePlan = serde_json::from_str(&request.get_ref().composite_plan)
             .map_err(|e| {
@@ -436,8 +436,7 @@ impl PolarsService for BastionLabPolars {
     ) -> Result<Response<ReferenceResponse>, Status> {
         let start_time = Instant::now();
 
-        let token = self.sess_manager.verify_request(&request)?;
-
+        let token = self.sess_manager.get_token(&request)?;
         let client_info = self.sess_manager.get_client_info(token)?;
         let (df, hash) = unserialize_dataframe(request.into_inner()).await?;
         let header = get_df_header(&df.dataframe)?;
@@ -465,7 +464,7 @@ impl PolarsService for BastionLabPolars {
         &self,
         request: Request<ReferenceRequest>,
     ) -> Result<Response<Self::FetchDataFrameStream>, Status> {
-        let token = self.sess_manager.verify_request(&request)?;
+        let token = self.sess_manager.get_token(&request)?;
 
         let fut = {
             let df = self.get_df(
@@ -481,7 +480,8 @@ impl PolarsService for BastionLabPolars {
         &self,
         request: Request<Empty>,
     ) -> Result<Response<ReferenceList>, Status> {
-        let token = self.sess_manager.verify_request(&request)?;
+        let token = self.sess_manager.get_token(&request)?;
+
         let list = self
             .get_headers()?
             .into_iter()
@@ -498,7 +498,8 @@ impl PolarsService for BastionLabPolars {
         &self,
         request: Request<ReferenceRequest>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        let token = self.sess_manager.verify_request(&request)?;
+        let token = self.sess_manager.get_token(&request)?;
+
         let identifier = String::from(&request.get_ref().identifier);
         let header = self.get_header(&identifier)?;
         telemetry::add_event(
@@ -514,7 +515,8 @@ impl PolarsService for BastionLabPolars {
         &self,
         request: Request<ReferenceRequest>,
     ) -> Result<Response<Empty>, Status> {
-        let token = self.sess_manager.verify_request(&request)?;
+        let token = self.sess_manager.get_token(&request)?;
+
         let identifier = &request.get_ref().identifier;
         self.persist_df(identifier)?;
         telemetry::add_event(
@@ -530,7 +532,8 @@ impl PolarsService for BastionLabPolars {
         &self,
         request: Request<ReferenceRequest>,
     ) -> Result<Response<Empty>, Status> {
-        let token = self.sess_manager.verify_request(&request)?;
+        let token = self.sess_manager.get_token(&request)?;
+
         let identifier = &request.get_ref().identifier;
         let user_id = self.sess_manager.get_user_id(token.clone())?;
         let owner_check = self.sess_manager.verify_if_owner(&user_id)?;

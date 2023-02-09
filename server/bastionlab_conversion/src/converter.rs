@@ -1,7 +1,6 @@
 use std::sync::{Arc, Mutex};
 
 use bastionlab_common::common_conversions::*;
-use bastionlab_common::session::SessionManager;
 use bastionlab_polars::BastionLabPolars;
 use bastionlab_torch::BastionLabTorch;
 use tonic::{Request, Response, Status};
@@ -12,20 +11,11 @@ use crate::bastionlab::Reference;
 pub struct Converter {
     torch: Arc<BastionLabTorch>,
     polars: Arc<BastionLabPolars>,
-    sess_manager: Arc<SessionManager>,
 }
 
 impl Converter {
-    pub fn new(
-        torch: Arc<BastionLabTorch>,
-        polars: Arc<BastionLabPolars>,
-        sess_manager: Arc<SessionManager>,
-    ) -> Self {
-        Self {
-            torch,
-            polars,
-            sess_manager,
-        }
+    pub fn new(torch: Arc<BastionLabTorch>, polars: Arc<BastionLabPolars>) -> Self {
+        Self { torch, polars }
     }
 }
 
@@ -35,7 +25,6 @@ impl ConversionService for Converter {
         &self,
         request: Request<ToTensor>,
     ) -> Result<Response<Reference>, Status> {
-        self.sess_manager.verify_request(&request)?;
         let identifier = &request.get_ref().identifier;
 
         let df = self.polars.get_df_unchecked(&identifier)?;
