@@ -1,10 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-<<<<<<< HEAD
 use bastionlab_common::{array_store::ArrayStore, common_conversions::*, session::SessionManager};
-=======
-use bastionlab_common::common_conversions::*;
->>>>>>> 8a4bdec627ca0b9c82bcccfb4a027ad47be4e3e4
 use bastionlab_polars::BastionLabPolars;
 use bastionlab_torch::BastionLabTorch;
 use ndarray::{Axis, Dim, IxDynImpl, OwnedRepr};
