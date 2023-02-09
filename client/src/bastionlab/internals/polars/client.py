@@ -20,10 +20,6 @@ class BastionLabPolars:
 
     This class contains all the endpoints allowed on the BastionLab server for Polars.
     It is instantiated by the `bastionlab.Client` class and is accessible through the `bastionlab.Client.polars` property.
-
-    Args:
-        stub : bastionlab.pb.bastionlab_polars_pb2_grpc.PolarsServiceStub
-            The gRPC service for BastionLab Polars. This define all the API calls for BastionLab Polars.
     """
 
     def __init__(self, client: "Client"):
@@ -37,29 +33,26 @@ class BastionLabPolars:
         sanitized_columns: List[str] = [],
     ) -> "FetchableLazyFrame":
         """
-        This method is used to send `polars.internals.dataframe.frame.DataFrame` to the BastionLab server.
+        This method is used to send `pl.DataFrame` to the BastionLab server.
 
-        It readily accepts `polars.internals.dataframe.frame.DataFrame` and also specifies the DataFrame policy and a list of
+        It readily accepts `pl.DataFrame` and also specifies the DataFrame policy and a list of
         sensitive columns.
 
         Args:
-            df : polars.internals.dataframe.frame.DataFrame
-                Polars DataFrame
-            policy : bastionlab.polars.policy.Policy
-                BastionLab Remote DataFrame policy. This specifies which operations can be performed on
-                DataFrames and they specified the data owner.
-            sanitized_columns : List[str]
-                This field contains (sensitive) columns in the DataFrame that are to be removed when a Data Scientist
-                wishes to fetch a query performed on the DataFrame.
+            df: Polars DataFrame
+            policy: BastionLab Remote DataFrame policy.
+                This specifies which operations can be performed on DataFrames and they
+                specified the data owner.
+            sanitized_columns: This field contains (sensitive) columns in the
+                DataFrame that are to be removed when a Data Scientist wishes to fetch a
+                query performed on the DataFrame.
 
         Returns:
-
-        bastionlab.polars.remote_polars.FetchableLazyFrame
-
+            bastionlab.polars.FetchableLazyFrame
         """
         from .remote_polars import FetchableLazyFrame
 
-        self.client.refresh_session_if_needed()
+        self.client._refresh_session_if_needed()
 
         res = GRPCException.map_error(
             lambda: self.stub.SendDataFrame(
@@ -110,7 +103,7 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
 
                 yield b.data
 
-        self.client.refresh_session_if_needed()
+        self.client._refresh_session_if_needed()
 
         try:
             df = GRPCException.map_error(
@@ -139,12 +132,12 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
                 Serialized instructions to be executed on BastionLab server.
 
         Returns:
-            bastionlab.polars.remote_polars.FetchableLazyFrame
+            bastionlab.polars.FetchableLazyFrame
         """
 
         from .remote_polars import FetchableLazyFrame
 
-        self.client.refresh_session_if_needed()
+        self.client._refresh_session_if_needed()
 
         res = GRPCException.map_error(
             lambda: self.stub.RunQuery(Query(composite_plan=composite_plan))
@@ -156,30 +149,27 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
         Enlists all the DataFrames available on the BastionLab server.
 
         Returns:
-            List[bastionlab.polars.remote_polars.FetchableLazyFrame]
+            List[bastionlab.polars.FetchableLazyFrame]
 
         """
         from .remote_polars import FetchableLazyFrame
 
-        self.client.refresh_session_if_needed()
+        self.client._refresh_session_if_needed()
 
         res = GRPCException.map_error(lambda: self.stub.ListDataFrames(Empty()).list)
         return [FetchableLazyFrame._from_reference(self, ref) for ref in res]
 
     def get_df(self, identifier: str) -> "FetchableLazyFrame":
         """
-        Returns a `bastionlab.polars.remote_polars.FetchableLazyFrame` from an BastionLab DataFrame identifier.
-
+        Returns a `bastionlab.polars.FetchableLazyFrame` from an BastionLab DataFrame identifier.
         Args:
-            identifier : str
-                A unique identifier for the Remote DataFrame.
-
+            identifier:  A unique identifier for the Remote DataFrame.
         Returns:
-            bastionlab.polars.remote_polars.FetchableLazyFrame
+            bastionlab.polars.FetchableLazyFrame
         """
         from .remote_polars import FetchableLazyFrame
 
-        self.client.refresh_session_if_needed()
+        self.client._refresh_session_if_needed()
 
         res = GRPCException.map_error(
             lambda: self.stub.GetDataFrameHeader(
@@ -201,7 +191,7 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
         -------
         Nothing
         """
-        self.client.refresh_session_if_needed()
+        self.client._refresh_session_if_needed()
 
         res = GRPCException.map_error(
             lambda: self.stub.PersistDataFrame(ReferenceRequest(identifier=identifier))
@@ -220,7 +210,7 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
         -------
         Nothing
         """
-        self.client.refresh_session_if_needed()
+        self.client._refresh_session_if_needed()
 
         res = GRPCException.map_error(
             lambda: self.stub.DeleteDataFrame(ReferenceRequest(identifier=identifier))

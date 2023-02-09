@@ -29,6 +29,8 @@ if TYPE_CHECKING:
     import matplotlib as mat
     from ..torch.remote_torch import RemoteTensor
 
+    import bastionlab.torch
+
 
 def delegate(
     target_cls: Callable,
@@ -713,10 +715,10 @@ class RemoteLazyFrame:
         """Draws a barchart
         barplot filters data down to necessary columns only and then calls Seaborn's barplot function.
         Args:
-            x (str) = None: The name of column to be used for x axes.
-            y (str) = None: The name of column to be used for y axes.
-            estimator (str) = "mean": string represenation of estimator to be used in aggregated query. Options are: "mean", "median", "count", "max", "min", "std" and "sum"
-            hue (str) = None: The name of column to be used for colour encoding.
+            x: The name of column to be used for x axes.
+            y: The name of column to be used for y axes.
+            estimator: string represenation of estimator to be used in aggregated query. Options are: "mean", "median", "count", "max", "min", "std" and "sum"
+            hue: The name of column to be used for colour encoding.
             **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function.
         Raises:
             ValueError: Incorrect column name given, no x or y values provided, estimator function not recognised
@@ -990,10 +992,10 @@ class RemoteLazyFrame:
         """Draws a barchart
         barplot filters data down to necessary columns only and then calls Seaborn's barplot function.
         Args:
-            x (str) = None: The name of column to be used for x axes.
-            y (str) = None: The name of column to be used for y axes.
-            estimator (str) = "mean": string represenation of estimator to be used in aggregated query. Options are: "mean", "median", "count", "max", "min", "std" and "sum"
-            hue (str) = None: The name of column to be used for colour encoding.
+            x: The name of column to be used for x axes.
+            y: The name of column to be used for y axes.
+            estimator: string represenation of estimator to be used in aggregated query. Options are: "mean", "median", "count", "max", "min", "std" and "sum"
+            hue: The name of column to be used for colour encoding.
             **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function.
         Raises:
             ValueError: Incorrect column name given, no x or y values provided, estimator function not recognised
@@ -1223,7 +1225,7 @@ class RemoteLazyFrame:
             if x != None:
                 if not x in self.columns:
                     raise ValueError("Column ", x, " not found in dataframe")
-        return Facet(inner_rdf=self, col=col, row=row, kwargs=kwargs)
+        return Facet(_inner_rdf=self, _col=col, _row=row, _kwargs=kwargs)
 
     def _make_string_udf_segment(
         self: RemoteLazyFrame,
@@ -1635,12 +1637,7 @@ class FetchableLazyFrame(RemoteLazyFrame):
 
     @property
     def identifier(self) -> str:
-        """
-        Gets identifier
-
-        Return:
-            returns identifier
-        """
+        """The identifier"""
         return self._identifier
 
     @staticmethod
@@ -1676,7 +1673,7 @@ class FetchableLazyFrame(RemoteLazyFrame):
     def fetch(self) -> pl.DataFrame:
         """Fetches your FetchableLazyFrame and returns it as a Polars DataFrame
         Returns:
-            Polars.DataFrame: returns a Polars DataFrame instance of your FetchableLazyFrame
+            pl.DataFrame: returns a Polars DataFrame instance of your FetchableLazyFrame
         """
         return self._meta._polars_client._fetch_df(self._identifier)
 
@@ -1689,10 +1686,12 @@ class FetchableLazyFrame(RemoteLazyFrame):
 
 @dataclass
 class Facet:
-    inner_rdf: RemoteLazyFrame
-    col: Optional[str] = None
-    row: Optional[str] = None
-    kwargs: dict = None
+    """Facet adapter for graphs."""
+
+    _inner_rdf: RemoteLazyFrame
+    _col: Optional[str] = None
+    _row: Optional[str] = None
+    _kwargs: dict = None
 
     def __str__(self: LDF) -> str:
         return f"FacetGrid"
@@ -1707,9 +1706,9 @@ class Facet:
         where values match with each combination of row/grid values.
 
         Args:
-            x (str): The name of column to be used for x axes.
-            y (str): The name of column to be used for y axes.
-            *args: (list[str]): Arguments to be passed to Seaborn's scatterplot function.
+            x: The name of column to be used for x axes.
+            y: The name of column to be used for y axes.
+            *args: Arguments to be passed to Seaborn's scatterplot function.
             **kwargs: Other keyword arguments that will be passed to Seaborn's scatterplot function.
 
         Raises:
@@ -1732,8 +1731,8 @@ class Facet:
         where values match with each combination of row/grid values.
 
         Args:
-            x (str): The name of column to be used for x axes.
-            y (str): The name of column to be used for y axes.
+            x: The name of column to be used for x axes.
+            y: The name of column to be used for y axes.
             **kwargs: Other keyword arguments that will be passed to Seaborn's lineplot function.
         Raises:
             ValueError: Incorrect column name given
@@ -1757,9 +1756,9 @@ class Facet:
         combination of row/column values and applies histplot to this dataset.
 
         Args:
-            x (str) = None: The name of column to be used for x axes.
-            y (str) = None: The name of column to be used for y axes.
-            bins (int) = 10: An integer bin value which x axes will be grouped by.
+            x: The name of column to be used for x axes.
+            y: The name of column to be used for y axes.
+            bins: An integer bin value which x axes will be grouped by.
             **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function, in the case of one column being supplied, or heatmap function, where both x and y columns are supplied.
         Raises:
             ValueError: Incorrect column name given
@@ -1781,10 +1780,10 @@ class Facet:
 
          barplot filters data down to necessary columns only and then calls Seaborn's barplot function.
         Args:
-            x (str) = None: The name of column to be used for x axes.
-            y (str) = None: The name of column to be used for y axes.
-            estimator (str) = "mean": string represenation of estimator to be used in aggregated query. Options are: "mean", "median", "count", "max", "min", "std" and "sum"
-            hue (str) = None: The name of column to be used for colour encoding.
+            x: The name of column to be used for x axes.
+            y: The name of column to be used for y axes.
+            estimator: string represenation of estimator to be used in aggregated query. Options are: "mean", "median", "count", "max", "min", "std" and "sum"
+            hue: The name of column to be used for colour encoding.
             **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function.
         Raises:
             ValueError: Incorrect column name given, no x or y values provided, estimator function not recognised
@@ -1803,37 +1802,37 @@ class Facet:
         # create list of all columns needed for query
         hue = kwargs["hue"] if "hue" in kwargs else None
         selects = []
-        for to_add in [x, y, self.col, self.row, hue]:
+        for to_add in [x, y, self._col, self._row, hue]:
             if to_add != None:
                 selects.append(to_add)
 
         for col in selects:
-            if col not in self.inner_rdf.columns:
+            if col not in self._inner_rdf.columns:
                 raise ValueError("Column ", col, " not found in dataframe")
 
         # get unique row and col values
         cols = []
         rows = []
-        if self.col != None:
+        if self._col != None:
             tmp = (
-                self.inner_rdf.groupby(pl.col(self.col))
+                self._inner_rdf.groupby(pl.col(self._col))
                 .agg(pl.count())
-                .sort(pl.col(self.col))
+                .sort(pl.col(self._col))
                 .collect()
                 .fetch()
             )
             RequestRejected.check_valid_df(tmp)
-            cols = tmp.to_pandas()[self.col].tolist()
-        if self.row != None:
+            cols = tmp.to_pandas()[self._col].tolist()
+        if self._row != None:
             tmp = (
-                self.inner_rdf.groupby(pl.col(self.row))
+                self._inner_rdf.groupby(pl.col(self._row))
                 .agg(pl.count())
-                .sort(pl.col(self.row))
+                .sort(pl.col(self._row))
                 .collect()
                 .fetch()
             )
             RequestRejected.check_valid_df(tmp)
-            rows = tmp.to_pandas()[self.row].tolist()
+            rows = tmp.to_pandas()[self._row].tolist()
 
         if fn == "histplot":
             bins = kwargs["bins"] if "bins" in kwargs else 10
@@ -1846,27 +1845,27 @@ class Facet:
         # mapping
         r_len = len(rows) if len(rows) != 0 else 1
         c_len = len(cols) if len(cols) != 0 else 1
-        if self.kwargs == None:
+        if self._kwargs == None:
             fig, axes = plt.subplots(r_len, c_len, figsize=((5 * c_len), (5 * r_len)))
         else:
-            if "figsize" not in self.kwargs:
-                self.kwargs["figsize"] = ((5 * c_len), (5 * r_len))
-            fig, axes = plt.subplots(r_len, c_len, **self.kwargs)
+            if "figsize" not in self._kwargs:
+                self._kwargs["figsize"] = ((5 * c_len), (5 * r_len))
+            fig, axes = plt.subplots(r_len, c_len, **self._kwargs)
         cols_len = len(cols)
         rows_len = len(rows)
         if (cols_len != 0) and (rows_len != 0):
             for col_count in range(cols_len):
                 for row_count in range(rows_len):
-                    df = self.inner_rdf.clone().filter(
-                        (pl.col(self.col) == cols[col_count])
-                        & (pl.col(self.row) == rows[row_count])
+                    df = self._inner_rdf.clone().filter(
+                        (pl.col(self._col) == cols[col_count])
+                        & (pl.col(self._row) == rows[row_count])
                     )
                     t1 = (
-                        self.row
+                        self._row
                         + ": "
                         + str(rows[row_count])
                         + " | "
-                        + self.col
+                        + self._col
                         + ": "
                         + str(cols[col_count])
                     )
@@ -1889,9 +1888,9 @@ class Facet:
             col_check = True if cols_len != 0 else False
             max_len = cols_len if col_check else rows_len
             my_list = cols if col_check else rows
-            t = self.col if col_check else self.row
+            t = self._col if col_check else self._row
             for count in range(max_len):
-                df = self.inner_rdf.clone().filter((pl.col(t) == my_list[count]))
+                df = self._inner_rdf.clone().filter((pl.col(t) == my_list[count]))
                 t1 = t + ": " + str(my_list[count])
                 if fn == "histplot":
                     df.select([pl.col(x) for x in selects]).histplot(
@@ -2004,27 +2003,23 @@ class RemoteLazyGroupBy(Generic[LDF]):
 
 
 def train_test_split(
-    *arrays: List["RemoteArray"],
+    *arrays: List[RemoteArray],
     train_size: Optional[float] = None,
     test_size: Optional[float] = 0.25,
     shuffle: Optional[bool] = False,
     random_state: Optional[int] = None,
-) -> List["RemoteArray"]:
+) -> List[RemoteArray]:
     """
     Split RemoteArrays into train and test subsets.
 
     Args:
-        train_size (Optional[float] = None):
-            It should be between 0.0 and 1.0 and represent the proportion of the dataset to include in the train split.
+        train_size: It should be between 0.0 and 1.0 and represent the proportion of the dataset to include in the train split.
             If None, the value is automatically set to the complement of the test size.
-        test_size (Optional[float] =0.25):
-            It should be between 0.0 and 1.0 and represent the proportion of the dataset to include in the test split.
+        test_size: It should be between 0.0 and 1.0 and represent the proportion of the dataset to include in the test split.
             If None, the value is set to the complement of the train size.
             If train_size is also None, it will be set to 0.25.
-        shuffle (Optional[bool] = False):
-            Whether or not to shuffle the data before splitting.
-        random_state (Optional[int] = -1):
-            Controls the shuffling applied to the data before applying the split.
+        shuffle: Whether or not to shuffle the data before splitting.
+        random_state: Controls the shuffling applied to the data before applying the split.
             Pass an int for reproducible output across multiple function calls.
     """
 
@@ -2064,8 +2059,8 @@ def train_test_split(
 
 
 class RemoteArray(RemoteLazyFrame):
-    def __init__(self, rdf: "RemoteLazyFrame") -> None:
-        def _verify_schema(rdf: "RemoteLazyFrame"):
+    def __init__(self, rdf: RemoteLazyFrame) -> None:
+        def _verify_schema(rdf: RemoteLazyFrame):
             dtypes = rdf.schema.values()
             if pl.Utf8 in list(dtypes):
                 raise TypeError("Utf8 column cannot be converted into RemoteArray")
@@ -2079,7 +2074,7 @@ class RemoteArray(RemoteLazyFrame):
         self._meta: Metadata = rdf._meta
         self.identifier = rdf.identifier
 
-    def to_tensor(self) -> "RemoteTensor":
+    def to_tensor(self) -> "bastionlab.torch.RemoteTensor":
         """
         Converts `RemoteArray` to `RemoteTensor`
 

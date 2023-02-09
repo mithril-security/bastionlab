@@ -8,11 +8,6 @@ class PublicKey:
     """A class for representing a public key. This class provides methods for
     encrypting and verifying messages, as well as converting the key to and from
     various formats (e.g. bytes, PEM).
-
-    Attributes:
-        _key (types.PUBLIC_KEY_TYPES): The underlying key type, represented using
-            the `types.PUBLIC_KEY_TYPES` type.
-        _hash (bytes): The hash of the key, used for identifying the key.
     """
 
     _key: types.PUBLIC_KEY_TYPES
@@ -27,7 +22,7 @@ class PublicKey:
 
         self._key = key
         hash = hashes.Hash(hashes.SHA256())
-        hash.update(self.bytes)
+        hash.update(self.as_bytes())
         self._hash = hash.finalize()
 
     def __eq__(self, o: object) -> bool:
@@ -62,8 +57,7 @@ class PublicKey:
         """
         return self._hash
 
-    @property
-    def bytes(self) -> bytes:
+    def as_bytes(self) -> bytes:
         """Get the DER encoding of this `PublicKey` instance.
 
         Returns:
@@ -148,11 +142,6 @@ class SigningKey:
     A class for representing a signing key. This class is used for creating digital
     signatures and verifying them. It contains both the private key (used for signing)
     and the corresponding public key (used for verification).
-
-    Attributes:
-        _key (types.PRIVATE_KEY_TYPES): The private key type, represented using the
-            `types.PRIVATE_KEY_TYPES` type.
-        _pubkey (PublicKey): The corresponding public key, used for verifying signatures.
     """
 
     _key: types.PRIVATE_KEY_TYPES

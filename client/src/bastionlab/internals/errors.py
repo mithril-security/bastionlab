@@ -32,21 +32,14 @@ class GRPCException(Exception):
     """
     A custom exception class for wrapping gRPC errors. This allows for better error
     handling and display.
-
-    Args:
-        err (Union[grpc._channel._InactiveRpcError, grpc._channel._MultiThreadedRendezvous]):
-            The gRPC error that was caught and wrapped by this exception.
     """
 
-    err: Union[grpc._channel._InactiveRpcError, grpc._channel._MultiThreadedRendezvous]
+    err: Union[grpc._channel._InactiveRpcError, grpc._channel._MultiThreadedRendezvous] #: The underlying error
 
     @property
     def code(self) -> grpc.StatusCode:
         """
         Get the status code of the gRPC error.
-
-        Returns:
-            The status code of the gRPC error.
         """
         return self.err._state.code
 
@@ -73,7 +66,7 @@ class GRPCException(Exception):
         return f"{prefix}: code={self.code} message={self.err.details()}"
 
     @staticmethod
-    def map_error(f: Callable[[], T]) -> T:
+    def _map_error(f: Callable[[], T]) -> T:
         """
         Map gRPC errors to `GRPCException` exceptions.
 

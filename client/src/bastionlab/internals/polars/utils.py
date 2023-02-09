@@ -19,7 +19,7 @@ def serialize_dataframe(
     """Converts Polars `DataFrame` to BastionLab `SendChunk` protobuf message.
     This currently uses the Apache IPC format.
     Args:
-        df : polars.internals.dataframe.frame.DataFrame
+        df : pl.DataFrame
             Polars DataFrame
         policy : Policy
             BastionLab Remote DataFrame policy. This specifies which operations can be performed on
@@ -60,7 +60,7 @@ def deserialize_dataframe(chunks: Iterator[bytes]) -> pl.DataFrame:
         chunks : Iterator[bytes]
             Iterator of bytes sent from the server.
     Returns:
-        polars.internals.dataframe.frame.DataFrame
+        pl.DataFrame
     """
     buf = io.BytesIO()
 
