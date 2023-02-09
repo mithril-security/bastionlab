@@ -102,7 +102,7 @@ nav:
       - SQL queries: "docs/tutorials/SQL_queries.ipynb"
       - Data visualization: "docs/tutorials/visualization.ipynb"
       - Saving DataFrames: "docs/tutorials/saving_dataframes.ipynb"
-      - Scaling DataFrames: "docs/tutorials/normalization.ipynb"
+      - Normalization: "docs/tutorials/normalization.ipynb"
   - 🌍 How-to-guides:
       - Data exploration:
         - Covid-19 cleaning and exploration: "docs/how-to-guides/covid_cleaning_exploration.ipynb"

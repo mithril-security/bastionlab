@@ -1,6 +1,10 @@
 use std::sync::{Arc, Mutex};
 
+<<<<<<< HEAD
 use bastionlab_common::{array_store::ArrayStore, common_conversions::*, session::SessionManager};
+=======
+use bastionlab_common::common_conversions::*;
+>>>>>>> 8a4bdec627ca0b9c82bcccfb4a027ad47be4e3e4
 use bastionlab_polars::BastionLabPolars;
 use bastionlab_torch::BastionLabTorch;
 use ndarray::{Axis, Dim, IxDynImpl, OwnedRepr};
@@ -16,20 +20,11 @@ use crate::bastionlab::Reference;
 pub struct Converter {
     torch: Arc<BastionLabTorch>,
     polars: Arc<BastionLabPolars>,
-    sess_manager: Arc<SessionManager>,
 }
 
 impl Converter {
-    pub fn new(
-        torch: Arc<BastionLabTorch>,
-        polars: Arc<BastionLabPolars>,
-        sess_manager: Arc<SessionManager>,
-    ) -> Self {
-        Self {
-            torch,
-            polars,
-            sess_manager,
-        }
+    pub fn new(torch: Arc<BastionLabTorch>, polars: Arc<BastionLabPolars>) -> Self {
+        Self { torch, polars }
     }
     pub fn ndarray_to_tensor(&self, arr: ArrayStore) -> Result<Tensor, Status> {
         let tensor = match arr {
@@ -221,8 +216,7 @@ impl ConversionService for Converter {
         &self,
         request: Request<RemoteArray>,
     ) -> Result<Response<Reference>, Status> {
-        self.sess_manager.verify_request(&request)?;
-        let identifier = &request.into_inner().identifier;
+        let identifier = &request.get_ref().identifier;
 
         let df = self.polars.get_array(&identifier)?;
 
