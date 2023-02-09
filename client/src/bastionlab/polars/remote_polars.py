@@ -438,21 +438,19 @@ class RemoteLazyFrame:
         # because if not this leads to panics etc. when we follow this with other operations that use the new column before next using collect()
         return ret.collect()
 
-    def describe(self: LDF) -> "FetchableLazyFrame":
+    def describe(self: LDF) -> pl.DataFrame:
         """
         Provides the following summary statistics for our RemoteLazyFrame:
         - count
+        - null count
         - mean
         - std
         - min
-        - 1st quartile
-        - 2nd quartile/median
-        - 3rd quartile
         - max
+        - median
         Returns:
-            RemoteLazyFrame: A RemoteLazyFrame containing statistical information
+            A Polars DataFrame containing statistical information
         """
-        #id = self.collect()._identifier
         ret = self.select(
             [
             pl.col("*").count().suffix("_count"),
@@ -465,6 +463,7 @@ class RemoteLazyFrame:
             ]
         )
         stats = ret.collect().fetch()
+        RequestRejected.check_valid_df(stats)
         description = pl.DataFrame({
         "describe": ["count", "null_count", "mean", "std", "min", "max", "median"],
         **{

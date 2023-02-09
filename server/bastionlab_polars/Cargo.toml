@@ -42,7 +42,6 @@ features = [
   "temporal",
   "random",
   "fmt",
-  "describe",
   "performant",
   "dtype-full",
   "rows",

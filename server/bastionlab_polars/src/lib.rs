@@ -9,7 +9,6 @@ use polars::export::ahash::HashSet;
 use polars::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json;
-use crate::Rule::True;
 use std::fs::{create_dir, read_dir, OpenOptions};
 use std::io::{Error, ErrorKind};
 use std::{future::Future, pin::Pin, time::Instant};
@@ -17,7 +16,6 @@ use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status, Streaming};
 use utils::sanitize_df;
 use uuid::Uuid;
-use UnsafeAction::Log;
 
 pub mod polars_proto {
     tonic::include_proto!("bastionlab_polars");
@@ -477,38 +475,6 @@ impl PolarsService for BastionLabPolars {
         };
         Ok(fut.await)
     }
-
-    async fn describe_data_frame(
-        &self,
-        request: Request<ReferenceRequest>,
-    ) -> Result<Response<ReferenceResponse>, Status>  {
-        let identifier = &request.get_ref().identifier;
-        let dfs = self.dataframes.read().unwrap(); 
-        let artifact = dfs.get(identifier).ok_or_else(|| {
-            Status::not_found(format!(
-                "Could not find dataframe: identifier={}",
-                identifier
-            ))
-        })?;
-        let new_df = artifact.dataframe.describe(None);
-        let pol = Policy{
-            safe_zone: True,
-            unsafe_handling: Log,
-            savable: true,
-            };
-        let df = DataFrameArtifact{
-            dataframe: new_df,
-            policy: pol,
-            fetchable: VerificationResult::Safe,
-            blacklist: Vec::new(),
-            query_details: String::from("upload dataframe"),
-        };
-        let header = get_df_header(&df.dataframe)?;
-        drop(dfs); //need to drop as if not blocks on insert_df
-        let id = self.insert_df(df);
-        Ok(Response::new(ReferenceResponse { identifier: id.to_string(), header}))
-    }
-
 
     async fn list_data_frames(
         &self,
