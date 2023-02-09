@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass, field, make_dataclass
+from dataclasses import dataclass
 from typing import Callable, Generic, List, Optional, TypeVar, Sequence, Union, Dict
 import seaborn as sns
 import polars as pl
@@ -16,7 +16,6 @@ import matplotlib.pyplot as plt
 import matplotlib as mat
 from typing import TYPE_CHECKING
 from ..errors import RequestRejected
-import numpy as np
 from serde import serde, InternalTagging, field
 from serde.json import to_json
 
@@ -78,15 +77,22 @@ def delegate_properties(
     return inner
 
 
-class CompositePlanSegment:
-    """
-    Composite plan segment class which handles segment plans that have not been implemented
-    """
+CompositePlanSegment = Union[
+    "PolarsPlanSegment",
+    "UdfPlanSegment",
+    "EntryPointPlanSegment",
+    "StackPlanSegment",
+    "StringUdfPlanSegment",
+    "RowCountSegment",
+]
+"""
+Composite plan segment class which handles segment plans that have not been implemented
+"""
 
 
 @dataclass
 @serde
-class EntryPointPlanSegment(CompositePlanSegment):
+class EntryPointPlanSegment:
     """
     Composite plan segment class responsible for new entry points
     """
@@ -96,7 +102,7 @@ class EntryPointPlanSegment(CompositePlanSegment):
 
 @dataclass
 @serde
-class PolarsPlanSegment(CompositePlanSegment):
+class PolarsPlanSegment:
     """
     Composite plan segment class responsible for Polars queries
     """
@@ -113,7 +119,7 @@ class PolarsPlanSegment(CompositePlanSegment):
 
 @dataclass
 @serde
-class UdfPlanSegment(CompositePlanSegment):
+class UdfPlanSegment:
     """
     Composite plan segment class responsible for user defined functions
     """
@@ -127,7 +133,7 @@ class UdfPlanSegment(CompositePlanSegment):
 
 @dataclass
 @serde
-class StackPlanSegment(CompositePlanSegment):
+class StackPlanSegment:
     """
     Composite plan segment class responsible for vstack function
     """
@@ -135,7 +141,7 @@ class StackPlanSegment(CompositePlanSegment):
 
 @dataclass
 @serde
-class RowCountSegment(CompositePlanSegment):
+class RowCountSegment:
     """
     Composite plan segment class responsible for with_row_count function
     """
@@ -143,91 +149,104 @@ class RowCountSegment(CompositePlanSegment):
     row: str
 
 
+StringMethod = Union[
+    "Split",
+    "ToLowerCase",
+    "ToUpperCase",
+    "Replace",
+    "ReplaceAll",
+    "Contains",
+    "Match",
+    "FindAll",
+    "Extract",
+    "ExtractAll",
+    "FuzzyMatch",
+]
+
+
+@dataclass
+@serde
+class ToLowerCase:
+    pass
+
+
+@dataclass
+@serde
+class ToUpperCase:
+    pass
+
+
+@dataclass
+@serde
+class Split:
+    pattern: str
+
+
+@dataclass
+@serde
+class Contains:
+    pattern: str
+
+
+@dataclass
+@serde
+class Match:
+    pattern: str
+
+
+@dataclass
+@serde
+class FindAll:
+    pattern: str
+
+
+@dataclass
+@serde
+class Extract:
+    pattern: str
+
+
+@dataclass
+@serde
+class ExtractAll:
+    pattern: str
+
+
+@dataclass
+@serde
+class FuzzyMatch:
+    pattern: str
+
+
+@dataclass
+@serde
+class Replace:
+    pattern: str
+    to: str
+
+
+@dataclass
+@serde
+class ReplaceAll:
+    pattern: str
+    to: str
+
+
 @dataclass
 @serde(tagging=InternalTagging("type"))
-class PlanSegments:
-    segments: List[
-        Union[
-            PolarsPlanSegment,
-            UdfPlanSegment,
-            EntryPointPlanSegment,
-            StackPlanSegment,
-            RowCountSegment,
-        ]
-    ]
-
-
-@dataclass
-class StringMethod(CompositePlanSegment):
-    def serialize(self) -> str:
-        raise NotImplementedError()
-
-
-def pattern_operator_serializer(operator: str):
-    """
-    This method creates the following dataclass type on-the-fly.
-
-    ```python
-        @dataclass
-        class [`operator`](StringMethod):
-            _pattern: str
-
-            def serialize(self):
-                return f'{{"{operator}": {{"pattern": "{self._pattern}"}}}}'
-    ```
-    """
-    return make_dataclass(
-        operator,
-        bases=(StringMethod,),
-        fields=[("_pattern", str)],
-        namespace={
-            "serialize": lambda self: f'{{"{operator}": {{"pattern": "{self._pattern}"}}}}'
-        },
-    )
-
-
-@dataclass
-class ToLowerCase(StringMethod):
-    def serialize(self) -> str:
-        return f'"ToLowerCase"'
-
-
-@dataclass
-class ToUpperCase(StringMethod):
-    def serialize(self) -> str:
-        return f'"ToUpperCase"'
-
-
-@dataclass
-class Replace(StringMethod):
-    _pattern: str
-    _to: str
-
-    def serialize(self) -> str:
-        return f'{{"Replace": {{"pattern": "{self._pattern}", "to": "{self._to}"}}}}'
-
-
-@dataclass
-class ReplaceAll(StringMethod):
-    _pattern: str
-    _to: str
-
-    def serialize(self) -> str:
-        return f'{{"ReplaceAll": {{"pattern": "{self._pattern}", "to": "{self._to}"}}}}'
-
-
-@dataclass
-class StringUdfPlanSegment(CompositePlanSegment):
+class StringUdfPlanSegment:
     """
     Composite plan segment class responsible for string-based user defined functions
     """
 
-    _method: "StringMethod"
-    _columns: List[str]
+    method: "StringMethod"
+    columns: List[str]
 
-    def serialize(self) -> str:
-        columns = ",".join([f'"{c}"' for c in self._columns])
-        return f'{{"StringUdfPlanSegment": {{"method": {self._method.serialize()}, "columns": [{columns}]}}}}'
+
+@dataclass
+@serde(tagging=InternalTagging("type"))
+class PlanSegments:
+    segments: List[CompositePlanSegment]
 
 
 @dataclass
@@ -1247,9 +1266,7 @@ class RemoteLazyFrame:
         Returns:
             RemoteLazyFrame.
         """
-        return self._make_string_udf_segment(
-            pattern_operator_serializer("Split")(sep), cols=cols
-        )
+        return self._make_string_udf_segment(Split(pattern=sep), cols=cols)
 
     def to_lowercase(
         self, cols: Optional[Union[str, List[str]]] = None
@@ -1342,9 +1359,7 @@ class RemoteLazyFrame:
         Returns:
             RemoteLazyFrame.
         """
-        return self._make_string_udf_segment(
-            pattern_operator_serializer("Contains")(pattern), cols=cols
-        )
+        return self._make_string_udf_segment(Contains(pattern=pattern), cols=cols)
 
     def match(
         self,
@@ -1364,9 +1379,7 @@ class RemoteLazyFrame:
         Returns:
             RemoteLazyFrame.
         """
-        return self._make_string_udf_segment(
-            pattern_operator_serializer("Match")(pattern), cols=cols
-        )
+        return self._make_string_udf_segment(Match(pattern=pattern), cols=cols)
 
     def fuzzy_match(
         self,
@@ -1386,9 +1399,7 @@ class RemoteLazyFrame:
         Returns:
             RemoteLazyFrame.
         """
-        return self._make_string_udf_segment(
-            pattern_operator_serializer("FuzzyMatch")(pattern), cols=cols
-        )
+        return self._make_string_udf_segment(FuzzyMatch(pattern=pattern), cols=cols)
 
     def findall(
         self,
@@ -1408,9 +1419,7 @@ class RemoteLazyFrame:
         Returns:
             RemoteLazyFrame.
         """
-        return self._make_string_udf_segment(
-            pattern_operator_serializer("FindAll")(pattern), cols=cols
-        )
+        return self._make_string_udf_segment(FindAll(pattern=pattern), cols=cols)
 
     def extract(
         self,
@@ -1430,9 +1439,7 @@ class RemoteLazyFrame:
         Returns:
             RemoteLazyFrame.
         """
-        return self._make_string_udf_segment(
-            pattern_operator_serializer("Extract")(pattern), cols=cols
-        )
+        return self._make_string_udf_segment(Extract(pattern=pattern), cols=cols)
 
     def extract_all(
         self,
@@ -1452,9 +1459,7 @@ class RemoteLazyFrame:
         Returns:
             RemoteLazyFrame.
         """
-        return self._make_string_udf_segment(
-            pattern_operator_serializer("ExtractAll")(pattern), cols=cols
-        )
+        return self._make_string_udf_segment(ExtractAll(pattern=pattern), cols=cols)
 
     def minmax_scale(self: LDF, cols: Union[str, List[str]]) -> LDF:
         """Rescales data using the Min/Max or normalization method to a range of [0,1]

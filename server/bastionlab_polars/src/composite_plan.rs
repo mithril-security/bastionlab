@@ -23,6 +23,7 @@ pub struct CompositePlan {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "type")]
 pub enum StringMethod {
     Split { pattern: String },
     ToLowerCase,
@@ -165,15 +166,24 @@ impl StringMethod {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum CompositePlanSegment {
-    PolarsPlanSegment { plan: LogicalPlan },
-    UdfPlanSegment { columns: Vec<String>, udf: String },
-    EntryPointPlanSegment { identifier: String },
+    PolarsPlanSegment {
+        plan: LogicalPlan,
+    },
+    UdfPlanSegment {
+        columns: Vec<String>,
+        udf: String,
+    },
+    EntryPointPlanSegment {
+        identifier: String,
+    },
     StackPlanSegment,
     StringUdfPlanSegment {
         method: StringMethod,
         columns: Vec<String>,
     },
-    RowCountSegment { row: String },
+    RowCountSegment {
+        row: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -196,7 +206,7 @@ impl CompositePlan {
         let plan_str = serde_json::to_string(&self.segments).map_err(|e| {
             Status::invalid_argument(format!("Could not parse composite plan: {e}"))
         })?;
-        
+
         let mut blacklist_hashmap = HashMap::new();
 
         for seg in self.segments {
