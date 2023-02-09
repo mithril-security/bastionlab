@@ -37,7 +37,7 @@ pub struct Session {
 #[derive(Debug)]
 pub struct SessionManager {
     keys: Option<Mutex<KeyManagement>>,
-    sessions: Arc<RwLock<HashMap<[u8; 32], Session>>>,
+    pub sessions: Arc<RwLock<HashMap<[u8; 32], Session>>>,
     session_expiry: u64,
     challenges: Mutex<HashSet<[u8; 32]>>,
 }
@@ -56,6 +56,24 @@ impl SessionManager {
         self.keys.is_some()
     }
 
+    /// Returns the access token in the request
+    pub fn get_token<T>(&self, req: &Request<T>) -> Result<Option<Bytes>, Status> {
+        if !self.auth_enabled(){
+            return Ok(None)
+        }
+
+        let meta = req
+            .metadata()
+            .get_bin("accesstoken-bin")
+            .ok_or_else(|| Status::invalid_argument("No access token in request metadata"))?;
+
+        let access_token = meta
+            .to_bytes()
+            .map_err(|_| Status::invalid_argument("Could not decode accesstoken"))?;
+
+        Ok(Some(access_token))
+    }
+
     /// Get the user pubkey hash from a token
     pub fn get_user_id(&self, token: Option<Bytes>) -> Result<String, Status> {
         let token_bytes = match &token {
@@ -69,45 +87,6 @@ impl SessionManager {
 
         let user_id = session.pubkey.clone();
         Ok(user_id)
-    }
-
-    /// Verify a request, return the user id token.
-    pub fn verify_request<T>(&self, req: &Request<T>) -> Result<Option<Bytes>, Status> {
-        if !self.auth_enabled() {
-            return Ok(None);
-        }
-        let meta = req
-            .metadata()
-            .get_bin("accesstoken-bin")
-            .ok_or_else(|| Status::invalid_argument("No access token in request metadata"))?;
-
-        let access_token = meta
-            .to_bytes()
-            .map_err(|_| Status::invalid_argument("Could not decode accesstoken"))?;
-
-        let mut tokens = self.sessions.write().expect("Poisoned lock");
-
-        let session = tokens
-            .get(access_token.as_ref())
-            .ok_or_else(|| Status::aborted("Session not found!"))?;
-
-        let recv_ip = &req
-            .remote_addr()
-            .ok_or_else(|| Status::aborted("User IP unavailable"))?;
-
-        // ip verification
-        if session.user_ip.ip() != recv_ip.ip() {
-            return Err(Status::aborted("Unknown IP Address!"));
-        }
-
-        // expiry verification
-        let curr_time = SystemTime::now();
-        if curr_time > session.expiry {
-            tokens.remove(access_token.as_ref());
-            return Err(Status::aborted("Session Expired"));
-        }
-
-        Ok(Some(access_token))
     }
 
     /// When no token is given and auth is disabled, this will give the ClientInfo of the last

@@ -3,6 +3,7 @@ use bastionlab_common::common_conversions::{
     lazy_frame_from_logical_plan, series_to_tensor, tensor_to_series,
 };
 use polars::{lazy::dsl::Expr, prelude::*};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io::Cursor};
 use tch::CModule;
@@ -46,12 +47,26 @@ impl CompositePlan {
         let plan_str = serde_json::to_string(&self.0).map_err(|e| {
             Status::invalid_argument(format!("Could not parse composite plan: {e}"))
         })?;
+        let mut blacklist_hashmap = HashMap::new();
 
         for seg in self.0 {
             match seg {
                 CompositePlanSegment::PolarsPlanSegment(mut plan) => {
                     let stats = initialize_plan(&mut plan, &mut stack)?;
-                    let df = run_logical_plan(plan)?;
+                    let df = run_logical_plan(plan.clone())?;
+
+                    let polars_plan_str = format!("{:?}", plan);
+                    let re =
+                        Regex::new(r#"col\("(?P<original>[^)]+)"\).alias\("(?P<alias>[^)]+)"\)"#)
+                            .unwrap();
+                    let matches = re.captures_iter(&polars_plan_str);
+                    for captures in matches {
+                        blacklist_hashmap.insert(
+                            captures["original"].to_string(),
+                            captures["alias"].to_string(),
+                        );
+                    }
+
                     stack.push(StackFrame { df, stats });
                 }
                 CompositePlanSegment::UdfPlanSegment { columns, udf } => {
@@ -119,11 +134,14 @@ impl CompositePlan {
                         "Could not apply with_row_count: no input data frame",
                     ))?;
                     let df = frame.df.with_row_count(&name, Some(0)).map_err(|e| {
-                        Status::invalid_argument(format!("Error while running with_row_count: {}", e))
+                        Status::invalid_argument(format!(
+                            "Error while running with_row_count: {}",
+                            e
+                        ))
                     })?;
                     let stats = frame.stats;
                     stack.push(StackFrame { df, stats });
-            }
+                }
             }
         }
 
@@ -151,6 +169,12 @@ impl CompositePlan {
                     policy = policy.merge(&artifact.policy);
                 }
                 fetchable.merge(check);
+
+                for (key, val) in blacklist_hashmap.iter() {
+                    if artifact.blacklist[..].contains(&key.to_string()) {
+                        blacklist.push(val.to_string());
+                    }
+                }
                 blacklist.extend_from_slice(&artifact.blacklist[..]);
 
                 Ok(())
