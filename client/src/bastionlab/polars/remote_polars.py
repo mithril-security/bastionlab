@@ -453,30 +453,42 @@ class RemoteLazyFrame:
         """
         ret = self.select(
             [
-            pl.col("*").count().suffix("_count"),
-            pl.col("*").null_count().suffix("_null_count"),
-            pl.col("*").mean().suffix("_mean"),
-            pl.col("*").std().suffix("_std"),
-            pl.col("*").min().suffix("_min"),
-            pl.col("*").max().suffix("_max"),
-            pl.col("*").median().suffix("_median"),
+                pl.col("*").count().suffix("_count"),
+                pl.col("*").null_count().suffix("_null_count"),
+                pl.col("*").mean().suffix("_mean"),
+                pl.col("*").std().suffix("_std"),
+                pl.col("*").min().suffix("_min"),
+                pl.col("*").max().suffix("_max"),
+                pl.col("*").median().suffix("_median"),
             ]
         )
         stats = ret.collect().fetch()
         RequestRejected.check_valid_df(stats)
-        description = pl.DataFrame({
-        "describe": ["count", "null_count", "mean", "std", "min", "max", "median"],
-        **{
-            x: [
-            stats.select(f"{x}_count")[0, 0],
-            stats.select(f"{x}_null_count")[0, 0], 
-            stats.select(f"{x}_mean")[0, 0], 
-            stats.select(f"{x}_std")[0, 0],
-            stats.select(f"{x}_min")[0, 0], 
-            stats.select(f"{x}_max")[0, 0],
-            stats.select(f"{x}_median")[0, 0]] for x in self.columns
-        },
-        })
+        description = pl.DataFrame(
+            {
+                "describe": [
+                    "count",
+                    "null_count",
+                    "mean",
+                    "std",
+                    "min",
+                    "max",
+                    "median",
+                ],
+                **{
+                    x: [
+                        stats.select(f"{x}_count")[0, 0],
+                        stats.select(f"{x}_null_count")[0, 0],
+                        stats.select(f"{x}_mean")[0, 0],
+                        stats.select(f"{x}_std")[0, 0],
+                        stats.select(f"{x}_min")[0, 0],
+                        stats.select(f"{x}_max")[0, 0],
+                        stats.select(f"{x}_median")[0, 0],
+                    ]
+                    for x in self.columns
+                },
+            }
+        )
         return description
 
     def join(
