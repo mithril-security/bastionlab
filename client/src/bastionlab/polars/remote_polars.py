@@ -452,8 +452,33 @@ class RemoteLazyFrame:
         Returns:
             RemoteLazyFrame: A RemoteLazyFrame containing statistical information
         """
-        id = self.collect()._identifier
-        return self._meta._polars_client._describe_df(id)
+        #id = self.collect()._identifier
+        ret = self.select(
+            [
+            pl.col("*").count().suffix("_count"),
+            pl.col("*").null_count().suffix("_null_count"),
+            pl.col("*").mean().suffix("_mean"),
+            pl.col("*").std().suffix("_std"),
+            pl.col("*").min().suffix("_min"),
+            pl.col("*").max().suffix("_max"),
+            pl.col("*").median().suffix("_median"),
+            ]
+        )
+        stats = ret.collect().fetch()
+        description = pl.DataFrame({
+        "describe": ["count", "null_count", "mean", "std", "min", "max", "median"],
+        **{
+            x: [
+            stats.select(f"{x}_count")[0, 0],
+            stats.select(f"{x}_null_count")[0, 0], 
+            stats.select(f"{x}_mean")[0, 0], 
+            stats.select(f"{x}_std")[0, 0],
+            stats.select(f"{x}_min")[0, 0], 
+            stats.select(f"{x}_max")[0, 0],
+            stats.select(f"{x}_median")[0, 0]] for x in self.columns
+        },
+        })
+        return description
 
     def join(
         self: LDF,
