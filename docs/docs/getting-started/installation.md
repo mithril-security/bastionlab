@@ -76,6 +76,19 @@ bastionlab_server.stop(srv)
 docker run -p 50056:50056 -d mithrilsecuritysas/bastionlab:latest
 ```
 
+### Configurating the Docker image
+If you want to modify the server's configuration, you should rather run the container like so:
+```
+docker create -p 50056:50056 --name bastionlab-srv mithrilsecuritysas/bastionlab:latest
+docker cp <your_updated_config>.toml bastionlab-srv:/app/bin
+docker start bastionlab-srv
+```
+
+Here is an example of reasonable config.toml:
+```
+--8<-- "server/tools/config.toml"
+```
+
 ### By locally building the Docker image
 
 Clone the repository and build the image using the Dockerfile:
