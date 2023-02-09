@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use bastionlab_common::{array_store::ArrayStore, common_conversions::*, session::SessionManager};
+use bastionlab_common::{array_store::ArrayStore, common_conversions::*};
 use bastionlab_polars::BastionLabPolars;
 use bastionlab_torch::BastionLabTorch;
 use ndarray::{Axis, Dim, IxDynImpl, OwnedRepr};
@@ -232,7 +232,6 @@ impl ConversionService for Converter {
         &self,
         request: Request<RemoteDataFrame>,
     ) -> Result<Response<RemoteArray>, Status> {
-        self.sess_manager.verify_request(&request)?;
         let identifier = request.into_inner().identifier;
 
         /*
@@ -289,8 +288,6 @@ impl ConversionService for Converter {
         &self,
         request: Request<ToTokenizedArrays>,
     ) -> Result<Response<RemoteArrays>, Status> {
-        self.sess_manager.verify_request(&request)?;
-
         let (identifier, add_special_tokens, model, config, revision, auth_token) = (
             request.get_ref().identifier.clone(),
             request.get_ref().add_special_tokens,
