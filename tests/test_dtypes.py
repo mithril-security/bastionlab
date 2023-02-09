@@ -43,7 +43,7 @@ class TestingConnection(unittest.TestCase):
 
         for df in frames:
             rdf = client.polars.send_df(
-                df, policy=Policy(TrueRule(), Log(), savable=False)
+                df, policy=Policy(TrueRule(), Log(), savable=False, convertable=True)
             )
             df2 = rdf.select(pl.all()).collect().fetch()
 
@@ -67,7 +67,7 @@ class TestingConnection(unittest.TestCase):
 
         for df in frames:
             rdf = client.polars.send_df(
-                df, policy=Policy(TrueRule(), Log(), savable=False)
+                df, policy=Policy(TrueRule(), Log(), savable=False, convertable=True)
             )
             df2 = rdf.select(pl.all()).collect().fetch()
 

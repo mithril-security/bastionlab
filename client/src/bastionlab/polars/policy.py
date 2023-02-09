@@ -131,17 +131,24 @@ class Policy:
 
     safe_zone: Rule
     unsafe_handling: UnsafeAction
-    savable: bool
+    savable: bool = True
+    convertable: bool = False
 
     def serialize(self) -> str:
         if self.savable:
             savable_str = "true"
         else:
             savable_str = "false"
-        return f'{{"safe_zone":{self.safe_zone.serialize()},"unsafe_handling":{self.unsafe_handling.serialize()},"savable":{savable_str}}}'
+
+        if self.convertable:
+            convertable_str = "true"
+        else:
+            convertable_str = "false"
+
+        return f'{{"safe_zone":{self.safe_zone.serialize()},"unsafe_handling":{self.unsafe_handling.serialize()},"savable":{savable_str},"convertable":{convertable_str}}}'
 
 
-DEFAULT_POLICY = Policy(Aggregation(10), Review(), True)
+DEFAULT_POLICY = Policy(Aggregation(10), Review(), True, True)
 """
 Default BastionLab Client Policy `Policy(Aggregation(10), Review(), True)`
 """

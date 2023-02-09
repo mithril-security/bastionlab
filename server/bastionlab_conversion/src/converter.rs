@@ -37,6 +37,11 @@ impl ConversionService for Converter {
     ) -> Result<Response<Reference>, Status> {
         self.sess_manager.verify_request(&request)?;
         let identifier = &request.get_ref().identifier;
+        let df_artifact = self.polars.get_df_artifact(identifier)?;
+
+        if !df_artifact.policy.check_convertable() {
+            return Err(Status::unknown("Dataframe is not convertable"));
+        }
 
         let df = self.polars.get_df_unchecked(&identifier)?;
 

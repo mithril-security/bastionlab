@@ -29,7 +29,10 @@ class TestingConnection(unittest.TestCase):
         connection = Connection("localhost", 50056)
         client = connection.client
         policy = Policy(
-            safe_zone=Aggregation(min_agg_size=1), unsafe_handling=Log(), savable=False
+            safe_zone=Aggregation(min_agg_size=1),
+            unsafe_handling=Log(),
+            savable=False,
+            convertable=True,
         )
         rdf = client.polars.send_df(df, policy)
         self.assertNotEqual(rdf, None)
@@ -40,7 +43,10 @@ class TestingConnection(unittest.TestCase):
         connection = Connection("localhost", 50056)
         client = connection.client
         policy = Policy(
-            safe_zone=Aggregation(min_agg_size=1), unsafe_handling=Log(), savable=False
+            safe_zone=Aggregation(min_agg_size=1),
+            unsafe_handling=Log(),
+            savable=False,
+            convertable=True,
         )
         rdf = client.polars.send_df(df, policy)
         per_class_rates = (
@@ -57,7 +63,12 @@ class TestingConnection(unittest.TestCase):
         df = pl.read_csv("titanic.csv").limit(50)
         connection = Connection("localhost", 50056)
         client = connection.client
-        policy = Policy(safe_zone=Aggregation(1), unsafe_handling=Log(), savable=False)
+        policy = Policy(
+            safe_zone=Aggregation(1),
+            unsafe_handling=Log(),
+            savable=False,
+            convertable=True,
+        )
         rdf = client.polars.send_df(df, policy)
         per_sex_rates = (
             rdf.select([pl.col("Sex"), pl.col("Survived")])

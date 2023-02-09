@@ -134,11 +134,14 @@ impl CompositePlan {
                         "Could not apply with_row_count: no input data frame",
                     ))?;
                     let df = frame.df.with_row_count(&name, Some(0)).map_err(|e| {
-                        Status::invalid_argument(format!("Error while running with_row_count: {}", e))
+                        Status::invalid_argument(format!(
+                            "Error while running with_row_count: {}",
+                            e
+                        ))
                     })?;
                     let stats = frame.stats;
                     stack.push(StackFrame { df, stats });
-            }
+                }
             }
         }
 

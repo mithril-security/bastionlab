@@ -8,6 +8,7 @@ pub struct Policy {
     safe_zone: Rule,
     unsafe_handling: UnsafeAction,
     savable: bool,
+    convertable: bool,
 }
 
 impl Policy {
@@ -26,6 +27,7 @@ impl Policy {
             safe_zone: Rule::AtLeastNOf(2, vec![self.safe_zone.clone(), other.safe_zone.clone()]),
             unsafe_handling: self.unsafe_handling.merge(other.unsafe_handling),
             savable: self.savable && other.savable,
+            convertable: self.convertable && other.convertable,
         }
     }
 
@@ -34,11 +36,16 @@ impl Policy {
             safe_zone: Rule::True,
             unsafe_handling: UnsafeAction::Log,
             savable: true,
+            convertable: true,
         }
     }
 
     pub fn check_savable(&self) -> bool {
         return self.savable;
+    }
+
+    pub fn check_convertable(&self) -> bool {
+        return self.convertable;
     }
 }
 
