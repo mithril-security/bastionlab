@@ -23,7 +23,10 @@ impl Policy {
 
     pub fn merge(&self, other: &Self) -> Self {
         Policy {
-            safe_zone: Rule::AtLeastNOf(2, vec![self.safe_zone.clone(), other.safe_zone.clone()]),
+            safe_zone: Rule::AtLeastNOf {
+                n: 2,
+                of: vec![self.safe_zone.clone(), other.safe_zone.clone()],
+            },
             unsafe_handling: self.unsafe_handling.merge(other.unsafe_handling),
             savable: self.savable && other.savable,
         }
@@ -31,7 +34,7 @@ impl Policy {
 
     pub fn allow_by_default() -> Self {
         Policy {
-            safe_zone: Rule::True,
+            safe_zone: Rule::TrueRule,
             unsafe_handling: UnsafeAction::Log,
             savable: true,
         }
@@ -43,12 +46,13 @@ impl Policy {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type")]
 pub enum Rule {
-    AtLeastNOf(usize, Vec<Rule>),
-    UserId(String),
-    Aggregation(usize),
-    True,
-    False,
+    AtLeastNOf { n: usize, of: Vec<Rule> },
+    UserId { id: String },
+    Aggregation { min_agg_size: usize },
+    TrueRule,
+    FalseRule,
 }
 
 #[derive(Debug, Clone)]
@@ -61,7 +65,7 @@ pub struct Context {
 impl Rule {
     fn verify(&self, ctx: &Context) -> Result<RuleMatch, Status> {
         match self {
-            Rule::AtLeastNOf(n, sub_rules) => {
+            Rule::AtLeastNOf { n, of: sub_rules } => {
                 let mut m = 0;
                 let mut failed = String::new();
                 for (i, rule) in sub_rules.iter().enumerate() {
@@ -80,12 +84,16 @@ impl Rule {
                     m, n, failed
                 )))
             }
-            Rule::UserId(expected_user_id) => Ok(if expected_user_id == &ctx.user_id {
+            Rule::UserId {
+                id: expected_user_id,
+            } => Ok(if expected_user_id == &ctx.user_id {
                 RuleMatch::Match
             } else {
                 RuleMatch::Mismatch(String::from("UserId mismatch"))
             }),
-            Rule::Aggregation(min_allowed_agg_size) => {
+            Rule::Aggregation {
+                min_agg_size: min_allowed_agg_size,
+            } => {
                 let min_allowed_agg_size = *min_allowed_agg_size * ctx.stats.join_scaling;
                 Ok(if ctx.stats.agg_size >= min_allowed_agg_size {
                     RuleMatch::Match
@@ -97,8 +105,8 @@ impl Rule {
                     ))
                 })
             }
-            Rule::True => Ok(RuleMatch::Match),
-            Rule::False => Ok(RuleMatch::Mismatch(String::from(
+            Rule::TrueRule => Ok(RuleMatch::Match),
+            Rule::FalseRule => Ok(RuleMatch::Mismatch(String::from(
                 "Operation denied by the data owner's policy.",
             ))),
         }
@@ -112,6 +120,7 @@ pub enum RuleMatch {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type")]
 pub enum UnsafeAction {
     Log,
     Review,

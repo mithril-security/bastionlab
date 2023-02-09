@@ -18,7 +18,9 @@ use crate::{
 };
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct CompositePlan(Vec<CompositePlanSegment>);
+pub struct CompositePlan {
+    segments: Vec<CompositePlanSegment>,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum StringMethod {
@@ -159,20 +161,19 @@ impl StringMethod {
         Ok(series)
     }
 }
+
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "type")]
 pub enum CompositePlanSegment {
-    PolarsPlanSegment(LogicalPlan),
-    UdfPlanSegment {
-        columns: Vec<String>,
-        udf: String,
-    },
-    EntryPointPlanSegment(String),
+    PolarsPlanSegment { plan: LogicalPlan },
+    UdfPlanSegment { columns: Vec<String>, udf: String },
+    EntryPointPlanSegment { identifier: String },
     StackPlanSegment,
     StringUdfPlanSegment {
         method: StringMethod,
         columns: Vec<String>,
     },
-    RowCountSegment(String),
+    RowCountSegment { row: String },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -192,15 +193,15 @@ struct StackFrame {
 impl CompositePlan {
     pub fn run(self, state: &BastionLabPolars, user_id: &str) -> Result<DataFrameArtifact, Status> {
         let mut stack = Vec::new();
-        let plan_str = serde_json::to_string(&self.0).map_err(|e| {
+        let plan_str = serde_json::to_string(&self.segments).map_err(|e| {
             Status::invalid_argument(format!("Could not parse composite plan: {e}"))
         })?;
         
         let mut blacklist_hashmap = HashMap::new();
 
-        for seg in self.0 {
+        for seg in self.segments {
             match seg {
-                CompositePlanSegment::PolarsPlanSegment(mut plan) => {
+                CompositePlanSegment::PolarsPlanSegment { mut plan } => {
                     let stats = initialize_plan(&mut plan, &mut stack)?;
                     let df = run_logical_plan(plan.clone())?;
 
@@ -257,7 +258,7 @@ impl CompositePlan {
                     }
                     stack.push(frame);
                 }
-                CompositePlanSegment::EntryPointPlanSegment(identifier) => {
+                CompositePlanSegment::EntryPointPlanSegment { identifier } => {
                     let df = state.get_df_unchecked(&identifier)?;
                     let stats = DataFrameStats::new(identifier);
                     stack.push(StackFrame { df, stats });
@@ -301,7 +302,7 @@ impl CompositePlan {
                     }
                     stack.push(frame);
                 }
-                CompositePlanSegment::RowCountSegment(name) => {
+                CompositePlanSegment::RowCountSegment { row: name } => {
                     let frame = stack.pop().ok_or(Status::invalid_argument(
                         "Could not apply with_row_count: no input data frame",
                     ))?;
