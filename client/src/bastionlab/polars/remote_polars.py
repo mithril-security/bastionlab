@@ -448,6 +448,8 @@ class RemoteLazyFrame:
         - min
         - max
         - median
+         Raises:
+            Exception: Where necessary queries to get statistical information for the operation are rejected by the data owner
         Returns:
             A Polars DataFrame containing statistical information
         """
