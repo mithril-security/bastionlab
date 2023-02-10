@@ -218,4 +218,6 @@ class RemoteDataset:
 
 
 __pdoc__ = {}
+__pdoc__["RemoteTensor.__init__"] = False
+__pdoc__["RemoteDataset.__init__"] = False
 __all__ = ["RemoteTensor", "RemoteDataset"]

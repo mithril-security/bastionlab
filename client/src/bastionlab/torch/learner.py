@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 class RemoteLearner:
     """Represents a remote model on the server along with hyperparameters to train and test it.
 
-    The remote learner accepts the model to be trained with a `RemoteDataLoader`.
+    The remote learner accepts the model to be trained with a `RemoteLearner`.
 
     Args:
         client: A BastionAI client to be used to access server resources.
@@ -294,7 +294,7 @@ class RemoteLearner:
         timeout: int = 100,
         poll_delay: float = 0.2,
     ) -> None:
-        """Tests the remote model with the test dataloader provided in the RemoteDataLoader.
+        """Tests the remote model with the test dataloader provided in the `RemoteLearner`.
 
         Args:
             test_dataset: overrides the test dataset passed to the remote `RemoteDataset` constructor.
@@ -322,4 +322,6 @@ class RemoteLearner:
         return self.model
 
 
+__pdoc__ = {}
+__pdoc__["RemoteLearner.__init__"] = False
 __all__ = ["RemoteLearner"]
