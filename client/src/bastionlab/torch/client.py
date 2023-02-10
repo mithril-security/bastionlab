@@ -1,7 +1,6 @@
 from typing import List, TYPE_CHECKING, Union, Optional
 from torch.nn import Module
 from torch.utils.data import Dataset
-import grpc
 import torch
 from ..pb.bastionlab_torch_pb2 import Empty, Metric, TestConfig, TrainConfig  # type: ignore [import]
 from ..pb.bastionlab_pb2 import Reference
@@ -17,11 +16,12 @@ from ._utils import (
     serialize_model,
 )
 
+# TODO: hide Reference from public API! (protobuf object)
+
 
 if TYPE_CHECKING:
-    from .learner import RemoteLearner
     from ..client import Client
-    from .data import RemoteTensor, RemoteDataset
+    import bastionlab.torch
 
 
 class BastionLabTorch:
@@ -130,7 +130,9 @@ class BastionLabTorch:
         chunks = GRPCException._map_error(lambda: self.stub.FetchModule(ref))
         deserialize_weights_to_model(model, chunks)
 
-    def fetch_dataset(self, ref: Union["RemoteDataset", Reference]) -> TensorDataset:
+    def fetch_dataset(
+        self, ref: Union["bastionlab.torch.RemoteDataset", Reference]
+    ) -> TensorDataset:
         """Fetches the distant dataset with a BastionLab Torch gRPC protocol reference.
 
         Args:
@@ -206,7 +208,9 @@ class BastionLabTorch:
 
         return GRPCException._map_error(lambda: self.stub.Test(config))
 
-    def delete_dataset(self, ref: Union["RemoteDataset", Reference]) -> None:
+    def delete_dataset(
+        self, ref: Union["bastionlab.torch.RemoteDataset", Reference]
+    ) -> None:
         """Deletes the dataset correponding to the given `ref` reference on the BastionLab Torch server.
 
         Args:
@@ -245,13 +249,13 @@ class BastionLabTorch:
 
         return GRPCException._map_error(lambda: self.stub.GetMetric(run))
 
-    def RemoteDataset(self, *args, **kwargs) -> "RemoteDataset":
+    def RemoteDataset(self, *args, **kwargs) -> "bastionlab.torch.RemoteDataset":
         """Returns a RemoteDataset object encapsulating a training and testing dataloaders
         on the remote server that uses this client to communicate with the server.
 
         Args:
-            *args: all arguments are forwarded to the `RemoteDataset` constructor.
-            **kwargs: all keyword arguments are forwarded to the `RemoteDataset` constructor.
+            *args: all arguments are forwarded to the `bastionlab.torch.RemoteDataset` constructor.
+            **kwargs: all keyword arguments are forwarded to the `bastionlab.torch.RemoteDataset` constructor.
         """
         from .data import RemoteDataset
 
@@ -266,19 +270,19 @@ class BastionLabTorch:
         else:
             return RemoteDataset._from_dataset(self, *args, **kwargs)
 
-    def RemoteLearner(self, *args, **kwargs) -> "RemoteLearner":
-        """Returns a RemoteLearner object encapsulating a model and hyperparameters for
+    def RemoteLearner(self, *args, **kwargs) -> "bastionlab.torch.RemoteLearner":
+        """Returns a `bastionlab.torch.RemoteLearner` object encapsulating a model and hyperparameters for
         training and testing on the remote server and that uses this client to communicate with the server.
 
         Args:
-            *args: all arguments are forwarded to the `RemoteDataLoader` constructor.
-            **kwargs: all keyword arguments are forwarded to the `RemoteDataLoader` constructor.
+            *args: all arguments are forwarded to the `bastionlab.torch.RemoteLearner` constructor.
+            **kwargs: all keyword arguments are forwarded to the `bastionlab.torch.RemoteLearner` constructor.
         """
         from .learner import RemoteLearner
 
         return RemoteLearner(self, *args, **kwargs)
 
-    def RemoteTensor(self, tensor: torch.Tensor) -> "RemoteTensor":
+    def RemoteTensor(self, tensor: torch.Tensor) -> "bastionlab.torch.RemoteTensor":
         """Returns a RemoteTensor which represents a reference to the uploaded tensor.
 
         Args:
@@ -287,3 +291,7 @@ class BastionLabTorch:
         from .data import RemoteTensor
 
         return RemoteTensor._send_tensor(self, tensor)
+
+
+__pdoc__ = {}
+__pdoc__["BastionLabTorch.__init__"] = False
