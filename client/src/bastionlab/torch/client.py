@@ -59,7 +59,7 @@ class BastionLabTorch:
 
         self.client._refresh_session_if_needed()
 
-        return GRPCException.map_error(
+        return GRPCException._map_error(
             lambda: self.stub.SendModel(
                 serialize_model(
                     model,
@@ -101,7 +101,7 @@ class BastionLabTorch:
 
         self.client._refresh_session_if_needed()
 
-        return GRPCException.map_error(
+        return GRPCException._map_error(
             lambda: self.stub.SendDataset(
                 serialize_dataset(
                     dataset,
@@ -127,7 +127,7 @@ class BastionLabTorch:
 
         self.client._refresh_session_if_needed()
 
-        chunks = GRPCException.map_error(lambda: self.stub.FetchModule(ref))
+        chunks = GRPCException._map_error(lambda: self.stub.FetchModule(ref))
         deserialize_weights_to_model(model, chunks)
 
     def fetch_dataset(self, ref: Union["RemoteDataset", Reference]) -> TensorDataset:
@@ -147,7 +147,7 @@ class BastionLabTorch:
                 identifier=ref.identifier, name="", description="", meta=bytes()
             )
         return dataset_from_chunks(
-            GRPCException.map_error(lambda: self.stub.FetchDataset(ref))
+            GRPCException._map_error(lambda: self.stub.FetchDataset(ref))
         )
 
     def get_available_models(self) -> List[Reference]:
@@ -155,14 +155,14 @@ class BastionLabTorch:
 
         self.client._refresh_session_if_needed()
 
-        return GRPCException.map_error(lambda: self.stub.AvailableModels(Empty())).list
+        return GRPCException._map_error(lambda: self.stub.AvailableModels(Empty())).list
 
     def get_available_datasets(self) -> List[Reference]:
         """Returns the list of BastionLab Torch gRPC protocol references of all datasets on the server."""
 
         self.client._refresh_session_if_needed()
 
-        return GRPCException.map_error(
+        return GRPCException._map_error(
             lambda: self.stub.AvailableDatasets(Empty())
         ).list
 
@@ -171,14 +171,16 @@ class BastionLabTorch:
 
         self.client._refresh_session_if_needed()
 
-        return GRPCException.map_error(lambda: self.stub.AvailableDevices(Empty())).list
+        return GRPCException._map_error(
+            lambda: self.stub.AvailableDevices(Empty())
+        ).list
 
     def get_available_optimizers(self) -> List[str]:
         """Returns the list of optimizers supported by the server."""
 
         self.client._refresh_session_if_needed()
 
-        return GRPCException.map_error(
+        return GRPCException._map_error(
             lambda: self.stub.AvailableOptimizers(Empty())
         ).list
 
@@ -191,7 +193,7 @@ class BastionLabTorch:
 
         self.client._refresh_session_if_needed()
 
-        return GRPCException.map_error(lambda: self.stub.Train(config))
+        return GRPCException._map_error(lambda: self.stub.Train(config))
 
     def _test(self, config: TestConfig) -> Reference:
         """Tests a dataset on a model according to `config` on the BastionLab Torch server.
@@ -202,7 +204,7 @@ class BastionLabTorch:
 
         self.client._refresh_session_if_needed()
 
-        return GRPCException.map_error(lambda: self.stub.Test(config))
+        return GRPCException._map_error(lambda: self.stub.Test(config))
 
     def delete_dataset(self, ref: Union["RemoteDataset", Reference]) -> None:
         """Deletes the dataset correponding to the given `ref` reference on the BastionLab Torch server.
@@ -219,7 +221,7 @@ class BastionLabTorch:
                 identifier=ref.identifier, name="", description="", meta=bytes()
             )
 
-        GRPCException.map_error(lambda: self.stub.DeleteDataset(ref))
+        GRPCException._map_error(lambda: self.stub.DeleteDataset(ref))
 
     def delete_module(self, ref: Reference) -> None:
         """Deletes the module correponding to the given `ref` reference on the BastionLab Torch server.
@@ -230,7 +232,7 @@ class BastionLabTorch:
 
         self.client._refresh_session_if_needed()
 
-        GRPCException.map_error(lambda: self.stub.DeleteModule(ref))
+        GRPCException._map_error(lambda: self.stub.DeleteModule(ref))
 
     def get_metric(self, run: Reference) -> Metric:
         """Returns the value of the metric associated with the given `run` reference.
@@ -241,7 +243,7 @@ class BastionLabTorch:
 
         self.client._refresh_session_if_needed()
 
-        return GRPCException.map_error(lambda: self.stub.GetMetric(run))
+        return GRPCException._map_error(lambda: self.stub.GetMetric(run))
 
     def RemoteDataset(self, *args, **kwargs) -> "RemoteDataset":
         """Returns a RemoteDataset object encapsulating a training and testing dataloaders

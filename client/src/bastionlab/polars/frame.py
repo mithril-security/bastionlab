@@ -1,7 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Generic, List, Optional, TypeVar, Sequence, Union, Dict
-import seaborn as sns
 import polars as pl
 from polars.internals.sql.context import SQLContext
 from torch.jit import ScriptFunction
@@ -15,8 +14,6 @@ from ..pb.bastionlab_conversion_pb2 import (
 from ..pb.bastionlab_polars_pb2 import ReferenceResponse, SplitRequest, ReferenceRequest
 from .client import BastionLabPolars
 from .utils import ApplyBins, Palettes, ApplyAbs
-import matplotlib.pyplot as plt
-import matplotlib as mat
 from typing import TYPE_CHECKING
 from ..errors import RequestRejected
 from serde import serde, InternalTagging, field
@@ -28,6 +25,7 @@ LDF = TypeVar("LDF", bound="pl.LazyFrame")
 if TYPE_CHECKING:
     from ..client import Client
     from ..torch import RemoteTensor
+    import matplotlib as mat
 
 
 def delegate(
@@ -258,18 +256,53 @@ class RemoteLazyFrame:
     """
     A class to represent a RemoteLazyFrame.
 
-    Delegate attributes:
-        dtypes: Get dtypes of columns in LazyFrame.
-        schema (dict[column name, DataType]): Get dataframe's schema
+    Delegated attributes
+    --------------------
+    dtypes : dict[str, pl.DataType]
+        Get dtypes of columns in LazyFrame.<br>
+    schema : dict[str, pl.DataType]
+        The dataframe's schema.
 
-    Delegate methods:
+    Delegated methods
+    -----------------
     As well as the methods that will be later described, we also support the following Polars methods which are defined in detail
-    in Polar's documentation:
+    in Polar's documentation:<br>
+    [sort](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.sort.html),
+    [cache](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.cache.html),
+    [filter](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.filter.html),
+    [select](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.select.html),
+    [with_columns](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.with_columns.html),
+    [with_context](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.with_context.html),
+    [with_column](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.with_column.html),
+    [drop](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.drop.html),
+    [rename](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.rename.html),
+    [reverse](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.reverse.html),
+    [shift](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.shift.html),
+    [shift_and_fill](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.shift_and_fill.html),
+    [slice](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.slice.html),
+    [limit](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.limit.html),
+    [head](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.head.html),
+    [tail](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.tail.html),
+    [last](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.last.html),
+    [first](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.first.html),
+    [take_every](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.take_every.html),
+    [fill_null](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.fill_null.html),
+    [fill_nan](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.fill_nan.html),
+    [std](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.std.html),
+    [var](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.var.html),
+    [max](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.max.html),
+    [min](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.min.html),
+    [sum](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.sum.html),
+    [mean](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.mean.html),
+    [median](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.median.html),
+    [quantile](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.quantile.html),
+    [explode](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.explode.html),
+    [unique](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.unique.html),
+    [drop_nulls](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.drop_nulls.html),
+    [melt](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.melt.html),
+    [interpolate](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.interpolate.html),
+    [unnest](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.unnest.html)
 
-    "sort", "cache", "filter", "select", "with_columns", "with_context", "with_column", "drop", "rename", "reverse",
-    "shift", "shift_and_fill", "slice", "limit", "head", "tail", "last", "first", "take_every", "fill_null",
-    "fill_nan", "std", "var", "max", "min", "sum", "mean", "median", "quantile", "explode", "unique", "drop_nulls", "melt",
-    "interpolate", "unnest",
     """
 
     _inner: pl.LazyFrame
@@ -360,7 +393,7 @@ class RemoteLazyFrame:
         """Applied user-defined function to selected columns of RemoteLazyFrame and returns result
         Args:
             columns (List[str]): List of columns that user-defined function should be applied to
-            udf (Callable): user-defined function to be applied to columns, must be a compatible input for torch.jit.script() function.
+            udf (Callable): user-defined function to be applied to columns, must be a compatible input for the `torch.jit.script` function.
         Returns:
             RemoteLazyFrame: An updated RemoteLazyFrame after udf applied
         """
@@ -501,8 +534,8 @@ class RemoteLazyFrame:
             left_on (Union[str, pl.Expr, Sequence[Union[str, pl.Expr]], None] = None): Name(s) of the left join column(s).
             right_on (Union[str, pl.Expr, Sequence[Union[str, pl.Expr]], None] = None): Name(s) of the right join column(s).
             on (Union[str, pl.Expr, Sequence[Union[str, pl.Expr]], None] = None): Name(s) of the join columns in both DataFrames.
-            how (pl.internals.type_aliases.JoinStrategy = "inner"): Join strategy {'inner', 'left', 'outer', 'semi', 'anti', 'cross'}
-            suffix (str = "_right"): Suffix to append to columns with a duplicate name.
+            how (str = 'inner'): Join strategy, which can be either `'inner'`, `'left'`, `'outer'`, `'semi'`, `'anti'` or `'cross'`.
+            suffix (str = '_right'): Suffix to append to columns with a duplicate name.
             allow_parallel (bool = True): Boolean value for allowing the physical plan to evaluate the computation of both RemoteLazyFrames up to the join in parallel.
             force_parallel (bool = False): Boolean value for forcing parallel the physical plan to evaluate the computation of both RemoteLazyFrames up to the join in parallel.
         Raises:
@@ -555,8 +588,8 @@ class RemoteLazyFrame:
             by_left (Union[str, Sequence[str], None] = None): Join on these columns before doing asof join
             by_right (Union[str, Sequence[str], None] = None): Join on these columns before doing asof join
             by (Union[str, Sequence[str], None] = None): Join on these columns before doing asof join
-            strategy (pl.internals.type_aliases.AsofJoinStrategy = "backward"): Join strategy: {'backward', 'forward'}.
-            suffix (str  = "_right"): Suffix to append to columns with a duplicate name.
+            strategy (str = "backward"): Join strategy: can be either `'backward'` or `'forward'`.
+            suffix (str = "_right"): Suffix to append to columns with a duplicate name.
             tolerance (Union[str, int, float, None] = None): Numeric tolerance. By setting this the join will only be done if the near keys are within this distance.
             suffix (str): Suffix to append to columns with a duplicate name.
             allow_parallel (bool = True): Boolean value for allowing the physical plan to evaluate the computation of both RemoteLazyFrames up to the join in parallel.
@@ -600,7 +633,7 @@ class RemoteLazyFrame:
         pie_labels: bool = True,
         key: bool = True,
         key_loc: str = "center left",
-        key_title: str = None,
+        key_title: Optional[str] = None,
         key_bbox=(1, 0, 0.5, 1),
     ) -> None:
         """Draws a pie chart based on values within single column.
@@ -608,15 +641,15 @@ class RemoteLazyFrame:
         Args:
             parts (str): The name of the column containing bar chart segment values.
             title (str = None): Title to be displayed with the bar chart.
-            labels (Union[str, list[str]] = None) = The labels of segments in pie charts. Either a list of string labels following the same order as the values
-            in your `parts` column or the name of a column containing the labels.
-            ax (List(str)): Here you can send your own matplotlib axis if required. Note- if you do this, the fig_kwargs arguments will not be used.
+            labels (Union[str, list[str]] = None): The labels of segments in pie charts. Either a list of string labels following the same order as the values
+                in your `parts` column or the name of a column containing the labels.
+            ax (List[str]): Here you can send your own matplotlib axis if required. Note- if you do this, the fig_kwargs arguments will not be used.
             fig_kwargs (dict = None): A dictionary argument where you can add any kwargs you wish to be forwarded onto matplotlib.pyplot.subplots()
-            when creating the figure that the pie chart will be displayed on.
+                when creating the figure that the pie chart will be displayed on.
             pie_labels (bool = True): You can modify this boolean value if you do not with to label the segments of your pie chart.
             key (bool = True): This key value specifies whether you want a color map key placed to the side of your pie chart.
             key_loc (str = "center left"): A string argument where you can modify the location of your segment color key on your pie chart to be forward to matplotlib's legend function.
-            key_title (str = None): A string argument where you can specify a title for this segment color key to be forward to matplotlib's legend function.
+            key_title (Optional[str] = None): A string argument where you can specify a title for this segment color key to be forward to matplotlib's legend function.
             key_bbox (tuple = 1, 0, 0.5, 1): bbox_to_anchor argument to be forward to matplotlib's legend function.
         Raises:
             ValueError: Incorrect column name given as parts or labels argument.
@@ -624,6 +657,8 @@ class RemoteLazyFrame:
         """
 
         tmp = self
+        import matplotlib.pyplot as plt
+
         if parts not in self.columns:
             raise ValueError("Parts column not found in dataframe")
         if type(labels) == str and labels not in self.columns:
@@ -699,12 +734,12 @@ class RemoteLazyFrame:
         **kwargs,
     ):
         """Draws a barchart
-        barplot filters data down to necessary columns only and then calls Seaborn's barplot function.
+        Barplot filters data down to necessary columns only and then calls Seaborn's barplot function.
         Args:
-            x (str) = None: The name of column to be used for x axes.
-            y (str) = None: The name of column to be used for y axes.
-            estimator (str) = "mean": string represenation of estimator to be used in aggregated query. Options are: "mean", "median", "count", "max", "min", "std" and "sum"
-            hue (str) = None: The name of column to be used for colour encoding.
+            x (str, optional): The name of column to be used for x axes.
+            y (str, optional): The name of column to be used for y axes.
+            estimator (str, optional): string represenation of estimator to be used in aggregated query. Options are: "mean", "median", "count", "max", "min", "std" and "sum"
+            hue (str, optional): The name of column to be used for colour encoding.
             **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function.
         Raises:
             ValueError: Incorrect column name given, no x or y values provided, estimator function not recognised
@@ -712,6 +747,8 @@ class RemoteLazyFrame:
             various exceptions: Note that exceptions may be raised from Seaborn when the barplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
+        import seaborn as sns
+
         # if there is a hue argument add them to cols and no duplicates
         if x == None and y == None:
             raise ValueError("Please provide a x or y column name")
@@ -754,7 +791,7 @@ class RemoteLazyFrame:
                 .collect()
                 .fetch()
             )
-            RequestRejected.check_valid_df(tmp)
+            RequestRejected._check_valid_df(tmp)
             df = tmp.to_pandas()
         else:
             agg_fn = pl.col(y).mean()
@@ -767,7 +804,7 @@ class RemoteLazyFrame:
                 .collect()
                 .fetch()
             )
-            RequestRejected.check_valid_df(tmp)
+            RequestRejected._check_valid_df(tmp)
             df = tmp.to_pandas()
         # run query
         if x == None:
@@ -797,6 +834,7 @@ class RemoteLazyFrame:
             various exceptions: Note that exceptions may be raised from Seaborn when the barplot or heatmap function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
+        import seaborn as sns
 
         col_x = x if x != None else "count"
         col_y = y if y != None else "count"
@@ -825,7 +863,7 @@ class RemoteLazyFrame:
                 .collect()
                 .fetch()
             )
-            RequestRejected.check_valid_df(tmp)
+            RequestRejected._check_valid_df(tmp)
             df = tmp.to_pandas()
 
             # horizontal barplot where x axis is count
@@ -863,7 +901,7 @@ class RemoteLazyFrame:
                 .collect()
                 .fetch()
             )
-            RequestRejected.check_valid_df(tmp)
+            RequestRejected._check_valid_df(tmp)
             df = tmp.to_pandas()
             my_cmap = sns.color_palette("Blues", as_cmap=True)
             pivot = df.pivot(index=col_y, columns=col_x, values="count")
@@ -902,6 +940,8 @@ class RemoteLazyFrame:
             various exceptions: Note that exceptions may be raised from Seaborn when the lineplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
+        import seaborn as sns
+
         selects = [x, y] if x != y else [x]
 
         for op in [hue, size, style, units]:
@@ -923,7 +963,7 @@ class RemoteLazyFrame:
 
         # get df with necessary columns
         tmp = self.select([pl.col(x) for x in selects]).collect().fetch()
-        RequestRejected.check_valid_df(tmp)
+        RequestRejected._check_valid_df(tmp)
         df = tmp.to_pandas()
         sns.lineplot(data=df, x=x, y=y, **kwargs)
 
@@ -940,6 +980,8 @@ class RemoteLazyFrame:
             various exceptions: Note that exceptions may be raised from Seaborn when the scatterplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
+        import seaborn as sns
+
         # if there is a hue or style argument add them to cols
         cols = [x, y]
         if "hue" in kwargs:
@@ -955,7 +997,7 @@ class RemoteLazyFrame:
 
         # get df with necessary columns
         tmp = self.select([pl.col(x) for x in cols]).collect().fetch()
-        RequestRejected.check_valid_df(tmp)
+        RequestRejected._check_valid_df(tmp)
         df = tmp.to_pandas()
         # run query
         sns.scatterplot(data=df, x=x, y=y, **kwargs)
@@ -971,10 +1013,10 @@ class RemoteLazyFrame:
         """Draws a barchart
         barplot filters data down to necessary columns only and then calls Seaborn's barplot function.
         Args:
-            x (str) = None: The name of column to be used for x axes.
-            y (str) = None: The name of column to be used for y axes.
-            estimator (str) = "mean": string represenation of estimator to be used in aggregated query. Options are: "mean", "median", "count", "max", "min", "std" and "sum"
-            hue (str) = None: The name of column to be used for colour encoding.
+            x (str, optional): The name of column to be used for x axes.
+            y (str, optional): The name of column to be used for y axes.
+            estimator (str, optional): string represenation of estimator to be used in aggregated query. Options are: "mean", "median", "count", "max", "min", "std" and "sum"
+            hue (str, optional): The name of column to be used for colour encoding.
             **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function.
         Raises:
             ValueError: Incorrect column name given, no x or y values provided, estimator function not recognised
@@ -982,6 +1024,8 @@ class RemoteLazyFrame:
             various exceptions: Note that exceptions may be raised from Seaborn when the barplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
+        import seaborn as sns
+
         # if there is a hue argument add them to cols and no duplicates
         if x == None and y == None:
             raise ValueError("Please provide a x or y column name")
@@ -1024,7 +1068,7 @@ class RemoteLazyFrame:
                 .collect()
                 .fetch()
             )
-            RequestRejected.check_valid_df(tmp)
+            RequestRejected._check_valid_df(tmp)
             df = tmp.to_pandas()
         else:
             agg_fn = pl.col(y).mean()
@@ -1037,7 +1081,7 @@ class RemoteLazyFrame:
                 .collect()
                 .fetch()
             )
-            RequestRejected.check_valid_df(tmp)
+            RequestRejected._check_valid_df(tmp)
             df = tmp.to_pandas()
         # run query
         if x == None:
@@ -1108,7 +1152,7 @@ class RemoteLazyFrame:
         y: str = None,
         colors: Union[str, list[str]] = Palettes.dict["standard"],
         vertical: bool = True,
-        ax: mat.axes = None,
+        ax: "mat.axes" = None,
         widths: float = 0.75,
         median_linestyle: str = "-",
         median_color: str = "black",
@@ -1137,6 +1181,8 @@ class RemoteLazyFrame:
             various exceptions: Note that exceptions may be raised from Seaborn when the lineplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
+        import matplotlib.pyplot as plt
+        import matplotlib as mat
 
         if isinstance(colors, str):
             c = colors
@@ -1427,6 +1473,8 @@ class FetchableLazyFrame(RemoteLazyFrame):
 
 @dataclass
 class Facet:
+    """Namespace for matplotlib functions"""
+
     inner_rdf: RemoteLazyFrame
     col: Optional[str] = None
     row: Optional[str] = None
@@ -1455,6 +1503,8 @@ class Facet:
             various exceptions: Note that exceptions may be raised from internal Seaborn (scatterplot) or Matplotlib.pyplot functions (subplots, set_title),
             for example, if kwargs keywords are not expected. See Seaborn/Matplotlib documentation for further details.
         """
+        import seaborn as sns
+
         self.__map(sns.scatterplot, *args, **kwargs)
 
     def lineplot(
@@ -1476,12 +1526,14 @@ class Facet:
             various exceptions: Note that exceptions may be raised from Seaborn when the lineplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
+        import seaborn as sns
+
         self.__map(sns.lineplot, x=x, y=y, **kwargs)
 
     def histplot(
         self: LDF,
-        x: str = None,
-        y: str = None,
+        x: str = "count",
+        y: str = "count",
         bins: int = 10,
         **kwargs,
     ) -> None:
@@ -1491,9 +1543,9 @@ class Facet:
         combination of row/column values and applies histplot to this dataset.
 
         Args:
-            x (str) = None: The name of column to be used for x axes.
-            y (str) = None: The name of column to be used for y axes.
-            bins (int) = 10: An integer bin value which x axes will be grouped by.
+            x (str): The name of column to be used for x axes.
+            y (str): The name of column to be used for y axes.
+            bins (int): An integer bin value which x axes will be grouped by.
             **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function, in the case of one column being supplied, or heatmap function, where both x and y columns are supplied.
         Raises:
             ValueError: Incorrect column name given
@@ -1505,20 +1557,20 @@ class Facet:
 
     def barplot(
         self: LDF,
-        x: str = None,
-        y: str = None,
-        hue: str = None,
+        x: Optional[str] = None,
+        y: Optional[str] = None,
+        hue: Optional[str] = None,
         estimator: str = "mean",
         **kwargs,
     ) -> None:
         """Draws a bar chart for each subset in row/column facet grid.
 
-         barplot filters data down to necessary columns only and then calls Seaborn's barplot function.
+        Barplot filters data down to necessary columns only and then calls Seaborn's barplot function.
         Args:
-            x (str) = None: The name of column to be used for x axes.
-            y (str) = None: The name of column to be used for y axes.
-            estimator (str) = "mean": string represenation of estimator to be used in aggregated query. Options are: "mean", "median", "count", "max", "min", "std" and "sum"
-            hue (str) = None: The name of column to be used for colour encoding.
+            x (str, optional): The name of column to be used for x axes.
+            y (str, optional): The name of column to be used for y axes.
+            estimator (str, optional): string represenation of estimator to be used in aggregated query. Options are: "mean", "median", "count", "max", "min", "std" and "sum"
+            hue (str, optional): The name of column to be used for colour encoding.
             **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function.
         Raises:
             ValueError: Incorrect column name given, no x or y values provided, estimator function not recognised
@@ -1532,6 +1584,8 @@ class Facet:
         self.__bastion_map("barplot", x=x, y=y, **kwargs)
 
     def __bastion_map(self, fn: str, x: str = None, y: str = None, **kwargs):
+        import matplotlib.pyplot as plt
+
         # create list of all columns needed for query
         hue = kwargs["hue"] if "hue" in kwargs else None
         selects = []
@@ -1554,7 +1608,7 @@ class Facet:
                 .collect()
                 .fetch()
             )
-            RequestRejected.check_valid_df(tmp)
+            RequestRejected._check_valid_df(tmp)
             cols = tmp.to_pandas()[self.col].tolist()
         if self.row != None:
             tmp = (
@@ -1564,7 +1618,7 @@ class Facet:
                 .collect()
                 .fetch()
             )
-            RequestRejected.check_valid_df(tmp)
+            RequestRejected._check_valid_df(tmp)
             rows = tmp.to_pandas()[self.row].tolist()
 
         if fn == "histplot":
@@ -1636,6 +1690,8 @@ class Facet:
                 axes[count].set_title(t1)
 
     def __map(self: LDF, func, **kwargs) -> None:
+        import matplotlib.pyplot as plt
+
         # create list of all columns needed for query
         selects = [self.col, self.row]
         if "x" in kwargs and not kwargs["x"] in selects:
@@ -1658,7 +1714,7 @@ class Facet:
                 .collect()
                 .fetch()
             )
-            RequestRejected.check_valid_df(tmp)
+            RequestRejected._check_valid_df(tmp)
             cols = tmp.to_pandas()[self.col].tolist()
 
         if self.row != None:
@@ -1669,7 +1725,7 @@ class Facet:
                 .collect()
                 .fetch()
             )
-            RequestRejected.check_valid_df(tmp)
+            RequestRejected._check_valid_df(tmp)
             rows = tmp.to_pandas()[self.row].tolist()
 
         # mapping
@@ -1700,7 +1756,7 @@ class Facet:
                         + str(cols[col_count])
                     )
                     tmp = df.select([pl.col(x) for x in selects]).collect().fetch()
-                    RequestRejected.check_valid_df(tmp)
+                    RequestRejected._check_valid_df(tmp)
                     sea_df = tmp.to_pandas()
                     func(data=sea_df, ax=axes[row_count, col_count], **kwargs)
                     axes[row_count, col_count].set_title(t1)
@@ -1713,7 +1769,7 @@ class Facet:
                 df = self.inner_rdf.clone().filter((pl.col(t) == my_list[count]))
                 t1 = t + ": " + str(my_list[count])
                 tmp = df.select([pl.col(x) for x in selects]).collect().fetch()
-                RequestRejected.check_valid_df(tmp)
+                RequestRejected._check_valid_df(tmp)
                 sea_df = tmp.to_pandas()
                 func(data=sea_df, ax=axes[row_count, col_count], **kwargs)
                 axes[count].set_title(t1)
@@ -1729,6 +1785,8 @@ class Facet:
 )
 @dataclass
 class RemoteLazyGroupBy(Generic[LDF]):
+    """Builder for a GroupBy operation on a `RemoteLazyFrame`."""
+
     _inner: pl.internals.lazyframe.groupby.LazyGroupBy[LDF]
     _meta: Metadata
 
@@ -1744,17 +1802,17 @@ def train_test_split(
     Split RemoteArrays into train and test subsets.
 
     Args:
-        train_size (Optional[float] = None):
-            It should be between 0.0 and 1.0 and represent the proportion of the dataset to include in the train split.
+        train_size (Optional[float], optional): It should
+            be between 0.0 and 1.0 and represent the proportion of the dataset to include in the train split.
             If None, the value is automatically set to the complement of the test size.
-        test_size (Optional[float] =0.25):
-            It should be between 0.0 and 1.0 and represent the proportion of the dataset to include in the test split.
+        test_size (Optional[float], optional): It should
+            be between 0.0 and 1.0 and represent the proportion of the dataset to include in the test split.
             If None, the value is set to the complement of the train size.
-            If train_size is also None, it will be set to 0.25.
-        shuffle (Optional[bool] = False):
-            Whether or not to shuffle the data before splitting.
-        random_state (Optional[int] = -1):
-            Controls the shuffling applied to the data before applying the split.
+            If train_size is also None, it will be set to 0.25. Defaults to 0.25.
+        shuffle (Optional[bool], optional): Whether or
+            not to shuffle the data before splitting.
+        random_state (Optional[int], optional): Controls the
+            shuffling applied to the data before applying the split.
             Pass an int for reproducible output across multiple function calls.
     """
 
@@ -1787,9 +1845,22 @@ def train_test_split(
 
 
 class RemoteArray(RemoteLazyFrame):
-    def __init__(self, client: "Client", identifier: str) -> None:
-        self._client = client
-        self.identifier = identifier
+    """Intermediate representation for conversion between Tensor and Dataframes."""
+
+    def __init__(self, rdf: "RemoteLazyFrame") -> None:
+        def _verify_schema(rdf: "RemoteLazyFrame"):
+            dtypes = rdf.schema.values()
+            if pl.Utf8 in list(dtypes):
+                raise TypeError("Utf8 column cannot be converted into RemoteArray")
+
+            if len(set(dtypes)) > 1:
+                raise TypeError("DataTypes for all columns should be the same")
+            return rdf.collect()
+
+        rdf = _verify_schema(rdf)
+        self._inner = rdf._inner
+        self._meta: Metadata = rdf._meta
+        self.identifier = rdf.identifier
 
     def to_tensor(self) -> "RemoteTensor":
         """
