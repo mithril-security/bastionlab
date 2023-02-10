@@ -487,6 +487,17 @@ class LayerNorm(nn.LayerNorm):
         return x
 
 
+__all__ = [
+    "Conv1d",
+    "Conv2d",
+    "Conv3d",
+    "ConvLinear",
+    "expanded_convolution",
+    "Linear",
+    "Embedding",
+    "LayerNorm",
+]
+
 if __name__ == "__main__":
     model = Conv2d(3, 16, 3, 64)
     model = torch.jit.script(Conv2d(3, 16, 3, 64))

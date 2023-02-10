@@ -19,7 +19,6 @@ import matplotlib.pyplot as plt
 import matplotlib as mat
 from typing import TYPE_CHECKING
 from ..errors import RequestRejected
-import numpy as np
 from serde import serde, InternalTagging, field
 from serde.json import to_json
 
@@ -27,8 +26,8 @@ from serde.json import to_json
 LDF = TypeVar("LDF", bound="pl.LazyFrame")
 
 if TYPE_CHECKING:
-    from ..torch.remote_torch import RemoteTensor
     from ..client import Client
+    from ..torch import RemoteTensor
 
 
 def delegate(
@@ -1803,7 +1802,7 @@ class RemoteArray(RemoteLazyFrame):
         Returns:
             RemoteTensor
         """
-        from ..torch.remote_torch import RemoteTensor
+        from ..torch.data import RemoteTensor
 
         res = self._client._converter._stub.ConvToTensor(
             PbRemoteArray(identifier=self.identifier)
@@ -1812,3 +1811,19 @@ class RemoteArray(RemoteLazyFrame):
 
     def __str__(self) -> str:
         return f"RemoteArray(identifier={self.identifier})"
+
+
+__pdoc__ = {}
+__all__ = [
+    "RemoteLazyFrame",
+    "RemoteLazyGroupBy",
+    "FetchableLazyFrame",
+    "train_test_split",
+    "Facet",
+    "RemoteArray",
+]
+__pdoc__["RemoteLazyFrame.__init__"] = False
+__pdoc__["RemoteLazyGroupBy.__init__"] = False
+__pdoc__["FetchableLazyFrame.__init__"] = False
+__pdoc__["Facet.__init__"] = False
+__pdoc__["RemoteArray.__init__"] = False

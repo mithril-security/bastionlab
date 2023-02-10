@@ -4,88 +4,94 @@ from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import ec, types
 
 
+__pdoc__ = {}
+
+
 class PublicKey:
-    # A class for representing a public key. This class provides methods for
-    # encrypting and verifying messages, as well as converting the key to and from
-    # various formats (e.g. bytes, PEM).
-    #
-    # Attributes:
-    #     _key (types.PUBLIC_KEY_TYPES): The underlying key type, represented using
-    #         the `types.PUBLIC_KEY_TYPES` type.
-    #     _hash (bytes): The hash of the key, used for identifying the key.
+    """A class for representing a public key. This class provides methods for
+    encrypting and verifying messages, as well as converting the key to and from
+    various formats (e.g. bytes, PEM).
+    """
 
     _key: types.PUBLIC_KEY_TYPES
     _hash: bytes
 
     def __init__(self, key: types.PUBLIC_KEY_TYPES):
-        # Initialize a `PublicKey` instance with a given public key type.
+        """Initialize a `PublicKey` instance with a given public key type.
 
-        # Args:
-        #     key: An EC public key type.
+        Args:
+            key: An EC public key type.
+        """
+
         self._key = key
         hash = hashes.Hash(hashes.SHA256())
-        hash.update(self.bytes)
+        hash.update(self.as_bytes())
         self._hash = hash.finalize()
 
     def __eq__(self, o: object) -> bool:
-        # Compare this `PublicKey` instance with another object for equality.
-        #
-        # Args:
-        #     o: The object to compare with.
-        #
-        # Returns:
-        #     True if the objects are equal, False otherwise.
+        """Compare this `PublicKey` instance with another object for equality.
+
+        Args:
+            o: The object to compare with.
+
+        Returns:
+            True if the objects are equal, False otherwise.
+        """
         return self._key.__eq__(o)
 
     def verify(self, signature: bytes, data: bytes) -> None:
-        # Verify that the given signature is valid for the given data.
+        """Verify that the given signature is valid for the given data.
 
-        # Args:
-        #     signature: A signature to verify.
-        #     data: The data that the signature should be for.
+        Args:
+            signature: A signature to verify.
+            data: The data that the signature should be for.
 
-        # Raises:
-        #     ValueError: if the signature is not valid for the given data.
+        Raises:
+            ValueError: if the signature is not valid for the given data.
+        """
         self._key.verify(signature, data, signature_algorithm=ec.ECDSA(hashes.SHA256()))
 
     @property
     def hash(self) -> bytes:
-        # Get the hash of this `PublicKey` instance.
+        """Get the hash of this `PublicKey` instance.
 
-        # Returns:
-        #     The hash of this `PublicKey` instance.
+        Returns:
+            The hash of this `PublicKey` instance.
+        """
         return self._hash
 
-    @property
-    def bytes(self) -> bytes:
-        # Get the DER encoding of this `PublicKey` instance.
+    def as_bytes(self) -> bytes:
+        """Get the DER encoding of this `PublicKey` instance.
 
-        # Returns:
-        #     The DER encoding of this `PublicKey` instance.
+        Returns:
+            The DER encoding of this `PublicKey` instance.
+        """
         return self._key.public_bytes(
             serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
         )
 
     @staticmethod
     def from_pem(path: str) -> "PublicKey":
-        # Load a `PublicKey` instance from a PEM-encoded file.
+        """Load a `PublicKey` instance from a PEM-encoded file.
 
-        # Args:
-        #     path: The path to the file to load the key from.
+        Args:
+            path: The path to the file to load the key from.
 
-        # Returns:
-        #     The `PublicKey` instance loaded from the given file.
+        Returns:
+            The `PublicKey` instance loaded from the given file.
+        """
         with open(path, "rb") as f:
             return PublicKey.from_pem_content(f.read())
 
     def save_pem(self, path: str) -> "PublicKey":
-        # Save this `PublicKey` instance to a PEM-encoded file.
+        """Save this `PublicKey` instance to a PEM-encoded file.
 
-        # Args:
-        #     path: The path to save the key to.
+        Args:
+            path: The path to save the key to.
 
-        # Returns:
-        #     This `PublicKey` instance.
+        Returns:
+            This `PublicKey` instance.
+        """
         with open(path, "wb") as f:
             f.write(
                 self._key.public_bytes(
@@ -96,10 +102,11 @@ class PublicKey:
 
     @property
     def pem(self) -> str:
-        # Get the PEM encoding of this `PublicKey` instance.
+        """Get the PEM encoding of this `PublicKey` instance.
 
-        # Returns:
-        #     The PEM encoding of this `PublicKey` instance.
+        Returns:
+            The PEM encoding of this `PublicKey` instance.
+        """
         return str(
             self._key.public_bytes(
                 serialization.Encoding.PEM,
@@ -110,57 +117,56 @@ class PublicKey:
 
     @staticmethod
     def from_bytes_content(content: bytes) -> "PublicKey":
-        # Load a `PublicKey` instance from a DER-encoded byte string.
+        """Load a `PublicKey` instance from a DER-encoded byte string.
 
-        # Args:
-        #     content: The DER-encoded byte string to load the key from.
+        Args:
+            content: The DER-encoded byte string to load the key from.
 
-        # Returns:
-        #     The `PublicKey` instance loaded from the given byte string.
+        Returns:
+            The `PublicKey` instance loaded from the given byte string.
+        """
         return PublicKey(serialization.load_der_public_key(content))
 
     @staticmethod
     def from_pem_content(content: bytes) -> "PublicKey":
-        # Load a `PublicKey` instance from a PEM-encoded byte string.
+        """Load a `PublicKey` instance from a PEM-encoded byte string.
 
-        # Args:
-        #     content: The PEM-encoded byte string to load the key from.
+        Args:
+            content: The PEM-encoded byte string to load the key from.
 
-        # Returns:
-        #     The `PublicKey` instance loaded from the given byte string.
+        Returns:
+            The `PublicKey` instance loaded from the given byte string.
+        """
         return PublicKey(serialization.load_pem_public_key(content))
 
 
-class SigningKey:
-    # """
-    # A class for representing a signing key. This class is used for creating digital
-    # signatures and verifying them. It contains both the private key (used for signing)
-    # and the corresponding public key (used for verification).
+__pdoc__["PublicKey.__init__"] = False
+__pdoc__["PublicKey.__eq__"] = True
 
-    # Attributes:
-    #     _key (types.PRIVATE_KEY_TYPES): The private key type, represented using the
-    #         `types.PRIVATE_KEY_TYPES` type.
-    #     _pubkey (PublicKey): The corresponding public key, used for verifying signatures."""
+
+class SigningKey:
+    """
+    A class for representing a signing key. This class is used for creating digital
+    signatures and verifying them. It contains both the private key (used for signing)
+    and the corresponding public key (used for verification).
+    """
 
     _key: types.PRIVATE_KEY_TYPES
     _pubkey: PublicKey
 
     def __init__(self, privkey: types.PRIVATE_KEY_TYPES):
-        # Initialize a `SigningKey` instance with a given private key type.
-
-        # Args:
-        #     privkey: A private key type.
         self._key = privkey
         self._pubkey = PublicKey(self._key.public_key())
 
     def sign(self, data: bytes) -> bytes:
-        # Sign the given data with this `SigningKey` instance's private key.
+        """Sign the given data with this `SigningKey` instance's private key.
 
-        # Args:
-        #     data: The data to sign.
+        Args:
+            data: The data to sign.
 
-        # Returns:
-        #     The signature for the given data.
+        Returns:
+            The signature for the given data.
+        """
         return self._key.sign(data, signature_algorithm=ec.ECDSA(hashes.SHA256()))
 
     def __eq__(self, o: object) -> bool:
@@ -168,31 +174,34 @@ class SigningKey:
 
     @property
     def pubkey(self) -> PublicKey:
-        # Get the public key associated with this `SigningKey` instance.
+        """Get the public key associated with this `SigningKey` instance.
 
-        # Returns:
-        #     The public key associated with this `SigningKey` instance.
+        Returns:
+            The public key associated with this `SigningKey` instance.
+        """
         return self._pubkey
 
     @staticmethod
     def generate() -> "SigningKey":
-        # Generate a new `SigningKey` instance.
+        """Generate a new `SigningKey` instance.
 
-        # Returns:
-        #     A new `SigningKey` instance.
+        Returns:
+            A new `SigningKey` instance.
+        """
         return SigningKey(ec.generate_private_key(ec.SECP256R1()))
 
     @staticmethod
     def keygen(path: str, password: Optional[bytes] = None) -> "SigningKey":
-        # Generate a new signing key and save it to the given file.
+        """Generate a new signing key and save it to the given file.
 
-        # Args:
-        #     path: The path to the file to save the signing key to.
-        #     password: The password to use to encrypt the signing key. If not provided,
-        #         the key will not be encrypted.
+        Args:
+            path: The path to the file to save the signing key to.
+            password: The password to use to encrypt the signing key. If not provided,
+                the key will not be encrypted.
 
-        # Returns:
-        #     The generated signing key.
+        Returns:
+            The generated signing key.
+        """
         signing_key_path = path
         pub_key_path = path + ".pub"
         if os.path.exists(signing_key_path):
@@ -204,24 +213,26 @@ class SigningKey:
 
     @staticmethod
     def from_pem(path: str, password: Optional[bytes] = None) -> "SigningKey":
-        # Load a `PublicKey` instance from a PEM-encoded file.
+        """Load a `PublicKey` instance from a PEM-encoded file.
 
-        # Args:
-        #     path: The path to the file to load the key from.
+        Args:
+            path: The path to the file to load the key from.
 
-        # Returns:
-        #     The `PublicKey` instance loaded from the given file.
+        Returns:
+            The `PublicKey` instance loaded from the given file.
+        """
         with open(path, "rb") as f:
             return SigningKey.from_pem_content(f.read(), password)
 
     def save_pem(self, path: str, password: Optional[bytes] = None) -> "SigningKey":
-        # Save this `PublicKey` instance to a PEM-encoded file.
+        """Save this `PublicKey` instance to a PEM-encoded file.
 
-        # Args:
-        #     path: The path to save the key to.
+        Args:
+            path: The path to save the key to.
 
-        # Returns:
-        #     This `PublicKey` instance.
+        Returns:
+            This `PublicKey` instance.
+        """
         with open(path, "wb") as f:
             f.write(
                 self._key.private_bytes(
@@ -238,15 +249,20 @@ class SigningKey:
     def from_pem_content(
         content: bytes, password: Optional[bytes] = None
     ) -> "SigningKey":
-        # Load a `SigningKey` instance from a PEM-encoded byte string.
+        """Load a `SigningKey` instance from a PEM-encoded byte string.
 
-        # Args:
-        #     content: The PEM-encoded byte string to load the key from.
-        #     password: The password to use to decrypt the key, if it is encrypted.
+        Args:
+            content: The PEM-encoded byte string to load the key from.
+            password: The password to use to decrypt the key, if it is encrypted.
 
-        # Returns:
-        #     The `SigningKey` instance loaded from the given byte string.
+        Returns:
+            The `SigningKey` instance loaded from the given byte string.
+        """
         return SigningKey(serialization.load_pem_private_key(content, password))
+
+
+__pdoc__["SigningKey.__init__"] = False
+__pdoc__["SigningKey.__eq__"] = True
 
 
 class Identity:
@@ -280,3 +296,13 @@ class Identity:
             The signing key with the given name.
         """
         return SigningKey.from_pem(name, None)
+
+
+__pdoc__["Identity.__init__"] = False
+
+
+__all__ = [
+    "SigningKey",
+    "PublicKey",
+    "Identity",
+]
