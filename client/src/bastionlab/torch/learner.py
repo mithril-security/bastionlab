@@ -6,15 +6,15 @@ from torch.nn import Module
 from torch.utils.data import Dataset
 import torch
 from ..pb.bastionlab_torch_pb2 import Metric, TestConfig, TrainConfig  # type: ignore [import]
-from ..pb.bastionlab_pb2 import Reference, TensorMetaData
+from ..pb.bastionlab_pb2 import Reference
 from ..errors import GRPCException
 from .psg import expand_weights
 from .client import BastionLabTorch
-from .optimizer_config import *
-from ..torch.remote_torch import RemoteDataset
+from .optimizer import *
+from .data import RemoteDataset
 
 if TYPE_CHECKING:
-    from ..torch.remote_torch import RemoteDataset
+    from .data import RemoteDataset
 
 
 class RemoteLearner:
@@ -264,7 +264,7 @@ class RemoteLearner:
                         polling ends and the progress bar is terminated.
             poll_delay: Delay in seconds between two polling requests for the loss.
         """
-        run = self.client.train(
+        run = self.client._train(
             self._train_config(
                 nb_epochs,
                 eps,
@@ -305,7 +305,7 @@ class RemoteLearner:
                         polling ends and the progress bar is terminated.
             poll_delay: Delay in seconds between two polling requests for the metric.
         """
-        run = self.client.test(self._test_config(batch_size, metric, metric_eps))
+        run = self.client._test(self._test_config(batch_size, metric, metric_eps))
         self._poll_metric(
             run,
             name=metric if metric is not None else self.loss,
@@ -320,3 +320,6 @@ class RemoteLearner:
         """
         self.client.fetch_model_weights(self.model, self.model_ref)
         return self.model
+
+
+__all__ = ["RemoteLearner"]

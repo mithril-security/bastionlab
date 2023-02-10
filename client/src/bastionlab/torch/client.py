@@ -1,4 +1,4 @@
-from typing import List, TYPE_CHECKING, Union
+from typing import List, TYPE_CHECKING, Union, Optional
 from torch.nn import Module
 from torch.utils.data import Dataset
 import grpc
@@ -7,9 +7,9 @@ from ..pb.bastionlab_torch_pb2 import Empty, Metric, TestConfig, TrainConfig  # 
 from ..pb.bastionlab_pb2 import Reference
 from ..pb.bastionlab_torch_pb2_grpc import TorchServiceStub  # type: ignore [import]
 from ..errors import GRPCException
-from .optimizer_config import *
+from .optimizer import *
 
-from .utils import (
+from ._utils import (
     TensorDataset,
     dataset_from_chunks,
     deserialize_weights_to_model,
@@ -21,15 +21,11 @@ from .utils import (
 if TYPE_CHECKING:
     from .learner import RemoteLearner
     from ..client import Client
-    from .remote_torch import RemoteTensor, RemoteDataset
+    from .data import RemoteTensor, RemoteDataset
 
 
 class BastionLabTorch:
-    """BastionLab Torch RPC Handle
-
-    Args:
-        stub: The underlying gRPC client for the BastionLab Torch protocol.
-    """
+    """BastionLab Torch RPC Handle"""
 
     def __init__(
         self,
@@ -61,7 +57,7 @@ class BastionLabTorch:
             BastionLab Torch gRPC protocol's reference object.
         """
 
-        self.client.refresh_session_if_needed()
+        self.client._refresh_session_if_needed()
 
         return GRPCException.map_error(
             lambda: self.stub.SendModel(
@@ -103,7 +99,7 @@ class BastionLabTorch:
             BastionLab Torch gRPC protocol's reference object.
         """
 
-        self.client.refresh_session_if_needed()
+        self.client._refresh_session_if_needed()
 
         return GRPCException.map_error(
             lambda: self.stub.SendDataset(
@@ -129,7 +125,7 @@ class BastionLabTorch:
             ref: BastionLab Torch gRPC protocol reference object corresponding to the distant trained model.
         """
 
-        self.client.refresh_session_if_needed()
+        self.client._refresh_session_if_needed()
 
         chunks = GRPCException.map_error(lambda: self.stub.FetchModule(ref))
         deserialize_weights_to_model(model, chunks)
@@ -143,9 +139,9 @@ class BastionLabTorch:
         Returns:
             A dataset instance built from received data.
         """
-        from .remote_torch import RemoteDataset
+        from .data import RemoteDataset
 
-        self.client.refresh_session_if_needed()
+        self.client._refresh_session_if_needed()
         if isinstance(ref, RemoteDataset):
             ref = Reference(
                 identifier=ref.identifier, name="", description="", meta=bytes()
@@ -157,14 +153,14 @@ class BastionLabTorch:
     def get_available_models(self) -> List[Reference]:
         """Returns the list of BastionLab Torch gRPC protocol references of all available models on the server."""
 
-        self.client.refresh_session_if_needed()
+        self.client._refresh_session_if_needed()
 
         return GRPCException.map_error(lambda: self.stub.AvailableModels(Empty())).list
 
     def get_available_datasets(self) -> List[Reference]:
         """Returns the list of BastionLab Torch gRPC protocol references of all datasets on the server."""
 
-        self.client.refresh_session_if_needed()
+        self.client._refresh_session_if_needed()
 
         return GRPCException.map_error(
             lambda: self.stub.AvailableDatasets(Empty())
@@ -173,38 +169,38 @@ class BastionLabTorch:
     def get_available_devices(self) -> List[str]:
         """Returns the list of devices available on the server."""
 
-        self.client.refresh_session_if_needed()
+        self.client._refresh_session_if_needed()
 
         return GRPCException.map_error(lambda: self.stub.AvailableDevices(Empty())).list
 
     def get_available_optimizers(self) -> List[str]:
         """Returns the list of optimizers supported by the server."""
 
-        self.client.refresh_session_if_needed()
+        self.client._refresh_session_if_needed()
 
         return GRPCException.map_error(
             lambda: self.stub.AvailableOptimizers(Empty())
         ).list
 
-    def train(self, config: TrainConfig) -> Reference:
+    def _train(self, config: TrainConfig) -> Reference:
         """Trains a model with hyperparameters defined in `config` on the BastionLab Torch server.
 
         Args:
             config: Training configuration that specifies the model, dataset and hyperparameters.
         """
 
-        self.client.refresh_session_if_needed()
+        self.client._refresh_session_if_needed()
 
         return GRPCException.map_error(lambda: self.stub.Train(config))
 
-    def test(self, config: TestConfig) -> Reference:
+    def _test(self, config: TestConfig) -> Reference:
         """Tests a dataset on a model according to `config` on the BastionLab Torch server.
 
         Args:
             config: Testing configuration that specifies the model, dataset and hyperparameters.
         """
 
-        self.client.refresh_session_if_needed()
+        self.client._refresh_session_if_needed()
 
         return GRPCException.map_error(lambda: self.stub.Test(config))
 
@@ -214,9 +210,9 @@ class BastionLabTorch:
         Args:
             ref: BastionLab Torch gRPC protocol reference of the dataset to be deleted.
         """
-        from .remote_torch import RemoteDataset
+        from .data import RemoteDataset
 
-        self.client.refresh_session_if_needed()
+        self.client._refresh_session_if_needed()
 
         if isinstance(ref, RemoteDataset):
             ref = Reference(
@@ -232,7 +228,7 @@ class BastionLabTorch:
             ref: BastionLab Torch gRPC protocol reference of the module to be deleted.
         """
 
-        self.client.refresh_session_if_needed()
+        self.client._refresh_session_if_needed()
 
         GRPCException.map_error(lambda: self.stub.DeleteModule(ref))
 
@@ -243,7 +239,7 @@ class BastionLabTorch:
             run: BastionLab Torch gRPC protocol reference of the run whose metric is read.
         """
 
-        self.client.refresh_session_if_needed()
+        self.client._refresh_session_if_needed()
 
         return GRPCException.map_error(lambda: self.stub.GetMetric(run))
 
@@ -255,7 +251,7 @@ class BastionLabTorch:
             *args: all arguments are forwarded to the `RemoteDataset` constructor.
             **kwargs: all keyword arguments are forwarded to the `RemoteDataset` constructor.
         """
-        from .remote_torch import RemoteDataset
+        from .data import RemoteDataset
 
         # Branch if inputs and labels are field with RemoteTensors
         # The branch triggers a gRPC call to actually convert `RemoteTensors` to `Dataset` and return
@@ -286,6 +282,6 @@ class BastionLabTorch:
         Args:
             tensor: The tensor to be uploaded.
         """
-        from .remote_torch import RemoteTensor
+        from .data import RemoteTensor
 
         return RemoteTensor._send_tensor(self, tensor)

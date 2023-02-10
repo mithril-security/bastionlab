@@ -1,7 +1,4 @@
-from dataclasses import dataclass
 import ssl
-from threading import Thread
-from time import sleep
 from typing import Any, TYPE_CHECKING, Optional
 from hashlib import sha256
 import grpc
@@ -20,8 +17,13 @@ import sys
 if TYPE_CHECKING:
     from .torch import BastionLabTorch
     from .polars import BastionLabPolars
-    from .converter import BastionLabConverter
     from .tokenizers import BastionLabTokenizers
+    from ._converter import BastionLabConverter
+
+    import bastionlab.torch
+    import bastionlab.polars
+
+__pdoc__ = {}
 
 
 class AuthPlugin(grpc.AuthMetadataPlugin):
@@ -52,17 +54,12 @@ CLIENT_INFO = ClientInfo(
 class Client:
     """
     The Client class provides access to the BastionLab machine learning platform through several attributes.
-
-    Attributes:
-    _bastionlab_torch is an object that provides access to the platform's torch functionality, which is a machine learning library based on PyTorch.
-    _bastionlab_polars is an object that provides access to the platform's polars functionality, which is a library for data analysis and visualization.
-    _channel is the underlying gRPC channel used to communicate with the server. gRPC is a high-performance RPC (remote procedure call) framework that is used for communication between services.
     """
 
-    _bastionlab_torch: "BastionLabTorch" = (
+    _bastionlab_torch: "bastionlab.torch.BastionLabTorch" = (
         None  #: The BastionLabTorch object for accessing the torch functionality.
     )
-    _bastionlab_polars: "BastionLabPolars" = (
+    _bastionlab_polars: "bastionlab.polars.BastionLabPolars" = (
         None  #: The BastionLabPolars object for accessing the polars functionality.
     )
     _bastionlab_converter: "BastionLabConverter" = None  #: The BastionLabConverter object for converting internal objects (DF->Dataset, Dataset->DF).
@@ -72,9 +69,9 @@ class Client:
     )
 
     _channel: grpc.Channel  #: The underlying gRPC channel used to communicate with the server.
-    __session_expiry_time: float = 0.0  #: Time in seconds
+    _session_expiry_time: float = 0.0  #: Time in seconds
     _token: Optional[bytes] = None
-    signing_key: Optional[SigningKey]
+    signing_key: Optional[SigningKey]  #: Signing key used
 
     def __init__(
         self,
@@ -83,22 +80,19 @@ class Client:
     ):
         """
         Initializes the client with a gRPC channel to the BastionLab server.
-
-        Args:
-            channel (grpc.Channel): A gRPC channel to the BastionLab server.
         """
         self._channel = channel
         self.__session_stub = SessionServiceStub(channel)
         self.signing_key = signing_key
 
-    def refresh_session_if_needed(self):
+    def _refresh_session_if_needed(self):
         current_time = time.time()
 
-        if current_time > self.__session_expiry_time:
+        if current_time > self._session_expiry_time:
             self._token = None
-            self.__create_session()
+            self._create_session()
 
-    def __create_session(self):
+    def _create_session(self):
         logging.debug("Refreshing session.")
 
         metadata = ()
@@ -118,16 +112,18 @@ class Client:
         # So, just to be sure, we refresh our token early (30s).
         adjusted_expiry_delay = max(res.expiry_time - 30_000, 0)
 
-        self.__session_expiry_time = (
+        self._session_expiry_time = (
             time.time() + adjusted_expiry_delay / 1000  # convert to seconds
         )
         self._token = res.token
 
     @property
-    def torch(self) -> "BastionLabTorch":
+    def torch(self) -> "bastionlab.torch.BastionLabTorch":
         """
-        Returns the BastionLabTorch instance used by this client.
+        The BastionLabTorch instance used by this client.
         """
+        # Lazy initialize; because we don't want to import torch when not needed!
+        # torch takes a long time to import
         if self._bastionlab_torch is None:
             from bastionlab.torch import BastionLabTorch
 
@@ -135,9 +131,9 @@ class Client:
         return self._bastionlab_torch
 
     @property
-    def polars(self) -> "BastionLabPolars":
+    def polars(self) -> "bastionlab.polars.BastionLabPolars":
         """
-        Returns the BastionLabPolars instance used by this client.
+        The BastionLabPolars instance used by this client.
         """
         if self._bastionlab_polars is None:
             from bastionlab.polars import BastionLabPolars
@@ -152,7 +148,7 @@ class Client:
         Returns the BastionLabPolars instance used by this client.
         """
         if self._bastionlab_converter is None:
-            from bastionlab.converter import BastionLabConverter
+            from bastionlab._converter import BastionLabConverter
 
             self._bastionlab_converter = BastionLabConverter(self)
         return self._bastionlab_converter
@@ -169,31 +165,29 @@ class Client:
         return self._bastionlab_tokenizers
 
 
-@dataclass
 class Connection:
     """This class represents a connection to a remote server. It holds the necessary
     information to establish and manage the connection, such as the hostname, port,
     identity (signing key), and token (if applicable).
-
-    Attributes:
-        host (str): The hostname or IP address of the remote server.
-        port (int, optional): The port to use for the connection. Defaults to 50056.
-        identity (SigningKey, optional): The signing key to use for authentication.
-            If not provided, the connection will not be authenticated.
-        channel (Any): The underlying channel object used to send and receive messages.
-            It does not need to be provided by the user.
-        token (bytes, optional): The authentication token to use for the connection.
-            If not provided, the connection will not be authenticated.
-        server_name (str, optional): The name of the remote server. Defaults to "bastionlab-server".
     """
 
-    host: str
-    port: Optional[int] = 50056
+    host: str  #: The hostname or IP address of the remote server.
+    #: The port to use for the connection. Defaults to 50056.
+    port: int
+    #: The signing key to use for authentication.
+    #: If not provided, the connection will not be authenticated.
     identity: Optional[SigningKey] = None
-    channel: Any = None
-    token: Optional[bytes] = None
-    _client: Optional[Client] = None  # The gRPC client object used to send messages.
-    server_name: Optional[str] = "bastionlab-server"
+    channel: Optional[grpc.Channel] = None  #: The underlying gRPC channel.
+    _token: Optional[bytes] = None
+    _client: Optional[Client] = None  #: The gRPC client object used to send messages.
+    _server_name: Optional[str] = "bastionlab-server"
+
+    def __init__(
+        self, host: str, port: int = 50056, identity: Optional[SigningKey] = None
+    ):
+        self.host = host
+        self.port = port
+        self.identity = identity
 
     @staticmethod
     def _verify_user(
@@ -270,10 +264,10 @@ class Connection:
         server_creds = grpc.ssl_channel_credentials(
             root_certificates=bytes(server_cert, encoding="utf8")
         )
-        connection_options = (("grpc.ssl_target_name_override", self.server_name),)
+        connection_options = (("grpc.ssl_target_name_override", self._server_name),)
 
         # Verify user by creating session
-        self.token = Connection._verify_user(
+        self._token = Connection._verify_user(
             server_target, server_creds, connection_options, self.identity
         )
 
@@ -283,7 +277,7 @@ class Connection:
             server_creds
             if self.identity is None
             else server_creds
-            if self.token is None
+            if self._token is None
             else grpc.composite_channel_credentials(
                 server_creds, grpc.metadata_call_credentials(auth_plugin)
             )
@@ -314,7 +308,7 @@ class Connection:
         self.channel.close()
 
 
-__all__ = [
-    "Client",
-    "Connection",
-]
+__pdoc__["Connection.__entrer__"] = True
+__pdoc__["Connection.__exit__"] = True
+
+__all__ = ["Client", "Connection"]

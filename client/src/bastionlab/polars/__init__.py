@@ -1,9 +1,15 @@
 from .client import BastionLabPolars
-from .remote_polars import RemoteLazyFrame, RemoteLazyGroupBy
-
-from .remote_polars import train_test_split
+from .frame import (
+    RemoteLazyFrame,
+    RemoteLazyGroupBy,
+    FetchableLazyFrame,
+    train_test_split,
+    Facet,
+    RemoteArray,
+)
 
 from . import policy
+from .frame import train_test_split
 
 __all__ = [
     "BastionLabPolars",
@@ -11,4 +17,8 @@ __all__ = [
     "RemoteLazyGroupBy",
     "train_test_split",
     "policy",
+    "FetchableLazyFrame",
+    "train_test_split",
+    "Facet",
+    "RemoteArray",
 ]
