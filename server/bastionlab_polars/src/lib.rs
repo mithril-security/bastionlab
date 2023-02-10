@@ -37,6 +37,7 @@ mod visitable;
 pub mod access_control;
 use access_control::*;
 
+mod udf;
 pub mod utils;
 
 pub mod prelude {
@@ -394,8 +395,8 @@ impl PolarsService for BastionLabPolars {
     ) -> Result<Response<ReferenceResponse>, Status> {
         let token = self.sess_manager.get_token(&request)?;
 
-        let composite_plan: CompositePlan = serde_json::from_str(&request.get_ref().composite_plan)
-            .map_err(|e| {
+        let composite_plan: CompositePlan =
+            udf::deserialize_composite_plan(&request.get_ref().composite_plan).map_err(|e| {
                 Status::invalid_argument(format!(
                     "Could not deserialize composite plan: {}{}",
                     e,

@@ -1,6 +1,7 @@
 use base64;
-use bastionlab_common::common_conversions::{
-    lazy_frame_from_logical_plan, series_to_tensor, tensor_to_series,
+use bastionlab_common::{
+    common_conversions::{lazy_frame_from_logical_plan, series_to_tensor, tensor_to_series},
+    prelude::*,
 };
 use polars::{lazy::dsl::Expr, prelude::*};
 use regex::Regex;
@@ -100,7 +101,7 @@ impl CompositePlan {
                                 ))
                             })?;
                         let series = frame.df.get_columns_mut().get_mut(idx).unwrap();
-                        let tensor = series_to_tensor(series)?;
+                        let tensor = series_to_tensor(series).or_invalid_argument()?;
                         let tensor = module.forward_ts(&[tensor]).map_err(|e| {
                             Status::invalid_argument(format!("Error while running udf: {}", e))
                         })?;

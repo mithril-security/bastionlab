@@ -8,6 +8,8 @@ from torch.jit import ScriptFunction
 import base64
 import json
 import torch
+import base64
+import io
 from ..pb.bastionlab_conversion_pb2 import ToTensor
 from ..pb.bastionlab_polars_pb2 import ReferenceResponse, SplitRequest, ReferenceRequest
 from .client import BastionLabPolars
@@ -23,6 +25,47 @@ LDF = TypeVar("LDF", bound="pl.LazyFrame")
 
 if TYPE_CHECKING:
     from ..torch.remote_torch import RemoteTensor
+    import torch.jit
+
+class _WrappedUdf:
+    inner: "torch.jit.ScriptFunction"
+    def __init__(self, inner):
+        self.inner = inner
+
+    def __call__(self, *args, **kwds):
+        import torch
+
+        def trans_arg(arg):
+            if isinstance(arg, pl.Series):
+                return torch.tensor(arg.to_numpy())
+            if isinstance(arg, pl.DataFrame):
+                return torch.tensor(arg.to_numpy())
+            return torch.tensor(arg) # 1-element tensor
+
+        ret = self.inner(*(trans_arg(arg) for arg in args), **kwds)
+
+        if len(ret.shape) == 0:
+            return ret.item()
+        if len(ret.shape) == 1:
+            return pl.Series(ret)
+        return ret
+
+class _TorchScriptUdfSerializer(pl.UdfSerializer):
+    def serialize_udf(self, udf: Callable) -> str:
+        import torch.jit
+
+        if isinstance(udf, _WrappedUdf):
+            udf = udf.inner
+
+        return str(base64.b64encode(torch.jit.script(udf).save_to_buffer()), 'ascii')
+
+    def deserialize_udf(self, data: str) -> Callable:
+        import torch.jit
+
+        buf = io.BytesIO(base64.b64decode(data))
+        return _WrappedUdf(torch.jit.load(buf))
+
+_udf_serializer = _TorchScriptUdfSerializer()
 
 
 def delegate(
@@ -131,7 +174,7 @@ class PolarsPlanSegment(CompositePlanSegment):
         #  message. So, we get the schema beforehand :)
         self._inner.schema
 
-        json_str = self._inner.write_json()
+        json_str = self._inner.write_json(udf_serializer=_udf_serializer)
         return f'{{"PolarsPlanSegment":{json_str}}}'
 
 
