@@ -673,7 +673,7 @@ class RemoteLazyFrame:
             raise ValueError(
                 "Estimator ", estimator, " not in list of accepted estimators"
             )
-        agg = y if y else x
+        agg = y if y != None else x
         agg_dict = VisTools._get_estimator_dict(agg)
 
         # check color input is valid
@@ -681,10 +681,10 @@ class RemoteLazyFrame:
             colors = Palettes.dict[colors]
 
         # setup ax
-        ax = ax if ax else plt.gca()
-        
+        #ax = ax if ax else plt.gca()
+        fig, ax = plt.subplots()
         # set up labels
-        labels = VisTools._get_unique_values(self, x if x and vertical is True else y)
+        labels = VisTools._get_unique_values(self, x if x else y)
         if None in labels:
             labels.remove(None)
 
@@ -696,7 +696,6 @@ class RemoteLazyFrame:
 
             # filter data by hue if hue provided
             tmp = self.filter(pl.col(hue) == val) if hue else self
-            print(tmp)
             
             # X or Y only plot
             if x == None or y == None:
@@ -710,23 +709,22 @@ class RemoteLazyFrame:
                 )
                 RequestRejected.check_valid_df(tmp)
                 df = tmp.to_pandas()
-                values = VisTools._bar_get_x_position(values, index, width) if hue else [0.5]
+                values = [1]
+                if hue:
+                    values = VisTools._bar_get_x_position(values, index, len(hues), width)
                 height = df[(x if x else y)].to_list()
-                for v in height:
-                    if type(v) != int and type(v) != float:
-                        raise ValueError("Y axes must plot numerical data")
                 vertical = vertical if y else False
                 if vertical is True:
+                    print("our width is:", width)
                     ax.bar(x=values, height=height, color=colors[index] if hue else colors, width=width, **kwargs)
                     ax.tick_params(labelbottom=False)
                 else:
-                    ax.barh(y=values, width=height, color=colors, **kwargs)
+                    ax.barh(y=values, width=height, color=colors[index] if hue else colors, **kwargs)
                     ax.tick_params(labelleft=False)
             else:
                 tmp = self.filter(pl.col(hue) == val) if hue else self
                 tmp = (
-                    tmp.filter(pl.col(x) != None)
-                    .select(pl.col(i) for i in selects)
+                    tmp.select(pl.col(col) for col in selects)
                     .groupby(pl.col(x))
                     .agg(agg_dict[estimator])
                     .sort(pl.col(x))
@@ -736,32 +734,39 @@ class RemoteLazyFrame:
                 RequestRejected.check_valid_df(tmp)
                 df = tmp.to_pandas()
                 x_values = df[x].to_list()
-                values = VisTools._bar_get_x_position(values, index, width) if hue else np.arange(len(x_values))
+                x_values = np.arange(len(x_values))
+                if hue:
+                    values = VisTools._bar_get_x_position(x_values, index, len(hues), width)
                 height = df[y].to_list()
                 if vertical is True:
+                    print("our width is:", width)
                     ax.bar(x=values if hue else values, height=height, width=width, color=colors[index] if hue else colors, label=val if hue else None, **kwargs)
                 else:
                     ax.barh(y=values, width=height, color=colors, **kwargs)
 
         # label axes and add title and color key
         if vertical is True:
-            ax.set_xlabel(x if auto_label else x_label)
-            ax.set_ylabel(y if auto_label else y_label)
-            if hue:
-                ax.set_xticks(np.arange(len(labels)) + (((width) * (len(hues) / 2)) - width / 2), labels=labels)
+            if x:
+                ax.set_xlabel(x if auto_label else x_label)
             else:
+                ax.set_xlabel(y if auto_label else y_label)
+            if x and y:
+                ax.set_ylabel(y if auto_label else y_label)
                 ax.set_xticks(np.arange(len(labels)), labels=labels)
         else:
-            ax.set_xlabel(y if auto_label else x_label)
-            ax.set_ylabel(x if auto_label else y_label)
-            if hue:
-                ax.set_yticks(np.arange(len(labels)) + (((width) * (len(hues) / 2)) - width / 2), labels=labels)
+            if x and y:
+                ax.set_xlabel(y if auto_label else x_label)
+            if x:
+                ax.set_ylabel(x if auto_label else y_label)
             else:
+                ax.set_ylabel(y if auto_label else y_label)
                 ax.set_yticks(np.arange(len(labels)), labels=labels)
         if title:
             ax.set_title(title)
         if hue:
             ax.legend(loc="best", title=hue)
+            fig.tight_layout()
+        print("WIDTH: ", width)
         return ax
 
     def histplot(

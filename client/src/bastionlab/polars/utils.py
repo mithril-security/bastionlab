@@ -149,13 +149,24 @@ class VisTools:
             return tmp.to_pandas()[col].tolist()
 
 
-    def _bar_get_x_position(points, index, width):
-        # even numbers of bars
-        new_points = []
-        for i in points:
-            new_points.append(points[i] + (width * index))
-        print(new_points)
-        return(new_points)
+    def _bar_get_x_position(points, index, total, width):
+        even = total % 2 == 0
+        half = total / 2
+        if (index + 1) == statistics.median(list(range(1, total + 1))):
+            print("mid")
+            print(points)
+            return points
+        if index <= half and not even:
+            print("less 1")
+            print(points)
+            return points - width / total
+        elif index < half and even:
+            print("less 2")
+            print(points)
+            return points - width / total
+        print("big")
+        print(points)
+        return points + width / total
 
     def _get_all_cols(
         rdf,
@@ -174,4 +185,4 @@ class VisTools:
         for col in selects:
             if not col in rdf.columns:
                 raise ValueError("Column ", col, " not found in dataframe")
-        return zip(selects)
+        return selects
