@@ -1,6 +1,7 @@
 from bastionlab.torch.utils import TensorDataset
 import polars as pl
 import torch
+import numpy as np
 import logging
 import unittest
 from bastionlab import Connection
@@ -35,11 +36,10 @@ class TestingDataConv(unittest.TestCase):
         rdf = client.polars.send_df(df, Policy(TrueRule(), Log(), False))
 
         arr = rdf.to_array()
-
-        df_tensor = arr.to_tensor()
+        tensor = arr.to_tensor()
         torch_tensor = torch.tensor(df.to_numpy())
         self.assertEqual(
-            df_tensor.shape, torch_tensor.shape, "Tensors are not the same Shape"
+            tensor.shape, torch_tensor.shape, "Tensors are not the same Shape"
         )
         connection.close()
 
@@ -84,6 +84,7 @@ class TestingDataConv(unittest.TestCase):
             height = df.height * 1.0
             test_size = int(math.floor(height * ratio))
             train_size = int(height) - test_size
+
             return df.head(train_size).to_numpy(), df.tail(test_size).to_numpy()
 
         sk_train_X, sk_test_X = splitter(df, ratio)
@@ -165,6 +166,66 @@ class TestingDataConv(unittest.TestCase):
 
         self.assertEqual(remote_tensor.shape, X.shape)
         self.assertEqual(remote_tensor.dtype, torch.float)
+
+    def test_list_dataframe_same_type(self):
+        connection = Connection("localhost")
+        client = connection.client
+        df = pl.DataFrame(
+            {
+                "a": [[0, 1, 2, 3, 4]],
+                "b": [[2, 3, 5, 6, 7]],
+            }
+        )
+
+        rdf = client.polars.send_df(df, Policy(TrueRule(), Log(), False))
+
+        remote_tensor = rdf.to_array().to_tensor()
+        local_tensor = torch.tensor(df.to_numpy().tolist())
+
+        self.assertEqual(remote_tensor.shape, local_tensor.shape)
+        self.assertEqual(remote_tensor.dtype, local_tensor.dtype)
+
+    def test_list_dataframe_of_diff_types(self):
+        connection = Connection("localhost")
+        client = connection.client
+        df = pl.DataFrame(
+            {
+                "a": [[0, 1, 2, 3, 4]],
+                "b": [[2.0, 3.1, 0.5, 1.6, 0.317]],
+            }
+        )
+
+        rdf = client.polars.send_df(df, Policy(TrueRule(), Log(), False))
+
+        # We expect this test to fail because the dataframe contains lists of different types
+        with self.assertRaises(Exception) as context:
+            rdf.to_array()
+
+        self.assertTrue(
+            "DataTypes for all columns should be the same"
+            in context.exception.details()
+        )
+
+    def test_dataframe_with_diff_types(self):
+        connection = Connection("localhost")
+        client = connection.client
+        df = pl.DataFrame(
+            {
+                "a": [0, 1, 2, 3, 4],
+                "b": [2.0, 3.1, 0.5, 1.6, 0.317],
+            }
+        )
+
+        rdf = client.polars.send_df(df, Policy(TrueRule(), Log(), False))
+
+        # We expect this test to fail because the dataframe contains lists of different types
+        with self.assertRaises(Exception) as context:
+            rdf.to_array()
+
+        self.assertTrue(
+            "DataTypes for all columns should be the same"
+            in context.exception.details()
+        )
 
 
 if __name__ == "__main__":

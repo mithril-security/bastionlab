@@ -1,15 +1,10 @@
-use std::{error::Error, io::Cursor};
+use std::{error::Error, io::Cursor, sync::Mutex};
 
-use ndarray::{prelude::*, CowRepr, Data, RawData};
-use polars::{
-    export::ahash::HashSet,
-    prelude::{
-        row::{AnyValueBuffer, Row},
-        *,
-    },
-};
+use ndarray::{prelude::*, Data, IxDynImpl, RawData};
+use polars::{export::rayon::prelude::ParallelIterator, prelude::*};
+use serde::{Deserialize, Serialize};
 use tch::{kind::Element, CModule, Tensor};
-use tokenizers::{Encoding, Tokenizer};
+use tokenizers::{FromPretrainedParameters, PaddingParams, Tokenizer, TruncationParams};
 use tonic::Status;
 
 pub fn list_dtype_to_tensor(series: &Series) -> Result<Vec<Tensor>, Status> {
@@ -82,8 +77,8 @@ pub fn vec_series_to_tensor(
     Ok((ts, shapes, dtypes, nb_samples.try_into().unwrap()))
 }
 
-fn ndarray_to_tensor<T: RawData, D: Dimension>(
-    data: &ArrayBase<T, D>,
+pub fn ndarray_to_tensor<T: RawData, D: Dimension>(
+    data: ArrayBase<T, D>,
 ) -> Result<tch::Tensor, Status>
 where
     T: Data,
@@ -93,66 +88,6 @@ where
         .map_err(|e| Status::aborted(format!("Could not convert ArrayBase to Tensor: {}", e)))?;
 
     Ok(tensor)
-}
-
-pub fn df_to_tensor(df: &DataFrame) -> Result<Tensor, Status> {
-    // Make sure all the dtypes are same.
-    let set = HashSet::from_iter(df.dtypes().iter().map(|dtype| dtype.to_string()));
-    if set.len() > 1 {
-        return Err(Status::aborted(
-            "DataTypes for all columns should be the same",
-        ));
-    }
-
-    let dtype = &df.dtypes()[0];
-
-    match dtype {
-        DataType::Float32 => ndarray_to_tensor::<CowRepr<f32>, Ix2>(
-            &df.to_ndarray::<Float32Type>()
-                .map_err(|e| {
-                    Status::aborted(format!("Cound not convert DataFrame to ndarray: {}", e))
-                })?
-                .as_standard_layout(),
-        ),
-        DataType::Float64 => ndarray_to_tensor::<CowRepr<f64>, Ix2>(
-            &df.to_ndarray::<Float64Type>()
-                .map_err(|e| {
-                    Status::aborted(format!("Cound not convert DataFrame to ndarray: {}", e))
-                })?
-                .as_standard_layout(),
-        ),
-        DataType::Int64 => ndarray_to_tensor::<CowRepr<i64>, Ix2>(
-            &df.to_ndarray::<Int64Type>()
-                .map_err(|e| {
-                    Status::aborted(format!("Cound not convert DataFrame to ndarray: {}", e))
-                })?
-                .as_standard_layout(),
-        ),
-        DataType::Int32 => ndarray_to_tensor::<CowRepr<i32>, Ix2>(
-            &df.to_ndarray::<Int32Type>()
-                .map_err(|e| {
-                    Status::aborted(format!("Cound not convert DataFrame to ndarray: {}", e))
-                })?
-                .as_standard_layout(),
-        ),
-        DataType::Int16 => ndarray_to_tensor::<CowRepr<i16>, Ix2>(
-            &df.to_ndarray::<Int16Type>()
-                .map_err(|e| {
-                    Status::aborted(format!("Cound not convert DataFrame to ndarray: {}", e))
-                })?
-                .as_standard_layout(),
-        ),
-        DataType::Int8 => ndarray_to_tensor::<CowRepr<i8>, Ix2>(
-            &df.to_ndarray::<Int8Type>()
-                .map_err(|e| {
-                    Status::aborted(format!("Cound not convert DataFrame to ndarray: {}", e))
-                })?
-                .as_standard_layout(),
-        ),
-        _ => {
-            return Err(Status::aborted(format!("Unsupported datatype {}", dtype)));
-        }
-    }
 }
 
 pub fn tensor_to_series(name: &str, dtype: &DataType, tensor: Tensor) -> Result<Series, Status> {
@@ -193,69 +128,107 @@ pub fn load_udf(udf: String) -> Result<CModule, Status> {
     )
 }
 
-fn get_tokenizer(model: &str) -> Result<Tokenizer, Status> {
-    let model = base64::decode_config(model, base64::STANDARD).map_err(|e| {
-        Status::invalid_argument(format!("Could not decode bas64-encoded udf: {}", e))
+fn get_tokenizer(
+    model: &str,
+    config: &str,
+    revision: &str,
+    auth_token: &str,
+) -> Result<Tokenizer, Status> {
+    let config: TokenizerParams = serde_json::from_str(config).map_err(|e| {
+        Status::failed_precondition(format!(
+            "Could not deserilize configuration for Tokenizer: {e}"
+        ))
     })?;
-    let tokenizer: Tokenizer = Tokenizer::from_bytes(model)
-        .map_err(|_| Status::invalid_argument("Could not deserialize Hugging Face Tokenizer"))?;
+
+    let mut tokenizer: Tokenizer = Tokenizer::from_pretrained(
+        model,
+        Some(FromPretrainedParameters {
+            revision: revision.to_string(),
+            auth_token: Some(auth_token.to_string()),
+            ..Default::default()
+        }),
+    )
+    .map_err(|_| Status::invalid_argument("Could not deserialize Hugging Face Tokenizer"))?;
+
+    tokenizer.with_padding(config.padding_params);
+    tokenizer.with_truncation(config.truncation_params);
     Ok(tokenizer)
 }
 
-pub fn series_to_tokenized_series(
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TokenizerParams {
+    padding_params: Option<PaddingParams>,
+    truncation_params: Option<TruncationParams>,
+}
+
+pub fn list_to_ndarray<T>(v: Vec<T>, shape: Vec<usize>) -> Result<Array<T, Dim<IxDynImpl>>, Status>
+where
+    T: Clone,
+{
+    let arr = Array::from_shape_vec(shape, v)
+        .map_err(|e| Status::aborted(format!("{e}")))?
+        .as_standard_layout()
+        .to_owned();
+
+    Ok(arr)
+}
+
+pub fn series_to_tokenized_arrays<'a>(
     s: &Series,
-    name: &str,
     model: &str,
-) -> Result<DataFrame, Status> {
-    let tokenizer = get_tokenizer(model)?;
-    let mut batched_seqs = Vec::new();
+    config: &str,
+    add_special_tokens: bool,
+    revision: &str,
+    auth_token: &str,
+) -> Result<(Array<i64, Dim<IxDynImpl>>, Array<i64, Dim<IxDynImpl>>), Status> {
+    let tokenizer = get_tokenizer(model, config, revision, auth_token)?;
 
-    let to_row = |tokens: &Encoding| {
-        let ids = tokens.get_ids();
-        let mask = tokens.get_attention_mask();
+    let out_ids = Arc::new(Mutex::new(Vec::new()));
+    let ids_shape = Arc::new(Mutex::new(Vec::new()));
+    let out_masks = Arc::new(Mutex::new(Vec::new()));
+    let masks_shape = Arc::new(Mutex::new(Vec::new()));
 
-        let to_any_value = |v: &[u32]| -> AnyValue {
-            let mut buf = AnyValueBuffer::new(&DataType::UInt32, v.len());
-            v.iter().for_each(|v| {
-                buf.add(AnyValue::UInt32(*v));
-            });
-            AnyValue::List(buf.into_series())
-        };
-        let ids = to_any_value(ids);
-        let mask = to_any_value(mask);
+    // We use the `par_iter` for parallel processing of the rows since there are no dependence.
+    s.utf8().unwrap().par_iter().for_each(|row| match row {
+        Some(s) => {
+            let encoded = tokenizer
+                .encode(s, add_special_tokens)
+                .map_err(|e| Status::aborted(format!("Failed to tokenize string: {e}")))
+                .unwrap();
+            let mut ids = encoded
+                .get_ids()
+                .to_vec()
+                .iter()
+                .map(|v| *v as i64)
+                .collect::<Vec<_>>();
+            let mut mask = encoded
+                .get_attention_mask()
+                .to_vec()
+                .iter()
+                .map(|v| *v as i64)
+                .collect::<Vec<_>>();
 
-        let joined = vec![ids.clone(), mask.clone()];
-
-        let row = Row::new(joined);
-        row
-    };
-    for row in s.utf8().unwrap().into_iter() {
-        match row {
-            Some(s) => {
-                batched_seqs.push(s.to_string());
-            }
-            None => {
-                return Err(Status::aborted(
-                    "Failed to convert row to Utf8 string".to_string(),
-                ));
-            }
+            ids_shape.lock().unwrap().push(ids.len());
+            masks_shape.lock().unwrap().push(mask.len());
+            out_ids.lock().unwrap().append(&mut ids);
+            out_masks.lock().unwrap().append(&mut mask);
         }
-    }
+        None => (),
+    });
 
-    let tokens_vec = tokenizer
-        .encode_batch(batched_seqs, false)
-        .map_err(|_| Status::aborted("Failed to tokenize string"))?;
+    let get_shape = |shape_vec: &[usize]| vec![shape_vec.len(), shape_vec[0]];
+    let out_ids = out_ids.lock().unwrap().to_vec();
+    let ids_shape = ids_shape.lock().unwrap().to_vec();
+    let masks_shape = masks_shape.lock().unwrap().to_vec();
+    let out_masks = out_masks.lock().unwrap().to_vec();
 
-    let rows = tokens_vec.iter().map(to_row).collect::<Vec<_>>();
-    let mut df = to_status_error(DataFrame::from_rows(&rows[..]))?;
+    let ids_shape = get_shape(&ids_shape);
+    let masks_shape = get_shape(&masks_shape[..]);
 
-    let ids_names = &format!("{}_ids", name.to_lowercase());
-    let mask_names = &format!("{}_mask", name.to_lowercase());
+    let out_ids = list_to_ndarray(out_ids, ids_shape)?;
+    let out_masks = list_to_ndarray(out_masks, masks_shape)?;
 
-    let col_names = df.get_column_names_owned();
-    to_status_error(df.rename(&col_names[0], &ids_names))?;
-    to_status_error(df.rename(&col_names[1], &mask_names))?;
-    Ok(df)
+    Ok((out_ids, out_masks))
 }
 
 pub fn chunked_array_to_tensor<T>(series: &ChunkedArray<T>) -> Result<Tensor, Status>
