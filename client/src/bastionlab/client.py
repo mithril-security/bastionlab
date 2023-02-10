@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from .torch import BastionLabTorch
     from .polars import BastionLabPolars
     from .converter import BastionLabConverter
+    from .tokenizers import BastionLabTokenizers
 
 
 class AuthPlugin(grpc.AuthMetadataPlugin):
@@ -65,6 +66,11 @@ class Client:
         None  #: The BastionLabPolars object for accessing the polars functionality.
     )
     _bastionlab_converter: "BastionLabConverter" = None  #: The BastionLabConverter object for converting internal objects (DF->Dataset, Dataset->DF).
+
+    _bastionlab_tokenizers: "BastionLabTokenizers" = (
+        None  #: The BastionLabTokenizers object used for integrating tokenizers.
+    )
+
     _channel: grpc.Channel  #: The underlying gRPC channel used to communicate with the server.
     __session_expiry_time: float = 0.0  #: Time in seconds
     _token: Optional[bytes] = None
@@ -150,6 +156,17 @@ class Client:
 
             self._bastionlab_converter = BastionLabConverter(self)
         return self._bastionlab_converter
+
+    @property
+    def tokenizers(self) -> "BastionLabTokenizers":
+        """
+        Returns the BastionLabTokenizers instance used by this client.
+        """
+        if self._bastionlab_tokenizers is None:
+            from bastionlab.tokenizers import BastionLabTokenizers
+
+            self._bastionlab_tokenizers = BastionLabTokenizers(self)
+        return self._bastionlab_tokenizers
 
 
 @dataclass

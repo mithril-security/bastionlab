@@ -22,7 +22,7 @@ def make_model(in_features: int, dtype: torch.dtype):
     class LinearRegression(torch.nn.Module):
         def __init__(self) -> None:
             super().__init__()
-            self.layer1 = torch.nn.Linear(in_features, 2, dtype=dtype)
+            self.layer1 = torch.nn.Linear(in_features, 1, dtype=dtype)
 
         def forward(self, tensor):
             return self.layer1(tensor)
@@ -88,8 +88,8 @@ class TestingConnection(unittest.TestCase):
         )
         rdf = rdf.collect()
 
-        inputs = rdf.select(cols).collect()
-        labels = rdf.select(label_col).collect()
+        inputs = rdf.select(cols).collect().to_array()
+        labels = rdf.select(label_col).collect().to_array()
 
         train_inputs, test_inputs, train_labels, test_labels = train_test_split(
             inputs,
@@ -99,9 +99,9 @@ class TestingConnection(unittest.TestCase):
         )
 
         train_inputs = train_inputs.to_tensor().to(torch.float32)
-        train_labels = train_labels.to_tensor()
+        train_labels = train_labels.to_tensor().to(torch.float32)
         test_inputs = test_inputs.to_tensor().to(torch.float32)
-        test_labels = test_labels.to_tensor()
+        test_labels = test_labels.to_tensor().to(torch.float32)
 
         in_features = train_inputs.shape[-1]
         dtype = train_inputs.dtype

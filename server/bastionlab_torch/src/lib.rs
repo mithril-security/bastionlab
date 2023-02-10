@@ -571,7 +571,6 @@ impl TorchService for BastionLabTorch {
                     "Could not convert SizedObjectBytes into Tensor: {e}"
                 ))
             })?;
-            data.print();
             data
         };
 

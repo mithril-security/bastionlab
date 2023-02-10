@@ -58,8 +58,8 @@ impl SessionManager {
 
     /// Returns the access token in the request
     pub fn get_token<T>(&self, req: &Request<T>) -> Result<Option<Bytes>, Status> {
-        if !self.auth_enabled(){
-            return Ok(None)
+        if !self.auth_enabled() {
+            return Ok(None);
         }
 
         let meta = req
