@@ -34,6 +34,7 @@ def delegate(
     f_names: List[str],
     wrap: bool = False,
     wrap_fn: Optional[Callable] = None,
+    make_docstring: Optional[Callable[[str], str]] = None,
 ) -> Callable[[Callable], Callable]:
     def inner(cls: Callable) -> Callable:
         delegates = {f_name: getattr(target_cls, f_name) for f_name in f_names}
@@ -54,7 +55,11 @@ def delegate(
             return f
 
         for f_name in f_names:
-            setattr(cls, f_name, delegated_fn(f_name))
+            delegated = delegated_fn(f_name)
+            if make_docstring is not None:
+                delegated.__doc__ = make_docstring(f_name)
+
+            setattr(cls, f_name, delegated)
 
         return cls
 
@@ -239,6 +244,10 @@ class Metadata:
         "unnest",
     ],
     wrap=True,
+    make_docstring=lambda fname: f"""
+        See the polars documentation for
+        [pl.LazyFrame.{fname}](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.{fname}.html).
+    """,
 )
 @delegate(
     target_cls=pl.LazyFrame,
@@ -250,6 +259,10 @@ class Metadata:
     ],
     wrap=True,
     wrap_fn=lambda rlf, res: RemoteLazyGroupBy(res, rlf._meta),
+    make_docstring=lambda fname: f"""
+        See the polars documentation for
+        [pl.LazyFrame.{fname}](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.{fname}.html).
+    """,
 )
 @dataclass
 class RemoteLazyFrame:
@@ -261,49 +274,7 @@ class RemoteLazyFrame:
     dtypes : dict[str, pl.DataType]
         Get dtypes of columns in LazyFrame.<br>
     schema : dict[str, pl.DataType]
-        The dataframe's schema.
-
-    Delegated methods
-    -----------------
-    As well as the methods that will be later described, we also support the following Polars methods which are defined in detail
-    in Polar's documentation:<br>
-    [sort](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.sort.html),
-    [cache](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.cache.html),
-    [filter](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.filter.html),
-    [select](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.select.html),
-    [with_columns](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.with_columns.html),
-    [with_context](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.with_context.html),
-    [with_column](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.with_column.html),
-    [drop](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.drop.html),
-    [rename](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.rename.html),
-    [reverse](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.reverse.html),
-    [shift](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.shift.html),
-    [shift_and_fill](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.shift_and_fill.html),
-    [slice](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.slice.html),
-    [limit](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.limit.html),
-    [head](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.head.html),
-    [tail](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.tail.html),
-    [last](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.last.html),
-    [first](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.first.html),
-    [take_every](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.take_every.html),
-    [fill_null](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.fill_null.html),
-    [fill_nan](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.fill_nan.html),
-    [std](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.std.html),
-    [var](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.var.html),
-    [max](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.max.html),
-    [min](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.min.html),
-    [sum](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.sum.html),
-    [mean](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.mean.html),
-    [median](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.median.html),
-    [quantile](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.quantile.html),
-    [explode](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.explode.html),
-    [unique](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.unique.html),
-    [drop_nulls](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.drop_nulls.html),
-    [melt](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.melt.html),
-    [interpolate](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.interpolate.html),
-    [unnest](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.unnest.html)
-
-    """
+        The dataframe's schema."""
 
     _inner: pl.LazyFrame
     _meta: Metadata
