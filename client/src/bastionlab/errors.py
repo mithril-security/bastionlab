@@ -19,7 +19,7 @@ class RequestRejected(Exception):
         super().__init__(self.message)
 
     @staticmethod
-    def check_valid_df(df) -> T:
+    def _check_valid_df(df) -> T:
         if df is None:
             raise RequestRejected()
 
@@ -67,7 +67,7 @@ class GRPCException(Exception):
         return f"{prefix}: code={self.code} message={self.err.details()}"
 
     @staticmethod
-    def map_error(f: Callable[[], T]) -> T:
+    def _map_error(f: Callable[[], T]) -> T:
         """
         Map gRPC errors to `GRPCException` exceptions.
 
