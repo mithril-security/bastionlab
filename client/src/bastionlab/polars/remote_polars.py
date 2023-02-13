@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable, Generic, List, Optional, TypeVar, Sequence, Union, Dict
 import seaborn as sns
 import polars as pl
@@ -8,7 +8,10 @@ from torch.jit import ScriptFunction
 import base64
 import json
 import torch
-from ..pb.bastionlab_conversion_pb2 import ToTensor
+from ..pb.bastionlab_conversion_pb2 import (
+    RemoteArray as PbRemoteArray,
+    RemoteDataFrame as PbRemoteDataFrame,
+)
 from ..pb.bastionlab_polars_pb2 import ReferenceResponse, SplitRequest, ReferenceRequest
 from .client import BastionLabPolars
 from .utils import ApplyBins, Palettes, ApplyAbs
@@ -17,12 +20,15 @@ import matplotlib as mat
 from typing import TYPE_CHECKING
 from ..errors import RequestRejected
 import numpy as np
+from serde import serde, InternalTagging, field
+from serde.json import to_json
 
 
 LDF = TypeVar("LDF", bound="pl.LazyFrame")
 
 if TYPE_CHECKING:
     from ..torch.remote_torch import RemoteTensor
+    from ..client import Client
 
 
 def delegate(
@@ -81,89 +87,91 @@ class CompositePlanSegment:
     Composite plan segment class which handles segment plans that have not been implemented
     """
 
-    def serialize(self) -> str:
-        """
-        will raise NotImplementedError
-
-        raises:
-            NotImplementedError
-        """
-        raise NotImplementedError()
-
 
 @dataclass
+@serde
 class EntryPointPlanSegment(CompositePlanSegment):
     """
     Composite plan segment class responsible for new entry points
     """
 
-    _inner: str
-
-    def serialize(self) -> str:
-        """
-        returns serialized string of this plan segment
-
-        Returns:
-            str: serialized string of this plan segment
-        """
-        return f'{{"EntryPointPlanSegment":"{self._inner}"}}'
+    identifier: str
 
 
 @dataclass
+@serde
 class PolarsPlanSegment(CompositePlanSegment):
     """
     Composite plan segment class responsible for Polars queries
     """
 
-    _inner: LDF
-
-    def serialize(self) -> str:
-        """
-        returns serialized string of this plan segment
-
-        Returns:
-            str: serialized string of this plan segment
-        """
-
-        # HACK: when getting using the schema attribute, polars returns
-        #  the proper error messages (polars.NotFoundError etc) when it is invalid.
-        #  This is not the case for write_json(), which returns a confusing error
-        #  message. So, we get the schema beforehand :)
-        self._inner.schema
-
-        json_str = self._inner.write_json()
-        return f'{{"PolarsPlanSegment":{json_str}}}'
+    # HACK: when getting using the schema attribute, polars returns
+    #  the proper error messages (polars.NotFoundError etc) when it is invalid.
+    #  This is not the case for write_json(), which returns a confusing error
+    #  message. So, we get the schema beforehand :)
+    plan: LDF = field(
+        serializer=lambda val: val.schema and json.loads(val.write_json()),
+        deserializer=lambda _: None,
+    )
 
 
 @dataclass
+@serde
 class UdfPlanSegment(CompositePlanSegment):
     """
     Composite plan segment class responsible for user defined functions
     """
 
-    _inner: ScriptFunction
-    _columns: List[str]
-
-    def serialize(self) -> str:
-        """
-        returns serialized string of this plan segment
-
-        Returns:
-            str: serialized string of this plan segment
-        """
-        columns = ",".join([f'"{c}"' for c in self._columns])
-        b64str = base64.b64encode(self._inner.save_to_buffer()).decode("ascii")
-        return f'{{"UdfPlanSegment":{{"columns":[{columns}],"udf":"{b64str}"}}}}'
+    columns: List[str]
+    udf: ScriptFunction = field(
+        serializer=lambda val: base64.b64encode(val.save_to_buffer()).decode("ascii"),
+        deserializer=lambda _: None,
+    )
 
 
 @dataclass
+@serde
 class StackPlanSegment(CompositePlanSegment):
     """
     Composite plan segment class responsible for vstack function
     """
 
+
+@dataclass
+@serde
+class RowCountSegment(CompositePlanSegment):
+    """
+    Composite plan segment class responsible for with_row_count function
+    """
+
+    row: str
+
+
+@dataclass
+@serde(tagging=InternalTagging("type"))
+class PlanSegments:
+    segments: List[
+        Union[
+            PolarsPlanSegment,
+            UdfPlanSegment,
+            EntryPointPlanSegment,
+            StackPlanSegment,
+            RowCountSegment,
+        ]
+    ]
+
+
+@dataclass
+class UdfTransformerPlanSegment(CompositePlanSegment):
+    """
+    Accepts a UDF for row-wise DataFrame transformation.
+    """
+
+    _name: str
+    _columns: List[str]
+
     def serialize(self) -> str:
-        return '"StackPlanSegment"'
+        pass
 
 
 @dataclass
@@ -174,17 +182,6 @@ class Metadata:
 
     _polars_client: BastionLabPolars
     _prev_segments: List[CompositePlanSegment] = field(default_factory=list)
-
-
-@dataclass
-class RowCountSegment(CompositePlanSegment):
-    _name: str
-    """
-    Composite plan segment class responsible for with_row_count function
-    """
-
-    def serialize(self) -> str:
-        return f'{{"RowCountSegment": "{self._name}"}}'
 
 
 # TODO
@@ -298,13 +295,11 @@ class RemoteLazyFrame:
         Returns:
             Composite_plan as str
         """
-        segments = ",".join(
-            [
-                seg.serialize()
-                for seg in [*self._meta._prev_segments, PolarsPlanSegment(self._inner)]
-            ]
+        return to_json(
+            PlanSegments(
+                segments=[*self._meta._prev_segments, PolarsPlanSegment(self._inner)]
+            )
         )
-        return f"[{segments}]"
 
     def collect(self: LDF) -> LDF:
         """runs any pending queries/actions on RemoteLazyFrame that have not yet been performed.
@@ -312,9 +307,6 @@ class RemoteLazyFrame:
             FetchableLazyFrame: FetchableLazyFrame of datarame after any queries have been performed
         """
         return self._meta._polars_client._run_query(self.composite_plan)
-
-    def to_array(self: LDF) -> "RemoteArray":
-        return RemoteArray(self)
 
     @staticmethod
     def sql(query: str, *rdfs: LDF) -> LDF:
@@ -384,7 +376,7 @@ class RemoteLazyFrame:
                 [
                     *self._meta._prev_segments,
                     PolarsPlanSegment(self._inner),
-                    UdfPlanSegment(ts_udf, columns),
+                    UdfPlanSegment(columns=columns, udf=ts_udf),
                 ],
             ),
         )
@@ -1295,6 +1287,19 @@ class FetchableLazyFrame(RemoteLazyFrame):
 
     _identifier: str
 
+    def to_array(self: "FetchableLazyFrame") -> "RemoteArray":
+        """
+        Converts a FetchableLazyFrame into a RemoteArray
+
+        Returns:
+            RemoteArray
+        """
+        client = self._meta._polars_client.client
+        res = client._converter._stub.ConvToArray(
+            PbRemoteDataFrame(identifier=self._identifier)
+        )
+        return RemoteArray(client, res.identifier)
+
     @property
     def identifier(self) -> str:
         """
@@ -1682,12 +1687,10 @@ def train_test_split(
             Pass an int for reproducible output across multiple function calls.
     """
 
-    from .remote_polars import FetchableLazyFrame
-
     if len(arrays) == 0:
         raise ValueError("At least one RemoteDataFrame required as input")
 
-    _train_rdf: RemoteArray = arrays[0]
+    _train_remote_array: RemoteArray = arrays[0]
 
     train_size = 1 - test_size if train_size is None else train_size
     test_size = 1 - train_size if test_size is None else test_size
@@ -1699,7 +1702,7 @@ def train_test_split(
         ReferenceRequest(identifier=rdf.identifier) for rdf in arrays
     ]
 
-    res = _train_rdf._meta._polars_client.stub.Split(
+    res = _train_remote_array._client.polars.stub.Split(
         SplitRequest(
             arrays=arrays,
             train_size=train_size,
@@ -1708,30 +1711,14 @@ def train_test_split(
             random_state=random_state,
         )
     )
-    res = [
-        FetchableLazyFrame._from_reference(
-            _train_rdf._meta._polars_client, ref
-        ).to_array()
-        for ref in res.list
-    ]
+    res = [RemoteArray(_train_remote_array._client, ref.identifier) for ref in res.list]
     return res
 
 
 class RemoteArray(RemoteLazyFrame):
-    def __init__(self, rdf: "RemoteLazyFrame") -> None:
-        def _verify_schema(rdf: "RemoteLazyFrame"):
-            dtypes = rdf.schema.values()
-            if pl.Utf8 in list(dtypes):
-                raise TypeError("Utf8 column cannot be converted into RemoteArray")
-
-            if len(set(dtypes)) > 1:
-                raise TypeError("DataTypes for all columns should be the same")
-            return rdf.collect()
-
-        rdf = _verify_schema(rdf)
-        self._inner = rdf._inner
-        self._meta: Metadata = rdf._meta
-        self.identifier = rdf.identifier
+    def __init__(self, client: "Client", identifier: str) -> None:
+        self._client = client
+        self.identifier = identifier
 
     def to_tensor(self) -> "RemoteTensor":
         """
@@ -1746,10 +1733,10 @@ class RemoteArray(RemoteLazyFrame):
         """
         from ..torch.remote_torch import RemoteTensor
 
-        res = self._meta._polars_client.client._converter._stub.ConvToTensor(
-            ToTensor(identifier=self.identifier)
+        res = self._client._converter._stub.ConvToTensor(
+            PbRemoteArray(identifier=self.identifier)
         )
-        return RemoteTensor._from_reference(res, self._meta._polars_client.client)
+        return RemoteTensor._from_reference(res, self._client)
 
     def __str__(self) -> str:
-        return f"RemoteArray(identifier={self.identifier}"
+        return f"RemoteArray(identifier={self.identifier})"
