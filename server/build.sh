@@ -9,7 +9,8 @@
 #   when building in a docker image as root.
 # Env variable "BASTIONLAB_CPP11" is for compile with C++11
 #   (installing if missing).
-#
+# Env variable "LIBTORCH" is the path of libtorch.
+# Env variable "CUDA" is the path of cuda.
 
 declare -a deb_dependencies=(
     [0]=build-essential
@@ -75,7 +76,7 @@ install_common()
     cd $(dirname $(pwd))
 
     # Libtorch installation
-    if [ ! -d "libtorch" ] ; then
+    if [ -z "${LIBTORCH}" ] && [ ! -d "libtorch" ] ; then
 	
 	if [ "$(id -u)" -eq 0 ]; then
 	    export VIRTUAL_ENV=/opt/venv
@@ -95,16 +96,30 @@ install_common()
 	fi
 	unzip libtorch.zip
     else
-	echo "libtorch.zip is already installed at $(dirname $(pwd))/libtorch"
+	if [ -z "${LIBTORCH}" ]; then
+	    echo "libtorch.zip is already installed at $(pwd)/libtorch"
+	else
+	    echo "libtorch is already set at LIBTORCH=${LIBTORCH}"
+	fi
     fi
 
-    # Libtorch env
-    export LIBTORCH=$PWD/libtorch
-    if [ -d "/usr/local/cuda" ]; then
-	export CUDA="/usr/local/cuda"
-	export LD_LIBRARY_PATH=$CUDA/lib64:$LIBTORCH/lib:$LD_LIBRARY_PATH
+    # Environment variables
+    # LIBTORCH
+    if [ -z "${LIBTORCH}" ]; then
+	echo "LIBTORCH environment variable is not set, using: $(pwd)/libtorch"
+	export LIBTORCH=$PWD/libtorch
     else
-	export LD_LIBRARY_PATH=$LIBTORCH/lib:$LD_LIBRARY_PATH
+	echo "LIBTORCH environment variable is already set to: ${LIBTORCH}"
+    fi
+    # CUDA
+    if [ -z "${CUDA}" ]; then
+	echo "CUDA environment variable is not set"
+	if [ -d "/usr/local/cuda" ]; then
+	    echo "Using: /usr/local/cuda"
+	    export CUDA="/usr/local/cuda"
+	fi
+    else
+	echo "CUDA environment variable is already set to: ${CUDA}"
     fi
 
     # Rustup installation
