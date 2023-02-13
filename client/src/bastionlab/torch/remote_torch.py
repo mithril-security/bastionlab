@@ -1,7 +1,7 @@
 import torch
 import hashlib
 import io
-from typing import Iterator, TYPE_CHECKING, List, Optional
+from typing import Iterator, TYPE_CHECKING, List, Optional, Any
 from dataclasses import dataclass
 from .utils import DataWrapper, Chunk, TensorDataset, send_tensor
 from ..pb.bastionlab_torch_pb2 import UpdateTensor, RemoteDatasetReference
@@ -33,8 +33,8 @@ class RemoteTensor:
     def identifier(self) -> str:
         return self._identifier
 
-    def _serialize(self) -> str:
-        return f'{{"identifier": "{self.identifier}"}}'
+    def _serialize(self) -> Any:
+        return {"identifier": {self.identifier}}
 
     @staticmethod
     def _send_tensor(client: "BastionLabTorch", tensor: torch.Tensor) -> "RemoteTensor":
@@ -104,6 +104,7 @@ def _get_tensor_metadata(meta_bytes: bytes):
     meta = TensorMetaData()
     meta.ParseFromString(meta_bytes)
 
+    print(meta.input_dtype)
     return [torch_dtypes[dt] for dt in meta.input_dtype], [
         torch.Size(list(meta.input_shape))
     ]
@@ -206,10 +207,14 @@ class RemoteDataset:
             identifier=res.identifier,
         )
 
-    def _serialize(self):
-        inputs = ",".join([input._serialize() for input in self.inputs])
-
-        return f'{{"inputs": [{inputs}], "labels": {self.labels._serialize()}, "nb_samples": {self.nb_samples}, "privacy_limit": {self.privacy_limit}, "identifier": "{self.identifier}" }}'
+    def _serialize(self) -> Any:
+        return {
+            "inputs": [input._serialize() for input in self.inputs],
+            "labels": self.labels._serialize(),
+            "nb_samples": self.nb_samples,
+            "privacy_limit": self.privacy_limit,
+            "identifier": self.identifier,
+        }
 
     def __str__(self) -> str:
         return f"RemoteDataset(identifier={self.identifier}, name={self.name}, privacy_limit={self.privacy_limit}, inputs={str(self.inputs)}, label={str(self.labels)})"

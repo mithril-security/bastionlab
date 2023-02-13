@@ -3,10 +3,6 @@ syntax = "proto3";
 package bastionlab_conversion;
 import "bastionlab.proto";
 
-message ToTensor {
-    string identifier = 1;
-}
-
 message ToDataFrame {
     repeated string inputs_col_names = 1;
     string labels_col_name = 2;
@@ -15,6 +11,28 @@ message ToDataFrame {
     string identifier = 5;
 }
 
+message RemoteArray {
+    string identifier = 1;
+}
+
+message RemoteDataFrame {
+    string identifier = 1;
+}
+
+message RemoteArrays {
+    repeated RemoteArray list = 1;
+}
+message ToTokenizedArrays {
+    string identifier = 1;
+    int32 add_special_tokens = 2;
+    string model = 3;
+    string config = 4;
+    string revision = 5;
+    optional string auth_token = 6;
+}
+
 service ConversionService {
-    rpc ConvToTensor(ToTensor) returns (bastionlab.Reference) {}
+    rpc ConvToTensor(RemoteArray) returns (bastionlab.Reference) {}
+    rpc TokenizeDataFrame(ToTokenizedArrays) returns (RemoteArrays) {}
+    rpc ConvToArray(RemoteDataFrame) returns (RemoteArray) {}
 }
