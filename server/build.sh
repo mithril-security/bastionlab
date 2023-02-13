@@ -289,7 +289,7 @@ if [ "$(id -u)" -ne 0 ] || [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
 	install_common "__torch_cxx11_url__"
 	
 	# Build server
-	LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all
+	make all
 	
     # For RHEL based distros    
     elif [ -f "/etc/redhat-release" ] ; then
@@ -331,10 +331,9 @@ if [ "$(id -u)" -ne 0 ] || [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
 
 		# Build server
 		if [ ! -z "${BASTIONLAB_CPP11}" ]; then
-		    scl enable devtoolset-11 'LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all' \
-			|| LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all
+		    scl enable devtoolset-11 'make all' ||  make all
 		else
-		    LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all
+		    make all
 		fi
 		;;
 	    *) # Other RHEL based distros
@@ -344,10 +343,9 @@ if [ "$(id -u)" -ne 0 ] || [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
 
 		# Build server
 		if [ ! -z "${BASTIONLAB_CPP11}" ]; then
-		    scl enable gcc-toolset-11 'LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all' \
-			|| LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all
+		    scl enable gcc-toolset-11 'make all' || make all
 		else
-		    LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all
+		    make all
 		fi
 		;;
 	esac
@@ -377,7 +375,7 @@ if [ "$(id -u)" -ne 0 ] || [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
 	export OPENSSL_LIB_DIR='/usr/lib/'
 	
 	# Build server
-	LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make all
+	make all
 
     else
 	unrecognized_distro
