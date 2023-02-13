@@ -1,12 +1,15 @@
 use bastionlab_common::prelude::*;
 use bastionlab_common::{
+    array_store::ArrayStore,
     session::SessionManager,
     session_proto::ClientInfo,
     telemetry::{self, TelemetryEventProps},
 };
 
-use polars::export::ahash::HashSet;
 use polars::prelude::*;
+use rand::rngs::StdRng;
+use rand::seq::SliceRandom;
+use rand::{thread_rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::fs::{create_dir, read_dir, OpenOptions};
@@ -94,9 +97,11 @@ impl DataFrameArtifact {
         }
     }
 }
+
 #[derive(Clone)]
 pub struct BastionLabPolars {
     dataframes: Arc<RwLock<HashMap<String, DataFrameArtifact>>>,
+    arrays: Arc<RwLock<HashMap<String, ArrayStore>>>,
     sess_manager: Arc<SessionManager>,
 }
 
@@ -104,6 +109,7 @@ impl BastionLabPolars {
     pub fn new(sess_manager: Arc<SessionManager>) -> Self {
         Self {
             dataframes: Arc::new(RwLock::new(HashMap::new())),
+            arrays: Arc::new(RwLock::new(HashMap::new())),
             sess_manager,
         }
     }
@@ -313,6 +319,24 @@ Reason: {}",
         identifier
     }
 
+    pub fn insert_array(&self, array: ArrayStore) -> String {
+        let mut arrays = self.arrays.write().unwrap();
+        let identifier = format!("{}", Uuid::new_v4());
+        arrays.insert(identifier.clone(), array);
+        identifier
+    }
+
+    pub fn get_array(&self, identifier: &str) -> Result<ArrayStore, Status> {
+        let arrays = self.arrays.read().unwrap();
+        let arr = arrays
+            .get(identifier)
+            .cloned()
+            .ok_or(Status::invalid_argument(format!(
+                "Could not find Array: {identifier}"
+            )))?;
+        Ok(arr)
+    }
+
     fn persist_df(&self, identifier: &str) -> Result<(), Status> {
         let dataframes = self
             .dataframes
@@ -392,7 +416,7 @@ impl PolarsService for BastionLabPolars {
         &self,
         request: Request<Query>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        let token = self.sess_manager.verify_request(&request)?;
+        let token = self.sess_manager.get_token(&request)?;
 
         let composite_plan: CompositePlan = serde_json::from_str(&request.get_ref().composite_plan)
             .map_err(|e| {
@@ -436,8 +460,7 @@ impl PolarsService for BastionLabPolars {
     ) -> Result<Response<ReferenceResponse>, Status> {
         let start_time = Instant::now();
 
-        let token = self.sess_manager.verify_request(&request)?;
-
+        let token = self.sess_manager.get_token(&request)?;
         let client_info = self.sess_manager.get_client_info(token)?;
         let (df, hash) = unserialize_dataframe(request.into_inner()).await?;
         let header = get_df_header(&df.dataframe)?;
@@ -465,7 +488,7 @@ impl PolarsService for BastionLabPolars {
         &self,
         request: Request<ReferenceRequest>,
     ) -> Result<Response<Self::FetchDataFrameStream>, Status> {
-        let token = self.sess_manager.verify_request(&request)?;
+        let token = self.sess_manager.get_token(&request)?;
 
         let fut = {
             let df = self.get_df(
@@ -481,7 +504,8 @@ impl PolarsService for BastionLabPolars {
         &self,
         request: Request<Empty>,
     ) -> Result<Response<ReferenceList>, Status> {
-        let token = self.sess_manager.verify_request(&request)?;
+        let token = self.sess_manager.get_token(&request)?;
+
         let list = self
             .get_headers()?
             .into_iter()
@@ -498,7 +522,8 @@ impl PolarsService for BastionLabPolars {
         &self,
         request: Request<ReferenceRequest>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        let token = self.sess_manager.verify_request(&request)?;
+        let token = self.sess_manager.get_token(&request)?;
+
         let identifier = String::from(&request.get_ref().identifier);
         let header = self.get_header(&identifier)?;
         telemetry::add_event(
@@ -514,7 +539,8 @@ impl PolarsService for BastionLabPolars {
         &self,
         request: Request<ReferenceRequest>,
     ) -> Result<Response<Empty>, Status> {
-        let token = self.sess_manager.verify_request(&request)?;
+        let token = self.sess_manager.get_token(&request)?;
+
         let identifier = &request.get_ref().identifier;
         self.persist_df(identifier)?;
         telemetry::add_event(
@@ -530,7 +556,8 @@ impl PolarsService for BastionLabPolars {
         &self,
         request: Request<ReferenceRequest>,
     ) -> Result<Response<Empty>, Status> {
-        let token = self.sess_manager.verify_request(&request)?;
+        let token = self.sess_manager.get_token(&request)?;
+
         let identifier = &request.get_ref().identifier;
         let user_id = self.sess_manager.get_user_id(token.clone())?;
         let owner_check = self.sess_manager.verify_if_owner(&user_id)?;
@@ -560,56 +587,60 @@ impl PolarsService for BastionLabPolars {
             request.get_ref().random_state,
         );
 
-        let mut dfs = Vec::new();
-
+        let mut out_arrays_store = vec![];
+        let mut out_arrays = vec![];
         for array in arrays {
-            dfs.push(self.get_df_unchecked(&array.identifier)?);
+            out_arrays_store.push(self.get_array(&array.identifier)?);
         }
 
-        // Verify that all dfs have equal lengths, if not abort.
-        let set = HashSet::from_iter(dfs.iter().map(|df| df.height()));
-        if set.len() > 1 {
-            return Err(Status::aborted("RDFs should have the same height"));
-        }
-        let mut out_dfs = vec![];
+        /*
+         - We use StdRng to shuffle indexes of the array.
 
-        // Inherit other features (`policy`, `fetachable`, `blacklist`, etc) from parent DataFrame
-        let inherit = |id: &String, df: DataFrame| {
-            self.with_df_artifact_ref(&id, |artifact| artifact.inherit(df.clone()))
+         -  We then use ArrayBase::select([indices]) to select the respective indices
+            along the Axis(0).
+
+         -  The reason why we are not using `rand::sample_axis_using` is that
+            for shuffling arrays, if the are multiple, we will want to have the same indexes
+            shuffled across.
+
+            This is very important for ML/DL because you wouldn't want to match a different input
+            to a different output.
+        */
+        let mut rng = if let Some(seed) = random_state {
+            StdRng::seed_from_u64(seed)
+        } else {
+            StdRng::from_rng(thread_rng()).unwrap()
         };
 
-        let make_response = |df: DataFrameArtifact| -> Result<ReferenceResponse, Status> {
-            let identifier = self.insert_df(df);
-            Ok(ReferenceResponse {
-                identifier: identifier.clone(),
-                header: self.get_header(&identifier)?,
-            })
-        };
+        let mut shuffled = false;
+        let mut indices = vec![];
 
-        let shuffle_df = |df: DataFrame| -> Result<DataFrame, Status> {
-            if shuffle {
-                df.sample_n(df.height(), true, true, random_state)
-                    .map_err(|e| Status::aborted(format!("Could not shuffle DataFrame: {e}")))
-            } else {
-                Ok(df)
+        for array in out_arrays_store.iter() {
+            if !shuffled {
+                indices = (0..array.height()).collect();
+                indices.shuffle(&mut rng);
+                shuffled = true;
             }
-        };
-        for (df, id) in dfs.iter().zip(arrays) {
-            let df_height = df.height() as f64 * 1.0;
+            let array = if shuffle {
+                let array = array.shuffle(&indices[..]);
+                array
+            } else {
+                array.clone()
+            };
 
-            let train_size = (df_height * train_size).floor() as usize;
-            let test_size = df_height as usize - train_size;
-
-            let train_df = shuffle_df(df.head(Some(train_size)))?;
-            let test_df = shuffle_df(df.tail(Some(test_size)))?;
-
-            // Push train_df either shuffled or not.
-            out_dfs.push(make_response(inherit(&id.identifier, train_df)?)?);
-
-            // Push train_df either shuffled or not.
-            out_dfs.push(make_response(inherit(&id.identifier, test_df)?)?);
+            let (upper, lower) = array.split((train_size, test_size));
+            out_arrays.append(&mut vec![
+                ReferenceResponse {
+                    identifier: self.insert_array(upper),
+                    header: String::default(),
+                },
+                ReferenceResponse {
+                    identifier: self.insert_array(lower),
+                    header: String::default(),
+                },
+            ])
         }
 
-        Ok(Response::new(ReferenceList { list: out_dfs }))
+        Ok(Response::new(ReferenceList { list: out_arrays }))
     }
 }

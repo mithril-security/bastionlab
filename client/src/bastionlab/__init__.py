@@ -9,7 +9,6 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "pb"))
 
 from .client import Connection
 from .keys import SigningKey, PublicKey, Identity
-
 from .errors import RequestRejected, GRPCException
 
 __all__ = [
@@ -17,7 +16,6 @@ __all__ = [
     "SigningKey",
     "PublicKey",
     "Identity",
-    "errors",
     "RequestRejected",
     "GRPCException",
 ]

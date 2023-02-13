@@ -292,9 +292,11 @@ dependencies = [
  "bastionlab_learning",
  "bastionlab_polars",
  "bastionlab_torch",
+ "ndarray",
  "polars",
  "prost",
  "ring",
+ "tch",
  "tokenizers",
  "tonic",
  "tonic-build",
@@ -323,6 +325,8 @@ dependencies = [
  "hex",
  "http",
  "log",
+ "ndarray",
+ "ndarray-rand",
  "once_cell",
  "polars",
  "prost",
@@ -1769,6 +1773,17 @@ dependencies = [
  "num-integer",
  "num-traits",
  "rawpointer",
+]
+
+[[package]]
+name = "ndarray-rand"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "65608f937acc725f5b164dcf40f4f0bc5d67dc268ab8a649d3002606718c4588"
+dependencies = [
+ "ndarray",
+ "rand",
+ "rand_distr",
 ]
 
 [[package]]
