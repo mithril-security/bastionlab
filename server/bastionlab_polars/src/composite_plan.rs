@@ -3,6 +3,7 @@ use bastionlab_common::common_conversions::{
     lazy_frame_from_logical_plan, series_to_tensor, tensor_to_series,
 };
 use polars::{lazy::dsl::Expr, prelude::*};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io::Cursor};
 use tch::CModule;
@@ -15,14 +16,18 @@ use crate::{
 };
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct CompositePlan(Vec<CompositePlanSegment>);
+pub struct CompositePlan {
+    segments: Vec<CompositePlanSegment>,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "type")]
 pub enum CompositePlanSegment {
-    PolarsPlanSegment(LogicalPlan),
+    PolarsPlanSegment { plan: LogicalPlan },
     UdfPlanSegment { columns: Vec<String>, udf: String },
-    EntryPointPlanSegment(String),
+    EntryPointPlanSegment { identifier: String },
     StackPlanSegment,
+    RowCountSegment { row: String },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -42,15 +47,29 @@ struct StackFrame {
 impl CompositePlan {
     pub fn run(self, state: &BastionLabPolars, user_id: &str) -> Result<DataFrameArtifact, Status> {
         let mut stack = Vec::new();
-        let plan_str = serde_json::to_string(&self.0).map_err(|e| {
+        let plan_str = serde_json::to_string(&self.segments).map_err(|e| {
             Status::invalid_argument(format!("Could not parse composite plan: {e}"))
         })?;
+        let mut blacklist_hashmap = HashMap::new();
 
-        for seg in self.0 {
+        for seg in self.segments {
             match seg {
-                CompositePlanSegment::PolarsPlanSegment(mut plan) => {
+                CompositePlanSegment::PolarsPlanSegment { mut plan } => {
                     let stats = initialize_plan(&mut plan, &mut stack)?;
-                    let df = run_logical_plan(plan)?;
+                    let df = run_logical_plan(plan.clone())?;
+
+                    let polars_plan_str = format!("{:?}", plan);
+                    let re =
+                        Regex::new(r#"col\("(?P<original>[^)]+)"\).alias\("(?P<alias>[^)]+)"\)"#)
+                            .unwrap();
+                    let matches = re.captures_iter(&polars_plan_str);
+                    for captures in matches {
+                        blacklist_hashmap.insert(
+                            captures["original"].to_string(),
+                            captures["alias"].to_string(),
+                        );
+                    }
+
                     stack.push(StackFrame { df, stats });
                 }
                 CompositePlanSegment::UdfPlanSegment { columns, udf } => {
@@ -92,7 +111,7 @@ impl CompositePlan {
                     }
                     stack.push(frame);
                 }
-                CompositePlanSegment::EntryPointPlanSegment(identifier) => {
+                CompositePlanSegment::EntryPointPlanSegment { identifier } => {
                     let df = state.get_df_unchecked(&identifier)?;
                     let stats = DataFrameStats::new(identifier);
                     stack.push(StackFrame { df, stats });
@@ -111,6 +130,19 @@ impl CompositePlan {
                     })?;
                     let mut stats = frame1.stats;
                     stats.merge(frame2.stats);
+                    stack.push(StackFrame { df, stats });
+                }
+                CompositePlanSegment::RowCountSegment { row: name } => {
+                    let frame = stack.pop().ok_or(Status::invalid_argument(
+                        "Could not apply with_row_count: no input data frame",
+                    ))?;
+                    let df = frame.df.with_row_count(&name, Some(0)).map_err(|e| {
+                        Status::invalid_argument(format!(
+                            "Error while running with_row_count: {}",
+                            e
+                        ))
+                    })?;
+                    let stats = frame.stats;
                     stack.push(StackFrame { df, stats });
                 }
             }
@@ -140,6 +172,12 @@ impl CompositePlan {
                     policy = policy.merge(&artifact.policy);
                 }
                 fetchable.merge(check);
+
+                for (key, val) in blacklist_hashmap.iter() {
+                    if artifact.blacklist[..].contains(&key.to_string()) {
+                        blacklist.push(val.to_string());
+                    }
+                }
                 blacklist.extend_from_slice(&artifact.blacklist[..]);
 
                 Ok(())

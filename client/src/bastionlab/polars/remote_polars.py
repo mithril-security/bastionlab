@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable, Generic, List, Optional, TypeVar, Sequence, Union, Dict
 import seaborn as sns
 import polars as pl
@@ -8,19 +8,27 @@ from torch.jit import ScriptFunction
 import base64
 import json
 import torch
-from ..pb.bastionlab_conversion_pb2 import ToTensor
+from ..pb.bastionlab_conversion_pb2 import (
+    RemoteArray as PbRemoteArray,
+    RemoteDataFrame as PbRemoteDataFrame,
+)
 from ..pb.bastionlab_polars_pb2 import ReferenceResponse, SplitRequest, ReferenceRequest
 from .client import BastionLabPolars
-from .utils import ApplyBins
+from .utils import ApplyBins, Palettes, ApplyAbs
 import matplotlib.pyplot as plt
+import matplotlib as mat
 from typing import TYPE_CHECKING
 from ..errors import RequestRejected
+import numpy as np
+from serde import serde, InternalTagging, field
+from serde.json import to_json
 
 
 LDF = TypeVar("LDF", bound="pl.LazyFrame")
 
 if TYPE_CHECKING:
     from ..torch.remote_torch import RemoteTensor
+    from ..client import Client
 
 
 def delegate(
@@ -79,89 +87,91 @@ class CompositePlanSegment:
     Composite plan segment class which handles segment plans that have not been implemented
     """
 
-    def serialize(self) -> str:
-        """
-        will raise NotImplementedError
-
-        raises:
-            NotImplementedError
-        """
-        raise NotImplementedError()
-
 
 @dataclass
+@serde
 class EntryPointPlanSegment(CompositePlanSegment):
     """
     Composite plan segment class responsible for new entry points
     """
 
-    _inner: str
-
-    def serialize(self) -> str:
-        """
-        returns serialized string of this plan segment
-
-        Returns:
-            str: serialized string of this plan segment
-        """
-        return f'{{"EntryPointPlanSegment":"{self._inner}"}}'
+    identifier: str
 
 
 @dataclass
+@serde
 class PolarsPlanSegment(CompositePlanSegment):
     """
     Composite plan segment class responsible for Polars queries
     """
 
-    _inner: LDF
-
-    def serialize(self) -> str:
-        """
-        returns serialized string of this plan segment
-
-        Returns:
-            str: serialized string of this plan segment
-        """
-
-        # HACK: when getting using the schema attribute, polars returns
-        #  the proper error messages (polars.NotFoundError etc) when it is invalid.
-        #  This is not the case for write_json(), which returns a confusing error
-        #  message. So, we get the schema beforehand :)
-        self._inner.schema
-
-        json_str = self._inner.write_json()
-        return f'{{"PolarsPlanSegment":{json_str}}}'
+    # HACK: when getting using the schema attribute, polars returns
+    #  the proper error messages (polars.NotFoundError etc) when it is invalid.
+    #  This is not the case for write_json(), which returns a confusing error
+    #  message. So, we get the schema beforehand :)
+    plan: LDF = field(
+        serializer=lambda val: val.schema and json.loads(val.write_json()),
+        deserializer=lambda _: None,
+    )
 
 
 @dataclass
+@serde
 class UdfPlanSegment(CompositePlanSegment):
     """
     Composite plan segment class responsible for user defined functions
     """
 
-    _inner: ScriptFunction
-    _columns: List[str]
-
-    def serialize(self) -> str:
-        """
-        returns serialized string of this plan segment
-
-        Returns:
-            str: serialized string of this plan segment
-        """
-        columns = ",".join([f'"{c}"' for c in self._columns])
-        b64str = base64.b64encode(self._inner.save_to_buffer()).decode("ascii")
-        return f'{{"UdfPlanSegment":{{"columns":[{columns}],"udf":"{b64str}"}}}}'
+    columns: List[str]
+    udf: ScriptFunction = field(
+        serializer=lambda val: base64.b64encode(val.save_to_buffer()).decode("ascii"),
+        deserializer=lambda _: None,
+    )
 
 
 @dataclass
+@serde
 class StackPlanSegment(CompositePlanSegment):
     """
     Composite plan segment class responsible for vstack function
     """
 
+
+@dataclass
+@serde
+class RowCountSegment(CompositePlanSegment):
+    """
+    Composite plan segment class responsible for with_row_count function
+    """
+
+    row: str
+
+
+@dataclass
+@serde(tagging=InternalTagging("type"))
+class PlanSegments:
+    segments: List[
+        Union[
+            PolarsPlanSegment,
+            UdfPlanSegment,
+            EntryPointPlanSegment,
+            StackPlanSegment,
+            RowCountSegment,
+        ]
+    ]
+
+
+@dataclass
+class UdfTransformerPlanSegment(CompositePlanSegment):
+    """
+    Accepts a UDF for row-wise DataFrame transformation.
+    """
+
+    _name: str
+    _columns: List[str]
+
     def serialize(self) -> str:
-        return '"StackPlanSegment"'
+        pass
 
 
 @dataclass
@@ -213,7 +223,6 @@ class Metadata:
         "tail",
         "last",
         "first",
-        "with_row_count",
         "take_every",
         "fill_null",
         "fill_nan",
@@ -259,7 +268,7 @@ class RemoteLazyFrame:
     in Polar's documentation:
 
     "sort", "cache", "filter", "select", "with_columns", "with_context", "with_column", "drop", "rename", "reverse",
-    "shift", "shift_and_fill", "slice", "limit", "head", "tail", "last", "first", "with_row_count", "take_every", "fill_null",
+    "shift", "shift_and_fill", "slice", "limit", "head", "tail", "last", "first", "take_every", "fill_null",
     "fill_nan", "std", "var", "max", "min", "sum", "mean", "median", "quantile", "explode", "unique", "drop_nulls", "melt",
     "interpolate", "unnest",
     """
@@ -286,13 +295,11 @@ class RemoteLazyFrame:
         Returns:
             Composite_plan as str
         """
-        segments = ",".join(
-            [
-                seg.serialize()
-                for seg in [*self._meta._prev_segments, PolarsPlanSegment(self._inner)]
-            ]
+        return to_json(
+            PlanSegments(
+                segments=[*self._meta._prev_segments, PolarsPlanSegment(self._inner)]
+            )
         )
-        return f"[{segments}]"
 
     def collect(self: LDF) -> LDF:
         """runs any pending queries/actions on RemoteLazyFrame that have not yet been performed.
@@ -300,9 +307,6 @@ class RemoteLazyFrame:
             FetchableLazyFrame: FetchableLazyFrame of datarame after any queries have been performed
         """
         return self._meta._polars_client._run_query(self.composite_plan)
-
-    def to_array(self: LDF) -> "RemoteArray":
-        return RemoteArray(self)
 
     @staticmethod
     def sql(query: str, *rdfs: LDF) -> LDF:
@@ -372,7 +376,7 @@ class RemoteLazyFrame:
                 [
                     *self._meta._prev_segments,
                     PolarsPlanSegment(self._inner),
-                    UdfPlanSegment(ts_udf, columns),
+                    UdfPlanSegment(columns=columns, udf=ts_udf),
                 ],
             ),
         )
@@ -400,6 +404,31 @@ class RemoteLazyFrame:
                 ],
             ),
         )
+
+    def with_row_count(self: LDF, name: str = "index") -> LDF:
+        """adds new column with row count
+        Args:
+            name (String): The name of the new index column.
+        Returns:
+            RemoteLazyFrame: The RemoteLazyFrame with new row count/index column
+        """
+        df = pl.DataFrame(
+            [pl.Series(k, dtype=v) for k, v in self._inner.schema.items()]
+        )
+        ret = RemoteLazyFrame(
+            df.lazy(),
+            Metadata(
+                self._meta._polars_client,
+                [
+                    *self._meta._prev_segments,
+                    PolarsPlanSegment(self._inner),
+                    RowCountSegment(name),
+                ],
+            ),
+        )
+        # Either we need to collect before returning OR we need to make it clear to users they need to call collect() with this function
+        # because if not this leads to panics etc. when we follow this with other operations that use the new column before next using collect()
+        return ret.collect()
 
     def join(
         self: LDF,
@@ -947,6 +976,140 @@ class RemoteLazyFrame:
         else:
             sns.barplot(data=df, x=x, y=y, **kwargs)
 
+    def _calculate_boxes(
+        self: LDF,
+        x: str = None,
+        y: str = None,
+        ax=None,
+    ):
+        # todo check error handling if data owner rejects
+        boxes = []
+        if x == None or y == None:
+            if y == None:
+                col_x = pl.col(x)
+            else:
+                col_x = pl.col(y)
+            ax.set_ylabel(x if x is not None else y)
+            q1 = self.select(col_x.quantile(0.25)).collect().fetch().to_numpy()[0]
+            q3 = self.select(col_x.quantile(0.75)).collect().fetch().to_numpy()[0]
+            boxes.append(
+                {
+                    "label": x,
+                    "whislo": self.select(col_x.min()).collect().fetch().to_numpy()[0],
+                    "q1": q1,
+                    "med": self.select(col_x.median()).collect().fetch().to_numpy()[0],
+                    "q3": q3,
+                    "iqr": q3 - q1,
+                    "whishi": self.select(col_x.max()).collect().fetch().to_numpy()[0],
+                }
+            )
+
+        else:
+            col_x = pl.col(x)
+            col_y = pl.col(y)
+            ax.set_ylabel(y)
+            ax.set_xlabel(x)
+            mins = self.groupby(col_x).agg(col_y.min()).sort(col_x)
+            maxes = self.groupby(col_x).agg(col_y.max()).sort(col_x)
+            meds = self.groupby(col_x).agg(col_y.median()).sort(col_x)
+            q1s = self.groupby(col_x).agg(col_y.quantile(0.25)).sort(col_x)
+            q3s = self.groupby(col_x).agg(col_y.quantile(0.75)).sort(col_x)
+            iqrs = self.groupby(col_x).agg(col_y.quantile(0.25)).sort(col_x)
+            labels = mins.collect().fetch().to_numpy()[:, 0]
+
+            for x in range(len(labels)):
+                boxes.append(
+                    {
+                        "label": labels[x],
+                        "whislo": mins.collect().fetch().to_numpy()[x, 1],
+                        "q1": q1s.collect().fetch().to_numpy()[x, 1],
+                        "med": meds.collect().fetch().to_numpy()[x, 1],
+                        "q3": q3s.collect().fetch().to_numpy()[x, 1],
+                        "iqr": iqrs.collect().fetch().to_numpy()[x, 1],
+                        "whishi": maxes.collect().fetch().to_numpy()[x, 1],
+                    }
+                )
+        return boxes
+
+    def boxplot(
+        self: LDF,
+        x: str = None,
+        y: str = None,
+        colors: Union[str, list[str]] = Palettes.dict["standard"],
+        vertical: bool = True,
+        ax: mat.axes = None,
+        widths: float = 0.75,
+        median_linestyle: str = "-",
+        median_color: str = "black",
+        median_linewidth: float = 0.75,
+        **kwargs,
+    ):
+        """Draws a boxplot based on x and y values.
+
+        boxplot uses aggregated queries to get data necessary to create a boxplot using matplotlib's boxplot
+
+        kwargs arguments are fowarded to matplotlib's Axes.bxp boxplot function
+
+        Args:
+            x (str): The name of column to be used for x axes.
+            y (str): The name of column to be used for y axes.
+            colors (Union[str, list[str]]): The color(s) or name of builtin BastionLab color palette to be used for boxes
+            vertical (bool): Option for vertical or horizontal orientation
+            ax (matplotlib.axes): axes to plot on. A new axes is created if set to None.
+            widths (float): boxes' widths
+            median_linestyle (str): linestyle for median line
+            median_color (str): color for median line
+            median_linewidth (float): boxes' widths
+            **kwargs: keyword arguments that will be passed to Matplolib's bxp function
+        Raises:
+            ValueError: Incorrect column name given
+            various exceptions: Note that exceptions may be raised from Seaborn when the lineplot function is called,
+            for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
+        """
+
+        if isinstance(colors, str):
+            c = colors
+            if c in Palettes.dict:
+                colors = Palettes.dict[c]
+            elif c in mat.colors.cnames:
+                colors = [mat.colors.cnames[c]]
+            else:
+                raise ValueError("Color not found")
+        if ax == None:
+            ax = plt.gca()
+        selects = []
+        for col in [x, y]:
+            if col != None:
+                if col not in self.columns:
+                    raise ValueError("Column ", col, " not found in dataframe")
+                else:
+                    selects.append(col)
+        if selects == []:
+            raise ValueError("Please specify at least an X or Y value")
+        boxes = self._calculate_boxes(x, y, ax)
+        medianprops = dict(
+            linestyle=median_linestyle, color=median_color, linewidth=median_linewidth
+        )
+        boxprops = dict(facecolor="#1f77b4")
+        bplot = ax.bxp(
+            boxes,
+            showfliers=False,
+            widths=widths,
+            medianprops=medianprops,
+            boxprops=boxprops,
+            patch_artist=True,
+            vert=vertical,
+        )
+        i = -1
+        for patch in bplot["boxes"]:
+            i = i + 1
+            patch.set_facecolor(colors[i % len(colors)])
+        if vertical is False:
+            tmp = ax.get_xlabel()
+            ax.set_xlabel(ax.get_ylabel())
+            ax.set_ylabel(tmp)
+        plt.show()
+
     def facet(
         self: LDF, col: Optional[str] = None, row: Optional[str] = None, **kwargs
     ) -> any:
@@ -968,6 +1131,153 @@ class RemoteLazyFrame:
                     raise ValueError("Column ", x, " not found in dataframe")
         return Facet(inner_rdf=self, col=col, row=row, kwargs=kwargs)
 
+    def minmax_scale(self: LDF, cols: Union[str, List[str]]) -> LDF:
+        """Rescales data using the Min/Max or normalization method to a range of [0,1]
+        by subtracting the overall minimum value of the data and then dividing the result by the difference between the minimum and maximum values.
+
+        Args:
+            cols (Union[str, List[str]]): The name of the column(s) which scaling should be applied to.
+        Returns:
+            Copy of original RemoteLazyFrame with scaling applied to specified column(s)
+        Raises:
+            ValueError: Column with a name provided as the cols argument not found in dataset.
+        """
+        columns = []
+        # set up columns for single string argument
+        if isinstance(cols, str):
+            if cols not in self.columns:
+                raise ValueError("Column ", cols, " not found in dataframe")
+            columns.append(cols)
+        else:  # set up columns for list
+            for x in cols:
+                if x not in self.columns:
+                    raise ValueError("Column ", x, " not found in dataframe")
+                columns.append(x)
+        rdf = self.with_columns(
+            [
+                (pl.col(x) - pl.col(x).min())
+                / (pl.col(x).max() - pl.col(x).min()).alias(x)
+                for x in columns
+            ]
+        )
+        return rdf
+
+    def mean_scale(self: LDF, cols: Union[str, List[str]]) -> LDF:
+        """Similar to the Min/Max scaling method, but subtracts the overall mean value of data instead of the min value.
+
+        Args:
+            cols (Union[str, List[str]]): The name of the column(s) which scaling should be applied to.
+        Returns:
+            Copy of original RemoteLazyFrame with scaling applied to specified column(s)
+        Raises:
+            ValueError: Column with a name provided as the cols argument not found in dataset.
+        """
+        columns = []
+        # set up columns for single string argument
+        if isinstance(cols, str):
+            if cols not in self.columns:
+                raise ValueError("Column ", cols, " not found in dataframe")
+            columns.append(cols)
+        else:  # set up columns for list
+            for x in cols:
+                if x not in self.columns:
+                    raise ValueError("Column ", x, " not found in dataframe")
+                columns.append(x)
+        rdf = self.with_columns(
+            [
+                (pl.col(x) - pl.col(x).mean())
+                / (pl.col(x).max() - pl.col(x).min()).alias(x)
+                for x in columns
+            ]
+        )
+        return rdf
+
+    def max_abs_scale(self: LDF, cols: Union[str, List[str]]) -> LDF:
+        """Rescales each data point between -1 and 1 by dividing each data point by its maximum absolute value.
+
+        Args:
+            cols (Union[str, List[str]]): The name of the column(s) which scaling should be applied to.
+        Returns:
+            Copy of original RemoteLazyFrame with scaling applied to specified column(s)
+        Raises:
+            ValueError: Column with a name provided as the cols argument not found in dataset.
+        """
+        model = ApplyAbs()
+        columns = []
+        # set up columns for single string argument
+        if isinstance(cols, str):
+            if cols not in self.columns:
+                raise ValueError("Column ", cols, " not found in dataframe")
+            columns.append(cols)
+        else:  # set up columns for list
+            for x in cols:
+                if x not in self.columns:
+                    raise ValueError("Column ", x, " not found in dataframe")
+                columns.append(x)
+        rdf = self.select([pl.col(x) for x in self.columns]).apply_udf(
+            [x for x in columns], model
+        )
+        rdf = rdf.with_columns(
+            [pl.col(x) / (pl.col(x).max()).alias(x) for x in columns]
+        )
+        return rdf
+
+    def zscore_scale(self: LDF, cols: Union[str, List[str]]) -> LDF:
+        """Rescales data by subtracting the mean from data poiints and then dividing the result by the standard deviation of the data.
+
+        Args:
+            cols (Union[str, List[str]]): The name of the column(s) which scaling should be applied to.
+        Returns:
+            Copy of original RemoteLazyFrame with scaling applied to specified column(s)
+        Raises:
+            ValueError: Column with a name provided as the cols argument not found in dataset.
+        """
+        columns = []
+        # set up columns for single string argument
+        if isinstance(cols, str):
+            if cols not in self.columns:
+                raise ValueError("Column ", cols, " not found in dataframe")
+            columns.append(cols)
+        else:  # set up columns for list
+            for x in cols:
+                if x not in self.columns:
+                    raise ValueError("Column ", x, " not found in dataframe")
+                columns.append(x)
+        rdf = self.with_columns(
+            [(pl.col(x) - pl.col(x).mean()) / pl.col(x).std().alias(x) for x in columns]
+        )
+        return rdf
+
+    def median_quantile_scale(self: LDF, cols: Union[str, List[str]]) -> LDF:
+        """Rescales data by subtracting the median value from data points and dividing the result by the IQR (inter-quartile range).
+
+        Args:
+            cols (Union[str, List[str]]): The name of the column(s) which scaling should be applied to.
+        Returns:
+            Copy of original RemoteLazyFrame with scaling applied to specified column(s)
+        Raises:
+            ValueError: Column with a name provided as the cols argument not found in dataset.
+        """
+        columns = []
+        # set up columns for single string argument
+        if isinstance(cols, str):
+            if cols not in self.columns:
+                raise ValueError("Column ", cols, " not found in dataframe")
+            columns.append(cols)
+        else:  # set up columns for list
+            for x in cols:
+                if x not in self.columns:
+                    raise ValueError("Column ", x, " not found in dataframe")
+                columns.append(x)
+        rdf = self.with_columns(
+            [
+                (pl.col(x) - pl.col(x).median())
+                / (pl.col(x).quantile(0.75) - pl.col(x).quantile(0.25)).alias(x)
+                for x in columns
+            ]
+        )
+        return rdf
+
 
 @dataclass
 class FetchableLazyFrame(RemoteLazyFrame):
@@ -976,6 +1286,19 @@ class FetchableLazyFrame(RemoteLazyFrame):
     """
 
     _identifier: str
+
+    def to_array(self: "FetchableLazyFrame") -> "RemoteArray":
+        """
+        Converts a FetchableLazyFrame into a RemoteArray
+
+        Returns:
+            RemoteArray
+        """
+        client = self._meta._polars_client.client
+        res = client._converter._stub.ConvToArray(
+            PbRemoteDataFrame(identifier=self._identifier)
+        )
+        return RemoteArray(client, res.identifier)
 
     @property
     def identifier(self) -> str:
@@ -1364,12 +1687,10 @@ def train_test_split(
             Pass an int for reproducible output across multiple function calls.
     """
 
-    from .remote_polars import FetchableLazyFrame
-
     if len(arrays) == 0:
         raise ValueError("At least one RemoteDataFrame required as input")
 
-    _train_rdf: RemoteArray = arrays[0]
+    _train_remote_array: RemoteArray = arrays[0]
 
     train_size = 1 - test_size if train_size is None else train_size
     test_size = 1 - train_size if test_size is None else test_size
@@ -1381,7 +1702,7 @@ def train_test_split(
         ReferenceRequest(identifier=rdf.identifier) for rdf in arrays
     ]
 
-    res = _train_rdf._meta._polars_client.stub.Split(
+    res = _train_remote_array._client.polars.stub.Split(
         SplitRequest(
             arrays=arrays,
             train_size=train_size,
@@ -1390,30 +1711,14 @@ def train_test_split(
             random_state=random_state,
         )
     )
-    res = [
-        FetchableLazyFrame._from_reference(
-            _train_rdf._meta._polars_client, ref
-        ).to_array()
-        for ref in res.list
-    ]
+    res = [RemoteArray(_train_remote_array._client, ref.identifier) for ref in res.list]
     return res
 
 
 class RemoteArray(RemoteLazyFrame):
-    def __init__(self, rdf: "RemoteLazyFrame") -> None:
-        def _verify_schema(rdf: "RemoteLazyFrame"):
-            dtypes = rdf.schema.values()
-            if pl.Utf8 in list(dtypes):
-                raise TypeError("Utf8 column cannot be converted into RemoteArray")
-
-            if len(set(dtypes)) > 1:
-                raise TypeError("DataTypes for all columns should be the same")
-            return rdf.collect()
-
-        rdf = _verify_schema(rdf)
-        self._inner = rdf._inner
-        self._meta: Metadata = rdf._meta
-        self.identifier = rdf.identifier
+    def __init__(self, client: "Client", identifier: str) -> None:
+        self._client = client
+        self.identifier = identifier
 
     def to_tensor(self) -> "RemoteTensor":
         """
@@ -1428,10 +1733,10 @@ class RemoteArray(RemoteLazyFrame):
         """
         from ..torch.remote_torch import RemoteTensor
 
-        res = self._meta._polars_client.client._converter._stub.ConvToTensor(
-            ToTensor(identifier=self.identifier)
+        res = self._client._converter._stub.ConvToTensor(
+            PbRemoteArray(identifier=self.identifier)
         )
-        return RemoteTensor._from_reference(res, self._meta._polars_client.client)
+        return RemoteTensor._from_reference(res, self._client)
 
     def __str__(self) -> str:
-        return f"RemoteArray(identifier={self.identifier}"
+        return f"RemoteArray(identifier={self.identifier})"
