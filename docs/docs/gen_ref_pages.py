@@ -100,7 +100,7 @@ if __name__ == "__main__":
     with open("mkdocs.yml", "r") as file:
         data = file.readlines()
         for i, line in enumerate(data):
-            if "Submodules:" in line:
+            if "Submodules:" in line or "Sub-modules:" in line:
                 tabs = line.count(" ") + 3
                 tree = align_tabs(tree, tabs)
                 data.insert(i + 1, tree)
