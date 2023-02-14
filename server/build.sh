@@ -9,6 +9,8 @@
 #   when building in a docker image as root.
 # Env variable "BASTIONLAB_CPP11" is for compile with C++11
 #   (installing if missing).
+# Env "INSTALL_RUST_OPT" are the installer options for rustup
+#   (To choose the default host, toolchain, profile, ...)
 # Env variable "LIBTORCH" is the path of libtorch.
 # Env variable "CUDA" is the path of cuda.
 
@@ -91,11 +93,10 @@ install_common()
 	    exit 1
 	fi
 	unzip libtorch.zip
+    elif [ -z "${LIBTORCH}" ]; then
+	echo "libtorch.zip is already installed at $(pwd)/libtorch"
     else
-	if [ -z "${LIBTORCH}" ]; then
-	    echo "libtorch.zip is already installed at $(pwd)/libtorch"
-	else
-	    echo "libtorch is already set at LIBTORCH=${LIBTORCH}"
+	echo "libtorch is already set at LIBTORCH=${LIBTORCH}"
 	fi
     fi
 
@@ -123,7 +124,12 @@ install_common()
     EXIT_STATUS=$?
     if ! (exit $EXIT_STATUS) ; then
 	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > /tmp/rustup.sh
-	sh /tmp/rustup.sh -y
+	# Installation with options
+	sh /tmp/rustup.sh -y "${INSTALL_RUST_OPT}"
+	EXIT_STATUS=$?
+	if ! (exit $EXIT_STATUS) ; then
+	    exit $EXIT_STATUS
+	fi
 	export PATH=$HOME/.cargo/bin:$PATH
     fi
     
