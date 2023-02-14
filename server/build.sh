@@ -124,7 +124,11 @@ install_common()
     if ! (exit $EXIT_STATUS) ; then
 	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > /tmp/rustup.sh
 	# Installation with options
-	sh /tmp/rustup.sh -y "${INSTALL_RUST_OPT}"
+	if [ ! -z "${INSTALL_RUST_OPT}" ]; then
+	    sh /tmp/rustup.sh -y "${INSTALL_RUST_OPT}"
+	else
+	    sh /tmp/rustup.sh -y
+	fi
 	EXIT_STATUS=$?
 	if ! (exit $EXIT_STATUS) ; then
 	    exit $EXIT_STATUS
