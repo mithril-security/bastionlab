@@ -14,15 +14,13 @@
 
 declare -a deb_dependencies=(
     [0]=build-essential
-    [1]=patchelf
-    [2]=libssl-dev
-    [3]=pkg-config
-    [4]=curl
-    [5]=unzip
-    [6]=python3
-    [7]=python3-pip
-    [8]=python3-venv
-    [9]=sudo
+    [1]=libssl-dev
+    [2]=pkg-config
+    [3]=curl
+    [4]=unzip
+    [5]=python3
+    [6]=python3-pip
+    [7]=python3-venv
 )
 
 declare -a deb_optionals=(
@@ -35,26 +33,24 @@ declare -a deb_optionals=(
 
 declare -a rhel_dependencies=(
     [0]=python3
-    [2]=python3-pip
-    [3]=make
-    [4]=gcc
-    [5]=gcc-c++
-    [6]=zip
-    [7]=openssl-devel
-    [8]=openssl
-    [9]=python3-virtualenv
-    [10]=sudo
+    [1]=python3-pip
+    [2]=make
+    [3]=gcc
+    [4]=gcc-c++
+    [5]=zip
+    [6]=openssl-devel
+    [7]=openssl
+    [8]=python3-virtualenv
 )
 
 declare -a arch_dependencies=(
-    [0]=sudo
-    [1]=python3
-    [2]=python-pip
-    [3]=python-virtualenv
-    [4]=make
-    [5]=gcc
-    [6]=unzip
-    [7]=openssl
+    [0]=python3
+    [1]=python-pip
+    [2]=python-virtualenv
+    [3]=make
+    [4]=gcc
+    [5]=unzip
+    [6]=openssl
 )
 
 unrecognized_distro()
@@ -177,7 +173,7 @@ install_deb_opt()
 	    DEB_TOOLCHAIN="https://ppa.launchpadcontent.net/ubuntu-toolchain-r/test/ubuntu ${VRELEASE} main"
 	    echo "deb" $DEB_TOOLCHAIN | tee -a /etc/apt/sources.list.d/toolchain.list
 	    echo "deb-src" $DEB_TOOLCHAIN | tee -a /etc/apt/sources.list.d/toolchain.list
-	    sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 1E9377A2BA9EF27F
+	    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 1E9377A2BA9EF27F
 	    EXIT_STATUS=$?
 	    apt-get update
 	    if ! (exit $EXIT_STATUS)  || ! (exit $?) ; then
@@ -245,6 +241,29 @@ install_arch_deps()
     pacman -S --noconfirm "${arch_dependencies[@]}"
 }
 
+missing_deps()
+{
+    install_fn=$1
+    if [ "$(id -u)" -ne 0 ]; then
+	command -v sudo > /dev/null 2>&1
+	EXIT_STATUS=$?
+	if ! (exit $EXIT_STATUS) ; then
+	    echo "It seems sudo is not installed and there are dependencies missing, to install them:" >&2
+	    echo "Run this script without BASTIONLAB_BUILD_AS_ROOT set and with superuser privileges" >&2
+	    echo "Example: su -c ./build.sh && ./build.sh # To install and then build"
+	    exit $EXIT_STATUS
+	else
+	    sudo $0
+	fi
+    else
+	$install_fn
+    fi
+    EXIT_STATUS=$?
+    if ! (exit $EXIT_STATUS) ; then
+	exit $EXIT_STATUS
+    fi
+}
+
 ############## main ##############
 
 if [ "$(id -u)" -eq 0 ]; then
@@ -274,15 +293,7 @@ if [ "$(id -u)" -ne 0 ] || [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
 
 	# If dependencies missing, installing them
 	if ! (exit $EXIT_STATUS) || ! (exit $EXIT_STATUS2) ; then
-	    if [ "$(id -u)" -ne 0 ]; then
-		sudo $0
-	    else
-		install_deb_deps
-	    fi
-	    EXIT_STATUS=$?
-	    if ! (exit $EXIT_STATUS) ; then
-		exit $EXIT_STATUS
-	    fi
+	    missing_deps install_deb_deps
 	fi
 	
 	# Install cargo and torch
@@ -312,15 +323,7 @@ if [ "$(id -u)" -ne 0 ] || [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
 
 	# If dependencies missing, installing them
 	if ! (exit $EXIT_STATUS) || ! (exit $EXIT_STATUS2) ; then
-	    if [ "$(id -u)" -ne 0 ]; then
-		sudo $0
-	    else
-		install_rhel_deps
-	    fi
-	    EXIT_STATUS=$?
-	    if ! (exit $EXIT_STATUS) ; then
-		exit $EXIT_STATUS
-	    fi
+	    missing_deps install_rhel_deps
 	fi
 	
 	case "$(cat /etc/centos-release | awk '{print $1}')" in
@@ -358,15 +361,7 @@ if [ "$(id -u)" -ne 0 ] || [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
 
 	# If dependencies missing, installing them
 	if ! (exit $EXIT_STATUS) ; then
-	    if [ "$(id -u)" -ne 0 ]; then
-		sudo $0
-	    else
-		install_arch_deps
-	    fi
-	    EXIT_STATUS=$?
-	    if ! (exit $EXIT_STATUS) ; then
-		exit $EXIT_STATUS
-	    fi
+	    missing_deps install_arch_deps
 	fi
 	
 	# Install cargo and torch
