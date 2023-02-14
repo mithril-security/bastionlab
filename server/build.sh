@@ -125,7 +125,7 @@ install_common()
 	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > /tmp/rustup.sh
 	# Installation with options
 	if [ ! -z "${INSTALL_RUST_OPT}" ]; then
-	    sh /tmp/rustup.sh -y "${INSTALL_RUST_OPT}"
+	    sh /tmp/rustup.sh -y ${INSTALL_RUST_OPT}
 	else
 	    sh /tmp/rustup.sh -y
 	fi
