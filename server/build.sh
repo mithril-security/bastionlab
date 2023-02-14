@@ -97,7 +97,6 @@ install_common()
 	echo "libtorch.zip is already installed at $(pwd)/libtorch"
     else
 	echo "libtorch is already set at LIBTORCH=${LIBTORCH}"
-	fi
     fi
 
     # Environment variables
