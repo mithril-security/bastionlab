@@ -1,0 +1,22 @@
+on:
+  push:
+    paths:
+      - client/src/bastionlab/version.py
+
+jobs:
+  sync-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Update env file
+        run: |
+          echo 'print(*[f"{v}={globals()[v]}" for v in __all__], sep="\n")' |
+            python3 -i client/src/bastionlab/version.py > client/src/bastionlab/.env.version
+
+      - name: Commit and push env file
+        uses: devops-infra/action-commit-push@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          commit_message: Update .env.version with version.py
