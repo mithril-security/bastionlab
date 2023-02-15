@@ -36,7 +36,7 @@ impl Tracking {
             Some((consumption, identifiers)) => {
                 if consumption + size > *self.max_memory.lock().unwrap() {
                     return Err(Status::unknown(
-                        "You have consumed your entire memory quota. Please ask the data owner to delete your dataframes to free memory.",
+                        "You have consumed your entire memory quota. Please delete some of your dataframes to free memory.",
                     ));
                 }
                 let mut identifiers = identifiers.to_owned();
