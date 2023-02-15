@@ -4,6 +4,7 @@ use bastionlab_common::{
     auth::KeyManagement,
     session::SessionManager,
     telemetry::{self, TelemetryEventProps},
+    tracking::Tracking,
 };
 use bastionlab_polars::BastionLabPolars;
 use bastionlab_torch::BastionLabTorch;
@@ -95,6 +96,14 @@ async fn main() -> Result<()> {
             .session_expiry()
             .context("Parsing the public session_expiry config")?,
     ));
+
+    let tracking = Arc::new(Tracking::new(
+        sess_manager.clone(),
+        config
+            .max_memory()
+            .context("Parsing the maximum memory config")?,
+    ));
+
     let server_cert =
         fs::read("tls/host_server.pem").context("Reading the tls/host_server.pem file")?;
     let server_key =
@@ -148,13 +157,12 @@ async fn main() -> Result<()> {
     };
 
     // Polars
-    let polars_svc = BastionLabPolars::new(sess_manager.clone());
+    let polars_svc = BastionLabPolars::new(sess_manager.clone(), tracking.clone());
     let builder = {
         use bastionlab_polars::{
             polars_proto::polars_service_server::PolarsServiceServer, BastionLabPolars,
         };
-        let svc = BastionLabPolars::new(sess_manager.clone());
-        match BastionLabPolars::load_dfs(&svc) {
+        match BastionLabPolars::load_dfs(&polars_svc) {
             Ok(_) => info!("Successfully loaded saved dataframes"),
             Err(_) => info!("There was an error loading saved dataframes"),
         };
