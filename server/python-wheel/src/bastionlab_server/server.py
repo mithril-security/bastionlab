@@ -69,18 +69,21 @@ def tls_certificates():
         print("TLS certificates already generated")
 
 
-def start_server(bastionlab_path: str, libtorch_path: str, auth_flag: bool) -> BastionLabServer:
+def start_server(
+    bastionlab_path: str, libtorch_path: str, auth_flag: bool
+) -> BastionLabServer:
     import shutil
+
     os.chmod(bastionlab_path, 0o755)
     os.chdir(os.getcwd() + "/bin")
     os.environ["LD_LIBRARY_PATH"] = libtorch_path + "/lib"
-    if auth_flag==False:
+    if auth_flag == False:
         os.environ["DISABLE_AUTHENTICATION"] = "1"
     else:
-        os.makedirs(os.getcwd() + '/keys/owners', mode=0o777, exist_ok=True)
-        os.makedirs(os.getcwd() + '/keys/users', mode=0o777, exist_ok=True)
-        shutil.copy('../data_owner.pub', os.getcwd() + '/keys/owners')
-        shutil.copy('../data_scientist.pub', os.getcwd() + '/keys/users')
+        os.makedirs(os.getcwd() + "/keys/owners", mode=0o777, exist_ok=True)
+        os.makedirs(os.getcwd() + "/keys/users", mode=0o777, exist_ok=True)
+        shutil.copy("../data_owner.pub", os.getcwd() + "/keys/owners")
+        shutil.copy("../data_scientist.pub", os.getcwd() + "/keys/users")
     process = subprocess.Popen([bastionlab_path], env=os.environ)
     os.chdir("..")
     print("Bastionlab server is now running on port 50056")
