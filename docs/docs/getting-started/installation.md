@@ -140,6 +140,16 @@ cd bastionlab/server/
 ./build.sh
 ```
 ##### Environmental variables
+- `LIBTORCH`
+  - If the LIBTORCH envar is already set, the script will use this path to build the server.
+- `CUDA`
+  - If the CUDA envar is already set, the script will use this path to build the server.
+- `INSTALL_RUST_OPT`
+  - It is to set the options for **rustup** installation (To choose the default host, **toolchain**, profile, ...).
+  ```bash
+  export INSTALL_RUST_OPT='--profile minimal --default-toolchain nightly'
+  ./build.sh
+  ```
 - `BASTIONLAB_BUILD_AS_ROOT`
   - If it is necessary to build the project as the **root user**, you need to set this variable before running the script.
   - If the variable is not set when running as root, the dependencies will be installed but the project will not be built.
@@ -183,7 +193,7 @@ flowchart LR
 
 First make sure that the following build dependencies (Debian-like systems) are installed on your machine:
 ```bash
-sudo apt update && apt install -y build-essential patchelf libssl-dev pkg-config curl unzip
+sudo apt-get update && apt-get -y install build-essential libssl-dev pkg-config curl unzip
 ```
 
 Then, clone our repository:
@@ -193,13 +203,13 @@ git clone https://github.com/mithril-security/bastionlab.git
 Download and unzip libtorch (Pytorch's C++ backend) from [Pytorch's website](https://pytorch.org/) (you can chose the right build according to your cuda version):
 ```bash
 cd ./bastionlab
-curl -o libtorch.zip https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.12.1%2Bcpu.zip
+curl -o libtorch.zip $(. ./.env.vars && echo "${TORCH_CXX11_URL}")
 unzip libtorch.zip
 ```
-Lib torch binaries are now available under the libtorch folder. You can now turn to building the server crates:
+Libtorch binaries are now available under the libtorch folder. You can now turn to building the server crates:
 ```bash
 cd server
-LIBTORCH_PATH="$(dirname $(pwd))/libtorch" make build
+make build
 ```
 
 To run the server, use:
