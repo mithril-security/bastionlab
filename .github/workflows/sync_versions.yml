@@ -1,4 +1,4 @@
-name: Github sync version variables manager
+name: Syncing versions manager
 
 on:
   workflow_dispatch:
