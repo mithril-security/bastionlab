@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Depends on:
-#   bastionlab/client/src/bastionlab/version.py
+#   bastionlab/.env.vars
 # Dependents:
 #   bastionlab/server/Dockerfile.gpu.sev
 #
@@ -20,9 +20,6 @@ declare -a deb_dependencies=(
     [2]=pkg-config
     [3]=curl
     [4]=unzip
-    [5]=python3
-    [6]=python3-pip
-    [7]=python3-venv
 )
 
 declare -a deb_optionals=(
@@ -34,25 +31,19 @@ declare -a deb_optionals=(
 )
 
 declare -a rhel_dependencies=(
-    [0]=python3
-    [1]=python3-pip
-    [2]=make
-    [3]=gcc
-    [4]=gcc-c++
-    [5]=zip
-    [6]=openssl-devel
-    [7]=openssl
-    [8]=python3-virtualenv
+    [0]=make
+    [1]=gcc
+    [2]=gcc-c++
+    [3]=zip
+    [4]=openssl-devel
+    [5]=openssl
 )
 
 declare -a arch_dependencies=(
-    [0]=python3
-    [1]=python-pip
-    [2]=python-virtualenv
-    [3]=make
-    [4]=gcc
-    [5]=unzip
-    [6]=openssl
+    [0]=make
+    [1]=gcc
+    [2]=unzip
+    [3]=openssl
 )
 
 unrecognized_distro()
@@ -71,22 +62,16 @@ failed_toolchain()
 
 install_common()
 {
+    
     cd $(dirname $(pwd))
+
+    TORCH_LINK=$(. ./.env.vars && echo "${!1}")
 
     # Libtorch installation
     if [ -z "${LIBTORCH}" ] && [ ! -d "libtorch" ] ; then
-	
-	if [ "$(id -u)" -eq 0 ]; then
-	    export VIRTUAL_ENV=/opt/venv
-	    python3 -m venv $VIRTUAL_ENV
-	    export PATH="$VIRTUAL_ENV/bin:$PATH"
-	fi
-	
-	pip3 install requests
-	echo 'import requests; \
-    open("libtorch.zip", "wb").write( \
-          requests.get('$1').content \
-            )' | python3 -i client/src/bastionlab/version.py
+
+	echo "Downloading libtorch.zip..."
+	curl -fsSL $TORCH_LINK > libtorch.zip
 	
 	if [ ! -f "libtorch.zip" ] ; then
 	    echo "[❌] Failed to download libtorch.zip file" >&2
@@ -306,7 +291,7 @@ if [ "$(id -u)" -ne 0 ] || [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
 	fi
 	
 	# Install cargo and torch
-	install_common "__torch_cxx11_url__"
+	install_common "TORCH_CXX11_URL"
 	
 	# Build server
 	make all
@@ -339,7 +324,7 @@ if [ "$(id -u)" -ne 0 ] || [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
 	    "CentOS") # CentOS based distros
 
 		# Install cargo and torch
-		install_common "__torch_url__"
+		install_common "TORCH_URL"
 
 		# Build server
 		if [ ! -z "${BASTIONLAB_CPP11}" ]; then
@@ -351,7 +336,7 @@ if [ "$(id -u)" -ne 0 ] || [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
 	    *) # Other RHEL based distros
 
 		# Install cargo and torch
-		install_common "__torch_cxx11_url__"
+		install_common "TORCH_CXX11_URL"
 
 		# Build server
 		if [ ! -z "${BASTIONLAB_CPP11}" ]; then
@@ -374,7 +359,7 @@ if [ "$(id -u)" -ne 0 ] || [ ! -z "${BASTIONLAB_BUILD_AS_ROOT}" ]; then
 	fi
 	
 	# Install cargo and torch
-	install_common "__torch_cxx11_url__"
+	install_common "TORCH_CXX11_URL"
 	export OPENSSL_INCLUDE_DIR='/usr/include/openssl/'
 	export OPENSSL_LIB_DIR='/usr/lib/'
 	
