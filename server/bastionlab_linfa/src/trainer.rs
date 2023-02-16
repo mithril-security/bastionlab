@@ -1,6 +1,11 @@
 use std::error::Error;
 
-use linfa::{DatasetBase, PlattParams};
+use bastionlab_common::array_store::ArrayStore;
+use linfa::{
+    dataset::TargetDim,
+    prelude::{AsTargets, Records},
+    DatasetBase, PlattParams,
+};
 use linfa_bayes::GaussianNb;
 use linfa_clustering::{KMeans, KMeansInit};
 use linfa_elasticnet::ElasticNet;
@@ -12,7 +17,7 @@ use linfa_nn::{
 };
 use linfa_svm::Svm;
 use linfa_trees::{DecisionTree, SplitQuality};
-use ndarray::{Array2, ArrayBase, Ix1, Ix2, OwnedRepr};
+use ndarray::{Array2, ArrayBase, Ix1, Ix2, IxDyn, IxDynImpl, OwnedRepr};
 use polars::{
     error::ErrString,
     prelude::{PolarsError, PolarsResult},
@@ -99,15 +104,44 @@ pub fn to_polars_error<T, E: Error>(input: Result<T, E>) -> PolarsResult<T> {
     input.map_err(|err| PolarsError::InvalidOperation(ErrString::Owned(err.to_string())))
 }
 
-pub fn get_datasets<D: Clone, T>(
-    records: ArrayBase<OwnedRepr<D>, Ix2>,
-    target: ArrayBase<OwnedRepr<T>, Ix1>,
-    col_names: Vec<String>,
-) -> PolarsResult<DatasetBase<ArrayBase<OwnedRepr<D>, Ix2>, ArrayBase<OwnedRepr<T>, Ix1>>> {
+#[derive(Debug)]
+pub struct IArrayStore(pub ArrayStore);
+
+impl Records for IArrayStore {
+    type Elem = IArrayStore;
+
+    fn nsamples(&self) -> usize {
+        self.0.height()
+    }
+
+    fn nfeatures(&self) -> usize {
+        self.0.width()
+    }
+}
+// impl TargetDim for IArrayStore {
+//     fn nsamples(mut self, nsamples: usize) -> Self {
+//         self.0
+//     }
+// }
+// impl AsTargets for IArrayStore {
+//     type Elem = Self;
+
+//     type Ix = Self;
+
+//     fn as_targets(&self) -> ndarray::ArrayView<Self::Elem, Self::Ix> {
+//         todo!()
+//     }
+// }
+
+pub fn get_datasets(
+    records: ArrayStore,
+    target: ArrayStore,
+) -> DatasetBase<IArrayStore, IArrayStore> {
     // ** For now, shuffling is not implemented.
-    let dataset = linfa::Dataset::new(records, target);
-    let dataset = dataset.with_feature_names::<String>(col_names);
-    Ok(dataset)
+    // let dataset = linfa::Dataset::new(records, target);
+    // let dataset = dataset.with_feature_names::<String>(col_names);
+    let dataset = DatasetBase::new(IArrayStore(records), IArrayStore(target));
+    dataset
 }
 
 pub fn process_trainer_req(

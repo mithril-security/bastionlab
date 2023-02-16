@@ -11,11 +11,7 @@ from ..pb.bastionlab_linfa_pb2 import (
 )
 from ..polars.remote_polars import RemoteArray
 from typing import Dict, Optional, List
-from ..config import get_client
 from enum import Enum
-
-client_name = "linfa_client"
-
 
 @dataclass
 class Trainer:
@@ -23,13 +19,13 @@ class Trainer:
         raise NotImplementedError
 
     def fit(self, train_set: "RemoteArray", target_set: "RemoteArray"):
-        client = get_client(client_name)
+        client = train_set._client.linfa
         model = client._train(train_set, target_set, self)
         self.identifier = model.identifier
         return model
 
     def predict(self, test_set: "RemoteArray"):
-        client = get_client(client_name)
+        client = test_set._client.linfa
         return client._predict(self, test_set)
 
 

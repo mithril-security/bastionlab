@@ -17,7 +17,9 @@ bastionlab_common = { path = "../bastionlab_common" }
 bastionlab_learning = { path = "../bastionlab_learning" }
 ring = "0.16.20"
 polars = "0.25.1"
+ndarray ="0.15.6"
 tokenizers = "0.13.2"
+tch = "0.10.1"
 
 [dependencies.uuid]
 version = "1.1.2"

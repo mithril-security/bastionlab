@@ -10,6 +10,7 @@ build:
   jobs:
     post_install:
     - bash docs/generate_api_reference.sh
+    - bash docs/remove_cells_tags.sh
 
 mkdocs:
   configuration: mkdocs.yml

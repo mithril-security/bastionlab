@@ -1,97 +1,75 @@
+use super::polars_proto::{fetch_chunk, FetchChunk, SendChunk};
+use crate::prelude::*;
+use crate::{DataFrameArtifact, DelayedDataFrame, FetchStatus};
 use polars::prelude::*;
+use ring::digest;
 use tokio::sync::mpsc;
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use tonic::{Response, Status};
 
-use crate::{
-    access_control::Policy, polars_proto::QueryBytes, DataFrameArtifact, DelayedDataFrame,
-    FetchStatus,
-};
+const CHUNK_SIZE: usize = 32 * 1024;
 
-use super::polars_proto::{fetch_chunk, FetchChunk, SendChunk};
+// TODO PERF: Do a PR on polars/pypolars to add the streaming IPC (apache flight) format to the python interface
+// right now, there is only the file format which requires random access
+// which means, we have to do a full copy to a buffer and we cannot parse it as we go
+// also: polar's IpcStreamReader requires the underlying stream to be Seek; which is weird & does not make sense
 
-pub async fn df_artifact_from_stream(
-    stream: tonic::Streaming<SendChunk>,
-) -> Result<DataFrameArtifact, Status> {
-    let (df_bytes, policy, metadata) = unstream_data(stream).await?;
-    let series = df_bytes
-        .iter()
-        .map(|v| bincode::deserialize(&v[..]).unwrap())
-        .collect::<Vec<Series>>();
-    let df = DataFrame::new(series.clone())
-        .map_err(|_| Status::unknown("Failed to deserialize DataFrame."))?;
-    let policy: Policy = serde_json::from_str(&policy)
-        .map_err(|_| Status::unknown("Failed to deserialize policy."))?;
-    let blacklist: Vec<String> = serde_json::from_str(&metadata)
-        .map_err(|_| Status::unknown("Failed to deserialize metadata."))?;
-    Ok(DataFrameArtifact::new(df, policy, blacklist))
-}
-
-pub fn df_to_bytes(df: &DataFrame) -> Vec<Vec<u8>> {
-    let series = df.get_columns();
-    let series_bytes = series
-        .iter()
-        .map(|s| bincode::serialize(s).unwrap())
-        .collect::<Vec<Vec<u8>>>();
-    series_bytes
-}
-
-pub async fn unstream_data(
+pub async fn unserialize_dataframe(
     mut stream: tonic::Streaming<SendChunk>,
-) -> Result<(Vec<Vec<u8>>, String, String), Status> {
-    let mut columns: Vec<u8> = Vec::new();
+) -> Result<(DataFrameArtifact, String), Status> {
+    let mut buf: Vec<u8> = Vec::new();
+    let mut first = true;
     let mut policy = String::new();
-    let mut metadata = String::new();
+    let mut sanitized_columns = Vec::new();
+
+    let mut hasher = digest::Context::new(&digest::SHA256);
 
     while let Some(chunk) = stream.next().await {
         let mut chunk = chunk?;
-        columns.append(&mut chunk.data);
-        policy.push_str(&chunk.policy);
-        metadata.push_str(&chunk.metadata);
+        hasher.update(&chunk.data);
+        buf.append(&mut chunk.data);
+        if first {
+            policy = chunk.policy;
+            sanitized_columns = chunk.sanitized_columns;
+            first = false;
+        }
     }
 
-    let pattern = b"[end]";
-    let mut indexes = vec![0 as usize];
-    indexes.append(
-        &mut columns
-            .windows(pattern.len())
-            .enumerate()
-            .map(
-                |(i, slide): (usize, &[u8])| {
-                    if slide == pattern {
-                        i
-                    } else {
-                        usize::MIN
-                    }
-                },
-            )
-            .filter(|v| v != &usize::MIN)
-            .collect::<Vec<usize>>(),
-    );
-    let output = indexes
-        .windows(2)
-        .map(|r| {
-            let start;
-            if r[0] == 0 {
-                start = r[0];
-            } else {
-                start = r[0] + 5;
-            }
-            let end = r[1];
+    let hash = hex::encode(hasher.finish().as_ref());
 
-            columns[start..end].to_vec()
-        })
-        .collect::<Vec<Vec<u8>>>();
-    Ok((output, policy, metadata))
+    let policy = serde_json::from_str(&policy).map_err(|err| {
+        Status::invalid_argument(format!("Error during the parsing of the policy: {err}"))
+    })?;
+
+    let view = std::io::Cursor::new(&buf);
+    let df = polars::io::ipc::IpcReader::new(view)
+        .finish()
+        .map_err(|err| Status::invalid_argument(format!("Polars error: {err}")))?;
+
+    Ok((DataFrameArtifact::new(df, policy, sanitized_columns), hash))
 }
 
-/// Converts a raw artifact (a header and a binary object) into a stream of chunks to be sent over gRPC.
-pub async fn stream_data(
+// so, to hash a dataset, this does a full serialization; that's kinda bad
+pub fn hash_dataset(df: &mut DataFrame) -> Result<String, PolarsError> {
+    let buf = dataframe_ser_helper(df)?;
+    Ok(hex::encode(digest::digest(&digest::SHA256, &buf).as_ref()))
+}
+
+// This requires &mut because polars is kinda weird about that, but it's not mutated..
+fn dataframe_ser_helper(df: &mut DataFrame) -> Result<Vec<u8>, PolarsError> {
+    let mut buf = Vec::new();
+
+    // PERF: this can be replaced by manually using arrow IPC methods, to avoid this copy
+    let view = std::io::Cursor::new(&mut buf);
+    polars::io::ipc::IpcWriter::new(view).finish(df)?;
+
+    Ok(buf)
+}
+
+pub async fn serialize_delayed_dataframe(
     df: DelayedDataFrame,
-    chunk_size: usize,
 ) -> Response<ReceiverStream<Result<FetchChunk, Status>>> {
     let (tx, rx) = mpsc::channel(4);
-    let pattern = b"[end]";
 
     match df.fetch_status {
         FetchStatus::Pending(reason) => tx
@@ -110,48 +88,44 @@ pub async fn stream_data(
     }
 
     tokio::spawn(async move {
-        let df: DataFrame = match df.future.await {
+        // important things to note about tokio channels:
+        // - send() on them will block until there is space in the queue
+        // - send() returns an error when the receiver has been dropped / .close() has been called on it
+        //   this means that send() will return Err only when the client has "lost interest", has dropped the connection / call
+
+        let mut df: DataFrame = match df.future.await {
             Ok(df) => df,
             Err(e) => {
-                tx.send(Err(e)).await.unwrap(); // fix this
+                // ignore send() error: error means the channel has been closed, ie, client dropped the request.
+                let _ignored = tx.send(Err(e)).await;
                 return;
             }
         };
 
-        let df_bytes = df_to_bytes(&df)
-            .iter_mut()
-            .map(|v| {
-                v.append(&mut pattern.to_vec());
-                v.clone()
-            })
-            .flatten()
-            .collect::<Vec<_>>();
+        let res = dataframe_ser_helper(&mut df)
+            .map_err(|err| Status::internal(format!("Polars error: {err}"))); // this is an internal error
 
-        let raw_bytes: Vec<u8> = df_bytes;
+        let buf = match res {
+            Ok(buf) => buf,
+            Err(err) => {
+                // ignore send() error
+                let _ignored = tx.send(Err(err)).await;
+                return;
+            }
+        };
 
-        for (_, bytes) in raw_bytes.chunks(chunk_size).enumerate() {
-            tx.send(Ok(FetchChunk {
-                body: Some(fetch_chunk::Body::Data(bytes.to_vec())),
-            }))
-            .await
-            .unwrap(); // Fix this
+        for chunk in buf.chunks(CHUNK_SIZE) {
+            let data = FetchChunk {
+                body: Some(fetch_chunk::Body::Data(chunk.into())),
+            };
+
+            if let Err(_ignored) = tx.send(Ok(data)).await {
+                // we have a send() error, meaning client isnt listening anymore
+                // stop the task when this is the case
+                return;
+            }
         }
     });
 
     Response::new(ReceiverStream::new(rx))
-}
-
-pub async fn unstream_query_request(
-    mut stream: tonic::Streaming<QueryBytes>,
-) -> Result<String, Status> {
-    let mut bytes: Vec<u8> = Vec::new();
-
-    while let Some(chunk) = stream.next().await {
-        let mut query = chunk?;
-        bytes.append(&mut query.data);
-    }
-
-    let query = String::from_utf8(bytes)
-        .map_err(|_| Status::invalid_argument(format!("Could not decode composite plan string")))?;
-    Ok(query)
 }

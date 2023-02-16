@@ -1,6 +1,9 @@
+use bastionlab_common::session_proto::TensorMetaData;
 use serde::{Deserialize, Serialize};
-use tch::{Kind, TchError};
+use tch::{Kind, TchError, Tensor};
 use tonic::Status;
+
+use crate::torch_proto::RemoteDatasetReference;
 
 /// Converts a [`tch::TchError`]-based result into a [`tonic::Status`]-based one.
 pub fn tcherror_to_status<T>(input: Result<T, TchError>) -> Result<T, Status> {
@@ -16,8 +19,29 @@ pub struct RemoteTensor {
 pub struct RemoteDataset {
     pub inputs: Vec<RemoteTensor>,
     pub labels: RemoteTensor,
-    pub nb_samples: usize,
     pub privacy_limit: f64,
+}
+
+impl From<RemoteDatasetReference> for RemoteDataset {
+    fn from(dataset: RemoteDatasetReference) -> Self {
+        let inputs = dataset
+            .inputs
+            .iter()
+            .map(|i| RemoteTensor {
+                identifier: i.identifier.clone(),
+            })
+            .collect::<Vec<_>>();
+
+        let labels = RemoteTensor {
+            identifier: dataset.labels.unwrap().identifier,
+        };
+
+        Self {
+            inputs,
+            labels,
+            privacy_limit: -1.0,
+        }
+    }
 }
 
 pub fn get_kind(kind: &str) -> Result<Kind, Status> {
@@ -46,5 +70,12 @@ pub fn get_kind(kind: &str) -> Result<Kind, Status> {
                 kind
             )));
         }
+    }
+}
+
+pub fn create_tensor_meta(tensor: &Tensor) -> TensorMetaData {
+    TensorMetaData {
+        input_dtype: vec![format!("{:?}", tensor.kind())],
+        input_shape: tensor.size(),
     }
 }

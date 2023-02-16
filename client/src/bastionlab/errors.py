@@ -8,6 +8,26 @@ T = TypeVar("T")
 
 
 @dataclass
+class RequestRejected(Exception):
+    """Exception raised when function tries to use datorama returned after a rejected access request.
+    Attributes:
+        message -- explanation of the error
+    """
+
+    def __init__(
+        self,
+        message="Action cancelled after data access request rejected by data owner",
+    ):
+        self.message = message
+        super().__init__(self.message)
+
+    @staticmethod
+    def check_valid_df(df) -> T:
+        if df is None:
+            raise RequestRejected()
+
+
+@dataclass
 class GRPCException(Exception):
     """
     A custom exception class for wrapping gRPC errors. This allows for better error

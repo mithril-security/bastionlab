@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use bastionlab_common::array_store::ArrayStore;
 use linfa::{
     prelude::{SingleTargetRegression, ToConfusionMatrix},
     traits::{Fit, Predict},
@@ -17,6 +18,7 @@ use polars::{
     },
     series::Series,
 };
+use tonic::Status;
 
 use crate::{
     algorithms::*,
@@ -122,23 +124,32 @@ fn transform(
 /// This method sends both the training and target datasets to the specified model in [`Models`].
 /// And `ratio` is passed along to [`linfa_datasets::DatasetBase`]
 pub fn send_to_trainer(
-    records: DataFrame,
-    targets: DataFrame,
+    records: ArrayStore,
+    targets: ArrayStore,
     model_type: Models,
-) -> PolarsResult<SupportedModels> {
-    let (cols, records, targets) = transform(&records, &targets)?;
-    let targets_shape = targets.shape().to_vec();
-
-    let train = get_datasets(records, targets, cols)?;
-
+) -> Result<SupportedModels, Status> {
+    let train = get_datasets(records, targets);
+    let failed_array_type = |model, array| {
+        return Err(Status::failed_precondition(format!(
+            "{model} expect array to be of type f64: {:?}",
+            array
+        )));
+    };
     match model_type {
         Models::GaussianNaiveBayes { var_smoothing } => {
-            let targets = to_usize(&train.targets, targets_shape[0])?;
-            let train = train.with_targets(targets);
             let model = gaussian_naive_bayes(var_smoothing.into());
 
-            let model = to_polars_error(model.fit(&train))?;
-            Ok(SupportedModels::GaussianNaiveBayes(model))
+            let records = match train.records.0 {
+                ArrayStore::AxdynF64(a) => a,
+                _ => return failed_array_type("Gaussian Naive Bayes -> Records", train.records),
+            };
+            let targets = match train.targets.0 {
+                ArrayStore::AxdynUsize(a) => a,
+                _ => return failed_array_type("Gaussian Naive Bayes -> Targets", train.targets),
+            };
+            todo!()
+            // let model = to_polars_error(model.fit(&train))?;
+            // Ok(SupportedModels::GaussianNaiveBayes(model))
         }
         Models::ElasticNet {
             penalty,
@@ -154,9 +165,10 @@ pub fn send_to_trainer(
                 max_iterations,
                 tolerance.into(),
             );
-            Ok(SupportedModels::ElasticNet(to_polars_error(
-                model.fit(&train),
-            )?))
+            todo!()
+            // Ok(SupportedModels::ElasticNet(to_polars_error(
+            //     model.fit(&train),
+            // )?))
         }
         Models::KMeans {
             n_runs,
@@ -172,15 +184,16 @@ pub fn send_to_trainer(
                 max_n_iterations,
                 init_method,
             );
-
-            Ok(SupportedModels::KMeans(to_polars_error(model.fit(&train))?))
+            todo!()
+            // Ok(SupportedModels::KMeans(to_polars_error(model.fit(&train))?))
         }
         Models::LinearRegression { fit_intercept } => {
             let model = linear_regression(fit_intercept);
 
-            Ok(SupportedModels::LinearRegression(to_polars_error(
-                model.fit(&train),
-            )?))
+            todo!()
+            // Ok(SupportedModels::LinearRegression(to_polars_error(
+            //     model.fit(&train),
+            // )?))
         }
 
         Models::LogisticRegression {
@@ -190,19 +203,19 @@ pub fn send_to_trainer(
             max_iterations,
             initial_params,
         } => {
-            let targets = to_usize(&train.targets, train.targets.shape().to_vec()[0])?;
-            let train = train.with_targets(targets);
-            let model = logistic_regression(
-                alpha,
-                gradient_tolerance,
-                fit_intercept,
-                max_iterations,
-                initial_params,
-            );
-
-            Ok(SupportedModels::LogisticRegression(to_polars_error(
-                model.fit(&train),
-            )?))
+            // let targets = to_usize(&train.targets, train.targets.shape().to_vec()[0])?;
+            // let train = train.with_targets(targets);
+            // let model = logistic_regression(
+            //     alpha,
+            //     gradient_tolerance,
+            //     fit_intercept,
+            //     max_iterations,
+            //     initial_params,
+            // );
+            todo!()
+            // Ok(SupportedModels::LogisticRegression(to_polars_error(
+            //     model.fit(&train),
+            // )?))
         }
 
         Models::DecisionTree {
@@ -212,20 +225,20 @@ pub fn send_to_trainer(
             min_weight_leaf,
             min_impurity_decrease,
         } => {
-            let shape = train.targets.shape().to_vec();
-            let targets = to_usize(&train.targets, shape[0])?;
-            let train = train.with_targets(targets);
-            let model = decision_trees(
-                split_quality,
-                max_depth,
-                min_weight_split,
-                min_weight_leaf,
-                min_impurity_decrease,
-            );
-
-            Ok(SupportedModels::DecisionTree(to_polars_error(
-                model.fit(&train),
-            )?))
+            // let shape = train.targets.shape().to_vec();
+            // let targets = to_usize(&train.targets, shape[0])?;
+            // let train = train.with_targets(targets);
+            // let model = decision_trees(
+            //     split_quality,
+            //     max_depth,
+            //     min_weight_split,
+            //     min_weight_leaf,
+            //     min_impurity_decrease,
+            // );
+            todo!()
+            // Ok(SupportedModels::DecisionTree(to_polars_error(
+            //     model.fit(&train),
+            // )?))
         }
         Models::SVM {
             c,
@@ -249,8 +262,8 @@ pub fn send_to_trainer(
                 None => None,
             };
             let model = svm(c, eps, nu, shrinking, platt_params, kernel_params);
-
-            Ok(SupportedModels::SVM(to_polars_error(model.fit(&train))?))
+            todo!()
+            // Ok(SupportedModels::SVM(to_polars_error(model.fit(&train))?))
         }
     }
 }
@@ -366,56 +379,57 @@ pub fn inner_cross_validate(
     scoring: &str,
     cv: usize,
 ) -> PolarsResult<DataFrame> {
-    let (cols, records, targets) = transform(&records, &targets)?;
-    let mut train = get_datasets(records, targets, cols)?;
+    todo!()
+    // let (cols, records, targets) = transform(&records, &targets)?;
+    // let mut train = get_datasets(records, targets);
 
-    let result = match model {
-        Models::LinearRegression { fit_intercept } => {
-            let m = linear_regression(fit_intercept);
+    // let result = match model {
+    //     Models::LinearRegression { fit_intercept } => {
+    //         let m = linear_regression(fit_intercept);
 
-            let arr = to_polars_error(train.cross_validate_single(
-                cv,
-                &vec![m][..],
-                |pred, truth| regression_metrics(pred, truth, scoring),
-            ))?;
+    //         let arr = to_polars_error(train.cross_validate_single(
+    //             cv,
+    //             &vec![m][..],
+    //             |pred, truth| regression_metrics(pred, truth, scoring),
+    //         ))?;
 
-            ndarray_to_df::<f64, Ix1>(&arr, vec![scoring])
-        }
+    //         ndarray_to_df::<f64, Ix1>(&arr, vec![scoring])
+    //     }
 
-        Models::LogisticRegression {
-            alpha,
-            gradient_tolerance,
-            fit_intercept,
-            max_iterations,
-            initial_params,
-        } => {
-            let m = logistic_regression(
-                alpha,
-                gradient_tolerance,
-                fit_intercept,
-                max_iterations,
-                initial_params,
-            );
+    //     Models::LogisticRegression {
+    //         alpha,
+    //         gradient_tolerance,
+    //         fit_intercept,
+    //         max_iterations,
+    //         initial_params,
+    //     } => {
+    //         let m = logistic_regression(
+    //             alpha,
+    //             gradient_tolerance,
+    //             fit_intercept,
+    //             max_iterations,
+    //             initial_params,
+    //         );
 
-            let targets = to_usize(&train.targets, train.targets.shape().to_vec()[0])?;
-            let mut train = train.with_targets(targets);
-            let arr = to_polars_error(train.cross_validate_single(
-                cv,
-                &vec![m][..],
-                |pred, truth| classification_metrics(pred, truth, scoring),
-            ))?;
+    //         let targets = to_usize(&train.targets, train.targets.shape().to_vec()[0])?;
+    //         let mut train = train.with_targets(targets);
+    //         let arr = to_polars_error(train.cross_validate_single(
+    //             cv,
+    //             &vec![m][..],
+    //             |pred, truth| classification_metrics(pred, truth, scoring),
+    //         ))?;
 
-            println!("{:?}", arr);
+    //         println!("{:?}", arr);
 
-            ndarray_to_df::<f32, Ix1>(&arr, vec![scoring])
-        }
+    //         ndarray_to_df::<f32, Ix1>(&arr, vec![scoring])
+    //     }
 
-        _ => {
-            return Err(PolarsError::NotFound(polars::error::ErrString::Owned(
-                "Unsupported Model".to_owned(),
-            )))
-        }
-    };
+    //     _ => {
+    //         return Err(PolarsError::NotFound(polars::error::ErrString::Owned(
+    //             "Unsupported Model".to_owned(),
+    //         )))
+    //     }
+    // };
 
-    result
+    // result
 }

@@ -29,9 +29,9 @@ RUN mkdir -p /app/bin/keys
 
 RUN apt update \
     && apt install -y \
-    libgomp1
+    libgomp1 ca-certificates
 
 ENV LD_LIBRARY_PATH=/app/libtorch/lib
 WORKDIR /app/bin
 EXPOSE 50056
-CMD ["./bastionlab"]
+CMD ./bastionlab

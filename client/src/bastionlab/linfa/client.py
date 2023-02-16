@@ -22,10 +22,9 @@ class BastionLabLinfa:
     def __init__(
         self,
         client: "Client",
-        polars: "BastionLabPolars",
     ) -> None:
         self.stub = LinfaServiceStub(client._channel)
-        self.polars = polars
+        self.client = client
 
     def _train(
         self,

@@ -27,7 +27,6 @@ use std::error::Error;
 
 use tonic::{Request, Response, Status};
 
-use bastionlab_common::session::SessionManager;
 use bastionlab_polars::{
     access_control::{Policy, VerificationResult},
     BastionLabPolars, DataFrameArtifact,
@@ -38,28 +37,23 @@ pub fn to_status_error<T, E: Error>(input: Result<T, E>) -> Result<T, Status> {
 }
 
 pub struct BastionLabLinfa {
-    bastionlab_polars: Arc<BastionLabPolars>,
+    polars: Arc<BastionLabPolars>,
     models: Arc<RwLock<HashMap<String, Arc<SupportedModels>>>>,
-    sess_manager: Arc<SessionManager>,
 }
 
 impl BastionLabLinfa {
-    pub fn new(sess_manager: Arc<SessionManager>, bl_polars: BastionLabPolars) -> Self {
+    pub fn new(polars: BastionLabPolars) -> Self {
         Self {
             models: Arc::new(RwLock::new(HashMap::new())),
-            sess_manager,
-            bastionlab_polars: Arc::new(bl_polars),
+            polars: Arc::new(polars),
         }
-    }
-    fn get_df(&self, identifier: &str) -> Result<DataFrame, Status> {
-        self.bastionlab_polars.get_df_unchecked(identifier)
     }
 
     pub fn insert_df(&self, df: DataFrameArtifact) -> String {
-        self.bastionlab_polars.insert_df(df)
+        self.polars.insert_df(df)
     }
     fn get_header(&self, identifier: &str) -> Result<String, Status> {
-        self.bastionlab_polars.get_header(identifier)
+        self.polars.get_header(identifier)
     }
 
     fn insert_model(&self, model: SupportedModels) -> String {
@@ -84,13 +78,12 @@ impl LinfaService for BastionLabLinfa {
         &self,
         request: Request<TrainingRequest>,
     ) -> Result<Response<ModelResponse>, Status> {
-        self.sess_manager.verify_request(&request)?;
         let (records, target, trainer): (String, String, Option<Trainer>) =
             process_trainer_req(request)?;
 
         let (records, target) = {
-            let records = self.get_df(&records)?;
-            let target = self.get_df(&target)?;
+            let records = self.polars.get_array(&records)?;
+            let target = self.polars.get_array(&target)?;
             (records, target)
         };
         let trainer = trainer.ok_or(Status::aborted("Invalid Trainer!"))?.clone();
@@ -105,7 +98,6 @@ impl LinfaService for BastionLabLinfa {
         &self,
         request: Request<PredictionRequest>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        self.sess_manager.verify_request(&request)?;
         let (model_id, test_set, probability) = {
             let model = &request.get_ref().model;
             let test_set = &request.get_ref().test_set;
@@ -115,7 +107,7 @@ impl LinfaService for BastionLabLinfa {
 
         let model = self.get_model(model_id)?;
 
-        let test_set = self.bastionlab_polars.get_df_unchecked(test_set)?;
+        let test_set = self.polars.get_df_unchecked(test_set)?;
         let prediction = to_status_error(predict(model, test_set, probability))?;
 
         let identifier = self.insert_df(
@@ -142,8 +134,8 @@ impl LinfaService for BastionLabLinfa {
             &request.get_ref().scoring,
         );
 
-        let records = self.bastionlab_polars.get_df_unchecked(records)?;
-        let targets = self.bastionlab_polars.get_df_unchecked(targets)?;
+        let records = self.polars.get_df_unchecked(records)?;
+        let targets = self.polars.get_df_unchecked(targets)?;
         let trainer = trainer.ok_or(Status::aborted("Invalid Trainer!"))?;
         let trainer = select_trainer(trainer)?;
 

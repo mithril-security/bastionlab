@@ -1,21 +1,30 @@
 import torch
 import hashlib
 import io
-from typing import Iterator, TYPE_CHECKING, List, Optional
+from typing import Iterator, TYPE_CHECKING, List, Optional, Any
 from dataclasses import dataclass
-from ..polars.utils import create_byte_chunk
-from ..pb.bastionlab_torch_pb2 import Chunk, Reference, Meta, UpdateTensor
-from .utils import DataWrapper, to_torch_meta
+from .utils import DataWrapper, Chunk, TensorDataset, send_tensor
+from ..pb.bastionlab_torch_pb2 import UpdateTensor, RemoteDatasetReference
+from ..pb.bastionlab_pb2 import Reference
 from torch.utils.data import Dataset, DataLoader
-from ..config import get_client
+from ..pb.bastionlab_pb2 import Reference, TensorMetaData
+import logging
 
 if TYPE_CHECKING:
-    from tokenizers import Tokenizer
-    from ..polars.remote_polars import RemoteSeries
+    from .client import BastionLabTorch
 
 
 @dataclass
 class RemoteTensor:
+    """
+    BastionLab reference to a PyTorch (tch) Tensor on the server.
+
+    It also stores a few basic information about the tensor (`dtype`, `shape`).
+
+    You can also change the dtype of the tensor through an API call
+    """
+
+    _client: "BastionLabTorch"
     _identifier: str
     _dtype: torch.dtype
     _shape: torch.Size
@@ -24,30 +33,19 @@ class RemoteTensor:
     def identifier(self) -> str:
         return self._identifier
 
-    def serialize(self) -> str:
-        return f'{{"identifier": "{self.identifier}"}}'
+    def _serialize(self) -> Any:
+        return {"identifier": {self.identifier}}
 
     @staticmethod
-    def send_tensor(tensor: torch.Tensor) -> "RemoteTensor":
-        client = get_client("torch_client")
-        data = DataWrapper([tensor], None)
-        ts = torch.jit.script(data)
-        buff = io.BytesIO()
-        data = torch.jit.save(ts, buff)
-
-        def inner(b) -> Iterator[Chunk]:
-            for data in create_byte_chunk(b):
-                yield Chunk(
-                    data=data, name="", description="", secret=bytes(), meta=bytes()
-                )
-
-        res = client.stub.SendTensor(inner(buff.getbuffer()))
-        return RemoteTensor._from_reference(res)
+    def _send_tensor(client: "BastionLabTorch", tensor: torch.Tensor) -> "RemoteTensor":
+        res = client.stub.SendTensor(send_tensor(tensor))
+        dtype, shape = _get_tensor_metadata(res.meta)
+        return RemoteTensor(client, res.identifier, *dtype, *shape)
 
     @staticmethod
-    def _from_reference(ref: Reference) -> "RemoteTensor":
-        dtypes, shape = to_torch_meta(ref.meta)
-        return RemoteTensor(ref.identifier, dtypes[0], shape[0])
+    def _from_reference(ref: Reference, client: "BastionLabTorch") -> "RemoteTensor":
+        dtypes, shape = _get_tensor_metadata(ref.meta)
+        return RemoteTensor(client, ref.identifier, dtypes[0], shape[0])
 
     def __str__(self) -> str:
         return f"RemoteTensor(identifier={self._identifier}, dtype={self._dtype}, shape={self._shape})"
@@ -56,27 +54,60 @@ class RemoteTensor:
         return str(self)
 
     @property
-    def dtype(self):
+    def dtype(self) -> torch.dtype:
+        """Returns the torch dtype of the corresponding tensor"""
         return self._dtype
 
     @property
     def shape(self):
+        """Returns the torch Size of the corresponding tensor"""
         return self._shape
 
     def to(self, dtype: torch.dtype):
-        from .utils import tch_kinds
+        """
+        Performs Tensor dtype conversion.
 
-        client = get_client("torch_client")
-        res = client.stub.ModifyTensor(
+        Args:
+            dtype: torch.dtype
+                The resulting torch.dtype
+        """
+        res = self._client.torch.stub.ModifyTensor(
             UpdateTensor(identifier=self.identifier, dtype=tch_kinds[dtype])
         )
-        return RemoteTensor._from_reference(res)
+        return RemoteTensor._from_reference(res, self._client)
 
-    def run_script(self, script: torch.ScriptFunction):
-        raise Exception("run_script is unimplemented")
 
-    def fetch_tensor(self) -> torch.Tensor:
-        raise Exception("fetch_tensor is unimplemented")
+torch_dtypes = {
+    "Int8": torch.uint8,
+    "UInt8": torch.uint8,
+    "Int16": torch.int16,
+    "Int32": torch.int32,
+    "Int64": torch.int64,
+    "Half": torch.half,
+    "Float": torch.float,
+    "Float32": torch.float32,
+    "Float64": torch.float64,
+    "Double": torch.double,
+    "ComplexHalf": torch.complex32,
+    "ComplexFloat": torch.complex64,
+    "ComplexDouble": torch.complex128,
+    "Bool": torch.bool,
+    "QInt8": torch.qint8,
+    "QInt32": torch.qint32,
+    "BFloat16": torch.bfloat16,
+}
+
+tch_kinds = {v: k for k, v in torch_dtypes.items()}
+
+
+def _get_tensor_metadata(meta_bytes: bytes):
+    meta = TensorMetaData()
+    meta.ParseFromString(meta_bytes)
+
+    print(meta.input_dtype)
+    return [torch_dtypes[dt] for dt in meta.input_dtype], [
+        torch.Size(list(meta.input_shape))
+    ]
 
 
 def _tracer(dtypes: List[torch.dtype], shapes: List[torch.Size]):
@@ -88,48 +119,102 @@ def _tracer(dtypes: List[torch.dtype], shapes: List[torch.Size]):
     ]
 
 
+def _make_id_reference(id: str) -> Reference:
+    return Reference(identifier=id, description="", name="", meta=bytes())
+
+
 @dataclass
 class RemoteDataset:
     inputs: List[RemoteTensor]
     labels: RemoteTensor
-    name: Optional[str] = "RemoteDataset-" + hashlib.sha256().hexdigest()[:5]
+    name: Optional[str] = "RemoteDataset"
+    description: Optional[str] = "RemoteDataset"
     privacy_limit: Optional[float] = -1.0
+    identifier: Optional[str] = ""
 
     @property
-    def trace_input(self):
+    def _trace_input(self):
         dtypes = [input.dtype for input in self.inputs]
         shapes = [input.shape for input in self.inputs]
         return _tracer(dtypes, shapes)
 
     @property
-    def nb_samples(self):
+    def nb_samples(self) -> int:
+        """Returns the number of samples in the RemoteDataset"""
         return self.labels.shape[0]
 
+    @property
+    def input_dtype(self) -> torch.dtype:
+        """Returns the input dtype of the tensors stored"""
+        return self.labels.dtype
+
     @staticmethod
-    def from_dataset(dataset: Dataset) -> "RemoteDataset":
-        data = dataset.__getitem__(0)
-        inputs = torch.cat(data[0]).unsqueeze(0)
-        labels = torch.tensor(data[1]).unsqueeze(0)
+    def _from_remote_tensors(
+        client: "BastionLabTorch",
+        inputs: List["RemoteTensor"],
+        labels: "RemoteTensor",
+        **kwargs,
+    ) -> "RemoteDataset":
+        name = kwargs.get("name", "")
+        description = kwargs.get("description", "")
+        privacy_limit = kwargs.get("privacy_limit", -1.0)
+        inputs = [_make_id_reference(input.identifier) for input in inputs]
+        labels = Reference(
+            identifier=labels.identifier,
+            description=description,
+            name=name,
+            meta=bytes(f'{{"privacy_limit": {privacy_limit}}}', encoding="ascii"),
+        )
 
-        print("Dataset --> RemoteDataset Transformation")
-        for idx in range(1, len(dataset)):
-            data = dataset.__getitem__(idx)
+        res = client.stub.ConvToDataset(
+            RemoteDatasetReference(
+                identifier="",
+                inputs=inputs,
+                labels=labels,
+            )
+        )
 
-            input = torch.cat(data[0]).unsqueeze(0)
-            label = torch.tensor(data[1]).unsqueeze(0)
+        inputs = [RemoteTensor._from_reference(ref, client) for ref in res.inputs]
+        labels = RemoteTensor._from_reference(res.labels, client)
 
-            inputs = torch.cat([inputs, input], 0)
-            labels = torch.cat([labels, label])
+        return RemoteDataset(
+            inputs,
+            labels,
+            name=name,
+            description=description,
+            privacy_limit=privacy_limit,
+            identifier=res.identifier,
+        )
 
-        print("Transformation Done")
-        inputs = RemoteTensor.send_tensor(inputs)
-        labels = RemoteTensor.send_tensor(labels.squeeze(0))
+    @staticmethod
+    def _from_dataset(
+        client: "BastionLabTorch", dataset: Dataset, *args, **kwargs
+    ) -> "RemoteDataset":
+        res: RemoteDatasetReference = client.send_dataset(dataset, *args, **kwargs)
+        inputs = [RemoteTensor._from_reference(ref, client) for ref in res.inputs]
+        labels = RemoteTensor._from_reference(res.labels, client)
 
-        return RemoteDataset([inputs], labels)
+        name = kwargs.get("name")
+        description = kwargs.get("description")
+        privacy_limit = kwargs.get("privacy_limit")
 
-    def serialize(self):
-        inputs = ",".join([input.serialize() for input in self.inputs])
-        return f'{{"inputs": [{inputs}], "labels": {self.labels.serialize()}, "nb_samples": {self.nb_samples}, "privacy_limit": {self.privacy_limit}}}'
+        return RemoteDataset(
+            inputs,
+            labels,
+            name=name,
+            description=description,
+            privacy_limit=-1.0 if not privacy_limit else privacy_limit,
+            identifier=res.identifier,
+        )
+
+    def _serialize(self) -> Any:
+        return {
+            "inputs": [input._serialize() for input in self.inputs],
+            "labels": self.labels._serialize(),
+            "nb_samples": self.nb_samples,
+            "privacy_limit": self.privacy_limit,
+            "identifier": self.identifier,
+        }
 
     def __str__(self) -> str:
-        return f"RemoteDataset(name={self.name}, privacy_limit={self.privacy_limit}, inputs={str(self.inputs)}, label={str(self.labels)})"
+        return f"RemoteDataset(identifier={self.identifier}, name={self.name}, privacy_limit={self.privacy_limit}, inputs={str(self.inputs)}, label={str(self.labels)})"

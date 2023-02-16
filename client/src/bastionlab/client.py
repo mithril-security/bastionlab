@@ -16,13 +16,13 @@ import getpass
 import time
 import logging
 import sys
-from .config import CONFIG
 
 if TYPE_CHECKING:
     from .torch import BastionLabTorch
     from .polars import BastionLabPolars
-    from .linfa import BastionLabLinfa
     from .converter import BastionLabConverter
+    from .tokenizers import BastionLabTokenizers
+    from .linfa import BastionLabLinfa
 
 
 class AuthPlugin(grpc.AuthMetadataPlugin):
@@ -55,8 +55,9 @@ class Client:
     The Client class provides access to the BastionLab machine learning platform through several attributes.
 
     Attributes:
-    _bastionlab_torch is an object that provides access to the platform's torch functionality, which is a machine learning library based on PyTorch.
+    _bastionlab_torch is an object that provides access to the platform's torch functionality, which is a deep learning library based on PyTorch.
     _bastionlab_polars is an object that provides access to the platform's polars functionality, which is a library for data analysis and visualization.
+    _bastionlab_linfa is an object that provides access to the platform's linfa functionality, which is a machine learning library based on Linfa.
     _channel is the underlying gRPC channel used to communicate with the server. gRPC is a high-performance RPC (remote procedure call) framework that is used for communication between services.
     """
 
@@ -66,10 +67,16 @@ class Client:
     _bastionlab_polars: "BastionLabPolars" = (
         None  #: The BastionLabPolars object for accessing the polars functionality.
     )
-    __bastionlab_linfa: "BastionLabLinfa" = (
-        None  #: The BastionLabPolars object for accessing the polars functionality.
-    )
     _bastionlab_converter: "BastionLabConverter" = None  #: The BastionLabConverter object for converting internal objects (DF->Dataset, Dataset->DF).
+
+    _bastionlab_tokenizers: "BastionLabTokenizers" = (
+        None  #: The BastionLabTokenizers object used for integrating tokenizers.
+    )
+
+    _bastionlab_linfa: "BastionLabLinfa" = (
+        None  #: The BastionLabLinfa object used for integration ML Library Linfa
+    )
+
     _channel: grpc.Channel  #: The underlying gRPC channel used to communicate with the server.
     __session_expiry_time: float = 0.0  #: Time in seconds
     _token: Optional[bytes] = None
@@ -87,9 +94,6 @@ class Client:
             channel (grpc.Channel): A gRPC channel to the BastionLab server.
         """
         self._channel = channel
-        CONFIG["torch_client"] = self.torch
-        CONFIG["polars_client"] = self.polars
-        CONFIG["linfa_client"] = self.linfa
         self.__session_stub = SessionServiceStub(channel)
         self.signing_key = signing_key
 
@@ -133,9 +137,7 @@ class Client:
         if self._bastionlab_torch is None:
             from bastionlab.torch import BastionLabTorch
 
-            self._bastionlab_torch = BastionLabTorch(
-                self._channel, self.converter, self
-            )
+            self._bastionlab_torch = BastionLabTorch(self)
         return self._bastionlab_torch
 
     @property
@@ -146,30 +148,42 @@ class Client:
         if self._bastionlab_polars is None:
             from bastionlab.polars import BastionLabPolars
 
-            self._bastionlab_polars = BastionLabPolars(
-                self._channel, self.converter, self
-            )
+            self._bastionlab_polars = BastionLabPolars(self)
 
         return self._bastionlab_polars
 
     @property
-    def linfa(self):
-        if self.__bastionlab_linfa is None:
-            from bastionlab.linfa import BastionLabLinfa
-
-            self._bastionlab_linfa = BastionLabLinfa(self, self.polars)
-        return self._bastionlab_linfa
-
-    @property
-    def converter(self) -> "BastionLabConverter":
+    def _converter(self) -> "BastionLabConverter":
         """
         Returns the BastionLabPolars instance used by this client.
         """
         if self._bastionlab_converter is None:
             from bastionlab.converter import BastionLabConverter
 
-            self._bastionlab_converter = BastionLabConverter(self._channel)
+            self._bastionlab_converter = BastionLabConverter(self)
         return self._bastionlab_converter
+
+    @property
+    def tokenizers(self) -> "BastionLabTokenizers":
+        """
+        Returns the BastionLabTokenizers instance used by this client.
+        """
+        if self._bastionlab_tokenizers is None:
+            from bastionlab.tokenizers import BastionLabTokenizers
+
+            self._bastionlab_tokenizers = BastionLabTokenizers(self)
+        return self._bastionlab_tokenizers
+
+    @property
+    def linfa(self) -> "BastionLabLinfa":
+        """
+        Returns the BastionLabLinfa instance used by this client.
+        """
+        if self._bastionlab_linfa is None:
+            from bastionlab.linfa import BastionLabLinfa
+
+            self._bastionlab_linfa = BastionLabLinfa(self)
+        return self._bastionlab_linfa
 
 
 @dataclass
@@ -202,7 +216,6 @@ class Connection:
     def _verify_user(
         server_target, server_creds, options, signing_key: Optional[SigningKey] = None
     ):
-
         """Set up initial connection to BastionLab for verification
         if pubkey not known:
            Drop connection and fail fast authentication
@@ -316,3 +329,9 @@ class Connection:
         """
         self._client = None
         self.channel.close()
+
+
+__all__ = [
+    "Client",
+    "Connection",
+]

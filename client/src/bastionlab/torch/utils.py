@@ -6,7 +6,8 @@ from torch.nn import Module
 from torch.nn.parameter import Parameter
 from torch.utils.data import Dataset
 from tqdm import tqdm  # type: ignore [import]
-from ..pb.bastionlab_torch_pb2 import Chunk, Reference, Meta  # type: ignore [import]
+from ..pb.bastionlab_torch_pb2 import Chunk  # type: ignore [import]
+from ..pb.bastionlab_pb2 import Reference
 
 T = TypeVar("T")
 U = TypeVar("U")
@@ -312,13 +313,7 @@ def serialize_dataset(
         ),
         name=name,
         description=description,
-        meta=Meta(
-            input_shape=[Meta.Shape(elem=input.size()) for input in dataset[0][0]],
-            input_dtype=[f"{input.dtype}" for input in dataset[0][0]],
-            nb_samples=len(dataset),  # type: ignore [arg-type]
-            privacy_limit=privacy_limit,
-            train_dataset=train_dataset,
-        ).SerializeToString(),
+        meta=bytes(),
         progress=progress,
     )
 
@@ -408,33 +403,15 @@ def bulk_deserialize(b: bytes) -> Any:
     return torch.load(buff)
 
 
-torch_dtypes = {
-    "Int8": torch.uint8,
-    "UInt8": torch.uint8,
-    "Int16": torch.int16,
-    "Int32": torch.int32,
-    "Int64": torch.int64,
-    "Half": torch.half,
-    "Float": torch.float,
-    "Float32": torch.float32,
-    "Float64": torch.float64,
-    "Double": torch.double,
-    "ComplexHalf": torch.complex32,
-    "ComplexFloat": torch.complex64,
-    "ComplexDouble": torch.complex128,
-    "Bool": torch.bool,
-    "QInt8": torch.qint8,
-    "QInt32": torch.qint32,
-    "BFloat16": torch.bfloat16,
-}
+def send_tensor(
+    tensor: torch.Tensor, chunk_size: Optional[int] = 32
+) -> Iterator[Chunk]:
+    buf = io.BytesIO()
 
-tch_kinds = {v: k for k, v in torch_dtypes.items()}
+    torch.jit.save(torch.jit.script(DataWrapper([tensor], None)), buf)
+    buf.seek(0)
+    buf_len = len(buf.getvalue())
+    while buf.tell() < buf_len:
+        data = buf.read(chunk_size)
 
-
-def to_torch_meta(meta_bytes: bytes):
-    meta = Meta()
-    meta.ParseFromString(meta_bytes)
-
-    return [torch_dtypes[dt] for dt in meta.input_dtype], [
-        torch.Size(list(meta.input_shape))
-    ]
+        yield Chunk(data=data, description="", meta=bytes(), name="", secret=bytes())

@@ -1,17 +1,19 @@
-from typing import List, TYPE_CHECKING, Optional, Callable, Union
+from typing import List, TYPE_CHECKING, Optional, Iterator
 import grpc
+import io
 from grpc import StatusCode
 import polars as pl
 from colorama import Fore
-from ..pb.bastionlab_polars_pb2 import ReferenceRequest, Empty, SplitRequest
+from ..pb.bastionlab_polars_pb2 import ReferenceRequest, Empty, Query
 from ..pb.bastionlab_polars_pb2_grpc import PolarsServiceStub
+from ..pb.bastionlab_pb2 import Reference
 from ..errors import GRPCException
-from .utils import deserialize_dataframe, serialize_dataframe, serialize_query
+from .utils import deserialize_dataframe, serialize_dataframe
 from .policy import Policy, DEFAULT_POLICY
 
 
 if TYPE_CHECKING:
-    from .remote_polars import FetchableLazyFrame
+    from .remote_polars import FetchableLazyFrame, RemoteArray
     from ..converter import BastionLabConverter
     from ..client import Client
 
@@ -27,11 +29,8 @@ class BastionLabPolars:
             The gRPC service for BastionLab Polars. This define all the API calls for BastionLab Polars.
     """
 
-    def __init__(
-        self, channel: grpc.Channel, conv: "BastionLabConverter", client: "Client"
-    ):
-        self.stub = PolarsServiceStub(channel)
-        self._conv = conv
+    def __init__(self, client: "Client"):
+        self.stub = PolarsServiceStub(client._channel)
         self.client = client
 
     def send_df(
@@ -85,8 +84,7 @@ class BastionLabPolars:
             Optional[pl.DataFrame]
         """
 
-        def inner() -> bytes:
-            joined_bytes = b""
+        def make_chunks_iter() -> Iterator[bytes]:
             blocked = False
 
             for b in self.stub.FetchDataFrame(ReferenceRequest(identifier=ref)):
@@ -113,14 +111,15 @@ Reason: {b.warning}
 This incident will be reported to the data owner.{Fore.WHITE}"""
                     )
 
-                joined_bytes += b.data
-            return joined_bytes
+                yield b.data
 
         self.client.refresh_session_if_needed()
 
         try:
-            joined_bytes = GRPCException.map_error(inner)
-            return deserialize_dataframe(joined_bytes)
+            df = GRPCException.map_error(
+                lambda: deserialize_dataframe(make_chunks_iter())
+            )
+            return df
         except GRPCException as e:
             if e.code == StatusCode.PERMISSION_DENIED:
                 print(
@@ -134,7 +133,6 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
         self,
         composite_plan: str,
     ) -> "FetchableLazyFrame":
-
         """
         Executes a Composite Plan on the BastionLab server.
         A composite plan is BastionLab's internal instruction set.
@@ -152,7 +150,7 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
         self.client.refresh_session_if_needed()
 
         res = GRPCException.map_error(
-            lambda: self.stub.RunQuery(serialize_query(composite_plan))
+            lambda: self.stub.RunQuery(Query(composite_plan=composite_plan))
         )
         return FetchableLazyFrame._from_reference(self, res)
 
@@ -230,3 +228,14 @@ This incident will be reported to the data owner.{Fore.WHITE}"""
         res = GRPCException.map_error(
             lambda: self.stub.DeleteDataFrame(ReferenceRequest(identifier=identifier))
         )
+
+    def RemoteArray(
+        self, identifier: Optional[str] = None, reference: Optional[Reference] = None
+    ) -> "RemoteArray":
+        if not identifier and not reference:
+            raise Exception("Please pass an identifier [str, RemoteArray]")
+        if reference:
+            if reference:
+                identifier = reference.identifier
+
+        return RemoteArray(self, identifier)

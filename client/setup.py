@@ -83,5 +83,7 @@ setup(
         "numpy~=1.21",
         "tqdm~=4.64",
         "tokenizers==0.13.2",
+        "matplotlib==3.6.3",
+        "pyserde~=0.9",
     ],
 )

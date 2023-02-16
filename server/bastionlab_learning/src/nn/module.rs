@@ -54,7 +54,7 @@ impl<'a> Forward<'a> {
         inputs: Vec<PrivacyGuard<Tensor>>,
     ) -> Result<PrivacyGuard<Tensor>, TchError> {
         if inputs.len() > 0 {
-            *self.dp_sgd_context.write().unwrap() = Some(DpSGDContext {
+            *self.dp_sgd_context.write().expect("Poisoned lock") = Some(DpSGDContext {
                 delta: inputs[0].map_context(|x| x.delta()),
                 batch_sampling_rate: inputs[0].batch_size()? as f32
                     / inputs[0].map_context(|x| x.nb_samples()) as f32,
@@ -147,9 +147,11 @@ impl TryFrom<SizedObjectsBytes> for Module {
     type Error = TchError;
 
     fn try_from(mut value: SizedObjectsBytes) -> Result<Self, Self::Error> {
-        let object = value.next().ok_or(TchError::FileFormat(String::from(
-            "Invalid data, expected at least one object in stream.",
-        )))?;
+        let object = value.next().ok_or_else(|| {
+            TchError::FileFormat(String::from(
+                "Invalid data, expected at least one object in stream.",
+            ))
+        })?;
         let vs = VarStore::new(Device::Cpu);
         Ok(Module {
             c_module: TrainableCModule::load_data(&mut &object[..], vs.root())?,

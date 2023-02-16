@@ -12,7 +12,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - serverImage: bastionlab
+          - serverImage: mithrilsecuritysas/bastionlab
             client-wheel: client-artifacts
             os: ubuntu-latest
         python-version: [3.9]
@@ -51,7 +51,7 @@ jobs:
         id: run-server
         run: |
           docker kill -f app > /dev/null 2>&1 || true
-          docker run --rm -d -e BASTIONLAB_DISABLE_TELEMETRY=1 -e DISABLE_AUTHENTICATION=1 -p 50056:50056  --name app mithrilsecuritysas/bastionlab:latest
+          docker run --rm -d -e BASTIONLAB_DISABLE_TELEMETRY=1 -e DISABLE_AUTHENTICATION=1 -p 50056:50056  --name app ${{ matrix.serverImage }}:latest
 
       ########## TESTING CLIENT ##########
       - name: Install dependencies for testing
@@ -60,6 +60,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install flake8 mypy pytest-cov
           wget 'https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv'
+          wget 'https://raw.githubusercontent.com/rinbaruah/COVID_preconditions_Kaggle/master/Data/covid.csv' 
 
       - name: Test with pytest
         id: test-client

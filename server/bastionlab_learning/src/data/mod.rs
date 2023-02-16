@@ -1,4 +1,4 @@
 mod dataset;
 pub mod privacy_guard;
 
-pub use dataset::{Dataset, DatasetIter};
+pub use dataset::{Dataset, DatasetIter, DatasetMetadata};

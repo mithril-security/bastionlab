@@ -1,143 +1,348 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
-use bastionlab_common::session::SessionManager;
-use bastionlab_common::utils::{kind_to_datatype, tensor_to_series};
-use bastionlab_polars::access_control::{Policy, VerificationResult};
-use bastionlab_polars::polars_proto::Meta;
-use bastionlab_polars::utils::to_status_error;
-use bastionlab_polars::utils::{df_to_tensor, series_to_tensor};
-use bastionlab_polars::{BastionLabPolars, DataFrameArtifact};
+use bastionlab_common::{array_store::ArrayStore, common_conversions::*};
+use bastionlab_polars::BastionLabPolars;
 use bastionlab_torch::BastionLabTorch;
-use polars::prelude::{DataFrame, DataType};
-use prost::Message;
+use ndarray::{Axis, Dim, IxDynImpl, OwnedRepr};
+use polars::export::ahash::HashSet;
+use polars::prelude::*;
+use tch::Tensor;
 use tonic::{Request, Response, Status};
-use uuid::Uuid;
 
-use crate::conversion_proto::{
-    conversion_service_server::ConversionService, ConvReference, ConvReferenceResponse,
-    ToDataFrame, ToTensor,
-};
+use crate::conversion_proto::{conversion_service_server::ConversionService, ToTokenizedArrays};
+use crate::conversion_proto::{RemoteArray, RemoteArrays, RemoteDataFrame};
 
+use crate::bastionlab::Reference;
 pub struct Converter {
     torch: Arc<BastionLabTorch>,
     polars: Arc<BastionLabPolars>,
-    sess_manager: Arc<SessionManager>,
 }
 
 impl Converter {
-    pub fn new(
-        torch: Arc<BastionLabTorch>,
-        polars: Arc<BastionLabPolars>,
-        sess_manager: Arc<SessionManager>,
-    ) -> Self {
-        Self {
-            torch,
-            polars,
-            sess_manager,
+    pub fn new(torch: Arc<BastionLabTorch>, polars: Arc<BastionLabPolars>) -> Self {
+        Self { torch, polars }
+    }
+    pub fn ndarray_to_tensor(&self, arr: ArrayStore) -> Result<Tensor, Status> {
+        let tensor = match arr {
+            ArrayStore::AxdynI64(a) => ndarray_to_tensor::<OwnedRepr<i64>, Dim<IxDynImpl>>(a),
+            ArrayStore::AxdynF64(a) => ndarray_to_tensor::<OwnedRepr<f64>, Dim<IxDynImpl>>(a),
+            ArrayStore::AxdynF32(a) => ndarray_to_tensor::<OwnedRepr<f32>, Dim<IxDynImpl>>(a),
+            ArrayStore::AxdynI32(a) => ndarray_to_tensor::<OwnedRepr<i32>, Dim<IxDynImpl>>(a),
+            ArrayStore::AxdynI16(a) => ndarray_to_tensor::<OwnedRepr<i16>, Dim<IxDynImpl>>(a),
+            _ => {
+                return Err(Status::aborted(format!(
+                    "Cannot convert {:?} into Tensor",
+                    arr
+                )))
+            }
+        };
+
+        tensor
+    }
+
+    pub fn df_to_ndarray(&self, df: &DataFrame) -> Result<String, Status> {
+        let set = HashSet::from_iter(df.dtypes().iter().map(|dtype| dtype.to_string()));
+        if set.len() > 1 {
+            return Err(Status::aborted(
+                "DataTypes for all columns should be the same",
+            ));
         }
+
+        let dtype = &df.dtypes()[0];
+
+        let arr = match dtype {
+            DataType::Float32 => {
+                let arr = df
+                    .to_ndarray::<Float32Type>()
+                    .map_err(|e| {
+                        Status::aborted(format!("Cound not convert DataFrame to ndarray: {}", e))
+                    })?
+                    .as_standard_layout()
+                    .to_owned()
+                    .into_dyn();
+                ArrayStore::AxdynF32(arr)
+            }
+            DataType::Float64 => {
+                let arr = df
+                    .to_ndarray::<Float64Type>()
+                    .map_err(|e| {
+                        Status::aborted(format!("Cound not convert DataFrame to ndarray: {}", e))
+                    })?
+                    .as_standard_layout()
+                    .to_owned()
+                    .into_dyn();
+                ArrayStore::AxdynF64(arr)
+            }
+
+            DataType::Int64 => {
+                let arr = df
+                    .to_ndarray::<Int64Type>()
+                    .map_err(|e| {
+                        Status::aborted(format!("Cound not convert DataFrame to ndarray: {}", e))
+                    })?
+                    .as_standard_layout()
+                    .to_owned()
+                    .into_dyn();
+                ArrayStore::AxdynI64(arr)
+            }
+            DataType::Int32 => {
+                let arr = df
+                    .to_ndarray::<Int32Type>()
+                    .map_err(|e| {
+                        Status::aborted(format!("Cound not convert DataFrame to ndarray: {}", e))
+                    })?
+                    .as_standard_layout()
+                    .to_owned()
+                    .into_dyn();
+                ArrayStore::AxdynI32(arr)
+            }
+            _ => {
+                return Err(Status::aborted(format!("{:?} not support ", dtype)));
+            }
+        };
+        let identifier = self.polars.insert_array(arr);
+        Ok(identifier)
+    }
+
+    pub fn list_series_to_array_store(&self, series: &Series) -> Result<ArrayStore, Status>
+where {
+        let get_shape = |series: &Series| -> Option<Vec<usize>> {
+            let _0th = series.len();
+            let _1st = if let AnyValue::List(inner) = series.get(0) {
+                inner.len()
+            } else {
+                return None;
+            };
+            Some(vec![_0th, _1st])
+        };
+
+        /*
+           In this function, we are only working with list series types.
+
+           The function serves as a helper function to convert series into a list to
+           reconstruct into ArrayStore(ArrayBase<T>)
+        */
+        let dtype = series.dtype();
+
+        let arraystore = match dtype {
+            DataType::List(inner) => {
+                /*
+                   In Polars, we do not expect List[List[Primitive]].
+                   Only List[Primitive] is allowed.
+                */
+                let res = match inner.as_ref() {
+                    DataType::Float64 => {
+                        let shape = get_shape(series).ok_or(Status::aborted(
+                            "Only List Series are supported in get_shape",
+                        ))?;
+                        let exploded = to_status_error(series.explode())?;
+                        let arr = to_status_error(exploded.f64())?;
+                        let slice = to_status_error(arr.cont_slice())?;
+                        ArrayStore::AxdynF64(to_status_error(list_to_ndarray(
+                            slice.to_vec(),
+                            shape,
+                        ))?)
+                    }
+
+                    DataType::Float32 => {
+                        let shape = get_shape(series).ok_or(Status::aborted(
+                            "Only List Series are supported in get_shape",
+                        ))?;
+                        let exploded = to_status_error(series.explode())?;
+                        let arr = to_status_error(exploded.f32())?;
+                        let slice = to_status_error(arr.cont_slice())?;
+                        ArrayStore::AxdynF32(to_status_error(list_to_ndarray(
+                            slice.to_vec(),
+                            shape,
+                        ))?)
+                    }
+
+                    DataType::Int64 => {
+                        let shape = get_shape(series).ok_or(Status::aborted(
+                            "Only List Series are supported in get_shape",
+                        ))?;
+                        let exploded = to_status_error(series.explode())?;
+                        let arr = to_status_error(exploded.i64())?;
+                        let slice = to_status_error(arr.cont_slice())?;
+                        ArrayStore::AxdynI64(to_status_error(list_to_ndarray(
+                            slice.to_vec(),
+                            shape,
+                        ))?)
+                    }
+
+                    DataType::Int32 => {
+                        let shape = get_shape(series).ok_or(Status::aborted(
+                            "Only List Series are supported in get_shape",
+                        ))?;
+                        let exploded = to_status_error(series.explode())?;
+                        let arr = to_status_error(exploded.i32())?;
+                        let slice = to_status_error(arr.cont_slice())?;
+                        ArrayStore::AxdynI32(to_status_error(list_to_ndarray(
+                            slice.to_vec(),
+                            shape,
+                        ))?)
+                    }
+
+                    DataType::Int16 => {
+                        let shape = get_shape(series).ok_or(Status::aborted(
+                            "Only List Series are supported in get_shape",
+                        ))?;
+                        let exploded = to_status_error(series.explode())?;
+                        let arr = to_status_error(exploded.i16())?;
+                        let slice = to_status_error(arr.cont_slice())?;
+                        ArrayStore::AxdynI16(to_status_error(list_to_ndarray(
+                            slice.to_vec(),
+                            shape,
+                        ))?)
+                    }
+                    _ => {
+                        return Err(Status::aborted(format!("{inner:?} not supported")));
+                    }
+                };
+                res
+            }
+            _ => {
+                return Err(Status::failed_precondition(
+                    "Only series of List type can be converted into a list",
+                ));
+            }
+        };
+
+        Ok(arraystore)
     }
 }
 
 #[tonic::async_trait]
 impl ConversionService for Converter {
-    async fn conv_to_data_frame(
-        &self,
-        request: Request<ToDataFrame>,
-    ) -> Result<Response<ConvReferenceResponse>, Status> {
-        self.sess_manager.verify_request(&request)?;
-
-        #[allow(unused)]
-        let (inputs_cols_names, labels_col_name, identifier, inputs_conv_fn) = {
-            (
-                &request.get_ref().inputs_col_names,
-                &request.get_ref().labels_col_name,
-                &request.get_ref().identifier,
-                &request.get_ref().inputs_conv_fn,
-            )
-        };
-        let identifier = Uuid::parse_str(&identifier)
-            .map_err(|_| Status::invalid_argument("Invalid run reference"))?;
-
-        let datasets = self.torch.datasets.read().unwrap();
-        let artifact = datasets
-            .get(&identifier.to_string())
-            .ok_or(Status::not_found("Dataset not found"))?;
-        let data = artifact.data.read().unwrap();
-
-        let samples_inputs_locks = data
-            .samples_inputs
-            .iter()
-            .map(|t| t.lock().unwrap())
-            .collect::<Vec<_>>();
-
-        let mut samples_inputs_series = Vec::new();
-
-        for (inputs, name) in samples_inputs_locks.iter().zip(inputs_cols_names.iter()) {
-            let dtype = kind_to_datatype(inputs.kind());
-
-            let series = if inputs.size().len() == 2 {
-                tensor_to_series(&name, &DataType::List(Box::new(dtype)), inputs.data())?
-            } else {
-                tensor_to_series(name, &dtype, inputs.data())?
-            };
-            samples_inputs_series.push(series);
-        }
-
-        let labels_lock = data.labels.lock().unwrap();
-        let dtype = kind_to_datatype(labels_lock.kind());
-        let labels = tensor_to_series(&labels_col_name, &dtype, labels_lock.data())?;
-
-        samples_inputs_series.push(labels);
-
-        let df = to_status_error(DataFrame::new(samples_inputs_series))?;
-
-        let df_artifact = DataFrameArtifact::new(df, Policy::allow_by_default(), vec![]);
-
-        // TODO: Remove this and solve Policy inheritance problem for converted data.
-        let df_artifact = df_artifact.with_fetchable(VerificationResult::Safe);
-
-        let identifier = self.polars.insert_df(df_artifact);
-        let header = self.polars.get_header(&identifier)?;
-        Ok(Response::new(ConvReferenceResponse { identifier, header }))
-    }
-
     async fn conv_to_tensor(
         &self,
-        request: Request<ToTensor>,
-    ) -> Result<Response<ConvReference>, Status> {
-        self.sess_manager.verify_request(&request)?;
+        request: Request<RemoteArray>,
+    ) -> Result<Response<Reference>, Status> {
         let identifier = &request.get_ref().identifier;
+
+        let df = self.polars.get_array(&identifier)?;
+
+        let tensor = self.ndarray_to_tensor(df)?;
+
+        let (_, tensor_ref) = self.torch.insert_tensor(Arc::new(Mutex::new(tensor)));
+
+        let tensor_ref = Reference {
+            identifier: tensor_ref.identifier,
+            meta: tensor_ref.meta,
+            ..Default::default()
+        };
+        Ok(Response::new(tensor_ref))
+    }
+
+    async fn conv_to_array(
+        &self,
+        request: Request<RemoteDataFrame>,
+    ) -> Result<Response<RemoteArray>, Status> {
+        let identifier = request.into_inner().identifier;
+
+        /*
+            Convert to array would have to branch (unless there's a state machine) introduce similar to CompositePlan
+            If there aren't strings and lists in the dataframe, and all the types are the same,
+            then we use `dataframe_to_ndarray`
+        */
 
         let df = self.polars.get_df_unchecked(&identifier)?;
 
-        let tensor = {
-            let cols = df.get_column_names();
-            if cols.len() == 1 {
-                let series = to_status_error(df.column(cols[0]))?;
-                let data = series_to_tensor(series)?;
+        let dtypes = df
+            .dtypes()
+            .iter()
+            .map(|d| d.to_string())
+            .collect::<Vec<_>>();
 
-                data
-            } else {
-                let tensor = df_to_tensor(&df)?;
-                tensor
+        let dtype_exists =
+            |dtype: &str| -> bool { dtypes.iter().find(|s| s.contains(dtype)).is_some() };
+        let arr = if !(dtype_exists("list") || dtype_exists("utf8")) {
+            RemoteArray {
+                identifier: (self.df_to_ndarray(&df)?),
             }
+        } else if dtype_exists("list") {
+            /*
+               Here, we assume we have a List[PrimitiveType]
+               The idea would be to convert columns into ArrayBase -> merge Vec<ArrayBase> -> ArrayBase
+            */
+            let col_names = df.get_column_names();
+            let vec_series = df
+                .columns(&col_names[..])
+                .map_err(|e| Status::aborted(format!("Could not get Series in DataFrame: {e}")))?;
+
+            let mut out = vec![];
+            for series in vec_series {
+                out.push(to_status_error(self.list_series_to_array_store(series))?);
+            }
+
+            /*
+                Here, we stack on Axis(1) because we would want to create [n_rows, m_cols, k_elems_in_each_item];
+            */
+            let array = ArrayStore::stack(Axis(1), &out[..])?;
+            RemoteArray {
+                identifier: self.polars.insert_array(array),
+            }
+        } else {
+            return Err(
+                Status::aborted("DataFrame with str columns cannot be converted directly to RemoteArray. Please tokenize strings first"));
         };
-        let meta = Meta {
-            input_dtype: vec![format!("{:?}", tensor.kind())],
-            input_shape: tensor.size(),
-            ..Default::default()
-        };
 
-        let tensor_id = self.torch.insert_tensor(tensor);
+        Ok(Response::new(arr))
+    }
 
-        // Here, a dataframe has been converted and can be cleared from the Polars storage.
-        self.polars.delete_dfs(identifier)?;
+    async fn tokenize_data_frame(
+        &self,
+        request: Request<ToTokenizedArrays>,
+    ) -> Result<Response<RemoteArrays>, Status> {
+        let (identifier, add_special_tokens, model, config, revision, auth_token) = (
+            request.get_ref().identifier.clone(),
+            request.get_ref().add_special_tokens,
+            request.get_ref().model.clone(),
+            request.get_ref().config.clone(),
+            request.get_ref().revision.clone(),
+            request.get_ref().auth_token(),
+        );
 
-        Ok(Response::new(ConvReference {
-            identifier: tensor_id,
-            name: String::new(),
-            description: String::new(),
-            meta: meta.encode_to_vec(),
-        }))
+        let add_special_tokens = add_special_tokens != 0;
+        let df = self.polars.get_df_unchecked(&identifier)?;
+
+        let mut identifiers = vec![];
+        for name in df.get_column_names_owned() {
+            let idx = df
+                .get_column_names()
+                .iter()
+                .position(|x| x == &&name)
+                .ok_or(Status::invalid_argument(format!(
+                    "Could not apply udf: no column `{}` in data frame",
+                    name
+                )))?;
+            let series = df.get_columns().get(idx).unwrap();
+
+            let (ids, masks) = if series.dtype().eq(&DataType::Utf8) {
+                series_to_tokenized_arrays(
+                    series,
+                    &model,
+                    &config,
+                    add_special_tokens,
+                    &revision,
+                    auth_token,
+                )?
+            } else {
+                return Err(Status::aborted(format!(
+                    "Non-string columns cannot be tokenized"
+                )));
+            };
+
+            let ids = RemoteArray {
+                identifier: self.polars.insert_array(ArrayStore::AxdynI64(ids)),
+            };
+            let masks = RemoteArray {
+                identifier: self.polars.insert_array(ArrayStore::AxdynI64(masks)),
+            };
+
+            identifiers.append(&mut vec![ids, masks]);
+        }
+
+        Ok(Response::new(RemoteArrays { list: identifiers }))
     }
 }

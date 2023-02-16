@@ -13,7 +13,6 @@ prost = { version = "0.8", default-features = false, features = [
 prost-types = "0.11.2"
 tokio = { version = "1.19.2", features = ["macros", "rt-multi-thread", "net"] }
 tokio-stream = "0.1"
-bincode = "1.3.3"
 serde = "1.0.147"
 serde_derive = "1.0.147"
 serde_json = "1.0.87"
@@ -32,6 +31,8 @@ once_cell = "1.13.1"
 log = "0.4.17"
 tokenizers = "0.13.2"
 ndarray = "0.15.6"
+ndarray-rand = "0.14.0"
+regex = "1.7.1"
 bastionlab_common = { path = "../bastionlab_common" }
 bastionlab_torch = { path = "../bastionlab_torch" }
 bastionlab_learning = { path = "../bastionlab_learning" }
@@ -90,6 +91,7 @@ features = [
   "string_justify",
   "arg_where",
   "date_offset",
+  "ipc_streaming",
 ]
 
 [dependencies.uuid]
