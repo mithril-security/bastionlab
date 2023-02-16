@@ -1,7 +1,14 @@
 use std::{error::Error, io::Cursor, sync::Mutex};
 
-use ndarray::{prelude::*, Data, IxDynImpl, RawData};
-use polars::{export::rayon::prelude::ParallelIterator, prelude::*};
+use ndarray::{prelude::*, Data, IxDynImpl, OwnedRepr, RawData};
+use polars::{
+    export::{
+        arrow::types::PrimitiveType,
+        num::{FromPrimitive, ToPrimitive},
+        rayon::prelude::ParallelIterator,
+    },
+    prelude::*,
+};
 use serde::{Deserialize, Serialize};
 use tch::{kind::Element, CModule, Tensor};
 use tokenizers::{FromPretrainedParameters, PaddingParams, Tokenizer, TruncationParams};
@@ -257,4 +264,61 @@ where
 {
     let v = Vec::from(tensor);
     ChunkedArray::new_vec(name, v)
+}
+
+pub fn ndarray_to_df<T, D: Dimension>(
+    arr: &ArrayBase<OwnedRepr<T>, D>,
+    col_names: Vec<&str>,
+) -> Result<DataFrame, Status>
+where
+    T: NumericNative + FromPrimitive + ToPrimitive,
+{
+    let mut lanes: Vec<Series> = vec![];
+
+    for (i, col) in arr.columns().into_iter().enumerate() {
+        match col.as_slice() {
+            Some(d) => {
+                if let PrimitiveType::Float64 = T::PRIMITIVE {
+                    let d = d
+                        .into_iter()
+                        .map(|v| v.to_f64().unwrap())
+                        .collect::<Vec<_>>();
+                    let series = Series::from(Float64Chunked::new_vec(col_names[i], d));
+                    lanes.push(series);
+                }
+                if let PrimitiveType::Float32 = T::PRIMITIVE {
+                    let d = d
+                        .into_iter()
+                        .map(|v| v.to_f32().unwrap())
+                        .collect::<Vec<_>>();
+                    let series = Series::from(Float32Chunked::new_vec(col_names[i], d));
+                    lanes.push(series);
+                }
+                if let PrimitiveType::UInt64 = T::PRIMITIVE {
+                    let d = d
+                        .into_iter()
+                        .map(|v| v.to_u64().unwrap())
+                        .collect::<Vec<_>>();
+                    let series = Series::from(UInt64Chunked::new_vec(col_names[i], d));
+                    lanes.push(series);
+                }
+                if let PrimitiveType::UInt32 = T::PRIMITIVE {
+                    let d = d
+                        .into_iter()
+                        .map(|v| v.to_u32().unwrap())
+                        .collect::<Vec<_>>();
+                    let series = Series::from(UInt32Chunked::new_vec("col", d));
+                    lanes.push(series);
+                }
+                // This could be expanded... for now, only (f64,f32, u64, and u32) are supported.
+            }
+            None => {
+                return Err(Status::aborted(
+                    "Could not convert column in array to slice",
+                ));
+            }
+        }
+    }
+
+    DataFrame::new(lanes).map_err(|e| Status::aborted(format!("Could not create a dataframe: {e}")))
 }

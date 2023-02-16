@@ -1,7 +1,8 @@
 use ndarray::{Array, ArrayView, Axis, Dim, IxDynImpl};
+use polars::prelude::DataFrame;
 use tonic::Status;
 
-use crate::common_conversions::to_status_error;
+use crate::common_conversions::{ndarray_to_df, to_status_error};
 
 // FIXME: Try to update several impls with macros or generics to simplify implementation
 
@@ -320,5 +321,20 @@ impl ArrayStore {
         };
 
         Ok(res)
+    }
+
+    pub fn to_dataframe(&self, col_names: Vec<&str>) -> Result<DataFrame, Status> {
+        match self {
+            ArrayStore::AxdynI64(a) => ndarray_to_df::<i64, Dim<IxDynImpl>>(a, col_names),
+            ArrayStore::AxdynF64(a) => ndarray_to_df::<f64, Dim<IxDynImpl>>(a, col_names),
+            ArrayStore::AxdynF32(a) => ndarray_to_df::<f32, Dim<IxDynImpl>>(a, col_names),
+            ArrayStore::AxdynI32(a) => ndarray_to_df::<i32, Dim<IxDynImpl>>(a, col_names),
+            _ => {
+                return Err(Status::unimplemented(format!(
+                    "Convertion to DataFrame not yet supported: {:?}",
+                    self
+                )))
+            }
+        }
     }
 }

@@ -13,6 +13,7 @@ from ..polars.remote_polars import RemoteArray
 from typing import Dict, Optional, List
 from enum import Enum
 
+
 @dataclass
 class Trainer:
     def to_msg_dict():
@@ -24,9 +25,9 @@ class Trainer:
         self.identifier = model.identifier
         return model
 
-    def predict(self, test_set: "RemoteArray"):
-        client = test_set._client.linfa
-        return client._predict(self, test_set)
+    def predict(self, prediction_input: "RemoteArray"):
+        client = prediction_input._client.linfa
+        return client._predict(self, prediction_input)
 
 
 @dataclass
@@ -53,8 +54,8 @@ class LinearRegression(Trainer):
     def fit(self, train_set: "RemoteArray", target_set: "RemoteArray"):
         return super().fit(train_set, target_set)
 
-    def predict(self, test_set: "RemoteArray"):
-        return super().predict(test_set)
+    def predict(self, prediction_input: "RemoteArray"):
+        return super().predict(prediction_input)
 
 
 @dataclass

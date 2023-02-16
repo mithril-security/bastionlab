@@ -11,10 +11,8 @@ pub mod linfa_proto {
     tonic::include_proto!("bastionlab_linfa");
 }
 
-use polars::prelude::DataFrame;
-
-mod trainer;
-use trainer::{process_trainer_req, select_trainer, SupportedModels};
+mod trainers;
+use trainers::{process_trainer_req, select_trainer, SupportedModels};
 
 mod algorithms;
 
@@ -98,17 +96,18 @@ impl LinfaService for BastionLabLinfa {
         &self,
         request: Request<PredictionRequest>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        let (model_id, test_set, probability) = {
+        let (model_id, input, probability) = {
             let model = &request.get_ref().model;
-            let test_set = &request.get_ref().test_set;
+            let input = &request.get_ref().input;
             let prob = *(&request.get_ref().probability);
-            (model, test_set, prob)
+            (model, input, prob)
         };
 
         let model = self.get_model(model_id)?;
 
-        let test_set = self.polars.get_df_unchecked(test_set)?;
-        let prediction = to_status_error(predict(model, test_set, probability))?;
+        let input = self.polars.get_array(input)?;
+        let prediction = to_status_error(predict(model, input, probability))?;
+        let prediction = prediction.to_dataframe(vec!["prediction"])?;
 
         let identifier = self.insert_df(
             DataFrameArtifact::new(
@@ -134,8 +133,8 @@ impl LinfaService for BastionLabLinfa {
             &request.get_ref().scoring,
         );
 
-        let records = self.polars.get_df_unchecked(records)?;
-        let targets = self.polars.get_df_unchecked(targets)?;
+        let records = self.polars.get_array(records)?;
+        let targets = self.polars.get_array(targets)?;
         let trainer = trainer.ok_or(Status::aborted("Invalid Trainer!"))?;
         let trainer = select_trainer(trainer)?;
 
@@ -145,8 +144,16 @@ impl LinfaService for BastionLabLinfa {
             targets,
             &scoring,
             cv as usize,
-        ))?;
+        ))?
+        .to_dataframe(vec![scoring])?;
 
+        // FIXME: Currently, everyone can fetch predictions.
+        // Ideally, we would want policies to trickly down here too
+        // TODO: Figure out how to pass policies to the `ndarray` -> `DataFrame` problem
+        //       where there wasn't any policy to inherit from in the first place.
+        //       Possible solution:
+        //         - Add a `policy` field to `ArrayStore` and this will inherit the policy of the
+        //           DataFrame, from which it was converted.
         let identifier = self.insert_df(
             DataFrameArtifact::new(df, Policy::allow_by_default(), vec![String::default()])
                 .with_fetchable(VerificationResult::Safe),

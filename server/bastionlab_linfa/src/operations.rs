@@ -1,126 +1,84 @@
-use std::sync::Arc;
+use std::{error::Error, fmt::Debug, sync::Arc};
 
-use bastionlab_common::array_store::ArrayStore;
+use bastionlab_common::{array_store::ArrayStore, common_conversions::to_status_error};
 use linfa::{
     prelude::{SingleTargetRegression, ToConfusionMatrix},
     traits::{Fit, Predict},
+    DatasetBase,
 };
-use ndarray::{Array, Array1, Array2, ArrayBase, Dimension, Ix1, OwnedRepr, StrideShape, ViewRepr};
+use ndarray::{ArrayBase, Ix1, Ix2, OwnedRepr, ViewRepr};
 
-use polars::{
-    export::{
-        arrow::types::PrimitiveType,
-        num::{FromPrimitive, ToPrimitive},
-    },
-    prelude::{
-        DataFrame, Float32Chunked, Float64Chunked, Float64Type, NumericNative, PolarsError,
-        PolarsResult, UInt32Chunked, UInt64Chunked,
-    },
-    series::Series,
-};
 use tonic::Status;
 
 use crate::{
     algorithms::*,
-    trainer::{get_datasets, to_polars_error, Models, PredictionTypes, SupportedModels},
+    trainers::{get_datasets, IArrayStore, Models, PredictionTypes, SupportedModels},
 };
 
-pub fn ndarray_to_df<T, D: Dimension>(
-    arr: &ArrayBase<OwnedRepr<T>, D>,
-    col_names: Vec<&str>,
-) -> PolarsResult<DataFrame>
+fn failed_array_type<T, A: Debug>(model: &str, array: T) -> Result<A, Status>
 where
-    T: NumericNative + FromPrimitive + ToPrimitive,
+    T: std::fmt::Debug,
 {
-    let mut lanes: Vec<Series> = vec![];
+    return Err(Status::failed_precondition(format!(
+        "{model} expect array to be of type f64: {:?}",
+        array
+    )));
+}
+fn dimensionality_error<E: Error>(dim: &str, e: E) -> Status {
+    return Status::aborted(format!(
+        "Could not convert Dynamic Array into {:?}: {e}",
+        dim
+    ));
+}
 
-    for (i, col) in arr.columns().into_iter().enumerate() {
-        match col.as_slice() {
-            Some(d) => {
-                if let PrimitiveType::Float64 = T::PRIMITIVE {
-                    let d = d
-                        .into_iter()
-                        .map(|v| v.to_f64().unwrap())
-                        .collect::<Vec<_>>();
-                    let series = Series::from(Float64Chunked::new_vec(col_names[i], d));
-                    lanes.push(series);
-                }
-                if let PrimitiveType::Float32 = T::PRIMITIVE {
-                    let d = d
-                        .into_iter()
-                        .map(|v| v.to_f32().unwrap())
-                        .collect::<Vec<_>>();
-                    let series = Series::from(Float32Chunked::new_vec(col_names[i], d));
-                    lanes.push(series);
-                }
-                if let PrimitiveType::UInt64 = T::PRIMITIVE {
-                    let d = d
-                        .into_iter()
-                        .map(|v| v.to_u64().unwrap())
-                        .collect::<Vec<_>>();
-                    let series = Series::from(UInt64Chunked::new_vec(col_names[i], d));
-                    lanes.push(series);
-                }
-                if let PrimitiveType::UInt32 = T::PRIMITIVE {
-                    let d = d
-                        .into_iter()
-                        .map(|v| v.to_u32().unwrap())
-                        .collect::<Vec<_>>();
-                    let series = Series::from(UInt32Chunked::new_vec("col", d));
-                    lanes.push(series);
-                }
-                // This could be expanded... for now, only (f64,f32, u64, and u32) are supported.
+///
+/// This macro converts convert the Dynamic Array Implememtation into
+/// a fixed dimension say `Ix2`.
+///
+/// It does this by first matching on the right enum variant (considering the type
+///  of the array).
+///
+/// It calls `into_dimensionality` to pass the dimension as a type to the macro.
+macro_rules! get_inner_array {
+    ($variant:tt, $array:ident, $dim:ty, $dim_str:tt, $model_name:tt, $inner:tt) => {{
+        use crate::trainers::IArrayStore;
+        match $array {
+            IArrayStore(ArrayStore::$variant(a)) => {
+                let a = a
+                    .into_dimensionality::<$dim>()
+                    .map_err(|e| dimensionality_error(&format!("{:?}", $dim_str), e))?;
+                a
             }
-            None => {
-                return Err(PolarsError::NoData(polars::error::ErrString::Borrowed(
-                    "Could not convert column to slice",
-                )));
-            }
+            _ => return failed_array_type(&format!("{:?} -> {:?}", $model_name, $inner), $array),
         }
-    }
-
-    DataFrame::new(lanes)
+    }};
 }
 
-fn to_usize<D: Dimension, S: Into<StrideShape<D>>>(
-    targets: &ArrayBase<OwnedRepr<f64>, D>,
-    shape: S,
-) -> PolarsResult<ArrayBase<OwnedRepr<usize>, D>> {
-    let targets = match targets.as_slice() {
-        Some(s) => {
-            let cast = s.into_iter().map(|v| *v as usize).collect::<Vec<_>>();
-            to_polars_error(Array::from_shape_vec(shape, cast))?
-        }
-        None => {
-            return Err(PolarsError::InvalidOperation(
-                polars::error::ErrString::Borrowed("Could not create slice from targets"),
-            ));
-        }
-    };
-    Ok(targets)
+///
+/// This macro converts `DatasetBase<IArrayBase>` into `DatasetBase<ArrayBase<T, Ix...>>`
+///
+macro_rules! prepare_train_data {
+    ($model:tt, $train:ident, ($t_variant:tt, $t_dim:ty)) => {{
+        let records = $train.records;
+        let targets = $train.targets;
+        let records = get_inner_array! {AxdynF64, records, Ix2, "Ix2", $model, "Records"};
+
+        /*
+            Intuitively, we ought to convert targets directly into a Ix1 but Polars' `DataFrame -> ndarray`
+            conversion only uses `Array2`.
+
+            We will have to first convert it from `DynImpl` into `Ix2` then later reshape into `Ix1`.
+         */
+        let targets = get_inner_array! {$t_variant, targets, Ix2, "Ix2", $model, "Targets"};
+        let shape = targets.shape().to_vec();
+        let targets = targets
+            .into_shape((shape[0]))
+            .map_err(|e| Status::aborted(format!("Could not reshape target arrary: {e}")))
+            .unwrap();
+        // Here, we construct the specific DatasetBase with the right types
+        DatasetBase::new(records, targets)
+    }};
 }
-
-fn transform(
-    records: &DataFrame,
-    targets: &DataFrame,
-) -> PolarsResult<(Vec<String>, Array2<f64>, Array1<f64>)> {
-    let cols = records
-        .get_column_names()
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
-    let targets_shape = targets.shape();
-    let records = to_polars_error(records.to_ndarray::<Float64Type>())?
-        .as_standard_layout()
-        .to_owned();
-    let targets = to_polars_error(targets.to_ndarray::<Float64Type>())?
-        .as_standard_layout()
-        .to_owned();
-    let targets = to_polars_error(targets.into_shape(targets_shape.0))?;
-
-    Ok((cols, records, targets))
-}
-
 /// This method sends both the training and target datasets to the specified model in [`Models`].
 /// And `ratio` is passed along to [`linfa_datasets::DatasetBase`]
 pub fn send_to_trainer(
@@ -129,27 +87,17 @@ pub fn send_to_trainer(
     model_type: Models,
 ) -> Result<SupportedModels, Status> {
     let train = get_datasets(records, targets);
-    let failed_array_type = |model, array| {
-        return Err(Status::failed_precondition(format!(
-            "{model} expect array to be of type f64: {:?}",
-            array
-        )));
-    };
+
     match model_type {
         Models::GaussianNaiveBayes { var_smoothing } => {
-            let model = gaussian_naive_bayes(var_smoothing.into());
+            let train = prepare_train_data! {
+                "GaussianNaiveBayes", train, (AxdynUsize, Ix1)
+            };
 
-            let records = match train.records.0 {
-                ArrayStore::AxdynF64(a) => a,
-                _ => return failed_array_type("Gaussian Naive Bayes -> Records", train.records),
-            };
-            let targets = match train.targets.0 {
-                ArrayStore::AxdynUsize(a) => a,
-                _ => return failed_array_type("Gaussian Naive Bayes -> Targets", train.targets),
-            };
-            todo!()
-            // let model = to_polars_error(model.fit(&train))?;
-            // Ok(SupportedModels::GaussianNaiveBayes(model))
+            let model = gaussian_naive_bayes(var_smoothing.into());
+            Ok(SupportedModels::GaussianNaiveBayes(to_status_error(
+                model.fit(&train),
+            )?))
         }
         Models::ElasticNet {
             penalty,
@@ -158,6 +106,7 @@ pub fn send_to_trainer(
             max_iterations,
             tolerance,
         } => {
+            let train = prepare_train_data! {"ElasticNet", train,  (AxdynF64, Ix1) };
             let model = elastic_net(
                 penalty.into(),
                 l1_ratio.into(),
@@ -165,10 +114,9 @@ pub fn send_to_trainer(
                 max_iterations,
                 tolerance.into(),
             );
-            todo!()
-            // Ok(SupportedModels::ElasticNet(to_polars_error(
-            //     model.fit(&train),
-            // )?))
+            Ok(SupportedModels::ElasticNet(to_status_error(
+                model.fit(&train),
+            )?))
         }
         Models::KMeans {
             n_runs,
@@ -177,6 +125,8 @@ pub fn send_to_trainer(
             max_n_iterations,
             init_method,
         } => {
+            let train = prepare_train_data! {"KMeans", train,  (AxdynF64, Ix1) };
+
             let model = kmeans(
                 n_runs.into(),
                 n_clusters.into(),
@@ -184,16 +134,16 @@ pub fn send_to_trainer(
                 max_n_iterations,
                 init_method,
             );
-            todo!()
-            // Ok(SupportedModels::KMeans(to_polars_error(model.fit(&train))?))
+            Ok(SupportedModels::KMeans(to_status_error(model.fit(&train))?))
         }
         Models::LinearRegression { fit_intercept } => {
+            let train = prepare_train_data! {"LinearRegression", train,  (AxdynF64, Ix1) };
+
             let model = linear_regression(fit_intercept);
 
-            todo!()
-            // Ok(SupportedModels::LinearRegression(to_polars_error(
-            //     model.fit(&train),
-            // )?))
+            Ok(SupportedModels::LinearRegression(to_status_error(
+                model.fit(&train),
+            )?))
         }
 
         Models::LogisticRegression {
@@ -203,19 +153,18 @@ pub fn send_to_trainer(
             max_iterations,
             initial_params,
         } => {
-            // let targets = to_usize(&train.targets, train.targets.shape().to_vec()[0])?;
-            // let train = train.with_targets(targets);
-            // let model = logistic_regression(
-            //     alpha,
-            //     gradient_tolerance,
-            //     fit_intercept,
-            //     max_iterations,
-            //     initial_params,
-            // );
-            todo!()
-            // Ok(SupportedModels::LogisticRegression(to_polars_error(
-            //     model.fit(&train),
-            // )?))
+            let train = prepare_train_data! {"LosgisticRegression", train,  (AxdynUsize, Ix1) };
+
+            let model = logistic_regression(
+                alpha,
+                gradient_tolerance,
+                fit_intercept,
+                max_iterations,
+                initial_params,
+            );
+            Ok(SupportedModels::LogisticRegression(to_status_error(
+                model.fit(&train),
+            )?))
         }
 
         Models::DecisionTree {
@@ -225,20 +174,18 @@ pub fn send_to_trainer(
             min_weight_leaf,
             min_impurity_decrease,
         } => {
-            // let shape = train.targets.shape().to_vec();
-            // let targets = to_usize(&train.targets, shape[0])?;
-            // let train = train.with_targets(targets);
-            // let model = decision_trees(
-            //     split_quality,
-            //     max_depth,
-            //     min_weight_split,
-            //     min_weight_leaf,
-            //     min_impurity_decrease,
-            // );
-            todo!()
-            // Ok(SupportedModels::DecisionTree(to_polars_error(
-            //     model.fit(&train),
-            // )?))
+            let train = prepare_train_data! {"DecisionTree", train,  (AxdynUsize, Ix1) };
+
+            let model = decision_trees(
+                split_quality,
+                max_depth,
+                min_weight_split,
+                min_weight_leaf,
+                min_impurity_decrease,
+            );
+            Ok(SupportedModels::DecisionTree(to_status_error(
+                model.fit(&train),
+            )?))
         }
         Models::SVM {
             c,
@@ -248,6 +195,8 @@ pub fn send_to_trainer(
             platt_params,
             kernel_params,
         } => {
+            let train = prepare_train_data! {"SupportVectorMachine", train,  (AxdynF64, Ix1) };
+
             let c = c
                 .iter()
                 .map(|v| (*v).try_into().unwrap())
@@ -262,8 +211,7 @@ pub fn send_to_trainer(
                 None => None,
             };
             let model = svm(c, eps, nu, shrinking, platt_params, kernel_params);
-            todo!()
-            // Ok(SupportedModels::SVM(to_polars_error(model.fit(&train))?))
+            Ok(SupportedModels::SVM(to_status_error(model.fit(&train))?))
         }
     }
 }
@@ -273,13 +221,11 @@ pub fn send_to_trainer(
 /// [f64] and [usize] --> [PredictionTypes::Float] and [PredictionTypes::Usize] respectively.
 pub fn predict(
     model: Arc<SupportedModels>,
-    data: DataFrame,
+    data: ArrayStore,
     probability: bool,
-) -> PolarsResult<DataFrame> {
-    let sample = to_polars_error(data.to_ndarray::<Float64Type>())?
-        .as_standard_layout()
-        .to_owned();
-
+) -> Result<ArrayStore, Status> {
+    let sample = IArrayStore(data);
+    let sample = get_inner_array! {AxdynF64, sample, Ix2, "Ix2", "predict", "sample"};
     let prediction = match &*model {
         SupportedModels::ElasticNet(m) => Some(PredictionTypes::Float(m.predict(sample))),
         SupportedModels::GaussianNaiveBayes(m) => Some(PredictionTypes::Usize(m.predict(sample))),
@@ -295,37 +241,16 @@ pub fn predict(
             }
         }
         SupportedModels::DecisionTree(m) => Some(PredictionTypes::Usize(m.predict(sample))),
-        _ => {
-            return Err(PolarsError::NotFound(polars::error::ErrString::Borrowed(
-                "Unsupported Model",
-            )))
-        }
+        _ => return Err(Status::failed_precondition("Unsupported Model")),
     };
 
-    let prediction: DataFrame = match prediction {
+    let prediction = match prediction {
         Some(v) => match v {
-            PredictionTypes::Usize(m) => {
-                let targets = match m.targets.as_slice() {
-                    Some(s) => {
-                        let arr = s.into_iter().map(|v| *v as u64).collect::<Vec<u64>>();
-                        Array1::from_vec(arr)
-                    }
-                    None => {
-                        return Err(PolarsError::InvalidOperation(
-                            polars::error::ErrString::Borrowed("Could not convert to slice"),
-                        ));
-                    }
-                };
-                ndarray_to_df::<u64, Ix1>(&targets, vec!["prediction"])?
-            }
-            PredictionTypes::Float(m) => ndarray_to_df::<f64, Ix1>(&m.targets, vec!["prediction"])?,
-            PredictionTypes::Probability(pr) => ndarray_to_df::<f64, Ix1>(&pr, vec!["prediction"])?,
+            PredictionTypes::Usize(pred) => ArrayStore::AxdynUsize(pred.targets.into_dyn()),
+            PredictionTypes::Float(pred) => ArrayStore::AxdynF64(pred.targets.into_dyn()),
+            PredictionTypes::Probability(pred) => ArrayStore::AxdynF64(pred.into_dyn()),
         },
-        None => {
-            return PolarsResult::Err(PolarsError::ComputeError(polars::error::ErrString::Owned(
-                "Failed to predict".to_string(),
-            )))
-        }
+        None => return Err(Status::aborted("Failed to predict")),
     };
 
     Ok(prediction)
@@ -374,62 +299,60 @@ fn classification_metrics(
 #[allow(unused)]
 pub fn inner_cross_validate(
     model: Models,
-    records: DataFrame,
-    targets: DataFrame,
+    records: ArrayStore,
+    targets: ArrayStore,
     scoring: &str,
     cv: usize,
-) -> PolarsResult<DataFrame> {
-    todo!()
-    // let (cols, records, targets) = transform(&records, &targets)?;
-    // let mut train = get_datasets(records, targets);
+) -> Result<ArrayStore, Status> {
+    let mut train = get_datasets(records, targets);
 
-    // let result = match model {
-    //     Models::LinearRegression { fit_intercept } => {
-    //         let m = linear_regression(fit_intercept);
+    let result = match model {
+        Models::LinearRegression { fit_intercept } => {
+            let m = linear_regression(fit_intercept);
+            let mut train = prepare_train_data! {"LinearRegression", train,  (AxdynF64, Ix1) };
+            let arr = to_status_error(train.cross_validate_single(
+                cv,
+                &vec![m][..],
+                |pred, truth| regression_metrics(pred, truth, scoring),
+            ))?;
 
-    //         let arr = to_polars_error(train.cross_validate_single(
-    //             cv,
-    //             &vec![m][..],
-    //             |pred, truth| regression_metrics(pred, truth, scoring),
-    //         ))?;
+            ArrayStore::AxdynF64(arr.into_dyn())
+        }
 
-    //         ndarray_to_df::<f64, Ix1>(&arr, vec![scoring])
-    //     }
+        Models::LogisticRegression {
+            alpha,
+            gradient_tolerance,
+            fit_intercept,
+            max_iterations,
+            initial_params,
+        } => {
+            let m = logistic_regression(
+                alpha,
+                gradient_tolerance,
+                fit_intercept,
+                max_iterations,
+                initial_params,
+            );
 
-    //     Models::LogisticRegression {
-    //         alpha,
-    //         gradient_tolerance,
-    //         fit_intercept,
-    //         max_iterations,
-    //         initial_params,
-    //     } => {
-    //         let m = logistic_regression(
-    //             alpha,
-    //             gradient_tolerance,
-    //             fit_intercept,
-    //             max_iterations,
-    //             initial_params,
-    //         );
+            let mut train = prepare_train_data! {"LosgisticRegression", train,  (AxdynUsize, Ix1) };
+            let arr = to_status_error(train.cross_validate_single(
+                cv,
+                &vec![m][..],
+                |pred, truth| classification_metrics(pred, truth, scoring),
+            ))?;
 
-    //         let targets = to_usize(&train.targets, train.targets.shape().to_vec()[0])?;
-    //         let mut train = train.with_targets(targets);
-    //         let arr = to_polars_error(train.cross_validate_single(
-    //             cv,
-    //             &vec![m][..],
-    //             |pred, truth| classification_metrics(pred, truth, scoring),
-    //         ))?;
+            ArrayStore::AxdynF32(arr.into_dyn())
+        }
 
-    //         println!("{:?}", arr);
+        _ => {
+            return Err(Status::failed_precondition(format!(
+                "
+                        Unsupported Model: {:?}
+                    ",
+                model
+            )))
+        }
+    };
 
-    //         ndarray_to_df::<f32, Ix1>(&arr, vec![scoring])
-    //     }
-
-    //     _ => {
-    //         return Err(PolarsError::NotFound(polars::error::ErrString::Owned(
-    //             "Unsupported Model".to_owned(),
-    //         )))
-    //     }
-    // };
-
-    // result
+    Ok(result)
 }

@@ -12,7 +12,7 @@ message ModelResponse {
 
 message PredictionRequest{
     string model = 1;
-    string test_set = 2;
+    string input = 2;
     bool probability = 3;
 }
 

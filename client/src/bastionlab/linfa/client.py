@@ -43,17 +43,17 @@ class BastionLabLinfa:
         )
         return FittedModel._from_reference(res, trainer)
 
-    def _predict(self, model: "FittedModel", test_set: "RemoteArray") -> pl.DataFrame:
+    def _predict(self, model: "FittedModel", pred_input: "RemoteArray") -> pl.DataFrame:
         from ..polars.remote_polars import FetchableLazyFrame
 
         res = self.stub.Predict(
             PredictionRequest(
-                model=model.identifier, test_set=test_set.identifier, probability=False
+                model=model.identifier, input=pred_input.identifier, probability=False
             )
         )
-        return FetchableLazyFrame._from_reference(self.polars, res)
+        return FetchableLazyFrame._from_reference(self.client.polars, res)
 
-    def predict_proba(
+    def _predict_proba(
         self, model: "FittedModel", test_set: "RemoteArray"
     ) -> "FetchableLazyFrame":
         from ..polars.remote_polars import FetchableLazyFrame
@@ -63,7 +63,7 @@ class BastionLabLinfa:
                 model=model.identifier, data=test_set.identifier, probability=True
             )
         )
-        return FetchableLazyFrame._from_reference(self.polars, res).fetch()
+        return FetchableLazyFrame._from_reference(self.client.polars, res).fetch()
 
 
 def cross_validate(

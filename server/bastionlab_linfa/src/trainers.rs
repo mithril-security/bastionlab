@@ -1,11 +1,5 @@
-use std::error::Error;
-
 use bastionlab_common::array_store::ArrayStore;
-use linfa::{
-    dataset::TargetDim,
-    prelude::{AsTargets, Records},
-    DatasetBase, PlattParams,
-};
+use linfa::{prelude::Records, DatasetBase, PlattParams};
 use linfa_bayes::GaussianNb;
 use linfa_clustering::{KMeans, KMeansInit};
 use linfa_elasticnet::ElasticNet;
@@ -17,11 +11,8 @@ use linfa_nn::{
 };
 use linfa_svm::Svm;
 use linfa_trees::{DecisionTree, SplitQuality};
-use ndarray::{Array2, ArrayBase, Ix1, Ix2, IxDyn, IxDynImpl, OwnedRepr};
-use polars::{
-    error::ErrString,
-    prelude::{PolarsError, PolarsResult},
-};
+use ndarray::{Array2, ArrayBase, Ix1, Ix2, OwnedRepr};
+
 use tonic::{Request, Status};
 
 use crate::{
@@ -31,6 +22,7 @@ use crate::{
     to_status_error,
 };
 
+#[derive(Debug)]
 pub enum Models {
     GaussianNaiveBayes {
         var_smoothing: f64,
@@ -100,10 +92,6 @@ pub enum PredictionTypes {
     Probability(ArrayBase<OwnedRepr<f64>, Ix1>),
 }
 
-pub fn to_polars_error<T, E: Error>(input: Result<T, E>) -> PolarsResult<T> {
-    input.map_err(|err| PolarsError::InvalidOperation(ErrString::Owned(err.to_string())))
-}
-
 #[derive(Debug)]
 pub struct IArrayStore(pub ArrayStore);
 
@@ -118,28 +106,12 @@ impl Records for IArrayStore {
         self.0.width()
     }
 }
-// impl TargetDim for IArrayStore {
-//     fn nsamples(mut self, nsamples: usize) -> Self {
-//         self.0
-//     }
-// }
-// impl AsTargets for IArrayStore {
-//     type Elem = Self;
-
-//     type Ix = Self;
-
-//     fn as_targets(&self) -> ndarray::ArrayView<Self::Elem, Self::Ix> {
-//         todo!()
-//     }
-// }
 
 pub fn get_datasets(
     records: ArrayStore,
     target: ArrayStore,
 ) -> DatasetBase<IArrayStore, IArrayStore> {
     // ** For now, shuffling is not implemented.
-    // let dataset = linfa::Dataset::new(records, target);
-    // let dataset = dataset.with_feature_names::<String>(col_names);
     let dataset = DatasetBase::new(IArrayStore(records), IArrayStore(target));
     dataset
 }
