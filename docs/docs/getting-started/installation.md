@@ -152,10 +152,13 @@ cd bastionlab/server/
   ```
 - `BASTIONLAB_BUILD_AS_ROOT`
   - If it is necessary to build the project as the **root user**, you need to set this variable before running the script.
-  - If the variable is not set when running as root, the dependencies will be installed but the project will not be built.
+  - If the variable is not set when running as root, the **dependencies will be installed** but the project will not be built.
+  ```bash
+  ./build # Running this as root will install the dependencies
+  ```
   ```bash
   export BASTIONLAB_BUILD_AS_ROOT=1
-  ./build.sh
+  ./build.sh # Running this as root and with the flag set will install AND build the server
   ```
 - `BASTIONLAB_CPP11`
   - If it is necessary to build the project using C++11, you need to set this variable before running the script. 
