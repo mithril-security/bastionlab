@@ -56,12 +56,38 @@ message LinearRegression {
     bool fit_intercept = 1;
 }
 
-message LogisticRegression {
+message TweedieRegressor {
+    bool fit_intercept = 1;
+    float alpha = 2;
+    uint64 max_iter = 3;
+    float tol = 4;
+    float power = 5;
+    
+    message Identity {}
+    message Log {}
+    message Logit {}
+    oneof link {
+        Identity identity = 6;
+        Log log = 7;
+        Logit logit = 8;
+    }
+}
+
+message BinomialLogisticRegression {
     float alpha = 1;
     float gradient_tolerance = 2;
     bool fit_intercept = 3;
     uint64 max_iterations = 4;
     repeated float initial_params = 7;
+}
+
+message MultinomialLogisticRegression {
+    float alpha = 1;
+    float gradient_tolerance = 2;
+    bool fit_intercept = 3;
+    uint64 max_iterations = 4;
+    repeated float initial_params = 7;
+    repeated uint64 shape = 8;
 }
 
 message DecisionTree {
@@ -83,9 +109,11 @@ message Trainer {
     optional ElasticNet elastic_net = 2;
     optional KMeans kmeans = 3;
     optional LinearRegression linear_regression = 4;
-    optional LogisticRegression logistic_regression = 5;
-    optional DecisionTree decision_tree = 6;
-    optional SVM svm = 7;
+    optional BinomialLogisticRegression binomial_logistic_regression = 5;
+    optional MultinomialLogisticRegression multinomial_logistic_regression = 6;
+    optional DecisionTree decision_tree = 7;
+    optional SVM svm = 8;
+    optional TweedieRegressor tweedie = 9;
 }
 
 message SVM {

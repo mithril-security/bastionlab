@@ -9,6 +9,8 @@ use crate::common_conversions::{ndarray_to_df, to_status_error};
 #[derive(Debug, Clone)]
 pub enum ArrayStore {
     AxdynI64(Array<i64, Dim<IxDynImpl>>),
+    AxdynU64(Array<u64, Dim<IxDynImpl>>),
+    AxdynU32(Array<u32, Dim<IxDynImpl>>),
     AxdynF64(Array<f64, Dim<IxDynImpl>>),
     AxdynF32(Array<f32, Dim<IxDynImpl>>),
     AxdynI32(Array<i32, Dim<IxDynImpl>>),
@@ -74,6 +76,8 @@ impl ArrayStore {
             ArrayStore::AxdynI32(a) => a.dim()[0],
             ArrayStore::AxdynI16(a) => a.dim()[0],
             ArrayStore::AxdynUsize(a) => a.dim()[0],
+            ArrayStore::AxdynU64(a) => a.dim()[0],
+            ArrayStore::AxdynU32(a) => a.dim()[0],
         }
     }
 
@@ -92,6 +96,8 @@ impl ArrayStore {
             ArrayStore::AxdynI32(a) => columns(a.shape()),
             ArrayStore::AxdynI16(a) => columns(a.shape()),
             ArrayStore::AxdynUsize(a) => columns(a.shape()),
+            ArrayStore::AxdynU64(a) => columns(a.shape()),
+            ArrayStore::AxdynU32(a) => columns(a.shape()),
         }
     }
 
@@ -103,6 +109,8 @@ impl ArrayStore {
             ArrayStore::AxdynI64(a) => Self::AxdynI64(shuffle::<i64>(a, indices)),
             ArrayStore::AxdynI16(a) => Self::AxdynI16(shuffle::<i16>(a, indices)),
             ArrayStore::AxdynUsize(a) => Self::AxdynUsize(shuffle::<usize>(a, indices)),
+            ArrayStore::AxdynU64(a) => Self::AxdynU64(shuffle::<u64>(a, indices)),
+            ArrayStore::AxdynU32(a) => Self::AxdynU32(shuffle::<u32>(a, indices)),
         }
     }
 
@@ -142,6 +150,17 @@ impl ArrayStore {
                 let (upper, lower) = split::<usize>(a, ratios);
 
                 (ArrayStore::AxdynUsize(upper), ArrayStore::AxdynUsize(lower))
+            }
+
+            ArrayStore::AxdynU64(a) => {
+                let (upper, lower) = split::<u64>(a, ratios);
+
+                (ArrayStore::AxdynU64(upper), ArrayStore::AxdynU64(lower))
+            }
+            ArrayStore::AxdynU32(a) => {
+                let (upper, lower) = split::<u32>(a, ratios);
+
+                (ArrayStore::AxdynU32(upper), ArrayStore::AxdynU32(lower))
             }
         }
     }
@@ -199,6 +218,24 @@ impl ArrayStore {
                 Self::AxdynUsize(b) => {
                     to_status_error(a.append(axis, b.view()))?;
                     Self::AxdynUsize(a.clone())
+                }
+                _ => {
+                    return cannot_append(self, other);
+                }
+            },
+            ArrayStore::AxdynU64(a) => match other {
+                Self::AxdynU64(b) => {
+                    to_status_error(a.append(axis, b.view()))?;
+                    Self::AxdynU64(a.clone())
+                }
+                _ => {
+                    return cannot_append(self, other);
+                }
+            },
+            ArrayStore::AxdynU32(a) => match other {
+                Self::AxdynU32(b) => {
+                    to_status_error(a.append(axis, b.view()))?;
+                    Self::AxdynU32(a.clone())
                 }
                 _ => {
                     return cannot_append(self, other);
@@ -318,6 +355,40 @@ impl ArrayStore {
                 );
                 ArrayStore::AxdynUsize(res?)
             }
+            ArrayStore::AxdynU64(_) => {
+                let res = stack::<u64>(
+                    axis,
+                    &arrays
+                        .iter()
+                        .map(|v| match v {
+                            ArrayStore::AxdynU64(a) => Ok(a.view()),
+                            _ => {
+                                return Err(Status::aborted(
+                                    "DataTypes for all columns should be the same",
+                                ));
+                            }
+                        })
+                        .collect::<Vec<_>>()[..],
+                );
+                ArrayStore::AxdynU64(res?)
+            }
+            ArrayStore::AxdynU32(_) => {
+                let res = stack::<u32>(
+                    axis,
+                    &arrays
+                        .iter()
+                        .map(|v| match v {
+                            ArrayStore::AxdynU32(a) => Ok(a.view()),
+                            _ => {
+                                return Err(Status::aborted(
+                                    "DataTypes for all columns should be the same",
+                                ));
+                            }
+                        })
+                        .collect::<Vec<_>>()[..],
+                );
+                ArrayStore::AxdynU32(res?)
+            }
         };
 
         Ok(res)
@@ -329,6 +400,8 @@ impl ArrayStore {
             ArrayStore::AxdynF64(a) => ndarray_to_df::<f64, Dim<IxDynImpl>>(a, col_names),
             ArrayStore::AxdynF32(a) => ndarray_to_df::<f32, Dim<IxDynImpl>>(a, col_names),
             ArrayStore::AxdynI32(a) => ndarray_to_df::<i32, Dim<IxDynImpl>>(a, col_names),
+            ArrayStore::AxdynU32(a) => ndarray_to_df::<u32, Dim<IxDynImpl>>(a, col_names),
+            ArrayStore::AxdynU64(a) => ndarray_to_df::<u64, Dim<IxDynImpl>>(a, col_names),
             _ => {
                 return Err(Status::unimplemented(format!(
                     "Convertion to DataFrame not yet supported: {:?}",

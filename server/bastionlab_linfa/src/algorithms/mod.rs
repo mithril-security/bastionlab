@@ -3,17 +3,18 @@ use linfa_bayes::{GaussianNb, GaussianNbParams};
 use linfa_clustering::{KMeans, KMeansInit, KMeansParams};
 use linfa_elasticnet::{ElasticNet, ElasticNetParams};
 use linfa_kernel::KernelParams;
-use linfa_linear::LinearRegression;
-use linfa_logistic::LogisticRegression;
+use linfa_linear::{LinearRegression, Link, TweedieRegressor, TweedieRegressorParams};
+use linfa_logistic::{LogisticRegression, MultiLogisticRegression};
 use linfa_nn::{
     distance::{Distance, L2Dist},
     BallTreeIndex, BuildError, KdTreeIndex, LinearSearchIndex,
 };
 use linfa_svm::SvmParams;
 use linfa_trees::{DecisionTreeParams, SplitQuality};
-use ndarray::{Array1, ArrayBase, Data, Ix2};
+use ndarray::{Array1, Array2, ArrayBase, Data, Ix2};
+use tonic::Status;
 
-pub fn logistic_regression(
+pub fn binomial_logistic_regression(
     alpha: f64,
     gradient_tolerance: f64,
     fit_intercept: bool,
@@ -34,6 +35,36 @@ pub fn logistic_regression(
     reg
 }
 
+pub fn multinomial_logistic_regression(
+    alpha: f64,
+    gradient_tolerance: f64,
+    fit_intercept: bool,
+    max_iterations: u64,
+    initial_params: Option<Vec<f64>>,
+    shape: Option<Vec<u64>>,
+) -> Result<MultiLogisticRegression<f64>, Status> {
+    let mut reg = MultiLogisticRegression::new()
+        .alpha(alpha)
+        .with_intercept(fit_intercept)
+        .gradient_tolerance(gradient_tolerance)
+        .max_iterations(max_iterations);
+
+    if let Some(params) = initial_params {
+        if let Some(shape) = shape {
+            let params = Array2::from_shape_vec((shape[0] as usize, shape[1] as usize), params)
+                .map_err(|e| {
+                    Status::failed_precondition(format!(
+                        "Could not construct initial_params from shape: {:?}: {e}",
+                        shape
+                    ))
+                })?;
+            reg = reg.initial_params(params);
+        }
+    }
+
+    Ok(reg)
+}
+
 pub fn gaussian_naive_bayes(var_smoothing: f64) -> GaussianNbParams<f64, usize> {
     let model = GaussianNb::params().var_smoothing(var_smoothing);
 
@@ -43,6 +74,25 @@ pub fn gaussian_naive_bayes(var_smoothing: f64) -> GaussianNbParams<f64, usize> 
 pub fn linear_regression(fit_intercept: bool) -> LinearRegression {
     let model = LinearRegression::new();
     let model = model.with_intercept(fit_intercept);
+
+    model
+}
+
+pub fn tweedie_regression(
+    fit_intercept: bool,
+    alpha: f64,
+    max_iter: u64,
+    link: Link,
+    tol: f64,
+    power: f64,
+) -> TweedieRegressorParams<f64> {
+    let model = TweedieRegressor::params()
+        .fit_intercept(fit_intercept)
+        .alpha(alpha)
+        .max_iter(max_iter.try_into().unwrap())
+        .link(link)
+        .tol(tol)
+        .power(power);
 
     model
 }

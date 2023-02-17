@@ -4,8 +4,8 @@ use linfa_bayes::GaussianNb;
 use linfa_clustering::{KMeans, KMeansInit};
 use linfa_elasticnet::ElasticNet;
 use linfa_kernel::{Kernel, KernelMethod, KernelParams, KernelType};
-use linfa_linear::FittedLinearRegression;
-use linfa_logistic::FittedLogisticRegression;
+use linfa_linear::{FittedLinearRegression, Link, TweedieRegressor};
+use linfa_logistic::{FittedLogisticRegression, MultiFittedLogisticRegression};
 use linfa_nn::{
     distance::L2Dist, BallTreeIndex, CommonNearestNeighbour, KdTreeIndex, LinearSearchIndex,
 };
@@ -17,7 +17,9 @@ use tonic::{Request, Status};
 
 use crate::{
     linfa_proto::{
-        ElasticNet as BastionElasticNet, KMeans as BastionKMeans, Svm as BastionSvm, Trainer, *,
+        tweedie_regressor::Link as ProtoTweedieLink, ElasticNet as BastionElasticNet,
+        KMeans as BastionKMeans, Svm as BastionSvm, Trainer,
+        TweedieRegressor as BastionTweedieRegressor, *,
     },
     to_status_error,
 };
@@ -41,16 +43,32 @@ pub enum Models {
         max_n_iterations: u64,
         init_method: KMeansInit<f64>,
     },
+
     LinearRegression {
         fit_intercept: bool,
     },
-
-    LogisticRegression {
+    TweedieRegressor {
+        fit_intercept: bool,
+        alpha: f64,
+        max_iter: u64,
+        link: Link,
+        tol: f64,
+        power: f64,
+    },
+    BinomialLogisticRegression {
         alpha: f64,
         gradient_tolerance: f64,
         fit_intercept: bool,
         max_iterations: u64,
         initial_params: Option<Vec<f64>>,
+    },
+    MultinomialLogisticRegression {
+        alpha: f64,
+        gradient_tolerance: f64,
+        fit_intercept: bool,
+        max_iterations: u64,
+        initial_params: Option<Vec<f64>>,
+        shape: Option<Vec<u64>>,
     },
 
     DecisionTree {
@@ -77,7 +95,9 @@ pub enum SupportedModels {
     ElasticNet(ElasticNet<f64>),
     KMeans(KMeans<f64, L2Dist>),
     LinearRegression(FittedLinearRegression<f64>),
-    LogisticRegression(FittedLogisticRegression<f64, usize>),
+    TweedieRegressor(TweedieRegressor<f64>),
+    BinomialLogisticRegression(FittedLogisticRegression<f64, u64>),
+    MultinomialLogisticRegression(MultiFittedLogisticRegression<f64, u64>),
     DecisionTree(DecisionTree<f64, usize>),
     BallTree(BallTreeIndex<'static, f64, L2Dist>),
     Linear(LinearSearchIndex<'static, f64, L2Dist>),
@@ -88,8 +108,10 @@ pub enum SupportedModels {
 #[derive(Debug)]
 pub enum PredictionTypes {
     Usize(DatasetBase<ArrayBase<OwnedRepr<f64>, Ix2>, ArrayBase<OwnedRepr<usize>, Ix1>>),
+    U64(DatasetBase<ArrayBase<OwnedRepr<f64>, Ix2>, ArrayBase<OwnedRepr<u64>, Ix1>>),
     Float(DatasetBase<ArrayBase<OwnedRepr<f64>, Ix2>, ArrayBase<OwnedRepr<f64>, Ix1>>),
-    Probability(ArrayBase<OwnedRepr<f64>, Ix1>),
+    SingleProbability(ArrayBase<OwnedRepr<f64>, Ix1>),
+    MultiProbability(ArrayBase<OwnedRepr<f64>, Ix2>),
 }
 
 #[derive(Debug)]
@@ -141,7 +163,7 @@ pub fn select_trainer(trainer: Trainer) -> Result<Models, Status> {
         Ok(Models::LinearRegression {
             fit_intercept: t.fit_intercept,
         })
-    } else if let Some(t) = trainer.logistic_regression {
+    } else if let Some(t) = trainer.binomial_logistic_regression {
         let initial_params = t
             .initial_params
             .iter()
@@ -153,12 +175,32 @@ pub fn select_trainer(trainer: Trainer) -> Result<Models, Status> {
         } else {
             Some(initial_params)
         };
-        Ok(Models::LogisticRegression {
+        Ok(Models::BinomialLogisticRegression {
             alpha: t.alpha.into(),
             gradient_tolerance: t.gradient_tolerance.into(),
             fit_intercept: t.fit_intercept,
             max_iterations: t.max_iterations,
             initial_params,
+        })
+    } else if let Some(t) = trainer.multinomial_logistic_regression {
+        let initial_params = t
+            .initial_params
+            .iter()
+            .map(|v| (*v).into())
+            .collect::<Vec<f64>>();
+
+        let initial_params = if initial_params.len() == 0 {
+            None
+        } else {
+            Some(initial_params)
+        };
+        Ok(Models::MultinomialLogisticRegression {
+            alpha: t.alpha.into(),
+            gradient_tolerance: t.gradient_tolerance.into(),
+            fit_intercept: t.fit_intercept,
+            max_iterations: t.max_iterations,
+            initial_params,
+            shape: Some(t.shape),
         })
     } else if let Some(t) = trainer.decision_tree {
         {
@@ -323,6 +365,33 @@ pub fn select_trainer(trainer: Trainer) -> Result<Models, Status> {
             shrinking,
             platt_params,
             kernel_params,
+        })
+    } else if let Some(t) = trainer.tweedie {
+        let link = t.link.ok_or(Status::failed_precondition(
+            "Please provide a Link in TweedieRegressor: {Log, Logit, Identity}",
+        ))?;
+
+        let link = match link {
+            ProtoTweedieLink::Identity(_) => Link::Identity,
+            ProtoTweedieLink::Log(_) => Link::Log,
+            ProtoTweedieLink::Logit(_) => Link::Logit,
+        };
+        let BastionTweedieRegressor {
+            alpha,
+            fit_intercept,
+            max_iter,
+            tol,
+            power,
+            ..
+        } = t;
+
+        Ok(Models::TweedieRegressor {
+            fit_intercept,
+            alpha: alpha as f64,
+            max_iter,
+            link,
+            tol: tol as f64,
+            power: power as f64,
         })
     } else {
         return Err(Status::not_found(format!("Unknown trainer: {:?}", trainer)));

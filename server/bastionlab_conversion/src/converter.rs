@@ -96,6 +96,28 @@ impl Converter {
                     .into_dyn();
                 ArrayStore::AxdynI32(arr)
             }
+            DataType::UInt32 => {
+                let arr = df
+                    .to_ndarray::<UInt32Type>()
+                    .map_err(|e| {
+                        Status::aborted(format!("Cound not convert DataFrame to ndarray: {}", e))
+                    })?
+                    .as_standard_layout()
+                    .to_owned()
+                    .into_dyn();
+                ArrayStore::AxdynU32(arr)
+            }
+            DataType::UInt64 => {
+                let arr = df
+                    .to_ndarray::<UInt64Type>()
+                    .map_err(|e| {
+                        Status::aborted(format!("Cound not convert DataFrame to ndarray: {}", e))
+                    })?
+                    .as_standard_layout()
+                    .to_owned()
+                    .into_dyn();
+                ArrayStore::AxdynU64(arr)
+            }
             _ => {
                 return Err(Status::aborted(format!("{:?} not support ", dtype)));
             }
@@ -191,6 +213,30 @@ where {
                         let arr = to_status_error(exploded.i16())?;
                         let slice = to_status_error(arr.cont_slice())?;
                         ArrayStore::AxdynI16(to_status_error(list_to_ndarray(
+                            slice.to_vec(),
+                            shape,
+                        ))?)
+                    }
+                    DataType::UInt64 => {
+                        let shape = get_shape(series).ok_or(Status::aborted(
+                            "Only List Series are supported in get_shape",
+                        ))?;
+                        let exploded = to_status_error(series.explode())?;
+                        let arr = to_status_error(exploded.u64())?;
+                        let slice = to_status_error(arr.cont_slice())?;
+                        ArrayStore::AxdynU64(to_status_error(list_to_ndarray(
+                            slice.to_vec(),
+                            shape,
+                        ))?)
+                    }
+                    DataType::UInt32 => {
+                        let shape = get_shape(series).ok_or(Status::aborted(
+                            "Only List Series are supported in get_shape",
+                        ))?;
+                        let exploded = to_status_error(series.explode())?;
+                        let arr = to_status_error(exploded.u32())?;
+                        let slice = to_status_error(arr.cont_slice())?;
+                        ArrayStore::AxdynU32(to_status_error(list_to_ndarray(
                             slice.to_vec(),
                             shape,
                         ))?)

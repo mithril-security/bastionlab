@@ -20,7 +20,7 @@ where
     T: std::fmt::Debug,
 {
     return Err(Status::failed_precondition(format!(
-        "{model} expect array to be of type f64: {:?}",
+        "{model} received wrong array type: ArrayStore(ArrayBase<{:?}>)",
         array
     )));
 }
@@ -49,7 +49,12 @@ macro_rules! get_inner_array {
                     .map_err(|e| dimensionality_error(&format!("{:?}", $dim_str), e))?;
                 a
             }
-            _ => return failed_array_type(&format!("{:?} -> {:?}", $model_name, $inner), $array),
+            _ => {
+                return failed_array_type(
+                    &format!("{:?} -> {:?}", $model_name, $inner),
+                    ($array.0.height(), $array.0.width()),
+                )
+            }
         }
     }};
 }
@@ -145,26 +150,66 @@ pub fn send_to_trainer(
                 model.fit(&train),
             )?))
         }
+        Models::TweedieRegressor {
+            fit_intercept,
+            alpha,
+            max_iter,
+            link,
+            tol,
+            power,
+        } => {
+            let train = prepare_train_data! {"LinearRegression", train,  (AxdynF64, Ix1) };
 
-        Models::LogisticRegression {
+            let model = tweedie_regression(fit_intercept, alpha, max_iter, link, tol, power);
+
+            Ok(SupportedModels::TweedieRegressor(to_status_error(
+                model.fit(&train),
+            )?))
+        }
+
+        Models::BinomialLogisticRegression {
             alpha,
             gradient_tolerance,
             fit_intercept,
             max_iterations,
             initial_params,
         } => {
-            let train = prepare_train_data! {"LosgisticRegression", train,  (AxdynUsize, Ix1) };
+            let train =
+                prepare_train_data! {"BinomialLogisticRegression", train,  (AxdynU64, Ix1) };
 
-            let model = logistic_regression(
+            let model = binomial_logistic_regression(
                 alpha,
                 gradient_tolerance,
                 fit_intercept,
                 max_iterations,
                 initial_params,
             );
-            Ok(SupportedModels::LogisticRegression(to_status_error(
-                model.fit(&train),
-            )?))
+            Ok(SupportedModels::BinomialLogisticRegression(
+                to_status_error(model.fit(&train))?,
+            ))
+        }
+        Models::MultinomialLogisticRegression {
+            alpha,
+            gradient_tolerance,
+            fit_intercept,
+            max_iterations,
+            initial_params,
+            shape,
+        } => {
+            let train =
+                prepare_train_data! {"MultinomialLogisticRegression", train,  (AxdynU64, Ix1) };
+
+            let model = multinomial_logistic_regression(
+                alpha,
+                gradient_tolerance,
+                fit_intercept,
+                max_iterations,
+                initial_params,
+                shape,
+            )?;
+            Ok(SupportedModels::MultinomialLogisticRegression(
+                to_status_error(model.fit(&train))?,
+            ))
         }
 
         Models::DecisionTree {
@@ -231,13 +276,22 @@ pub fn predict(
         SupportedModels::GaussianNaiveBayes(m) => Some(PredictionTypes::Usize(m.predict(sample))),
         SupportedModels::KMeans(m) => Some(PredictionTypes::Usize(m.predict(sample))),
         SupportedModels::LinearRegression(m) => Some(PredictionTypes::Float(m.predict(sample))),
-        SupportedModels::LogisticRegression(m) => {
+        SupportedModels::BinomialLogisticRegression(m) => {
             if probability {
-                Some(PredictionTypes::Probability(
+                Some(PredictionTypes::SingleProbability(
                     m.predict_probabilities(&sample),
                 ))
             } else {
-                Some(PredictionTypes::Usize(m.predict(sample)))
+                Some(PredictionTypes::U64(m.predict(sample)))
+            }
+        }
+        SupportedModels::MultinomialLogisticRegression(m) => {
+            if probability {
+                Some(PredictionTypes::MultiProbability(
+                    m.predict_probabilities(&sample),
+                ))
+            } else {
+                Some(PredictionTypes::U64(m.predict(sample)))
             }
         }
         SupportedModels::DecisionTree(m) => Some(PredictionTypes::Usize(m.predict(sample))),
@@ -246,9 +300,11 @@ pub fn predict(
 
     let prediction = match prediction {
         Some(v) => match v {
+            PredictionTypes::U64(pred) => ArrayStore::AxdynU64(pred.targets.into_dyn()),
             PredictionTypes::Usize(pred) => ArrayStore::AxdynUsize(pred.targets.into_dyn()),
             PredictionTypes::Float(pred) => ArrayStore::AxdynF64(pred.targets.into_dyn()),
-            PredictionTypes::Probability(pred) => ArrayStore::AxdynF64(pred.into_dyn()),
+            PredictionTypes::SingleProbability(pred) => ArrayStore::AxdynF64(pred.into_dyn()),
+            PredictionTypes::MultiProbability(pred) => ArrayStore::AxdynF64(pred.into_dyn()),
         },
         None => return Err(Status::aborted("Failed to predict")),
     };
@@ -319,14 +375,40 @@ pub fn inner_cross_validate(
             ArrayStore::AxdynF64(arr.into_dyn())
         }
 
-        Models::LogisticRegression {
+        Models::BinomialLogisticRegression {
             alpha,
             gradient_tolerance,
             fit_intercept,
             max_iterations,
             initial_params,
         } => {
-            let m = logistic_regression(
+            let m = binomial_logistic_regression(
+                alpha,
+                gradient_tolerance,
+                fit_intercept,
+                max_iterations,
+                initial_params,
+            );
+
+            let mut train = prepare_train_data! {"LosgisticRegression", train,  (AxdynUsize, Ix1) };
+            let arr = to_status_error(train.cross_validate_single(
+                cv,
+                &vec![m][..],
+                |pred, truth| classification_metrics(pred, truth, scoring),
+            ))?;
+
+            ArrayStore::AxdynF32(arr.into_dyn())
+        }
+
+        Models::MultinomialLogisticRegression {
+            alpha,
+            gradient_tolerance,
+            fit_intercept,
+            max_iterations,
+            initial_params,
+            shape,
+        } => {
+            let m = binomial_logistic_regression(
                 alpha,
                 gradient_tolerance,
                 fit_intercept,
