@@ -37,29 +37,37 @@ First you will need to login with the command:
 ```bash
 az login
 ```
-### Setup App Service
+### Basic Configuration Setup
 Make sure to set *resource group name*, *app name*, *location* and *app service plan name* variables according to your needs.
 
-#### Set variables (example)
+##### Set variables (example values)
 ```bash
-resourceGroupName="myResourceGroup"
-appName="webappwithcosmosdb$RANDOM"
+resourceGroupName="docker-RG"
+appName="bastionlab-docker-$RANDOM"
 location="eastus"
-appServicePlanName="$appName-ASP"
+bastionLabImage="mithrilsecuritysas/bastionlab:latest"
 ```
-#### Create a Resource Group
+##### Create a Resource Group
 ```bash
 az group create --name $resourceGroupName --location $location
 ```
-#### Create an App Service Plan
+
+### Deploy BastionLab Server as a Container App
 ```bash
-az appservice plan create --resource-group $resourceGroupName --name $appServicePlanName --sku S1 --location $location
+az container create \
+        --name $appName \
+        --resource-group $resourceGroupName \
+        --image $bastionLabImage \
+        --dns-name-label $appName \
+        --ports 50056
 ```
-#### Create a Web app in the App Service Plan
+
+### Show FQDN and Provisioning State
 ```bash
-az webapp create --name $appName --plan $appServicePlanName --resource-group $resourceGroupName
+az container show \
+	--resource-group $resourceGroupName \
+	--name $appName \
+	--query "{FQDN:ipAddress.fqdn,ProvisioningState:provisioningState}" \
+	--out table
 ```
-#### Upload BastionLab's server code
-```bash
-az webapp deployment source config --resource-group $resourceGroupName --name $appName --repo-url https://github.com/mithril-security/bastionlab.git --branch main --manual-integration
-```
+
