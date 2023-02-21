@@ -268,7 +268,7 @@ where
 
 pub fn ndarray_to_df<T, D: Dimension>(
     arr: &ArrayBase<OwnedRepr<T>, D>,
-    col_names: Vec<&str>,
+    col_names: Vec<String>,
 ) -> Result<DataFrame, Status>
 where
     T: NumericNative + FromPrimitive + ToPrimitive,
@@ -276,6 +276,8 @@ where
     let mut lanes: Vec<Series> = vec![];
 
     for (i, col) in arr.columns().into_iter().enumerate() {
+        // We convert the 1-d column into a standard layout in order to return it as a slice.
+        let col = col.as_standard_layout();
         match col.as_slice() {
             Some(d) => {
                 if let PrimitiveType::Float64 = T::PRIMITIVE {
@@ -283,7 +285,7 @@ where
                         .into_iter()
                         .map(|v| v.to_f64().unwrap())
                         .collect::<Vec<_>>();
-                    let series = Series::from(Float64Chunked::new_vec(col_names[i], d));
+                    let series = Series::from(Float64Chunked::new_vec(&col_names[i], d));
                     lanes.push(series);
                 }
                 if let PrimitiveType::Float32 = T::PRIMITIVE {
@@ -291,7 +293,7 @@ where
                         .into_iter()
                         .map(|v| v.to_f32().unwrap())
                         .collect::<Vec<_>>();
-                    let series = Series::from(Float32Chunked::new_vec(col_names[i], d));
+                    let series = Series::from(Float32Chunked::new_vec(&col_names[i], d));
                     lanes.push(series);
                 }
                 if let PrimitiveType::UInt64 = T::PRIMITIVE {
@@ -299,7 +301,7 @@ where
                         .into_iter()
                         .map(|v| v.to_u64().unwrap())
                         .collect::<Vec<_>>();
-                    let series = Series::from(UInt64Chunked::new_vec(col_names[i], d));
+                    let series = Series::from(UInt64Chunked::new_vec(&col_names[i], d));
                     lanes.push(series);
                 }
                 if let PrimitiveType::UInt32 = T::PRIMITIVE {
@@ -307,7 +309,7 @@ where
                         .into_iter()
                         .map(|v| v.to_u32().unwrap())
                         .collect::<Vec<_>>();
-                    let series = Series::from(UInt32Chunked::new_vec("col", d));
+                    let series = Series::from(UInt32Chunked::new_vec(&col_names[i], d));
                     lanes.push(series);
                 }
                 // This could be expanded... for now, only (f64,f32, u64, and u32) are supported.

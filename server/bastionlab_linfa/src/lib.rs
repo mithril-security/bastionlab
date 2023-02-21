@@ -107,7 +107,17 @@ impl LinfaService for BastionLabLinfa {
 
         let input = self.polars.get_array(input)?;
         let prediction = to_status_error(predict(model, input, probability))?;
-        let prediction = prediction.to_dataframe(vec!["prediction"])?;
+
+        let prediction_titles = |width: usize| {
+            let mut titles = vec![];
+
+            for i in 0..width {
+                titles.push(format!("Class{i}"));
+            }
+            return titles;
+        };
+
+        let prediction = prediction.to_dataframe(prediction_titles(prediction.width()))?;
 
         let identifier = self.insert_df(
             DataFrameArtifact::new(
@@ -145,7 +155,7 @@ impl LinfaService for BastionLabLinfa {
             &scoring,
             cv as usize,
         ))?
-        .to_dataframe(vec![scoring])?;
+        .to_dataframe(vec![scoring.to_string()])?;
 
         // FIXME: Currently, everyone can fetch predictions.
         // Ideally, we would want policies to trickly down here too

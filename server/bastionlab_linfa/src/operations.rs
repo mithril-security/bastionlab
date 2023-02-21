@@ -158,7 +158,7 @@ pub fn send_to_trainer(
             tol,
             power,
         } => {
-            let train = prepare_train_data! {"LinearRegression", train,  (AxdynF64, Ix1) };
+            let train = prepare_train_data! {"TweedieRegressor", train,  (AxdynF64, Ix1) };
 
             let model = tweedie_regression(fit_intercept, alpha, max_iter, link, tol, power);
 
@@ -327,7 +327,7 @@ fn regression_metrics(
         "median_absolute_error" => prediction.median_absolute_error(truth),
         _ => {
             return Err(linfa::Error::Priors(format!(
-                "Could not find metric: {}",
+                "Unsupported metric: {}",
                 metric
             )))
         }
@@ -366,11 +366,21 @@ pub fn inner_cross_validate(
         Models::LinearRegression { fit_intercept } => {
             let m = linear_regression(fit_intercept);
             let mut train = prepare_train_data! {"LinearRegression", train,  (AxdynF64, Ix1) };
-            let arr = to_status_error(train.cross_validate_single(
-                cv,
-                &vec![m][..],
-                |pred, truth| regression_metrics(pred, truth, scoring),
-            ))?;
+            let arr =
+                to_status_error(
+                    train.cross_validate_single(cv, &vec![m][..], |pred, truth| {
+                        let res = regression_metrics(pred, truth, scoring);
+
+                        match res {
+                            Ok(res) => {
+                                return Ok(res);
+                            }
+                            Err(e) => {
+                                return Err(linfa::Error::Priors(format!("{e}")));
+                            }
+                        }
+                    }),
+                )?;
 
             ArrayStore::AxdynF64(arr.into_dyn())
         }

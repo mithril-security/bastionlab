@@ -394,7 +394,7 @@ impl ArrayStore {
         Ok(res)
     }
 
-    pub fn to_dataframe(&self, col_names: Vec<&str>) -> Result<DataFrame, Status> {
+    pub fn to_dataframe(&self, col_names: Vec<String>) -> Result<DataFrame, Status> {
         match self {
             ArrayStore::AxdynI64(a) => ndarray_to_df::<i64, Dim<IxDynImpl>>(a, col_names),
             ArrayStore::AxdynF64(a) => ndarray_to_df::<f64, Dim<IxDynImpl>>(a, col_names),

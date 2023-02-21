@@ -74,7 +74,6 @@ pub fn gaussian_naive_bayes(var_smoothing: f64) -> GaussianNbParams<f64, usize> 
 pub fn linear_regression(fit_intercept: bool) -> LinearRegression {
     let model = LinearRegression::new();
     let model = model.with_intercept(fit_intercept);
-
     model
 }
 

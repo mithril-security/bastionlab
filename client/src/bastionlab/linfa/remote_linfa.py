@@ -57,6 +57,10 @@ class Trainer:
         client = prediction_input._client.linfa
         return client._predict(self._fitted_model, prediction_input)
 
+    def predict_proba(self, prediction_input: "RemoteArray"):
+        client = prediction_input._client.linfa
+        return client._predict_proba(self._fitted_model, prediction_input)
+
     def __str__(self) -> str:
         return f"{self._fitted_model}"
 
@@ -179,6 +183,9 @@ class LogisticRegression(Trainer):
 
     def predict(self, test_set: "RemoteArray"):
         return super().predict(test_set)
+
+    def predict_proba(self, prediction_input: "RemoteArray"):
+        return super().predict_proba(prediction_input)
 
 
 @dataclass
