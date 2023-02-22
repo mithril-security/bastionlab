@@ -3,8 +3,6 @@ from dataclasses import dataclass
 from typing import Callable, Generic, List, Optional, TypeVar, Sequence, Union, Dict
 import polars as pl
 from polars.internals.sql.context import SQLContext
-from torch.jit import ScriptFunction
-import base64
 import json
 import torch
 from ..pb.bastionlab_conversion_pb2 import (
@@ -16,8 +14,17 @@ from .client import BastionLabPolars
 from .utils import ApplyBins, Palettes, ApplyAbs
 from typing import TYPE_CHECKING
 from ..errors import RequestRejected
-from serde import serde, InternalTagging, field
 from serde.json import to_json
+from ._utils import (
+    Metadata,
+    PolarsPlanSegment,
+    EntryPointPlanSegment,
+    UdfPlanSegment,
+    StackPlanSegment,
+    PlanSegments,
+    RowCountSegment,
+)
+from .._utils import delegate, delegate_properties
 
 
 LDF = TypeVar("LDF", bound="pl.LazyFrame")
@@ -26,164 +33,6 @@ if TYPE_CHECKING:
     from ..client import Client
     from ..torch import RemoteTensor
     import matplotlib as mat
-
-
-def delegate(
-    target_cls: Callable,
-    target_attr: str,
-    f_names: List[str],
-    wrap: bool = False,
-    wrap_fn: Optional[Callable] = None,
-    make_docstring: Optional[Callable[[str], str]] = None,
-) -> Callable[[Callable], Callable]:
-    def inner(cls: Callable) -> Callable:
-        delegates = {f_name: getattr(target_cls, f_name) for f_name in f_names}
-
-        def delegated_fn(f_name: str) -> Callable:
-            def f(_self, *args, **kwargs):
-                res = (delegates[f_name])(getattr(_self, target_attr), *args, **kwargs)
-                if wrap:
-                    if wrap_fn is not None:
-                        return wrap_fn(_self, res)
-                    else:
-                        wrapped_res = _self.clone()
-                        setattr(wrapped_res, target_attr, res)
-                        return wrapped_res
-                else:
-                    return res
-
-            return f
-
-        for f_name in f_names:
-            delegated = delegated_fn(f_name)
-            if make_docstring is not None:
-                delegated.__doc__ = make_docstring(f_name)
-
-            setattr(cls, f_name, delegated)
-
-        return cls
-
-    return inner
-
-
-def delegate_properties(
-    *names: str, target_attr: str
-) -> Callable[[Callable], Callable]:
-    def inner(cls: Callable) -> Callable:
-        def prop(name):
-            def f(_self):
-                return getattr(getattr(_self, target_attr), name)
-
-            return property(f)
-
-        for name in names:
-            setattr(cls, name, prop(name))
-
-        return cls
-
-    return inner
-
-
-class CompositePlanSegment:
-    """
-    Composite plan segment class which handles segment plans that have not been implemented
-    """
-
-
-@dataclass
-@serde
-class EntryPointPlanSegment(CompositePlanSegment):
-    """
-    Composite plan segment class responsible for new entry points
-    """
-
-    identifier: str
-
-
-@dataclass
-@serde
-class PolarsPlanSegment(CompositePlanSegment):
-    """
-    Composite plan segment class responsible for Polars queries
-    """
-
-    # HACK: when getting using the schema attribute, polars returns
-    #  the proper error messages (polars.NotFoundError etc) when it is invalid.
-    #  This is not the case for write_json(), which returns a confusing error
-    #  message. So, we get the schema beforehand :)
-    plan: LDF = field(
-        serializer=lambda val: val.schema and json.loads(val.write_json()),
-        deserializer=lambda _: None,
-    )
-
-
-@dataclass
-@serde
-class UdfPlanSegment(CompositePlanSegment):
-    """
-    Composite plan segment class responsible for user defined functions
-    """
-
-    columns: List[str]
-    udf: ScriptFunction = field(
-        serializer=lambda val: base64.b64encode(val.save_to_buffer()).decode("ascii"),
-        deserializer=lambda _: None,
-    )
-
-
-@dataclass
-@serde
-class StackPlanSegment(CompositePlanSegment):
-    """
-    Composite plan segment class responsible for vstack function
-    """
-
-
-@dataclass
-@serde
-class RowCountSegment(CompositePlanSegment):
-    """
-    Composite plan segment class responsible for with_row_count function
-    """
-
-    row: str
-
-
-@dataclass
-@serde(tagging=InternalTagging("type"))
-class PlanSegments:
-    segments: List[
-        Union[
-            PolarsPlanSegment,
-            UdfPlanSegment,
-            EntryPointPlanSegment,
-            StackPlanSegment,
-            RowCountSegment,
-        ]
-    ]
-
-
-@dataclass
-class UdfTransformerPlanSegment(CompositePlanSegment):
-    """
-    Accepts a UDF for row-wise DataFrame transformation.
-    """
-
-    _name: str
-    _columns: List[str]
-
-    def serialize(self) -> str:
-        pass
-
-
-@dataclass
-class Metadata:
-    """
-    A class containing metadata related to your dataframe
-    """
-
-    _polars_client: BastionLabPolars
-    _prev_segments: List[CompositePlanSegment] = field(default_factory=list)
 
 
 # TODO
