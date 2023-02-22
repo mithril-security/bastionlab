@@ -15,13 +15,11 @@ import logging
 import sys
 
 if TYPE_CHECKING:
-    from .torch import BastionLabTorch
-    from .polars import BastionLabPolars
-    from .tokenizers import BastionLabTokenizers
     from ._converter import BastionLabConverter
 
     import bastionlab.torch
     import bastionlab.polars
+    import bastionlab.tokenizers
 
 __pdoc__ = {}
 
@@ -64,7 +62,7 @@ class Client:
     )
     _bastionlab_converter: "BastionLabConverter" = None  #: The BastionLabConverter object for converting internal objects (DF->Dataset, Dataset->DF).
 
-    _bastionlab_tokenizers: "BastionLabTokenizers" = (
+    _bastionlab_tokenizers: "bastionlab.tokenizers.BastionLabTokenizers" = (
         None  #: The BastionLabTokenizers object used for integrating tokenizers.
     )
 
@@ -144,9 +142,6 @@ class Client:
 
     @property
     def _converter(self) -> "BastionLabConverter":
-        """
-        Returns the BastionLabPolars instance used by this client.
-        """
         if self._bastionlab_converter is None:
             from bastionlab._converter import BastionLabConverter
 
@@ -154,7 +149,7 @@ class Client:
         return self._bastionlab_converter
 
     @property
-    def tokenizers(self) -> "BastionLabTokenizers":
+    def tokenizers(self) -> "bastionlab.tokenizers.BastionLabTokenizers":
         """
         Returns the BastionLabTokenizers instance used by this client.
         """
