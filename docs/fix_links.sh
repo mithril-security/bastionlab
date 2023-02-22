@@ -23,7 +23,7 @@ while read line; do
                 if [[ $line2 == 'bastionlab.torch.psg' ]]; then
                     sed -i "s+$line2+[$line2]($filepath/index.md)+g" $line
                 fi
-            elif [[ $filepath == 'pb' ]] || [[ $filepath == 'polars' ]] || [[ $filepath == 'torch' ]]; then
+            elif [[ $filepath == 'pb' ]] || [[ $filepath == 'polars' ]] || [[ $filepath == 'torch' ]] || [[ $filepath == 'tokenizers' ]] ; then
                 sed -i "s+$line2+[$line2]($filepath/index.md)+g" $line
             elif [[ $filepath == 'version' ]]; then
                 # Delete the entire line as it is not needed

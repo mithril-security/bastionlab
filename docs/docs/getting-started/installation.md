@@ -172,14 +172,14 @@ cd bastionlab/server/
 ```mermaid
 %%{ init: { 'flowchart': { 'curve': 'stepBefore' } } }%%
 flowchart LR
-    subgraph Privileges at run
+    subgraph PR[Privileges at run]
         direction LR
         z(Start) --> a
         a{Sudo privileges?} ==Yes==> b[Run as superuser]
         a -.No.-> c[Run as user] -.-> d{Dependencies\nmissing?}
         d -.Yes.-> b
     end
-    subgraph Main flow
+    subgraph MF[Main flow]
         direction LR
         A[Install\ndependencies] ===> D{Ran script as user\nor flag\nBUILD_AS_ROOT is set?}
         D -.Yes.-> B
@@ -189,6 +189,7 @@ flowchart LR
     end
         b ==> A
         d -.No.-> B
+    PR === MF
 ```
 
 
