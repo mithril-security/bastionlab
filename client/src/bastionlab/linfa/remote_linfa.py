@@ -50,7 +50,7 @@ class Trainer:
 
     def fit(self, train_set: "RemoteArray", target_set: "RemoteArray"):
         client = train_set._client.linfa
-        model = client._train(train_set, target_set, self)
+        model = client._train(records=train_set, target=target_set, trainer=self)
         self._fitted_model = model
 
     def predict(self, prediction_input: "RemoteArray"):
@@ -65,9 +65,9 @@ class Trainer:
         return f"{self._fitted_model}"
 
 
-class GaussianNb(Trainer):
-    def __init__(self):
-        self.var_smoothing: float = 1e-9
+@dataclass
+class GaussianNB(Trainer):
+    var_smoothing: float = 1e-9
 
     def to_msg_dict(self):
         return {"gaussian_nb": ProtoGaussian(var_smoothing=self.var_smoothing)}
@@ -77,6 +77,9 @@ class GaussianNb(Trainer):
 
     def predict(self, test_set: "RemoteArray"):
         return super().predict(test_set)
+
+    def predict_proba(self, prediction_input: "RemoteArray"):
+        raise NotImplementedError("predict_proba isn't implemented for GaussianNB")
 
 
 class LinearRegression(Trainer):
@@ -215,33 +218,32 @@ class ElasticNet(Trainer):
 
 
 @dataclass
-class DecisionTree(Trainer):
-    class SplitQuality(Trainer):
-        def to_msg_dict():
-            raise NotImplementedError()
-
-    class Gini(SplitQuality):
-        def to_msg_dict():
-            return {"gini": ProtoDecisionTree.Gini}
-
-    class Entropy(SplitQuality):
-        def to_msg_dict():
-            return {"entropy": ProtoDecisionTree.Entropy}
-
-    split_quality: Optional[SplitQuality] = Gini
+class DecisionTreeClassifier(Trainer):
+    criterion: Optional[str] = "gini"
     max_depth: Optional[int] = None
-    min_weight_split: float = (2.0,)
-    min_weight_leaf: float = (1.0,)
-    min_impurity_decrease: float = 0.00001
+    min_weight_split: float = 2.0
+    min_weight_leaf: float = 1.0
+    min_impurity_decrease: float = 1e-5
 
     def to_msg_dict(self):
+        if self.criterion not in ["gini", "entropy"]:
+            raise ValueError(
+                "Please choose one of these Split Qualities: [gini, entropy]"
+            )
+        elif self.criterion == "log_loss":
+            raise NotImplementedError("`log_loss` not supported by BastionLab ")
+
+        criteria = dict(
+            gini=dict(gini=ProtoDecisionTree.Gini()),
+            entropy=dict(entropy=ProtoDecisionTree.Entropy()),
+        )
         return {
             "decision_tree": ProtoDecisionTree(
                 max_depth=self.max_depth,
                 min_weight_split=self.min_weight_split,
                 min_weight_leaf=self.min_weight_leaf,
                 min_impurity_decrease=self.min_impurity_decrease,
-                split_quality=self.split_quality.to_msg_dict(),
+                **criteria[self.criterion],
             )
         }
 
@@ -254,136 +256,87 @@ class DecisionTree(Trainer):
 
 @dataclass
 class KMeans(Trainer):
-    class InitMethod(Trainer):
-        def to_msg_dict():
-            raise NotImplementedError()
 
-    class Random(InitMethod):
-        def to_msg_dict():
-            return {"random": ProtoKMeans.Random()}
-
-    class KMeanPara(InitMethod):
-        def to_msg_dict():
-            return {"kmeans_para": ProtoKMeans.KMeansPara()}
-
-    class KMeansPlusPlus(InitMethod):
-        def to_msg_dict():
-            return {"kmeans_plus_plus": ProtoKMeans.KMeansPlusPlus()}
-
-    n_runs: int = 10
+    n_init: int = 10
     n_clusters: int = 0
     tolerance: float = 1e-4
-    max_n_iterations: int = 300
-    init_method: Optional[InitMethod] = None
+    init: "str" = "k-means++"
+    max_iter: int = 300
+    random_state: int = 42
 
-    def get_init_method(self) -> Dict:
-        return (
-            self.Random.to_msg_dict()
-            if not self.init_method
-            else self.init_method.to_msg_dict()
-        )
+    def get_init(self) -> Dict:
+        init = {
+            "k-means++": dict(kmeans_plus_plus=ProtoKMeans.KMeansPlusPlus()),
+            "random": dict(random=ProtoKMeans.Random()),
+        }
+
+        if self.init not in list(init.keys()):
+            raise ValueError(
+                f"Please provide one of these init methods: [k-means++, random]"
+            )
+        return init[self.init]
 
     def to_msg_dict(self):
         return {
             "kmeans": ProtoKMeans(
-                n_runs=self.n_runs,
+                n_runs=self.n_init,
                 n_clusters=self.n_clusters,
                 tolerance=self.tolerance,
-                max_n_iterations=self.max_n_iterations,
-                **self.get_init_method(),
+                max_n_iterations=self.max_iter,
+                random_state=self.random_state,
+                **self.get_init(),
             )
         }
 
-    def fit(self, train_set: "RemoteArray", target_set: "RemoteArray"):
-        return super().fit(train_set, target_set)
+    def fit(self, train_set: "RemoteArray"):
+        return super().fit(train_set, train_set)
 
     def predict(self, test_set: "RemoteArray"):
         return super().predict(test_set)
 
 
 @dataclass
-class SVM(Trainer):
+class SVC(Trainer):
     class PlattParams(Trainer):
-        maxiter: int = 100
-        ministep: float = 1e-10
-        sigma: float = 1e-12
-
         def to_msg_dict(self):
-            return {
-                "platt_params": SVM.PlattParams(
-                    maxiter=self.maxiter, ministep=self.ministep, sigma=self.sigma
-                )
-            }
+            kernel_method = dict(
+                linear=dict(linear=SVM.KernelParams.Linear()),
+                gaussian=lambda eps: SVM.KernelParams.Gaussian(eps=eps),
+                poly=lambda constant, degree: SVM.KernelParams.Polynomial(
+                    constant=constant, degree=degree
+                ),
+            )
 
-    class KernelParams(Trainer):
-        class KernelMethod(Trainer):
-            pass
-
-        class KernelType(Trainer):
-            pass
-
-        class Dense(KernelType):
-            def to_msg_dict():
-                return {"dense": SVM.KernelParams.Dense()}
-
-        class Sparse(KernelType):
-            sparsity: int = 1
-
-            def to_msg_dict(self):
-                return {"sparse": SVM.KernelParams.Sparse(sparsity=self.sparsity)}
-
-        class Gaussian(KernelMethod):
-            eps: float = 1.0
-
-            def to_msg_dict(self):
-                return {"gaussian": SVM.KernelParams.Guassian(eps=self.eps)}
-
-        class Linear(KernelMethod):
-            def to_msg_dict():
-                return {"linear": SVM.KernelParams.Linear()}
-
-        class Polynomial(KernelMethod):
-            constant: float = 1.0
-            degree: float = 1.0
-
-            def to_msg_dict(self):
-                return {
-                    "poly": SVM.KernelParams.Polynomial(
-                        constant=self.constant, degree=self.degree
-                    )
-                }
-
-        kernel_method: Optional[KernelMethod] = Linear.to_msg_dict()
-        kernel_type: Optional[KernelType] = Dense.to_msg_dict()
-        n: N = SVM.KernelParams.LinearSearch
-
-        def to_msg_dict(self):
+            kernel_type = dict(
+                dense=dict(dense=SVM.KernelParams.Dense()),
+                sparse=lambda sparsity: SVM.KernelParams.Sparse(sparsity=sparsity),
+            )
             return {
                 "kernel_params": SVM.KernelParams(
                     **self.kernel_method, **self.kernel_type, n=self.n
                 )
             }
 
-    c: List[float] = field(default_factory=list)
-    eps: Optional[float] = None
-    nu: Optional[float] = None
+    C: float = 1.0
     shrinking: bool = False
-    platt_params: Optional[PlattParams] = None
-    kernel_params: Optional[KernelParams] = None
+    kernel: Optional[str] = "linear"
+    max_iter: int = -1
+    sigma: float = 1e-12
+    tol: float = 1e-3
 
-    def get_kernel_params(self):
-        return (
-            self.KernelParams().to_msg_dict()
-            if not self.kernel_params
-            else self.kernel_params.to_msg_dict()
-        )
+    # def get_kernel_params(self):
+    #     return (
+    #         self.KernelParams().to_msg_dict()
+    #         if not self.kernel_params
+    #         else self.kernel_params.to_msg_dict()
+    #     )
 
-    def get_platt_params(self):
-        return (
-            self.PlattParams().to_msg_dict()
-            if not self.platt_params
-            else self.platt_params.to_msg_dict()
-        )
+    # def get_platt_params(self):
+    #     return (
+    #         self.PlattParams().to_msg_dict()
+    #         if not self.platt_params
+    #         else self.platt_params.to_msg_dict()
+    #     )
 
     def fit(self, train_set: "RemoteArray", target_set: "RemoteArray"):
         return super().fit(train_set, target_set)
@@ -394,10 +347,8 @@ class SVM(Trainer):
     def to_msg_dict(self):
         return {
             "svm": SVM(
-                c=self.c,
-                eps=self.eps,
+                c=self.C,
                 shrinking=self.shrinking,
-                nu=self.nu,
                 **self.get_kernel_params(),
                 **self.get_platt_params(),
             )

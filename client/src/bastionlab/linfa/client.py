@@ -8,7 +8,7 @@ from ..pb.bastionlab_linfa_pb2 import (
     Trainer as LinfaTrainer,
 )
 from ..pb.bastionlab_polars_pb2 import ReferenceResponse
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, Optional
 from ..config import CONFIG
 
 if TYPE_CHECKING:

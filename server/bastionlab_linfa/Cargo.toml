@@ -24,8 +24,8 @@ ndarray = "0.15.6"
 polars = { version = "0.25.1", default-features = true, features = ["object"] }
 bastionlab_common = { path = "../bastionlab_common" }
 bastionlab_polars = { path = "../bastionlab_polars" }
-rand_xoshiro = "0.6.0"
-
+rand = "0.8.5"
+ring = "0.16.20"
 [dependencies.uuid]
 version = "1.1.2"
 features = [

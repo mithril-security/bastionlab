@@ -1,5 +1,4 @@
-use bastionlab_common::array_store::ArrayStore;
-use linfa::{prelude::Records, DatasetBase, PlattParams};
+use linfa::{DatasetBase, PlattParams};
 use linfa_bayes::GaussianNb;
 use linfa_clustering::{KMeans, KMeansInit};
 use linfa_elasticnet::ElasticNet;
@@ -13,7 +12,7 @@ use linfa_svm::Svm;
 use linfa_trees::{DecisionTree, SplitQuality};
 use ndarray::{Array2, ArrayBase, Ix1, Ix2, OwnedRepr};
 
-use tonic::{Request, Status};
+use tonic::Status;
 
 use crate::{
     linfa_proto::{
@@ -22,19 +21,14 @@ use crate::{
         TweedieRegressor as BastionTweedieRegressor, *,
     },
     to_status_error,
+    utils::LabelU64,
 };
 
 #[derive(Debug)]
 pub enum Models {
+    /* Covered Models */
     GaussianNaiveBayes {
         var_smoothing: f64,
-    },
-    ElasticNet {
-        penalty: f32,
-        l1_ratio: f32,
-        with_intercept: bool,
-        max_iterations: u32,
-        tolerance: f32,
     },
     KMeans {
         n_runs: usize,
@@ -42,18 +36,11 @@ pub enum Models {
         tolerance: f64,
         max_n_iterations: u64,
         init_method: KMeansInit<f64>,
+        random_state: u64,
     },
 
     LinearRegression {
         fit_intercept: bool,
-    },
-    TweedieRegressor {
-        fit_intercept: bool,
-        alpha: f64,
-        max_iter: u64,
-        link: Link,
-        tol: f64,
-        power: f64,
     },
     BinomialLogisticRegression {
         alpha: f64,
@@ -70,7 +57,7 @@ pub enum Models {
         initial_params: Option<Vec<f64>>,
         shape: Option<Vec<u64>>,
     },
-
+    // TODO: Not Yet covered
     DecisionTree {
         split_quality: SplitQuality,
         max_depth: Option<usize>,
@@ -78,6 +65,22 @@ pub enum Models {
         min_weight_leaf: f32,
         min_impurity_decrease: f64,
     },
+    ElasticNet {
+        penalty: f32,
+        l1_ratio: f32,
+        with_intercept: bool,
+        max_iterations: u32,
+        tolerance: f32,
+    },
+    TweedieRegressor {
+        fit_intercept: bool,
+        alpha: f64,
+        max_iter: u64,
+        link: Link,
+        tol: f64,
+        power: f64,
+    },
+
     SVM {
         c: Vec<f32>,
         eps: Option<f32>,
@@ -91,14 +94,17 @@ pub enum Models {
 #[allow(unused)]
 #[derive(Debug)]
 pub enum SupportedModels {
-    GaussianNaiveBayes(GaussianNb<f64, usize>),
-    ElasticNet(ElasticNet<f64>),
+    // Covered
+    GaussianNaiveBayes(GaussianNb<f64, LabelU64>),
     KMeans(KMeans<f64, L2Dist>),
     LinearRegression(FittedLinearRegression<f64>),
-    TweedieRegressor(TweedieRegressor<f64>),
     BinomialLogisticRegression(FittedLogisticRegression<f64, u64>),
     MultinomialLogisticRegression(MultiFittedLogisticRegression<f64, u64>),
-    DecisionTree(DecisionTree<f64, usize>),
+
+    // TODO: Not Yet Covered
+    ElasticNet(ElasticNet<f64>),
+    TweedieRegressor(TweedieRegressor<f64>),
+    DecisionTree(DecisionTree<f64, LabelU64>),
     BallTree(BallTreeIndex<'static, f64, L2Dist>),
     Linear(LinearSearchIndex<'static, f64, L2Dist>),
     KdTree(KdTreeIndex<'static, f64, L2Dist>),
@@ -107,51 +113,10 @@ pub enum SupportedModels {
 
 #[derive(Debug)]
 pub enum PredictionTypes {
-    Usize(DatasetBase<ArrayBase<OwnedRepr<f64>, Ix2>, ArrayBase<OwnedRepr<usize>, Ix1>>),
     U64(DatasetBase<ArrayBase<OwnedRepr<f64>, Ix2>, ArrayBase<OwnedRepr<u64>, Ix1>>),
     Float(DatasetBase<ArrayBase<OwnedRepr<f64>, Ix2>, ArrayBase<OwnedRepr<f64>, Ix1>>),
     SingleProbability(ArrayBase<OwnedRepr<f64>, Ix1>),
     MultiProbability(ArrayBase<OwnedRepr<f64>, Ix2>),
-}
-
-#[derive(Debug)]
-pub struct IArrayStore(pub ArrayStore);
-
-impl Records for IArrayStore {
-    type Elem = IArrayStore;
-
-    fn nsamples(&self) -> usize {
-        self.0.height()
-    }
-
-    fn nfeatures(&self) -> usize {
-        self.0.width()
-    }
-}
-
-pub fn get_datasets(
-    records: ArrayStore,
-    target: ArrayStore,
-) -> DatasetBase<IArrayStore, IArrayStore> {
-    // ** For now, shuffling is not implemented.
-    let dataset = DatasetBase::new(IArrayStore(records), IArrayStore(target));
-    dataset
-}
-
-pub fn process_trainer_req(
-    request: Request<TrainingRequest>,
-) -> Result<(String, String, Option<Trainer>), Status> {
-    Ok((
-        request.get_ref().records.clone(),
-        request.get_ref().target.clone(),
-        Some(
-            request
-                .get_ref()
-                .trainer
-                .clone()
-                .ok_or_else(|| Status::aborted("Trainer not supported!"))?,
-        ),
-    ))
 }
 
 pub fn select_trainer(trainer: Trainer) -> Result<Models, Status> {
@@ -255,7 +220,9 @@ pub fn select_trainer(trainer: Trainer) -> Result<Models, Status> {
             tolerance,
             max_n_iterations,
             init_method,
+            random_state,
         } = t;
+
         let init_method =
             init_method.ok_or_else(|| Status::aborted("Invalid KMeans Init Method!"))?;
         let init_method: KMeansInit<f64> = match init_method {
@@ -284,6 +251,7 @@ pub fn select_trainer(trainer: Trainer) -> Result<Models, Status> {
             tolerance: tolerance.into(),
             max_n_iterations,
             init_method,
+            random_state,
         })
     } else if let Some(t) = trainer.svm {
         let BastionSvm {

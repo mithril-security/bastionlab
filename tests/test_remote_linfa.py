@@ -4,7 +4,15 @@ import os
 import polars as pl
 from bastionlab import Connection
 from bastionlab.polars.policy import TrueRule, Log, Policy
-from bastionlab.linfa import LinearRegression, LogisticRegression, cross_validate
+from bastionlab.linfa import (
+    LinearRegression,
+    LogisticRegression,
+    KMeans,
+    GaussianNB,
+    DecisionTreeClassifier,
+    SVC,
+    cross_validate,
+)
 from bastionlab.polars import train_test_split
 from sklearn.model_selection import (
     train_test_split as sk_train_test_split,
@@ -13,6 +21,12 @@ from sklearn.model_selection import (
 )
 from sklearn.metrics import r2_score
 from sklearn.linear_model import LinearRegression as SkLinearRegression
+from sklearn.cluster import KMeans as SKMeans
+from sklearn.naive_bayes import GaussianNB as SkGaussianNB
+from sklearn.tree import DecisionTreeClassifier as SkDecisionTreeClassifier
+from sklearn.svm import SVC as SkSVC
+
+from sklearn.datasets import make_blobs
 
 import numpy as np
 
@@ -184,99 +198,6 @@ class TestingRemoteLinfa(unittest.TestCase):
         # and expect the non-zero values after calculation to be zero
         self.assertTrue(calculate_prediction_difference(remote_pred, local_pred))
 
-    def test_linear_regression_accuracy(self):
-        """
-        To test for the accuracy of the linear regression model on BastionLab,
-        we will first shuffle the DataFrame to reduce overfitting in our model."""
-
-        # Join the input and target to make sure we shuffle rightly
-        diabetes = pl.concat(
-            [self.diabetes_train, self.diabetes_targets], how="horizontal"
-        )
-        # diabetes = reshuffle_dataframe(diabetes)
-
-        # Split the dataframe back into inputs and targets
-        columns = diabetes.columns
-
-        # Targets is the last column
-        diabetes_train = diabetes.select(pl.col(columns[:-1]).cast(pl.Float64))
-        diabetes_targets = diabetes.select(columns[-1])
-        diabetes_train_array = self.client.polars.send_df(
-            diabetes_train, self.policy
-        ).to_array()
-        diabetes_targets_array = self.client.polars.send_df(
-            diabetes_targets, self.policy
-        ).to_array()
-
-        (
-            diabetes_train_X,
-            diabetes_test_X,
-            diabetes_train_Y,
-            diabetes_test_Y,
-        ) = train_test_split(
-            diabetes_train_array,
-            diabetes_targets_array,
-            test_size=0.30,
-            shuffle=False,
-        )
-
-        (
-            diabetes_local_train_X,
-            diabetes_local_test_X,
-            diabetes_local_train_Y,
-            diabetes_local_test_Y,
-        ) = sk_train_test_split(
-            diabetes_train.to_numpy(),
-            diabetes_targets.to_numpy(),
-            test_size=0.30,
-            shuffle=False,
-        )
-
-        lr = LinearRegression()
-        sk_lr = SkLinearRegression()
-
-        lr.fit(diabetes_train_X, diabetes_train_Y)
-        sk_lr.fit(diabetes_local_train_X, diabetes_local_train_Y)
-
-        remote_pred = lr.predict(diabetes_test_X)
-        local_pred = sk_lr.predict(diabetes_local_test_X)
-
-        # TODO: Write test cases for cross_validation
-
-        scores = [
-            dict(remote="r2", local="r2"),
-            dict(remote="max_error", local="max_error"),
-            dict(remote="mean_absolute_error", local="neg_mean_absolute_error"),
-            dict(remote="explained_variance", local="explained_variance"),
-            dict(remote="mean_squared_log_error", local="neg_mean_squared_log_error"),
-            dict(remote="mean_squared_error", local="neg_mean_squared_error"),
-            dict(remote="median_absolute_error", local="neg_median_absolute_error"),
-        ]
-        for score in scores:
-            # Cross_validate scores
-            remote_scores = (
-                cross_validate(
-                    lr,
-                    remote_pred.to_array(),
-                    diabetes_test_Y,
-                    cv=20,
-                    scoring=score["remote"],
-                )
-                .fetch()
-                .to_numpy()
-                .squeeze()
-            )
-
-            local_scores = cross_val_score(
-                sk_lr,
-                local_pred,
-                diabetes_local_test_Y,
-                cv=20,
-                scoring=score["local"],
-            ).mean()
-
-            ## TODO: Add the best relationship checker to assert on
-
     def test_multinomial_logistic_regression(self):
         from sklearn.linear_model import LogisticRegression as SkLogisticRegression
 
@@ -298,21 +219,6 @@ class TestingRemoteLinfa(unittest.TestCase):
         local_prob_pred = sk_log_reg.predict_proba(self.local_iris_test_X)
 
         self.assertAlmostEqual(remote_prob_pred.var(), local_prob_pred.var(), places=4)
-
-    def test_multinomial_logistic_regression_accuracy(self):
-        iris = reshuffle_dataframe(self.iris)
-
-        columns = iris.columns
-
-        iris_train = iris.select(columns[:-1])
-        iris_targets = iris.select(columns[-1]).select(pl.all().cast(pl.UInt64))
-
-        iris_train_array = self.client.polars.send_df(
-            iris_train, self.policy
-        ).to_array()
-        iris_targets_array = self.client.polars.send_df(
-            iris_targets, self.policy
-        ).to_array()
 
     def test_binomial_logistic_regression(self):
         from sklearn.linear_model import LogisticRegression as SkLogisticRegression
@@ -374,6 +280,103 @@ class TestingRemoteLinfa(unittest.TestCase):
         local_prob_pred = sk_log_reg.predict_proba(local_iris_test_X)[:, 1]
 
         self.assertAlmostEqual(remote_prob_pred.var(), local_prob_pred.var(), 4)
+
+    def test_kmeans(self):
+
+        X, y = make_blobs(n_samples=500, centers=3, n_features=2)
+
+        data = pl.DataFrame(dict(X=X[:, 0], y=X[:, 1], labels=y))
+
+        data_array = self.client.polars.send_df(data[:, :2], self.policy).to_array()
+
+        # Initialize our KMeans classifier from sklearn
+
+        sk_kmeans = SKMeans(
+            init="k-means++",
+            n_clusters=3,
+            n_init=10,
+            random_state=0,
+            max_iter=2000,
+        )
+
+        # Here, we perform a trick by taking a column of the reduced_digits_data to fill the targets
+        # requirement because of the a constrainst in the backend
+
+        kmeans = KMeans(
+            n_clusters=3, init="k-means++", n_init=10, max_iter=2000, random_state=0
+        )
+
+        local_pred_input = X[:50, :2]
+
+        remote_pred_input = self.client.polars.send_df(
+            pl.DataFrame(local_pred_input), self.policy
+        ).to_array()
+
+        kmeans.fit(data_array)
+        sk_kmeans.fit(X)
+
+        remote_pred = kmeans.predict(remote_pred_input).fetch().to_numpy().squeeze()
+        local_pred = sk_kmeans.predict(local_pred_input)
+
+        # Continue with assertions
+
+    def test_gaussian_naive_bayes(self):
+        X = np.array([[-1, -1], [-2, -1], [-3, -2], [1, 1], [2, 1], [3, 2]])
+        Y = np.array([1, 1, 1, 2, 2, 2])
+
+        remote_X = self.client.polars.send_df(
+            pl.DataFrame(X).select(pl.all().cast(pl.Float64)), self.policy
+        ).to_array()
+        remote_Y = self.client.polars.send_df(
+            pl.DataFrame(Y).select(pl.all().cast(pl.UInt64())), self.policy
+        ).to_array()
+
+        bayes = GaussianNB()
+        sk_bayes = SkGaussianNB()
+
+        bayes.fit(remote_X, remote_Y)
+        sk_bayes.fit(X, Y)
+
+        remote_pred_input = self.client.polars.send_df(
+            pl.DataFrame([[0.8], [-1.0]]), self.policy
+        ).to_array()
+        remote_pred = (
+            bayes.predict(remote_pred_input).fetch().to_numpy().squeeze(axis=0)
+        )
+        local_pred = sk_bayes.predict([[0.8, -1.0]])
+
+        self.assertTrue(np.array_equal(remote_pred, local_pred))
+
+    def test_decision_trees(self):
+        cut_off = 130
+        remote_X = self.client.polars.send_df(
+            self.iris.select(self.iris_cols[:-1]).head(cut_off), self.policy
+        ).to_array()
+        remote_Y = self.client.polars.send_df(
+            self.iris.select(pl.col(self.iris_cols[-1]).cast(pl.UInt64)).head(cut_off),
+            self.policy,
+        ).to_array()
+
+        decision_tree = DecisionTreeClassifier(max_depth=2)
+        sk_decision_tree = SkDecisionTreeClassifier()
+
+        decision_tree.fit(remote_X, remote_Y)
+        sk_decision_tree.fit(
+            self.iris[:cut_off, :-1].to_numpy(), self.iris[:cut_off, -1].to_numpy()
+        )
+
+        remote_pred_input = self.client.polars.send_df(
+            self.iris.select(self.iris_cols[:-1]).tail(1), self.policy
+        ).to_array()
+
+        remote_pred = (
+            decision_tree.predict(remote_pred_input).fetch().to_numpy().squeeze(0)
+        )
+        local_pred = sk_decision_tree.predict(self.iris[-1:, :-1].to_numpy()).astype(
+            np.uint64
+        )
+
+        self.assertTrue(np.array_equal(remote_pred, local_pred))
 
     def tearDown(self) -> None:
         self.connection.close()

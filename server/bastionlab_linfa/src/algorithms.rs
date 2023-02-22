@@ -1,8 +1,6 @@
-use linfa::PlattParams;
 use linfa_bayes::{GaussianNb, GaussianNbParams};
 use linfa_clustering::{KMeans, KMeansInit, KMeansParams};
 use linfa_elasticnet::{ElasticNet, ElasticNetParams};
-use linfa_kernel::KernelParams;
 use linfa_linear::{LinearRegression, Link, TweedieRegressor, TweedieRegressorParams};
 use linfa_logistic::{LogisticRegression, MultiLogisticRegression};
 use linfa_nn::{
@@ -12,7 +10,10 @@ use linfa_nn::{
 use linfa_svm::SvmParams;
 use linfa_trees::{DecisionTreeParams, SplitQuality};
 use ndarray::{Array1, Array2, ArrayBase, Data, Ix2};
+use rand::{rngs::StdRng, SeedableRng};
 use tonic::Status;
+
+use crate::utils::LabelU64;
 
 pub fn binomial_logistic_regression(
     alpha: f64,
@@ -65,7 +66,7 @@ pub fn multinomial_logistic_regression(
     Ok(reg)
 }
 
-pub fn gaussian_naive_bayes(var_smoothing: f64) -> GaussianNbParams<f64, usize> {
+pub fn gaussian_naive_bayes(var_smoothing: f64) -> GaussianNbParams<f64, LabelU64> {
     let model = GaussianNb::params().var_smoothing(var_smoothing);
 
     model
@@ -102,15 +103,15 @@ pub fn decision_trees(
     min_weight_split: f32,
     min_weight_leaf: f32,
     min_impurity_decrease: f64,
-) -> DecisionTreeParams<f64, usize> {
-    let reg = DecisionTreeParams::new()
+) -> DecisionTreeParams<f64, LabelU64> {
+    let model = DecisionTreeParams::new()
         .split_quality(split_quality)
         .max_depth(max_depth)
         .min_weight_split(min_weight_split)
         .min_weight_leaf(min_weight_leaf)
         .min_impurity_decrease(min_impurity_decrease);
 
-    reg
+    model
 }
 
 pub fn elastic_net(
@@ -135,8 +136,10 @@ pub fn kmeans(
     tolerance: f64,
     max_n_iterations: u64,
     init_method: KMeansInit<f64>,
-) -> KMeansParams<f64, rand_xoshiro::Xoshiro256Plus, L2Dist> {
-    let model = KMeans::params(n_clusters)
+    random_state: u64,
+) -> KMeansParams<f64, StdRng, L2Dist> {
+    let rng = StdRng::seed_from_u64(random_state);
+    let model = KMeans::params_with(n_clusters, rng, L2Dist)
         .n_runs(n_runs)
         .max_n_iterations(max_n_iterations)
         .tolerance(tolerance)
@@ -171,30 +174,16 @@ pub fn balltree<DT: Data<Elem = f64>, D: Distance<f64>>(
     BallTreeIndex::new(batch, leaf_size, dist_fn)
 }
 
+#[allow(unused)]
 pub fn svm(
-    c: Vec<f64>,
+    c: f64,
     eps: Option<f64>,
-    nu: Option<f64>,
     shrinking: bool,
-    platt_params: PlattParams<f64, ()>,
-    kernel_params: KernelParams<f64>,
+    gamma: String,
+    degree: u64,
+    max_iter: i64,
+    coef0: f64,
+    kernel: String,
 ) -> SvmParams<f64, f64> {
-    let model = SvmParams::new()
-        .shrinking(shrinking)
-        .with_platt_params(platt_params)
-        .with_kernel_params(kernel_params);
-
-    if c.len() > 0 {
-        if c.len() == 2 {
-            model.pos_neg_weights(c[0], c[1])
-        } else if c.len() == 1 && eps.is_some() {
-            model.c_eps(c[0], eps.unwrap())
-        } else {
-            model
-        }
-    } else if nu.is_some() && eps.is_some() {
-        model.nu_eps(nu.unwrap(), eps.unwrap())
-    } else {
-        model
-    }
+    todo!()
 }

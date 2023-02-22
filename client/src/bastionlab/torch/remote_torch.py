@@ -104,7 +104,8 @@ def _get_tensor_metadata(meta_bytes: bytes):
     meta = TensorMetaData()
     meta.ParseFromString(meta_bytes)
 
-    print(meta.input_dtype)
+    # Update: removed unnecessary print statement
+
     return [torch_dtypes[dt] for dt in meta.input_dtype], [
         torch.Size(list(meta.input_shape))
     ]

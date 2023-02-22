@@ -1,4 +1,4 @@
-use std::{error::Error, fmt::Debug, sync::Arc};
+use std::sync::Arc;
 
 use bastionlab_common::{array_store::ArrayStore, common_conversions::to_status_error};
 use linfa::{
@@ -6,32 +6,16 @@ use linfa::{
     traits::{Fit, Predict},
     DatasetBase,
 };
-use ndarray::{ArrayBase, Ix1, Ix2, OwnedRepr, ViewRepr};
+use ndarray::{Array2, ArrayBase, Ix1, Ix2, OwnedRepr, ViewRepr};
 
 use tonic::Status;
 
 use crate::{
     algorithms::*,
-    trainers::{get_datasets, IArrayStore, Models, PredictionTypes, SupportedModels},
+    trainers::{Models, PredictionTypes, SupportedModels},
+    utils::{get_datasets, IArrayStore, LabelU64},
 };
 
-fn failed_array_type<T, A: Debug>(model: &str, array: T) -> Result<A, Status>
-where
-    T: std::fmt::Debug,
-{
-    return Err(Status::failed_precondition(format!(
-        "{model} received wrong array type: ArrayStore(ArrayBase<{:?}>)",
-        array
-    )));
-}
-fn dimensionality_error<E: Error>(dim: &str, e: E) -> Status {
-    return Status::aborted(format!(
-        "Could not convert Dynamic Array into {:?}: {e}",
-        dim
-    ));
-}
-
-///
 /// This macro converts convert the Dynamic Array Implememtation into
 /// a fixed dimension say `Ix2`.
 ///
@@ -41,7 +25,7 @@ fn dimensionality_error<E: Error>(dim: &str, e: E) -> Status {
 /// It calls `into_dimensionality` to pass the dimension as a type to the macro.
 macro_rules! get_inner_array {
     ($variant:tt, $array:ident, $dim:ty, $dim_str:tt, $model_name:tt, $inner:tt) => {{
-        use crate::trainers::IArrayStore;
+        use crate::utils::{dimensionality_error, failed_array_type, IArrayStore};
         match $array {
             IArrayStore(ArrayStore::$variant(a)) => {
                 let a = a
@@ -59,7 +43,6 @@ macro_rules! get_inner_array {
     }};
 }
 
-///
 /// This macro converts `DatasetBase<IArrayBase>` into `DatasetBase<ArrayBase<T, Ix...>>`
 ///
 macro_rules! prepare_train_data {
@@ -73,19 +56,21 @@ macro_rules! prepare_train_data {
             conversion only uses `Array2`.
 
             We will have to first convert it from `DynImpl` into `Ix2` then later reshape into `Ix1`.
+
+            Also, for the edge case of using `KMeans`, we will only choose the first column if there are multiple
+            columns in the target array.
          */
         let targets = get_inner_array! {$t_variant, targets, Ix2, "Ix2", $model, "Targets"};
-        let shape = targets.shape().to_vec();
-        let targets = targets
-            .into_shape((shape[0]))
-            .map_err(|e| Status::aborted(format!("Could not reshape target arrary: {e}")))
-            .unwrap();
+
+        // Select the first column
+        let targets = targets.column(0).to_owned();
+
         // Here, we construct the specific DatasetBase with the right types
         DatasetBase::new(records, targets)
     }};
 }
+#[allow(unused)]
 /// This method sends both the training and target datasets to the specified model in [`Models`].
-/// And `ratio` is passed along to [`linfa_datasets::DatasetBase`]
 pub fn send_to_trainer(
     records: ArrayStore,
     targets: ArrayStore,
@@ -96,8 +81,10 @@ pub fn send_to_trainer(
     match model_type {
         Models::GaussianNaiveBayes { var_smoothing } => {
             let train = prepare_train_data! {
-                "GaussianNaiveBayes", train, (AxdynUsize, Ix1)
+                "GaussianNaiveBayes", train, (AxdynU64, Ix1)
             };
+
+            let train = train.map_targets(|t| LabelU64(*t));
 
             let model = gaussian_naive_bayes(var_smoothing.into());
             Ok(SupportedModels::GaussianNaiveBayes(to_status_error(
@@ -129,15 +116,29 @@ pub fn send_to_trainer(
             tolerance,
             max_n_iterations,
             init_method,
+            random_state,
         } => {
-            let train = prepare_train_data! {"KMeans", train,  (AxdynF64, Ix1) };
+            let train = prepare_train_data! {"KMeans", train,  (AxdynF64, Ix2) };
 
+            /*
+               For kmeans, we will set the target to Array2's default with respect to the records lenght.
+               This is because the KMeans algorithm doesn't rely on the targets.
+
+               But in order for the algorithm to work correctly and keep a unified for `prepare_train_data`, we process all the targets same
+               and then later set the targets for kmeans to defaults.
+            */
+
+            let records_shape = train.records().shape().to_vec();
+
+            let train = train
+                .with_targets::<Array2<f64>>(Array2::zeros((records_shape[0], records_shape[1])));
             let model = kmeans(
                 n_runs.into(),
                 n_clusters.into(),
                 tolerance,
                 max_n_iterations,
                 init_method,
+                random_state,
             );
             Ok(SupportedModels::KMeans(to_status_error(model.fit(&train))?))
         }
@@ -219,8 +220,9 @@ pub fn send_to_trainer(
             min_weight_leaf,
             min_impurity_decrease,
         } => {
-            let train = prepare_train_data! {"DecisionTree", train,  (AxdynUsize, Ix1) };
+            let train = prepare_train_data! {"DecisionTree", train,  (AxdynU64, Ix1) };
 
+            let train = train.map_targets(|t| LabelU64(*t));
             let model = decision_trees(
                 split_quality,
                 max_depth,
@@ -240,30 +242,14 @@ pub fn send_to_trainer(
             platt_params,
             kernel_params,
         } => {
-            let train = prepare_train_data! {"SupportVectorMachine", train,  (AxdynF64, Ix1) };
-
-            let c = c
-                .iter()
-                .map(|v| (*v).try_into().unwrap())
-                .collect::<Vec<_>>();
-            let eps = match eps {
-                Some(v) => Some(v.into()),
-                None => None,
-            };
-
-            let nu = match nu {
-                Some(v) => Some(v.into()),
-                None => None,
-            };
-            let model = svm(c, eps, nu, shrinking, platt_params, kernel_params);
-            Ok(SupportedModels::SVM(to_status_error(model.fit(&train))?))
+            todo!()
         }
     }
 }
 
 /// This method is used to run a prediction on an already fitted model, based on the model selection type.
 /// We use two different types for prediction
-/// [f64] and [usize] --> [PredictionTypes::Float] and [PredictionTypes::Usize] respectively.
+/// [f64] and [usize] --> [PredictionTypes::Float] and [PredictionTypes::U64] respectively.
 pub fn predict(
     model: Arc<SupportedModels>,
     data: ArrayStore,
@@ -273,8 +259,12 @@ pub fn predict(
     let sample = get_inner_array! {AxdynF64, sample, Ix2, "Ix2", "predict", "sample"};
     let prediction = match &*model {
         SupportedModels::ElasticNet(m) => Some(PredictionTypes::Float(m.predict(sample))),
-        SupportedModels::GaussianNaiveBayes(m) => Some(PredictionTypes::Usize(m.predict(sample))),
-        SupportedModels::KMeans(m) => Some(PredictionTypes::Usize(m.predict(sample))),
+        SupportedModels::GaussianNaiveBayes(m) => {
+            Some(PredictionTypes::U64(m.predict(sample).map_targets(|t| t.0)))
+        }
+        SupportedModels::KMeans(m) => Some(PredictionTypes::U64(
+            m.predict(sample).map_targets(|t| *t as u64),
+        )),
         SupportedModels::LinearRegression(m) => Some(PredictionTypes::Float(m.predict(sample))),
         SupportedModels::BinomialLogisticRegression(m) => {
             if probability {
@@ -294,14 +284,15 @@ pub fn predict(
                 Some(PredictionTypes::U64(m.predict(sample)))
             }
         }
-        SupportedModels::DecisionTree(m) => Some(PredictionTypes::Usize(m.predict(sample))),
+        SupportedModels::DecisionTree(m) => {
+            Some(PredictionTypes::U64(m.predict(sample).map_targets(|t| t.0)))
+        }
         _ => return Err(Status::failed_precondition("Unsupported Model")),
     };
 
     let prediction = match prediction {
         Some(v) => match v {
             PredictionTypes::U64(pred) => ArrayStore::AxdynU64(pred.targets.into_dyn()),
-            PredictionTypes::Usize(pred) => ArrayStore::AxdynUsize(pred.targets.into_dyn()),
             PredictionTypes::Float(pred) => ArrayStore::AxdynF64(pred.targets.into_dyn()),
             PredictionTypes::SingleProbability(pred) => ArrayStore::AxdynF64(pred.into_dyn()),
             PredictionTypes::MultiProbability(pred) => ArrayStore::AxdynF64(pred.into_dyn()),
@@ -335,8 +326,8 @@ fn regression_metrics(
 }
 
 fn classification_metrics(
-    prediction: &ArrayBase<OwnedRepr<usize>, Ix1>,
-    truth: &ArrayBase<ViewRepr<&usize>, Ix1>,
+    prediction: &ArrayBase<OwnedRepr<LabelU64>, Ix1>,
+    truth: &ArrayBase<ViewRepr<&LabelU64>, Ix1>,
     metric: &str,
 ) -> Result<f32, linfa::Error> {
     let cm = prediction.confusion_matrix(truth)?;
@@ -400,7 +391,9 @@ pub fn inner_cross_validate(
                 initial_params,
             );
 
-            let mut train = prepare_train_data! {"LosgisticRegression", train,  (AxdynUsize, Ix1) };
+            let mut train = prepare_train_data! {"LosgisticRegression", train,  (AxdynU64, Ix1) };
+
+            let mut train = train.map_targets(|t| LabelU64(*t));
             let arr = to_status_error(train.cross_validate_single(
                 cv,
                 &vec![m][..],
@@ -426,7 +419,10 @@ pub fn inner_cross_validate(
                 initial_params,
             );
 
-            let mut train = prepare_train_data! {"LosgisticRegression", train,  (AxdynUsize, Ix1) };
+            let mut train = prepare_train_data! {"LosgisticRegression", train,  (AxdynU64, Ix1) };
+
+            let mut train = train.map_targets(|t| LabelU64(*t));
+
             let arr = to_status_error(train.cross_validate_single(
                 cv,
                 &vec![m][..],
@@ -438,9 +434,7 @@ pub fn inner_cross_validate(
 
         _ => {
             return Err(Status::failed_precondition(format!(
-                "
-                        Unsupported Model: {:?}
-                    ",
+                "Unsupported Model: {:?}",
                 model
             )))
         }

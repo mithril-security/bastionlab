@@ -12,12 +12,15 @@ pub mod linfa_proto {
 }
 
 mod trainers;
-use trainers::{process_trainer_req, select_trainer, SupportedModels};
+use trainers::{select_trainer, SupportedModels};
 
 mod algorithms;
 
 mod operations;
 use operations::*;
+
+mod utils;
+use utils::process_trainer_req;
 
 use uuid::Uuid;
 
@@ -84,6 +87,7 @@ impl LinfaService for BastionLabLinfa {
             let target = self.polars.get_array(&target)?;
             (records, target)
         };
+
         let trainer = trainer.ok_or(Status::aborted("Invalid Trainer!"))?.clone();
 
         let trainer = select_trainer(trainer)?;

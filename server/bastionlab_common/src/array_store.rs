@@ -4,7 +4,38 @@ use tonic::Status;
 
 use crate::common_conversions::{ndarray_to_df, to_status_error};
 
-// FIXME: Try to update several impls with macros or generics to simplify implementation
+/*
+   Introduces two fixes:
+       - One macro for split.
+       - Another for stacking
+   This update removes the duplicated methods in the ArrayStore variant matching logic
+*/
+macro_rules! splitter {
+    ($array:ident, $variant:tt,$ratios:ident, $inner_type:ty) => {{
+        let (left, right) = split::<$inner_type>($array, $ratios);
+        (ArrayStore::$variant(left), ArrayStore::$variant(right))
+    }};
+}
+
+macro_rules! stacker {
+    ($axis:ident, $arrays:ident, $variant:tt, $inner_type:ty) => {{
+        let res = stack::<$inner_type>(
+            $axis,
+            &$arrays
+                .iter()
+                .map(|v| match v {
+                    ArrayStore::$variant(a) => Ok(a.view()),
+                    _ => {
+                        return Err(Status::aborted(
+                            "DataTypes for all columns should be the same",
+                        ));
+                    }
+                })
+                .collect::<Vec<_>>()[..],
+        );
+        ArrayStore::$variant(res?)
+    }};
+}
 
 #[derive(Debug, Clone)]
 pub enum ArrayStore {
@@ -15,10 +46,6 @@ pub enum ArrayStore {
     AxdynF32(Array<f32, Dim<IxDynImpl>>),
     AxdynI32(Array<i32, Dim<IxDynImpl>>),
     AxdynI16(Array<i16, Dim<IxDynImpl>>),
-
-    // Usize addition to support linfa easily without
-    // casting to `usize`
-    AxdynUsize(Array<usize, Dim<IxDynImpl>>),
 }
 
 /// This is used to shuffle the inner array by using the [`select`] function on ArrayBase.
@@ -75,7 +102,6 @@ impl ArrayStore {
             ArrayStore::AxdynF64(a) => a.dim()[0],
             ArrayStore::AxdynI32(a) => a.dim()[0],
             ArrayStore::AxdynI16(a) => a.dim()[0],
-            ArrayStore::AxdynUsize(a) => a.dim()[0],
             ArrayStore::AxdynU64(a) => a.dim()[0],
             ArrayStore::AxdynU32(a) => a.dim()[0],
         }
@@ -95,7 +121,6 @@ impl ArrayStore {
             ArrayStore::AxdynF64(a) => columns(a.shape()),
             ArrayStore::AxdynI32(a) => columns(a.shape()),
             ArrayStore::AxdynI16(a) => columns(a.shape()),
-            ArrayStore::AxdynUsize(a) => columns(a.shape()),
             ArrayStore::AxdynU64(a) => columns(a.shape()),
             ArrayStore::AxdynU32(a) => columns(a.shape()),
         }
@@ -108,7 +133,6 @@ impl ArrayStore {
             ArrayStore::AxdynI32(a) => Self::AxdynI32(shuffle::<i32>(a, indices)),
             ArrayStore::AxdynI64(a) => Self::AxdynI64(shuffle::<i64>(a, indices)),
             ArrayStore::AxdynI16(a) => Self::AxdynI16(shuffle::<i16>(a, indices)),
-            ArrayStore::AxdynUsize(a) => Self::AxdynUsize(shuffle::<usize>(a, indices)),
             ArrayStore::AxdynU64(a) => Self::AxdynU64(shuffle::<u64>(a, indices)),
             ArrayStore::AxdynU32(a) => Self::AxdynU32(shuffle::<u32>(a, indices)),
         }
@@ -119,276 +143,33 @@ impl ArrayStore {
             Arrays could be split on a several axes but in this implementation, we are
             only splitting on the Oth Axis (row-wise).
         */
+
+        /*
+           UPDATE: Replaces repeated pattern with macro to simplify implementation
+        */
         match self {
-            ArrayStore::AxdynI64(a) => {
-                let (upper, lower) = split::<i64>(a, ratios);
-                (ArrayStore::AxdynI64(upper), ArrayStore::AxdynI64(lower))
-            }
-            ArrayStore::AxdynF64(a) => {
-                let (upper, lower) = split::<f64>(a, ratios);
-
-                (ArrayStore::AxdynF64(upper), ArrayStore::AxdynF64(lower))
-            }
-            ArrayStore::AxdynF32(a) => {
-                let (upper, lower) = split::<f32>(a, ratios);
-
-                (ArrayStore::AxdynF32(upper), ArrayStore::AxdynF32(lower))
-            }
-            ArrayStore::AxdynI32(a) => {
-                let (upper, lower) = split::<i32>(a, ratios);
-
-                (ArrayStore::AxdynI32(upper), ArrayStore::AxdynI32(lower))
-            }
-
-            ArrayStore::AxdynI16(a) => {
-                let (upper, lower) = split::<i16>(a, ratios);
-
-                (ArrayStore::AxdynI16(upper), ArrayStore::AxdynI16(lower))
-            }
-
-            ArrayStore::AxdynUsize(a) => {
-                let (upper, lower) = split::<usize>(a, ratios);
-
-                (ArrayStore::AxdynUsize(upper), ArrayStore::AxdynUsize(lower))
-            }
-
-            ArrayStore::AxdynU64(a) => {
-                let (upper, lower) = split::<u64>(a, ratios);
-
-                (ArrayStore::AxdynU64(upper), ArrayStore::AxdynU64(lower))
-            }
-            ArrayStore::AxdynU32(a) => {
-                let (upper, lower) = split::<u32>(a, ratios);
-
-                (ArrayStore::AxdynU32(upper), ArrayStore::AxdynU32(lower))
-            }
+            ArrayStore::AxdynI64(a) => splitter!(a, AxdynI64, ratios, i64),
+            ArrayStore::AxdynI32(a) => splitter!(a, AxdynI32, ratios, i32),
+            ArrayStore::AxdynF64(a) => splitter!(a, AxdynF64, ratios, f64),
+            ArrayStore::AxdynF32(a) => splitter!(a, AxdynF32, ratios, f32),
+            ArrayStore::AxdynI16(a) => splitter!(a, AxdynI16, ratios, i16),
+            ArrayStore::AxdynU32(a) => splitter!(a, AxdynU32, ratios, u32),
+            ArrayStore::AxdynU64(a) => splitter!(a, AxdynU64, ratios, u64),
         }
     }
-
-    pub fn append(&mut self, other: &Self, axis: Axis) -> Result<ArrayStore, Status> {
-        let cannot_append =
-            |a, b| return Err(Status::aborted(format!("Cannot append {a:?} to {b:?}")));
-        let res = match self {
-            ArrayStore::AxdynI64(a) => match other {
-                Self::AxdynI64(b) => {
-                    to_status_error(a.append(axis, b.view()))?;
-                    Self::AxdynI64(a.clone())
-                }
-                _ => {
-                    return cannot_append(self, other);
-                }
-            },
-            ArrayStore::AxdynF64(a) => match other {
-                Self::AxdynF64(b) => {
-                    to_status_error(a.append(axis, b.view()))?;
-                    Self::AxdynF64(a.clone())
-                }
-                _ => {
-                    return cannot_append(self, other);
-                }
-            },
-            ArrayStore::AxdynF32(a) => match other {
-                Self::AxdynF32(b) => {
-                    to_status_error(a.append(axis, b.view()))?;
-                    Self::AxdynF32(a.clone())
-                }
-                _ => {
-                    return cannot_append(self, other);
-                }
-            },
-            ArrayStore::AxdynI32(a) => match other {
-                Self::AxdynI32(b) => {
-                    to_status_error(a.append(axis, b.view()))?;
-                    Self::AxdynI32(a.clone())
-                }
-                _ => {
-                    return cannot_append(self, other);
-                }
-            },
-            ArrayStore::AxdynI16(a) => match other {
-                Self::AxdynI16(b) => {
-                    to_status_error(a.append(axis, b.view()))?;
-                    Self::AxdynI16(a.clone())
-                }
-                _ => {
-                    return cannot_append(self, other);
-                }
-            },
-            ArrayStore::AxdynUsize(a) => match other {
-                Self::AxdynUsize(b) => {
-                    to_status_error(a.append(axis, b.view()))?;
-                    Self::AxdynUsize(a.clone())
-                }
-                _ => {
-                    return cannot_append(self, other);
-                }
-            },
-            ArrayStore::AxdynU64(a) => match other {
-                Self::AxdynU64(b) => {
-                    to_status_error(a.append(axis, b.view()))?;
-                    Self::AxdynU64(a.clone())
-                }
-                _ => {
-                    return cannot_append(self, other);
-                }
-            },
-            ArrayStore::AxdynU32(a) => match other {
-                Self::AxdynU32(b) => {
-                    to_status_error(a.append(axis, b.view()))?;
-                    Self::AxdynU32(a.clone())
-                }
-                _ => {
-                    return cannot_append(self, other);
-                }
-            },
-        };
-
-        Ok(res)
-    }
-
     pub fn stack(axis: Axis, arrays: &[ArrayStore]) -> Result<ArrayStore, Status> {
         let first = arrays
             .get(0)
             .ok_or(Status::failed_precondition("Could not stack empty array"))?;
 
         let res = match first {
-            ArrayStore::AxdynI64(_) => {
-                let res = stack::<i64>(
-                    axis,
-                    &arrays
-                        .iter()
-                        .map(|v| match v {
-                            ArrayStore::AxdynI64(a) => Ok(a.view()),
-                            _ => {
-                                return Err(Status::aborted(
-                                    "DataTypes for all columns should be the same",
-                                ));
-                            }
-                        })
-                        .collect::<Vec<_>>()[..],
-                );
-                ArrayStore::AxdynI64(res?)
-            }
-            ArrayStore::AxdynI32(_) => {
-                let res = stack::<i32>(
-                    axis,
-                    &arrays
-                        .iter()
-                        .map(|v| match v {
-                            ArrayStore::AxdynI32(a) => Ok(a.view()),
-                            _ => {
-                                return Err(Status::aborted(
-                                    "DataTypes for all columns should be the same",
-                                ));
-                            }
-                        })
-                        .collect::<Vec<_>>()[..],
-                );
-                ArrayStore::AxdynI32(res?)
-            }
-            ArrayStore::AxdynF64(_) => {
-                let res = stack::<f64>(
-                    axis,
-                    &arrays
-                        .iter()
-                        .map(|v| match v {
-                            ArrayStore::AxdynF64(a) => Ok(a.view()),
-                            _ => {
-                                return Err(Status::aborted(
-                                    "DataTypes for all columns should be the same",
-                                ));
-                            }
-                        })
-                        .collect::<Vec<_>>()[..],
-                );
-                ArrayStore::AxdynF64(res?)
-            }
-            ArrayStore::AxdynF32(_) => {
-                let res = stack::<f32>(
-                    axis,
-                    &arrays
-                        .iter()
-                        .map(|v| match v {
-                            ArrayStore::AxdynF32(a) => Ok(a.view()),
-                            _ => {
-                                return Err(Status::aborted(
-                                    "DataTypes for all columns should be the same",
-                                ));
-                            }
-                        })
-                        .collect::<Vec<_>>()[..],
-                );
-                ArrayStore::AxdynF32(res?)
-            }
-            ArrayStore::AxdynI16(_) => {
-                let res = stack::<i16>(
-                    axis,
-                    &arrays
-                        .iter()
-                        .map(|v| match v {
-                            ArrayStore::AxdynI16(a) => Ok(a.view()),
-                            _ => {
-                                return Err(Status::aborted(
-                                    "DataTypes for all columns should be the same",
-                                ));
-                            }
-                        })
-                        .collect::<Vec<_>>()[..],
-                );
-                ArrayStore::AxdynI16(res?)
-            }
-
-            ArrayStore::AxdynUsize(_) => {
-                let res = stack::<usize>(
-                    axis,
-                    &arrays
-                        .iter()
-                        .map(|v| match v {
-                            ArrayStore::AxdynUsize(a) => Ok(a.view()),
-                            _ => {
-                                return Err(Status::aborted(
-                                    "DataTypes for all columns should be the same",
-                                ));
-                            }
-                        })
-                        .collect::<Vec<_>>()[..],
-                );
-                ArrayStore::AxdynUsize(res?)
-            }
-            ArrayStore::AxdynU64(_) => {
-                let res = stack::<u64>(
-                    axis,
-                    &arrays
-                        .iter()
-                        .map(|v| match v {
-                            ArrayStore::AxdynU64(a) => Ok(a.view()),
-                            _ => {
-                                return Err(Status::aborted(
-                                    "DataTypes for all columns should be the same",
-                                ));
-                            }
-                        })
-                        .collect::<Vec<_>>()[..],
-                );
-                ArrayStore::AxdynU64(res?)
-            }
-            ArrayStore::AxdynU32(_) => {
-                let res = stack::<u32>(
-                    axis,
-                    &arrays
-                        .iter()
-                        .map(|v| match v {
-                            ArrayStore::AxdynU32(a) => Ok(a.view()),
-                            _ => {
-                                return Err(Status::aborted(
-                                    "DataTypes for all columns should be the same",
-                                ));
-                            }
-                        })
-                        .collect::<Vec<_>>()[..],
-                );
-                ArrayStore::AxdynU32(res?)
-            }
+            ArrayStore::AxdynI64(_) => stacker!(axis, arrays, AxdynI64, i64),
+            ArrayStore::AxdynI32(_) => stacker!(axis, arrays, AxdynI32, i32),
+            ArrayStore::AxdynF64(_) => stacker!(axis, arrays, AxdynF64, f64),
+            ArrayStore::AxdynF32(_) => stacker!(axis, arrays, AxdynF32, f32),
+            ArrayStore::AxdynI16(_) => stacker!(axis, arrays, AxdynI16, i16),
+            ArrayStore::AxdynU64(_) => stacker!(axis, arrays, AxdynU64, u64),
+            ArrayStore::AxdynU32(_) => stacker!(axis, arrays, AxdynU32, u32),
         };
 
         Ok(res)

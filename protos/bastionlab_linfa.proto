@@ -34,6 +34,7 @@ message KMeans {
     uint64 n_clusters = 2;
     float tolerance = 3;
     uint64 max_n_iterations = 4;
+    uint64 random_state = 9;
 
     oneof init_method {
         Random random = 5;
