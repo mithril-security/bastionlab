@@ -604,7 +604,7 @@ class RemoteLazyFrame:
                 .to_series(0)
                 .to_list()
             )
-            labels_list = ['null' if v is None else v for v in labels_list1]
+            labels_list = ["null" if v is None else v for v in labels_list1]
         else:
             labels_list = labels
 
