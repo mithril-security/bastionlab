@@ -256,7 +256,6 @@ class DecisionTreeClassifier(Trainer):
 
 @dataclass
 class KMeans(Trainer):
-
     n_init: int = 10
     n_clusters: int = 0
     tolerance: float = 1e-4

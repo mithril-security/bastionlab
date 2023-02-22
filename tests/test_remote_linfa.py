@@ -243,7 +243,12 @@ class TestingRemoteLinfa(unittest.TestCase):
             Policy(TrueRule(), Log(), False),
         ).to_array()
 
-        (iris_train_X, iris_test_X, iris_train_Y, iris_test_Y,) = train_test_split(
+        (
+            iris_train_X,
+            iris_test_X,
+            iris_train_Y,
+            iris_test_Y,
+        ) = train_test_split(
             iris_train_array, iris_targets_array, test_size=0.2, shuffle=False
         )
 
@@ -282,7 +287,6 @@ class TestingRemoteLinfa(unittest.TestCase):
         self.assertAlmostEqual(remote_prob_pred.var(), local_prob_pred.var(), 4)
 
     def test_kmeans(self):
-
         X, y = make_blobs(n_samples=500, centers=3, n_features=2)
 
         data = pl.DataFrame(dict(X=X[:, 0], y=X[:, 1], labels=y))
