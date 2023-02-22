@@ -596,7 +596,7 @@ class RemoteLazyFrame:
 
         # get labels list
         if type(labels) == str:
-            labels_list = (
+            labels_list1 = (
                 tmp.select(labels)
                 .collect()
                 .fetch()
@@ -604,6 +604,7 @@ class RemoteLazyFrame:
                 .to_series(0)
                 .to_list()
             )
+            labels_list = ['null' if v is None else v for v in labels_list1]
         else:
             labels_list = labels
 
