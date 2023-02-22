@@ -430,61 +430,6 @@ class RemoteLazyFrame:
         # because if not this leads to panics etc. when we follow this with other operations that use the new column before next using collect()
         return ret.collect()
 
-    def describe(self: LDF) -> pl.DataFrame:
-        """
-        Provides the following summary statistics for our RemoteLazyFrame:
-        - count
-        - null count
-        - mean
-        - std
-        - min
-        - max
-        - median
-         Raises:
-            Exception: Where necessary queries to get statistical information for the operation are rejected by the data owner
-        Returns:
-            A Polars DataFrame containing statistical information
-        """
-        ret = self.select(
-            [
-                pl.col("*").count().suffix("_count"),
-                pl.col("*").null_count().suffix("_null_count"),
-                pl.col("*").mean().suffix("_mean"),
-                pl.col("*").std().suffix("_std"),
-                pl.col("*").min().suffix("_min"),
-                pl.col("*").max().suffix("_max"),
-                pl.col("*").median().suffix("_median"),
-            ]
-        )
-        stats = ret.collect().fetch()
-        RequestRejected.check_valid_df(stats)
-        description = pl.DataFrame(
-            {
-                "describe": [
-                    "count",
-                    "null_count",
-                    "mean",
-                    "std",
-                    "min",
-                    "max",
-                    "median",
-                ],
-                **{
-                    x: [
-                        stats.select(f"{x}_count")[0, 0],
-                        stats.select(f"{x}_null_count")[0, 0],
-                        stats.select(f"{x}_mean")[0, 0],
-                        stats.select(f"{x}_std")[0, 0],
-                        stats.select(f"{x}_min")[0, 0],
-                        stats.select(f"{x}_max")[0, 0],
-                        stats.select(f"{x}_median")[0, 0],
-                    ]
-                    for x in self.columns
-                },
-            }
-        )
-        return description
-
     def join(
         self: LDF,
         other: LDF,
@@ -624,14 +569,24 @@ class RemoteLazyFrame:
             various exceptions: Note that exceptions may be raised from matplotlib pyplot's pie or subplots functions, for example if fig_kwargs keywords are not valid.
         """
 
+        tmp = self
         if parts not in self.columns:
             raise ValueError("Parts column not found in dataframe")
         if type(labels) == str and labels not in self.columns:
             raise ValueError("Labels column not found in dataframe")
 
+        # run previous operations to ensure order of columns are as expected
+        if type(labels) == str and type(parts) == str:
+            tmp = tmp.collect()
         # get list of values in parts column
-        parts_tmp = self.select(pl.col(parts)).collect().fetch().to_numpy()
-        parts_list = [x[0] for x in parts_tmp]
+        parts_list = (
+            tmp.select(pl.col(parts))
+            .collect()
+            .fetch()
+            .select(parts)
+            .to_series(0)
+            .to_list()
+        )
 
         # get total for calculating percentages
         total = sum(parts_list)
@@ -641,8 +596,14 @@ class RemoteLazyFrame:
 
         # get labels list
         if type(labels) == str:
-            labels_tmp = self.select(pl.col(labels)).collect().fetch().to_numpy()
-            labels_list = [x[0] for x in labels_tmp]
+            labels_list = (
+                tmp.select(labels)
+                .collect()
+                .fetch()
+                .select(labels)
+                .to_series(0)
+                .to_list()
+            )
         else:
             labels_list = labels
 
@@ -651,7 +612,7 @@ class RemoteLazyFrame:
             if fig_kwargs == None:
                 fig, ax = plt.subplots(figsize=(7, 4), subplot_kw=dict(aspect="equal"))
             else:
-                if "figsize" not in self.kwargs:
+                if "figsize" not in fig_kwargs:
                     fig_kwargs["figsize"] = (7, 4)
                 fig, ax = plt.subplots(**fig_kwargs)
             if pie_labels == True:
