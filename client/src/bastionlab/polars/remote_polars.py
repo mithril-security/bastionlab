@@ -568,16 +568,24 @@ class RemoteLazyFrame:
             ValueError: Incorrect column name given as parts or labels argument.
             various exceptions: Note that exceptions may be raised from matplotlib pyplot's pie or subplots functions, for example if fig_kwargs keywords are not valid.
         """
-       
+
         if parts not in self.columns:
             raise ValueError("Parts column not found in dataframe")
         if type(labels) == str and labels not in self.columns:
             raise ValueError("Labels column not found in dataframe")
 
         # run previous operations to ensure order of columns are as expected
-        self.collect()
+        if type(labels) == str and type(parts) == str:
+            self = self.collect()
         # get list of values in parts column
-        parts_list = self.select(pl.col(parts)).collect().fetch().select(parts).to_series(0).to_list()
+        parts_list = (
+            self.select(pl.col(parts))
+            .collect()
+            .fetch()
+            .select(parts)
+            .to_series(0)
+            .to_list()
+        )
 
         # get total for calculating percentages
         total = sum(parts_list)
@@ -587,7 +595,14 @@ class RemoteLazyFrame:
 
         # get labels list
         if type(labels) == str:
-            labels_list = self.select(labels).collect().fetch().select(labels).to_series(0).to_list()
+            labels_list = (
+                self.select(labels)
+                .collect()
+                .fetch()
+                .select(labels)
+                .to_series(0)
+                .to_list()
+            )
         else:
             labels_list = labels
 
