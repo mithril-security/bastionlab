@@ -569,6 +569,7 @@ class RemoteLazyFrame:
             various exceptions: Note that exceptions may be raised from matplotlib pyplot's pie or subplots functions, for example if fig_kwargs keywords are not valid.
         """
 
+        tmp = self
         if parts not in self.columns:
             raise ValueError("Parts column not found in dataframe")
         if type(labels) == str and labels not in self.columns:
@@ -576,10 +577,10 @@ class RemoteLazyFrame:
 
         # run previous operations to ensure order of columns are as expected
         if type(labels) == str and type(parts) == str:
-            self = self.collect()
+            tmp = tmp.collect()
         # get list of values in parts column
         parts_list = (
-            self.select(pl.col(parts))
+            tmp.select(pl.col(parts))
             .collect()
             .fetch()
             .select(parts)
@@ -596,7 +597,7 @@ class RemoteLazyFrame:
         # get labels list
         if type(labels) == str:
             labels_list = (
-                self.select(labels)
+                tmp.select(labels)
                 .collect()
                 .fetch()
                 .select(labels)
@@ -611,7 +612,7 @@ class RemoteLazyFrame:
             if fig_kwargs == None:
                 fig, ax = plt.subplots(figsize=(7, 4), subplot_kw=dict(aspect="equal"))
             else:
-                if "figsize" not in self.kwargs:
+                if "figsize" not in fig_kwargs:
                     fig_kwargs["figsize"] = (7, 4)
                 fig, ax = plt.subplots(**fig_kwargs)
             if pie_labels == True:
