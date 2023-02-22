@@ -430,6 +430,61 @@ class RemoteLazyFrame:
         # because if not this leads to panics etc. when we follow this with other operations that use the new column before next using collect()
         return ret.collect()
 
+    def describe(self: LDF) -> pl.DataFrame:
+        """
+        Provides the following summary statistics for our RemoteLazyFrame:
+        - count
+        - null count
+        - mean
+        - std
+        - min
+        - max
+        - median
+         Raises:
+            Exception: Where necessary queries to get statistical information for the operation are rejected by the data owner
+        Returns:
+            A Polars DataFrame containing statistical information
+        """
+        ret = self.select(
+            [
+                pl.col("*").count().suffix("_count"),
+                pl.col("*").null_count().suffix("_null_count"),
+                pl.col("*").mean().suffix("_mean"),
+                pl.col("*").std().suffix("_std"),
+                pl.col("*").min().suffix("_min"),
+                pl.col("*").max().suffix("_max"),
+                pl.col("*").median().suffix("_median"),
+            ]
+        )
+        stats = ret.collect().fetch()
+        RequestRejected.check_valid_df(stats)
+        description = pl.DataFrame(
+            {
+                "describe": [
+                    "count",
+                    "null_count",
+                    "mean",
+                    "std",
+                    "min",
+                    "max",
+                    "median",
+                ],
+                **{
+                    x: [
+                        stats.select(f"{x}_count")[0, 0],
+                        stats.select(f"{x}_null_count")[0, 0],
+                        stats.select(f"{x}_mean")[0, 0],
+                        stats.select(f"{x}_std")[0, 0],
+                        stats.select(f"{x}_min")[0, 0],
+                        stats.select(f"{x}_max")[0, 0],
+                        stats.select(f"{x}_median")[0, 0],
+                    ]
+                    for x in self.columns
+                },
+            }
+        )
+        return description
+
     def join(
         self: LDF,
         other: LDF,
