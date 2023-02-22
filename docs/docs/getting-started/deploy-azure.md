@@ -27,8 +27,28 @@ If deploying with **Azure CLI** in your local environment, then you will need to
 ## Deploying with Azure Portal
 _____________________________________________
 
-First you will need to login to your [Azure Portal](https://portal.azure.com/) and create a *resource group*.
-![](../../assets/RG-Azure-870x586.png)
+First you will need to login to your [Azure Portal](https://portal.azure.com/) and create a **resource group**.
+### Create a resource group
+<img src="../../assets/az-resource-group.png" alt="resource group" width="90%" />
+
+Then go to the **Container instances** section in your azure portal.
+### Setup basic configuration
+<img src="../../assets/az-container-instance.png" alt="resource group" width="90%" />
+
+### Setup networking
+Let the **public type networking** option, set your DNS label and set the port to 50056.
+
+<img src="../../assets/az-container-instance-net.png" alt="resource group" width="90%" />
+
+Leave all other settings as their defaults, then select Review + create.
+
+### Create container instance
+Review the settings and create the container instance.
+
+<img src="../../assets/az-container-instance-create.png" alt="resource group" width="90%" />
+
+### Uploading authentication public keys
+<img src="../../assets/az-container-instance-keys.png">
 
 ## Deploying with Azure CLI
 ______________________________________________
@@ -38,11 +58,11 @@ First you will need to login with the command:
 az login
 ```
 ### Basic Configuration Setup
-Make sure to set *resource group name*, *app name*, *location* and *app service plan name* variables according to your needs.
+Make sure to set *resource group name*, *app name*, *location* and the *docker image* variables according to your needs.
 
 ##### Set variables (example values)
 ```bash
-resourceGroupName="docker-RG"
+resourceGroupName="docker-bastionlab"
 appName="bastionlab-docker-$RANDOM"
 location="eastus"
 bastionLabImage="mithrilsecuritysas/bastionlab:latest"
@@ -63,6 +83,9 @@ az container create \
 ```
 
 ### Show FQDN and Provisioning State
+
+To display the container's fully qualified domain name (FQDN) and its provisioning state, you can run:
+
 ```bash
 az container show \
 	--resource-group $resourceGroupName \
@@ -71,3 +94,10 @@ az container show \
 	--out table
 ```
 
+If the `ProvisioningState` is **Succeeded**, congratulations! You have deployed succesfully your application in a running Docker container on Azure Cloud.
+
+```bash
+FQDN                               ProvisioningState
+---------------------------------  -------------------
+<fqdn>				   Succeeded
+```
