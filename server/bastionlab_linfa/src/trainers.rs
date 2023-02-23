@@ -1,3 +1,4 @@
+use bastionlab_common::common_conversions::to_status_error;
 use linfa::{DatasetBase, PlattParams};
 use linfa_bayes::GaussianNb;
 use linfa_clustering::{KMeans, KMeansInit};
@@ -20,7 +21,6 @@ use crate::{
         KMeans as BastionKMeans, Svm as BastionSvm, Trainer,
         TweedieRegressor as BastionTweedieRegressor, *,
     },
-    to_status_error,
     utils::LabelU64,
 };
 

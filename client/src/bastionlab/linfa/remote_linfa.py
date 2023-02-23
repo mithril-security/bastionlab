@@ -296,59 +296,60 @@ class KMeans(Trainer):
 
 @dataclass
 class SVC(Trainer):
-    class PlattParams(Trainer):
-        def to_msg_dict(self):
-            kernel_method = dict(
-                linear=dict(linear=SVM.KernelParams.Linear()),
-                gaussian=lambda eps: SVM.KernelParams.Gaussian(eps=eps),
-                poly=lambda constant, degree: SVM.KernelParams.Polynomial(
-                    constant=constant, degree=degree
-                ),
-            )
+    pass
+    # class PlattParams(Trainer):
+    #     def to_msg_dict(self):
+    #         kernel_method = dict(
+    #             linear=dict(linear=SVM.KernelParams.Linear()),
+    #             gaussian=lambda eps: SVM.KernelParams.Gaussian(eps=eps),
+    #             poly=lambda constant, degree: SVM.KernelParams.Polynomial(
+    #                 constant=constant, degree=degree
+    #             ),
+    #         )
 
-            kernel_type = dict(
-                dense=dict(dense=SVM.KernelParams.Dense()),
-                sparse=lambda sparsity: SVM.KernelParams.Sparse(sparsity=sparsity),
-            )
-            return {
-                "kernel_params": SVM.KernelParams(
-                    **self.kernel_method, **self.kernel_type, n=self.n
-                )
-            }
+    #         kernel_type = dict(
+    #             dense=dict(dense=SVM.KernelParams.Dense()),
+    #             sparse=lambda sparsity: SVM.KernelParams.Sparse(sparsity=sparsity),
+    #         )
+    #         return {
+    #             "kernel_params": SVM.KernelParams(
+    #                 **self.kernel_method, **self.kernel_type, n=self.n
+    #             )
+    #         }
 
-    C: float = 1.0
-    shrinking: bool = False
-    kernel: Optional[str] = "linear"
-    max_iter: int = -1
-    sigma: float = 1e-12
-    tol: float = 1e-3
+    # C: float = 1.0
+    # shrinking: bool = False
+    # kernel: Optional[str] = "linear"
+    # max_iter: int = -1
+    # sigma: float = 1e-12
+    # tol: float = 1e-3
 
-    # def get_kernel_params(self):
-    #     return (
-    #         self.KernelParams().to_msg_dict()
-    #         if not self.kernel_params
-    #         else self.kernel_params.to_msg_dict()
-    #     )
+    # # def get_kernel_params(self):
+    # #     return (
+    # #         self.KernelParams().to_msg_dict()
+    # #         if not self.kernel_params
+    # #         else self.kernel_params.to_msg_dict()
+    # #     )
 
-    # def get_platt_params(self):
-    #     return (
-    #         self.PlattParams().to_msg_dict()
-    #         if not self.platt_params
-    #         else self.platt_params.to_msg_dict()
-    #     )
+    # # def get_platt_params(self):
+    # #     return (
+    # #         self.PlattParams().to_msg_dict()
+    # #         if not self.platt_params
+    # #         else self.platt_params.to_msg_dict()
+    # #     )
 
-    def fit(self, train_set: "RemoteArray", target_set: "RemoteArray"):
-        return super().fit(train_set, target_set)
+    # def fit(self, train_set: "RemoteArray", target_set: "RemoteArray"):
+    #     return super().fit(train_set, target_set)
 
-    def predict(self, test_set: "RemoteArray"):
-        return super().predict(test_set)
+    # def predict(self, test_set: "RemoteArray"):
+    #     return super().predict(test_set)
 
-    def to_msg_dict(self):
-        return {
-            "svm": SVM(
-                c=self.C,
-                shrinking=self.shrinking,
-                **self.get_kernel_params(),
-                **self.get_platt_params(),
-            )
-        }
+    # def to_msg_dict(self):
+    #     return {
+    #         "svm": SVM(
+    #             c=self.C,
+    #             shrinking=self.shrinking,
+    #             **self.get_kernel_params(),
+    #             **self.get_platt_params(),
+    #         )
+    #     }

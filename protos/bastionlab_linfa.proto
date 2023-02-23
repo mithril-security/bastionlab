@@ -183,6 +183,13 @@ message ValidationRequest {
     string scoring = 5;
 }
 
+message SimpleValidationRequest {
+    string truth = 1;
+    string prediction = 2;
+    string scoring = 3;
+    string metric_type = 4;
+}
+
 message ValidationResponse {
     repeated float response = 1;
 }
@@ -199,4 +206,5 @@ service LinfaService {
     rpc Train(TrainingRequest) returns (ModelResponse) {}
     rpc Predict(PredictionRequest) returns (ReferenceResponse) {}
     rpc CrossValidate(ValidationRequest) returns (ReferenceResponse) {}
+    rpc Validate(SimpleValidationRequest) returns (ReferenceResponse) {}
 }

@@ -8,9 +8,7 @@ from .remote_linfa import (
     DecisionTreeClassifier,
     SVC,
 )
-
-__models__ = []
-
+from . import metrics
 
 __all__ = [
     "cross_validate",
@@ -20,4 +18,5 @@ __all__ = [
     "KMeans",
     "DecisionTreeClassifier",
     "SVC",
+    "metrics",
 ]

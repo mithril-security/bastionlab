@@ -1,3 +1,5 @@
+use std::fmt::{Debug, Display};
+
 use ndarray::{Array, ArrayView, Axis, Dim, IxDynImpl};
 use polars::prelude::DataFrame;
 use tonic::Status;
@@ -37,7 +39,7 @@ macro_rules! stacker {
     }};
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum ArrayStore {
     AxdynI64(Array<i64, Dim<IxDynImpl>>),
     AxdynU64(Array<u64, Dim<IxDynImpl>>),
@@ -185,10 +187,55 @@ impl ArrayStore {
             ArrayStore::AxdynU64(a) => ndarray_to_df::<u64, Dim<IxDynImpl>>(a, col_names),
             _ => {
                 return Err(Status::unimplemented(format!(
-                    "Convertion to DataFrame not yet supported: {:?}",
+                    "Conversion to DataFrame not yet supported: {:#?}",
                     self
                 )))
             }
         }
+    }
+}
+
+/// This impl is used as a fix to disallow leaking data through error logging
+impl Display for ArrayStore {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let dtype = match self {
+            ArrayStore::AxdynI64(_) => "Int64",
+            ArrayStore::AxdynU64(_) => "UInt64",
+            ArrayStore::AxdynU32(_) => "UInt32",
+            ArrayStore::AxdynF64(_) => "Float64",
+            ArrayStore::AxdynF32(_) => "Float32",
+            ArrayStore::AxdynI32(_) => "Int32",
+            ArrayStore::AxdynI16(_) => "Int16",
+        };
+        write!(
+            f,
+            "ArrayStore<shape=[{:?}, {:?}], dtype={}>",
+            self.height(),
+            self.width(),
+            dtype,
+        )?;
+        Ok(())
+    }
+}
+
+impl Debug for ArrayStore {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let dtype = match self {
+            ArrayStore::AxdynI64(_) => "Int64",
+            ArrayStore::AxdynU64(_) => "UInt64",
+            ArrayStore::AxdynU32(_) => "UInt32",
+            ArrayStore::AxdynF64(_) => "Float64",
+            ArrayStore::AxdynF32(_) => "Float32",
+            ArrayStore::AxdynI32(_) => "Int32",
+            ArrayStore::AxdynI16(_) => "Int16",
+        };
+        write!(
+            f,
+            "ArrayStore<shape=[{:?}, {:?}], dtype={}>",
+            self.height(),
+            self.width(),
+            dtype
+        )?;
+        Ok(())
     }
 }

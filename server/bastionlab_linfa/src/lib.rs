@@ -3,9 +3,10 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use bastionlab_common::common_conversions::to_status_error;
 use linfa_proto::{
     linfa_service_server::LinfaService, ModelResponse, PredictionRequest, ReferenceResponse,
-    Trainer, TrainingRequest, ValidationRequest,
+    SimpleValidationRequest, Trainer, TrainingRequest, ValidationRequest,
 };
 pub mod linfa_proto {
     tonic::include_proto!("bastionlab_linfa");
@@ -20,11 +21,9 @@ mod operations;
 use operations::*;
 
 mod utils;
-use utils::process_trainer_req;
+use utils::{process_trainer_req, IArrayStore};
 
 use uuid::Uuid;
-
-use std::error::Error;
 
 use tonic::{Request, Response, Status};
 
@@ -32,10 +31,6 @@ use bastionlab_polars::{
     access_control::{Policy, VerificationResult},
     BastionLabPolars, DataFrameArtifact,
 };
-
-pub fn to_status_error<T, E: Error>(input: Result<T, E>) -> Result<T, Status> {
-    input.map_err(|err| Status::aborted(err.to_string()))
-}
 
 pub struct BastionLabLinfa {
     polars: Arc<BastionLabPolars>,
@@ -168,6 +163,41 @@ impl LinfaService for BastionLabLinfa {
         //       Possible solution:
         //         - Add a `policy` field to `ArrayStore` and this will inherit the policy of the
         //           DataFrame, from which it was converted.
+        let identifier = self.insert_df(
+            DataFrameArtifact::new(df, Policy::allow_by_default(), vec![String::default()])
+                .with_fetchable(VerificationResult::Safe),
+        );
+        let header = self.get_header(&identifier)?;
+        Ok(Response::new(ReferenceResponse { identifier, header }))
+    }
+
+    async fn validate(
+        &self,
+        request: Request<SimpleValidationRequest>,
+    ) -> Result<Response<ReferenceResponse>, Status> {
+        let (truth, prediction, scoring, metric_type) = (
+            &request.get_ref().truth,
+            &request.get_ref().prediction,
+            &request.get_ref().scoring,
+            &request.get_ref().metric_type,
+        );
+
+        let truth = self.polars.get_array(truth)?;
+        let prediction = self.polars.get_array(prediction)?;
+
+        let truth = IArrayStore(truth);
+        let prediction = IArrayStore(prediction);
+
+        let df = match metric_type.as_str() {
+            "regression" => truth.regression_metrics(prediction, scoring),
+            "classification" => truth.classification_metrics(prediction, scoring),
+            &_ => {
+                return Err(Status::failed_precondition(format!(
+                    "Unsupported metric type: {metric_type}"
+                )));
+            }
+        }?;
+
         let identifier = self.insert_df(
             DataFrameArtifact::new(df, Policy::allow_by_default(), vec![String::default()])
                 .with_fetchable(VerificationResult::Safe),

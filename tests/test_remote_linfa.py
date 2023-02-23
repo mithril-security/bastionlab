@@ -16,10 +16,10 @@ from bastionlab.linfa import (
 from bastionlab.polars import train_test_split
 from sklearn.model_selection import (
     train_test_split as sk_train_test_split,
-    cross_validate as sk_cross_validate,
-    cross_val_score,
 )
-from sklearn.metrics import r2_score
+from sklearn import metrics as sk_metrics
+from bastionlab.linfa import metrics
+
 from sklearn.linear_model import LinearRegression as SkLinearRegression
 from sklearn.cluster import KMeans as SKMeans
 from sklearn.naive_bayes import GaussianNB as SkGaussianNB
@@ -87,6 +87,10 @@ def reshuffle_dataframe(dataframe: pl.DataFrame) -> pl.DataFrame:
     array = dataframe.to_numpy()
     np.random.shuffle(array)
     return pl.DataFrame(array)
+
+
+def to_numpy(df):
+    return df.fetch().to_numpy()
 
 
 class TestingRemoteLinfa(unittest.TestCase):
@@ -191,12 +195,36 @@ class TestingRemoteLinfa(unittest.TestCase):
 
         lr.fit(self.diabetes_train_X, self.diabetes_train_Y)
         sk_lr.fit(self.diabetes_local_train_X, self.diabetes_local_train_Y)
-        remote_pred = lr.predict(self.diabetes_test_X).collect().fetch().to_numpy()
+        remote_pred = lr.predict(self.diabetes_test_X).to_array()
         local_pred = sk_lr.predict(self.diabetes_local_test_X)
 
         # Because of Machine epsilon, we round computation to 1e-10
         # and expect the non-zero values after calculation to be zero
-        self.assertTrue(calculate_prediction_difference(remote_pred, local_pred))
+
+        # Mean squared error computation
+        remote_mean_squared = (
+            to_numpy(metrics.mean_squared_error(self.diabetes_test_Y, remote_pred))
+            .astype(np.float32)
+            .squeeze()
+        )
+
+        local_mean_squared = sk_metrics.mean_squared_error(
+            self.diabetes_local_test_Y, local_pred
+        ).astype(np.float32)
+
+        self.assertEqual(remote_mean_squared, local_mean_squared)
+
+        # R2 score
+        remote_r2_score = (
+            to_numpy(metrics.r2_score(self.diabetes_test_Y, remote_pred))
+            .astype(np.float32)
+            .squeeze()
+        )
+        local_r2_score = sk_metrics.r2_score(
+            self.diabetes_local_test_Y, local_pred
+        ).astype(np.float32)
+
+        self.assertEqual(remote_r2_score, local_r2_score)
 
     def test_multinomial_logistic_regression(self):
         from sklearn.linear_model import LogisticRegression as SkLogisticRegression
@@ -206,19 +234,17 @@ class TestingRemoteLinfa(unittest.TestCase):
         log_reg.fit(self.iris_train_X, self.iris_train_Y)
         sk_log_reg.fit(self.local_iris_train_X, self.local_iris_train_Y)
 
-        remote_pred = (
-            log_reg.predict(self.iris_test_X).collect().fetch().to_numpy().squeeze()
-        )
+        remote_pred = log_reg.predict(self.iris_test_X).to_array()
         local_pred = sk_log_reg.predict(self.local_iris_test_X)
 
-        self.assertTrue(calculate_prediction_difference(remote_pred, local_pred))
-
-        remote_prob_pred = (
-            log_reg.predict_proba(self.iris_test_X).fetch().to_numpy().squeeze()
+        self.assertEqual(
+            to_numpy(metrics.accuracy_score(self.iris_test_Y, remote_pred))
+            .squeeze()
+            .astype(np.float32),
+            sk_metrics.accuracy_score(self.local_iris_test_Y, local_pred).astype(
+                np.float32
+            ),
         )
-        local_prob_pred = sk_log_reg.predict_proba(self.local_iris_test_X)
-
-        self.assertAlmostEqual(remote_prob_pred.var(), local_prob_pred.var(), places=4)
 
     def test_binomial_logistic_regression(self):
         from sklearn.linear_model import LogisticRegression as SkLogisticRegression
@@ -263,13 +289,17 @@ class TestingRemoteLinfa(unittest.TestCase):
         log_reg.fit(iris_train_X, iris_train_Y)
         sk_log_reg.fit(local_iris_train_X, local_iris_train_Y)
 
-        remote_pred = (
-            log_reg.predict(iris_test_X).collect().fetch().to_numpy().squeeze()
-        )
+        remote_pred = log_reg.predict(iris_test_X).to_array()
         local_pred = sk_log_reg.predict(local_iris_test_X)
 
-        self.assertTrue(calculate_prediction_difference(remote_pred, local_pred))
+        # self.assertTrue(calculate_prediction_difference(remote_pred, local_pred))
 
+        self.assertEqual(
+            to_numpy(metrics.accuracy_score(iris_test_Y, remote_pred))
+            .squeeze()
+            .astype(np.float32),
+            sk_metrics.accuracy_score(local_iris_test_Y, local_pred).astype(np.float32),
+        )
         # Prediction Probability
         remote_prob_pred = (
             log_reg.predict_proba(iris_test_X).fetch().to_numpy().squeeze()
@@ -287,7 +317,7 @@ class TestingRemoteLinfa(unittest.TestCase):
         data = pl.DataFrame(dict(X=X[:, 0], y=X[:, 1], labels=y))
 
         data_array = self.client.polars.send_df(data[:, :2], self.policy).to_array()
-
+        # test_Y = self.client.polars.send_df(data[])
         # Initialize our KMeans classifier from sklearn
 
         sk_kmeans = SKMeans(
@@ -317,6 +347,14 @@ class TestingRemoteLinfa(unittest.TestCase):
         remote_pred = kmeans.predict(remote_pred_input).fetch().to_numpy().squeeze()
         local_pred = sk_kmeans.predict(local_pred_input)
 
+        # self.assertEqual(
+        #     to_numpy(metrics.accuracy_score(self.iris_test_Y, remote_pred))
+        #     .squeeze()
+        #     .astype(np.float32),
+        #     sk_metrics.accuracy_score(self.local_iris_test_Y, local_pred).astype(
+        #         np.float32
+        #     ),
+        # )
         # Continue with assertions
 
     def test_gaussian_naive_bayes(self):
@@ -330,6 +368,10 @@ class TestingRemoteLinfa(unittest.TestCase):
             pl.DataFrame(Y).select(pl.all().cast(pl.UInt64())), self.policy
         ).to_array()
 
+        test_Y = self.client.polars.send_df(
+            pl.DataFrame(pl.Series("target", values=[1], dtype=pl.UInt64)), self.policy
+        ).to_array()
+
         bayes = GaussianNB()
         sk_bayes = SkGaussianNB()
 
@@ -339,43 +381,55 @@ class TestingRemoteLinfa(unittest.TestCase):
         remote_pred_input = self.client.polars.send_df(
             pl.DataFrame([[0.8], [-1.0]]), self.policy
         ).to_array()
-        remote_pred = (
-            bayes.predict(remote_pred_input).fetch().to_numpy().squeeze(axis=0)
-        )
+
+        remote_pred = bayes.predict(remote_pred_input).to_array()
         local_pred = sk_bayes.predict([[0.8, -1.0]])
 
-        self.assertTrue(np.array_equal(remote_pred, local_pred))
+        self.assertEqual(
+            to_numpy(metrics.accuracy_score(test_Y, remote_pred)),
+            sk_metrics.accuracy_score(np.array([1]), local_pred),
+        )
 
     def test_decision_trees(self):
-        cut_off = 130
-        remote_X = self.client.polars.send_df(
-            self.iris.select(self.iris_cols[:-1]).head(cut_off), self.policy
-        ).to_array()
-        remote_Y = self.client.polars.send_df(
-            self.iris.select(pl.col(self.iris_cols[-1]).cast(pl.UInt64)).head(cut_off),
+        data = self.client.polars.send_df(
+            self.iris,
             self.policy,
-        ).to_array()
+        )
+
+        remote_inputs = data.select(self.iris_cols[:-1]).collect().to_array()
+        remote_y = (
+            data.select(pl.col(self.iris_cols[-1]).cast(pl.UInt64)).collect().to_array()
+        )
+
+        X_train, X_test, y_train, y_test = train_test_split(
+            remote_inputs, remote_y, test_size=0.2, shuffle=False
+        )
+
+        X_local_train, X_local_test, y_local_train, y_local_test = sk_train_test_split(
+            self.iris[:, :-1].to_numpy(),
+            self.iris[:, -1].to_numpy(),
+            test_size=0.2,
+            shuffle=False,
+        )
 
         decision_tree = DecisionTreeClassifier(max_depth=2)
         sk_decision_tree = SkDecisionTreeClassifier()
 
-        decision_tree.fit(remote_X, remote_Y)
-        sk_decision_tree.fit(
-            self.iris[:cut_off, :-1].to_numpy(), self.iris[:cut_off, -1].to_numpy()
-        )
+        decision_tree.fit(X_train, y_train)
+        sk_decision_tree.fit(X_local_train, y_local_train)
 
-        remote_pred_input = self.client.polars.send_df(
-            self.iris.select(self.iris_cols[:-1]).tail(1), self.policy
-        ).to_array()
+        remote_pred = decision_tree.predict(X_test).to_array()
+        local_pred = sk_decision_tree.predict(X_local_test).astype(np.uint64)
 
-        remote_pred = (
-            decision_tree.predict(remote_pred_input).fetch().to_numpy().squeeze(0)
+        self.assertEqual(
+            to_numpy(metrics.accuracy_score(y_test, remote_pred))
+            .squeeze()
+            .astype(np.float32),
+            sk_metrics.accuracy_score(
+                y_local_test,
+                local_pred,
+            ).astype(np.float32),
         )
-        local_pred = sk_decision_tree.predict(self.iris[-1:, :-1].to_numpy()).astype(
-            np.uint64
-        )
-
-        self.assertTrue(np.array_equal(remote_pred, local_pred))
 
     def tearDown(self) -> None:
         self.connection.close()

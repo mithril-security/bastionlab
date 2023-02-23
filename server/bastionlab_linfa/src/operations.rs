@@ -2,73 +2,20 @@ use std::sync::Arc;
 
 use bastionlab_common::{array_store::ArrayStore, common_conversions::to_status_error};
 use linfa::{
-    prelude::{SingleTargetRegression, ToConfusionMatrix},
     traits::{Fit, Predict},
     DatasetBase,
 };
-use ndarray::{Array2, ArrayBase, Ix1, Ix2, OwnedRepr, ViewRepr};
+use ndarray::{Array2, Ix2};
 
 use tonic::Status;
 
 use crate::{
     algorithms::*,
+    get_inner_array, prepare_train_data,
     trainers::{Models, PredictionTypes, SupportedModels},
-    utils::{get_datasets, IArrayStore, LabelU64},
+    utils::{classification_metrics, get_datasets, regression_metrics, IArrayStore, LabelU64},
 };
 
-/// This macro converts convert the Dynamic Array Implememtation into
-/// a fixed dimension say `Ix2`.
-///
-/// It does this by first matching on the right enum variant (considering the type
-///  of the array).
-///
-/// It calls `into_dimensionality` to pass the dimension as a type to the macro.
-macro_rules! get_inner_array {
-    ($variant:tt, $array:ident, $dim:ty, $dim_str:tt, $model_name:tt, $inner:tt) => {{
-        use crate::utils::{dimensionality_error, failed_array_type, IArrayStore};
-        match $array {
-            IArrayStore(ArrayStore::$variant(a)) => {
-                let a = a
-                    .into_dimensionality::<$dim>()
-                    .map_err(|e| dimensionality_error(&format!("{:?}", $dim_str), e))?;
-                a
-            }
-            _ => {
-                return failed_array_type(
-                    &format!("{:?} -> {:?}", $model_name, $inner),
-                    ($array.0.height(), $array.0.width()),
-                )
-            }
-        }
-    }};
-}
-
-/// This macro converts `DatasetBase<IArrayBase>` into `DatasetBase<ArrayBase<T, Ix...>>`
-///
-macro_rules! prepare_train_data {
-    ($model:tt, $train:ident, ($t_variant:tt, $t_dim:ty)) => {{
-        let records = $train.records;
-        let targets = $train.targets;
-        let records = get_inner_array! {AxdynF64, records, Ix2, "Ix2", $model, "Records"};
-
-        /*
-            Intuitively, we ought to convert targets directly into a Ix1 but Polars' `DataFrame -> ndarray`
-            conversion only uses `Array2`.
-
-            We will have to first convert it from `DynImpl` into `Ix2` then later reshape into `Ix1`.
-
-            Also, for the edge case of using `KMeans`, we will only choose the first column if there are multiple
-            columns in the target array.
-         */
-        let targets = get_inner_array! {$t_variant, targets, Ix2, "Ix2", $model, "Targets"};
-
-        // Select the first column
-        let targets = targets.column(0).to_owned();
-
-        // Here, we construct the specific DatasetBase with the right types
-        DatasetBase::new(records, targets)
-    }};
-}
 #[allow(unused)]
 /// This method sends both the training and target datasets to the specified model in [`Models`].
 pub fn send_to_trainer(
@@ -303,46 +250,6 @@ pub fn predict(
     Ok(prediction)
 }
 
-fn regression_metrics(
-    prediction: &ArrayBase<OwnedRepr<f64>, Ix1>,
-    truth: &ArrayBase<ViewRepr<&f64>, Ix1>,
-    metric: &str,
-) -> Result<f64, linfa::Error> {
-    match metric {
-        "r2" => prediction.r2(truth),
-        "max_error" => prediction.max_error(truth),
-        "mean_absolute_error" => prediction.mean_absolute_error(truth),
-        "explained_variance" => prediction.explained_variance(truth),
-        "mean_squared_log_error" => prediction.mean_squared_log_error(truth),
-        "mean_squared_error" => prediction.mean_squared_error(truth),
-        "median_absolute_error" => prediction.median_absolute_error(truth),
-        _ => {
-            return Err(linfa::Error::Priors(format!(
-                "Unsupported metric: {}",
-                metric
-            )))
-        }
-    }
-}
-
-fn classification_metrics(
-    prediction: &ArrayBase<OwnedRepr<LabelU64>, Ix1>,
-    truth: &ArrayBase<ViewRepr<&LabelU64>, Ix1>,
-    metric: &str,
-) -> Result<f32, linfa::Error> {
-    let cm = prediction.confusion_matrix(truth)?;
-    match metric {
-        "accuracy" => Ok(cm.accuracy()),
-        "f1_score" => Ok(cm.f1_score()),
-        "mcc" => Ok(cm.mcc()),
-        _ => {
-            return Err(linfa::Error::Priors(format!(
-                "Could not find metric: {}",
-                metric
-            )))
-        }
-    }
-}
 #[allow(unused)]
 pub fn inner_cross_validate(
     model: Models,
