@@ -1667,20 +1667,9 @@ def train_test_split(
 class RemoteArray(RemoteLazyFrame):
     """Intermediate representation for conversion between Tensor and Dataframes."""
 
-    def __init__(self, rdf: "RemoteLazyFrame") -> None:
-        def _verify_schema(rdf: "RemoteLazyFrame"):
-            dtypes = rdf.schema.values()
-            if pl.Utf8 in list(dtypes):
-                raise TypeError("Utf8 column cannot be converted into RemoteArray")
-
-            if len(set(dtypes)) > 1:
-                raise TypeError("DataTypes for all columns should be the same")
-            return rdf.collect()
-
-        rdf = _verify_schema(rdf)
-        self._inner = rdf._inner
-        self._meta: Metadata = rdf._meta
-        self.identifier = rdf.identifier
+    def __init__(self, client: "Client", identifier: str) -> None:
+        self._client = client
+        self.identifier = identifier
 
     def to_tensor(self) -> "RemoteTensor":
         """

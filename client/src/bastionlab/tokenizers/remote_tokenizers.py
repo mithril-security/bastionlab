@@ -98,6 +98,8 @@ class RemoteTokenizer:
             )
         ).list
 
+        from ..polars import RemoteArray
+
         ids = RemoteArray(self._client, ids.identifier)
         masks = RemoteArray(self._client, masks.identifier)
 
