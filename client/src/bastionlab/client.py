@@ -54,9 +54,12 @@ class Client:
     The Client class provides access to the BastionLab machine learning platform through several attributes.
 
     Attributes:
-    _bastionlab_torch is an object that provides access to the platform's torch functionality, which is a machine learning library based on PyTorch.
-    _bastionlab_polars is an object that provides access to the platform's polars functionality, which is a library for data analysis and visualization.
-    _channel is the underlying gRPC channel used to communicate with the server. gRPC is a high-performance RPC (remote procedure call) framework that is used for communication between services.
+
+        _bastionlab_torch is an object that provides access to the platform's torch functionality, which is a machine learning library based on PyTorch.
+
+        _bastionlab_polars is an object that provides access to the platform's polars functionality, which is a library for data analysis and visualization.
+        
+        _channel is the underlying gRPC channel used to communicate with the server. gRPC is a high-performance RPC (remote procedure call) framework that is used for communication between services.
     """
 
     _bastionlab_torch: "BastionLabTorch" = (
@@ -81,12 +84,6 @@ class Client:
         channel: grpc.Channel,
         signing_key: SigningKey,
     ):
-        """
-        Initializes the client with a gRPC channel to the BastionLab server.
-
-        Args:
-            channel (grpc.Channel): A gRPC channel to the BastionLab server.
-        """
         self._channel = channel
         self.__session_stub = SessionServiceStub(channel)
         self.signing_key = signing_key
@@ -176,24 +173,54 @@ class Connection:
     identity (signing key), and token (if applicable).
 
     Attributes:
+
         host (str): The hostname or IP address of the remote server.
+
         port (int, optional): The port to use for the connection. Defaults to 50056.
+
         identity (SigningKey, optional): The signing key to use for authentication.
             If not provided, the connection will not be authenticated.
+
         channel (Any): The underlying channel object used to send and receive messages.
             It does not need to be provided by the user.
+
         token (bytes, optional): The authentication token to use for the connection.
             If not provided, the connection will not be authenticated.
+
         server_name (str, optional): The name of the remote server. Defaults to "bastionlab-server".
     """
 
-    host: str
+    host: str 
+    """
+    The hostname or IP address of the remote server.
+    """
     port: Optional[int] = 50056
+    """
+    The port to use for the connection. Defaults to 50056.
+    """
     identity: Optional[SigningKey] = None
+    """
+    The signing key to use for authentication.
+    If not provided, the connection will not be authenticated.
+    """
     channel: Any = None
+    """
+    The underlying channel object used to send and receive messages.
+    It does not need to be provided by the user.
+    """
     token: Optional[bytes] = None
-    _client: Optional[Client] = None  # The gRPC client object used to send messages.
+    """
+    The signing key to use for authentication.
+    If not provided, the connection will not be authenticated.
+    """
+    _client: Optional[Client] = None 
+    """
+    The gRPC client object used to send messages.
+    """
     server_name: Optional[str] = "bastionlab-server"
+    """
+    The name of the remote server. Defaults to "bastionlab-server".
+    """
 
     @staticmethod
     def _verify_user(
