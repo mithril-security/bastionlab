@@ -269,7 +269,12 @@ class TestingRemoteLinfa(unittest.TestCase):
             Policy(TrueRule(), Log(), False),
         ).to_array()
 
-        (iris_train_X, iris_test_X, iris_train_Y, iris_test_Y,) = train_test_split(
+        (
+            iris_train_X,
+            iris_test_X,
+            iris_train_Y,
+            iris_test_Y,
+        ) = train_test_split(
             iris_train_array, iris_targets_array, test_size=0.2, shuffle=False
         )
 
