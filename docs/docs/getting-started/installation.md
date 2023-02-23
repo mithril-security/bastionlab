@@ -10,14 +10,15 @@ ___________________________________________
 
 To install **BastionLab Client and BastionLab Server**, ensure the following are already installed in your system:
 
-- Python3.7 or greater *(get the latest version of Python at [https://www.python.org/downloads/](https://www.python.org/downloads/) or with your operating system’s package manager)*
-- [Python Pip](https://pypi.org/project/pip/) (PyPi), the package manager
+- Python3.7 or greater
+    - You can get the official latest version of Python at [python.org](https://www.python.org/downloads/) or with your operating system's package manager.
+- [Python Pip](https://pypi.org/project/pip/) (PyPi)
+    - The package manager
 
 To install **BastionLab Server**, you'll also need:
 
 - [Docker](https://www.docker.com/) 
-
-*Here's the [Docker official tutorial](https://docker-curriculum.com/) to set it up on your computer.*
+    - Here's the [Docker official tutorial](https://docker-curriculum.com/) to set it up on your computer.
 
 ## Installing BastionLab Client
 _____________________________________________
@@ -81,7 +82,7 @@ docker run -p 50056:50056 -d mithrilsecuritysas/bastionlab:latest
 Clone the repository and build the image using the Dockerfile:
 ```bash
 git clone https://github.com/mithril-security/bastionlab.git
-cd ./bastionlab/server
+cd ./bastionlab
 docker build -t bastionlab:0.1.0 -t bastionlab:latest .
 ```
 Then run a container based on the image:

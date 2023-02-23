@@ -185,3 +185,4 @@ ex.c
 *.key.pem
 *.html
 *~
+*.swp
