@@ -624,14 +624,24 @@ class RemoteLazyFrame:
             various exceptions: Note that exceptions may be raised from matplotlib pyplot's pie or subplots functions, for example if fig_kwargs keywords are not valid.
         """
 
+        tmp = self
         if parts not in self.columns:
             raise ValueError("Parts column not found in dataframe")
         if type(labels) == str and labels not in self.columns:
             raise ValueError("Labels column not found in dataframe")
 
+        # run previous operations to ensure order of columns are as expected
+        if type(labels) == str and type(parts) == str:
+            tmp = tmp.collect()
         # get list of values in parts column
-        parts_tmp = self.select(pl.col(parts)).collect().fetch().to_numpy()
-        parts_list = [x[0] for x in parts_tmp]
+        parts_list = (
+            tmp.select(pl.col(parts))
+            .collect()
+            .fetch()
+            .select(parts)
+            .to_series(0)
+            .to_list()
+        )
 
         # get total for calculating percentages
         total = sum(parts_list)
@@ -641,8 +651,15 @@ class RemoteLazyFrame:
 
         # get labels list
         if type(labels) == str:
-            labels_tmp = self.select(pl.col(labels)).collect().fetch().to_numpy()
-            labels_list = [x[0] for x in labels_tmp]
+            labels_list1 = (
+                tmp.select(labels)
+                .collect()
+                .fetch()
+                .select(labels)
+                .to_series(0)
+                .to_list()
+            )
+            labels_list = ["null" if v is None else v for v in labels_list1]
         else:
             labels_list = labels
 
@@ -651,7 +668,7 @@ class RemoteLazyFrame:
             if fig_kwargs == None:
                 fig, ax = plt.subplots(figsize=(7, 4), subplot_kw=dict(aspect="equal"))
             else:
-                if "figsize" not in self.kwargs:
+                if "figsize" not in fig_kwargs:
                     fig_kwargs["figsize"] = (7, 4)
                 fig, ax = plt.subplots(**fig_kwargs)
             if pie_labels == True:
