@@ -58,7 +58,7 @@ class Client:
         _bastionlab_torch is an object that provides access to the platform's torch functionality, which is a machine learning library based on PyTorch.
 
         _bastionlab_polars is an object that provides access to the platform's polars functionality, which is a library for data analysis and visualization.
-        
+
         _channel is the underlying gRPC channel used to communicate with the server. gRPC is a high-performance RPC (remote procedure call) framework that is used for communication between services.
     """
 
@@ -190,7 +190,7 @@ class Connection:
         server_name (str, optional): The name of the remote server. Defaults to "bastionlab-server".
     """
 
-    host: str 
+    host: str
     """
     The hostname or IP address of the remote server.
     """
@@ -213,7 +213,7 @@ class Connection:
     The signing key to use for authentication.
     If not provided, the connection will not be authenticated.
     """
-    _client: Optional[Client] = None 
+    _client: Optional[Client] = None
     """
     The gRPC client object used to send messages.
     """
