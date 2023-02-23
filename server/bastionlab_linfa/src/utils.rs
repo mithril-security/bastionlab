@@ -20,7 +20,7 @@ use crate::linfa_proto::{Trainer, TrainingRequest};
 ----------------------
 */
 
-/// This macro converts convert the Dynamic Array Implememtation into
+/// This macro converts convert the Dynamic Array Implementation into
 /// a fixed dimension say `Ix2`.
 ///
 /// It does this by first matching on the right enum variant (considering the type
@@ -141,12 +141,6 @@ impl IArrayStore {
     }
 }
 
-// impl Display for IArrayStore {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         write!(f, "{}", format!("{}", self.0))?;
-//         Ok(())
-//     }
-// }
 impl Records for IArrayStore {
     type Elem = IArrayStore;
 
