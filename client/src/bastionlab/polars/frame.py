@@ -576,7 +576,7 @@ class RemoteLazyFrame:
         allowed_fns = ["mean", "count", "max", "min", "std", "sum", "median"]
 
         if estimator not in allowed_fns:
-            raise ValueError("Column ", col, " not found in dataframe")
+            raise ValueError(f"Column `{col}` not found in dataframe")
         if x != None and y != None:
             selects = [x, y] if x != y else [x]
         else:
@@ -591,7 +591,7 @@ class RemoteLazyFrame:
 
         for col in selects:
             if not col in self.columns:
-                raise ValueError("Column ", col, " not found in dataframe")
+                raise ValueError(f"Column `{col}` not found in dataframe")
 
         agg = y if y != None else x
         agg_dict = {
@@ -634,9 +634,7 @@ class RemoteLazyFrame:
         else:
             sns.barplot(data=df, x=x, y=y, **kwargs)
 
-    def histplot(
-        self: LDF, x: str = "count", y: str = "count", bins: int = 10, **kwargs
-    ):
+    def histplot(self: LDF, x: str = None, y: str = None, bins: int = 10, **kwargs):
         """Histplot plots a univariate histogram, where one x or y axes is provided or a bivariate histogram, where both x and y axes values are supplied.
 
         Histplot filters down a RemoteLazyFrame to necessary columns only, groups x axes into bins
@@ -779,7 +777,7 @@ class RemoteLazyFrame:
 
         for col in selects:
             if not col in self.columns:
-                raise ValueError("Column ", col, " not found in dataframe")
+                raise ValueError(f"Column `{col}` not found in dataframe")
 
         # get df with necessary columns
         tmp = self.select([pl.col(x) for x in selects]).collect().fetch()
@@ -813,7 +811,7 @@ class RemoteLazyFrame:
 
         for col in cols:
             if not col in self.columns:
-                raise ValueError("Column ", col, " not found in dataframe")
+                raise ValueError(f"Column `{col}` not found in dataframe")
 
         # get df with necessary columns
         tmp = self.select([pl.col(x) for x in cols]).collect().fetch()
@@ -853,7 +851,7 @@ class RemoteLazyFrame:
         allowed_fns = ["mean", "count", "max", "min", "std", "sum", "median"]
 
         if estimator not in allowed_fns:
-            raise ValueError("Column ", col, " not found in dataframe")
+            raise ValueError(f"Column `{col}` not found in dataframe")
         if x != None and y != None:
             selects = [x, y] if x != y else [x]
         else:
@@ -868,7 +866,7 @@ class RemoteLazyFrame:
 
         for col in selects:
             if not col in self.columns:
-                raise ValueError("Column ", col, " not found in dataframe")
+                raise ValueError(f"Column `{col}` not found in dataframe")
 
         agg = y if y != None else x
         agg_dict = {
@@ -1018,7 +1016,7 @@ class RemoteLazyFrame:
         for col in [x, y]:
             if col != None:
                 if col not in self.columns:
-                    raise ValueError("Column ", col, " not found in dataframe")
+                    raise ValueError(f"Column `{col}` not found in dataframe")
                 else:
                     selects.append(col)
         if selects == []:
@@ -1065,7 +1063,7 @@ class RemoteLazyFrame:
         for x in [col, row]:
             if x != None:
                 if not x in self.columns:
-                    raise ValueError("Column ", x, " not found in dataframe")
+                    raise ValueError(f"Column `{x}` not found in dataframe")
         return Facet(inner_rdf=self, col=col, row=row, kwargs=kwargs)
 
     def minmax_scale(self: LDF, cols: Union[str, List[str]]) -> LDF:
@@ -1083,12 +1081,12 @@ class RemoteLazyFrame:
         # set up columns for single string argument
         if isinstance(cols, str):
             if cols not in self.columns:
-                raise ValueError("Column ", cols, " not found in dataframe")
+                raise ValueError(f"Column `{cols}` not found in dataframe")
             columns.append(cols)
         else:  # set up columns for list
             for x in cols:
                 if x not in self.columns:
-                    raise ValueError("Column ", x, " not found in dataframe")
+                    raise ValueError(f"Column `{x}` not found in dataframe")
                 columns.append(x)
         rdf = self.with_columns(
             [
@@ -1113,12 +1111,12 @@ class RemoteLazyFrame:
         # set up columns for single string argument
         if isinstance(cols, str):
             if cols not in self.columns:
-                raise ValueError("Column ", cols, " not found in dataframe")
+                raise ValueError(f"Column `{cols}` not found in dataframe")
             columns.append(cols)
         else:  # set up columns for list
             for x in cols:
                 if x not in self.columns:
-                    raise ValueError("Column ", x, " not found in dataframe")
+                    raise ValueError(f"Column `{x}` not found in dataframe")
                 columns.append(x)
         rdf = self.with_columns(
             [
@@ -1144,12 +1142,12 @@ class RemoteLazyFrame:
         # set up columns for single string argument
         if isinstance(cols, str):
             if cols not in self.columns:
-                raise ValueError("Column ", cols, " not found in dataframe")
+                raise ValueError(f"Column `{cols}` not found in dataframe")
             columns.append(cols)
         else:  # set up columns for list
             for x in cols:
                 if x not in self.columns:
-                    raise ValueError("Column ", x, " not found in dataframe")
+                    raise ValueError(f"Column `{x}` not found in dataframe")
                 columns.append(x)
         rdf = self.select([pl.col(x) for x in self.columns]).apply_udf(
             [x for x in columns], model
@@ -1173,12 +1171,12 @@ class RemoteLazyFrame:
         # set up columns for single string argument
         if isinstance(cols, str):
             if cols not in self.columns:
-                raise ValueError("Column ", cols, " not found in dataframe")
+                raise ValueError(f"Column `{cols}` not found in dataframe")
             columns.append(cols)
         else:  # set up columns for list
             for x in cols:
                 if x not in self.columns:
-                    raise ValueError("Column ", x, " not found in dataframe")
+                    raise ValueError(f"Column `{x}` not found in dataframe")
                 columns.append(x)
         rdf = self.with_columns(
             [(pl.col(x) - pl.col(x).mean()) / pl.col(x).std().alias(x) for x in columns]
@@ -1199,12 +1197,12 @@ class RemoteLazyFrame:
         # set up columns for single string argument
         if isinstance(cols, str):
             if cols not in self.columns:
-                raise ValueError("Column ", cols, " not found in dataframe")
+                raise ValueError(f"Column `{cols}` not found in dataframe")
             columns.append(cols)
         else:  # set up columns for list
             for x in cols:
                 if x not in self.columns:
-                    raise ValueError("Column ", x, " not found in dataframe")
+                    raise ValueError(f"Column `{x}` not found in dataframe")
                 columns.append(x)
         rdf = self.with_columns(
             [
@@ -1352,8 +1350,8 @@ class Facet:
 
     def histplot(
         self: LDF,
-        x: str = "count",
-        y: str = "count",
+        x: Optional[str] = None,
+        y: Optional[str] = None,
         bins: int = 10,
         **kwargs,
     ) -> None:
@@ -1415,7 +1413,7 @@ class Facet:
 
         for col in selects:
             if col not in self.inner_rdf.columns:
-                raise ValueError("Column ", col, " not found in dataframe")
+                raise ValueError(f"Column `{col}` not found in dataframe")
 
         # get unique row and col values
         cols = []
@@ -1521,7 +1519,7 @@ class Facet:
 
         for col in selects:
             if col not in self.inner_rdf.columns:
-                raise ValueError("Column ", col, " not found in dataframe")
+                raise ValueError(f"Column `{col}` not found in dataframe")
 
         # get unique row and col values
         cols = []
