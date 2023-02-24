@@ -14,6 +14,24 @@ use tch::{kind::Element, CModule, Tensor};
 use tokenizers::{FromPretrainedParameters, PaddingParams, Tokenizer, TruncationParams};
 use tonic::Status;
 
+// Update:
+// - Adds macro to simplify converting Ndarrays into DataFrames
+
+/// This macro simplifies converting an Ndarray ArrayBase<T> into a DataFrame
+macro_rules! df_from_array {
+    ($slice:ident, $to_fn:tt, $series_ty:tt, $col_name:expr) => {{
+        let mut lanes: Vec<Series> = vec![];
+
+        let d = $slice
+            .into_iter()
+            .map(|v| v.$to_fn().unwrap())
+            .collect::<Vec<_>>();
+        let series = Series::from($series_ty::new_vec($col_name, d));
+        lanes.push(series);
+        lanes
+    }};
+}
+
 pub fn list_dtype_to_tensor(series: &Series) -> Result<Vec<Tensor>, Status> {
     let rows = to_status_error(series.list())?;
     let mut out = vec![];
@@ -58,7 +76,7 @@ pub fn series_to_tensor(series: &Series) -> Result<Tensor, Status> {
         }
         d => {
             return Err(Status::invalid_argument(format!(
-                "Unsuported data type in series: {}",
+                "Unsupported data type in series: {}",
                 d
             )))
         }
@@ -107,7 +125,7 @@ pub fn tensor_to_series(name: &str, dtype: &DataType, tensor: Tensor) -> Result<
         DataType::Int8 => Series::from(tensor_to_chunked_array::<Int8Type>(&name, tensor)),
         d => {
             return Err(Status::invalid_argument(format!(
-                "Unsuported data type in udf: {}",
+                "Unsupported data type in udf: {}",
                 d
             )))
         }
@@ -143,7 +161,7 @@ fn get_tokenizer(
 ) -> Result<Tokenizer, Status> {
     let config: TokenizerParams = serde_json::from_str(config).map_err(|e| {
         Status::failed_precondition(format!(
-            "Could not deserilize configuration for Tokenizer: {e}"
+            "Could not deserialize configuration for Tokenizer: {e}"
         ))
     })?;
 
@@ -266,6 +284,7 @@ where
     ChunkedArray::new_vec(name, v)
 }
 
+/// This conversion is proprietary and wasn't completed by Polars.
 pub fn ndarray_to_df<T, D: Dimension>(
     arr: &ArrayBase<OwnedRepr<T>, D>,
     col_names: Vec<String>,
@@ -273,53 +292,38 @@ pub fn ndarray_to_df<T, D: Dimension>(
 where
     T: NumericNative + FromPrimitive + ToPrimitive,
 {
-    let mut lanes: Vec<Series> = vec![];
+    let mut lanes = vec![];
 
     for (i, col) in arr.columns().into_iter().enumerate() {
         // We convert the 1-d column into a standard layout in order to return it as a slice.
         let col = col.as_standard_layout();
-        match col.as_slice() {
+        let col_name = &col_names[i];
+        let mut vec_series = match col.as_slice() {
             Some(d) => {
-                if let PrimitiveType::Float64 = T::PRIMITIVE {
-                    let d = d
-                        .into_iter()
-                        .map(|v| v.to_f64().unwrap())
-                        .collect::<Vec<_>>();
-                    let series = Series::from(Float64Chunked::new_vec(&col_names[i], d));
-                    lanes.push(series);
-                }
-                if let PrimitiveType::Float32 = T::PRIMITIVE {
-                    let d = d
-                        .into_iter()
-                        .map(|v| v.to_f32().unwrap())
-                        .collect::<Vec<_>>();
-                    let series = Series::from(Float32Chunked::new_vec(&col_names[i], d));
-                    lanes.push(series);
-                }
-                if let PrimitiveType::UInt64 = T::PRIMITIVE {
-                    let d = d
-                        .into_iter()
-                        .map(|v| v.to_u64().unwrap())
-                        .collect::<Vec<_>>();
-                    let series = Series::from(UInt64Chunked::new_vec(&col_names[i], d));
-                    lanes.push(series);
-                }
-                if let PrimitiveType::UInt32 = T::PRIMITIVE {
-                    let d = d
-                        .into_iter()
-                        .map(|v| v.to_u32().unwrap())
-                        .collect::<Vec<_>>();
-                    let series = Series::from(UInt32Chunked::new_vec(&col_names[i], d));
-                    lanes.push(series);
-                }
-                // This could be expanded... for now, only (f64,f32, u64, and u32) are supported.
+                let vec_series = match T::PRIMITIVE {
+                    PrimitiveType::Float64 => df_from_array!(d, to_f64, Float64Chunked, col_name),
+                    PrimitiveType::Float32 => df_from_array!(d, to_f32, Float32Chunked, col_name),
+                    PrimitiveType::Int64 => df_from_array!(d, to_i64, Int64Chunked, col_name),
+                    PrimitiveType::Int32 => df_from_array!(d, to_i32, Int32Chunked, col_name),
+                    PrimitiveType::UInt64 => df_from_array!(d, to_u64, UInt64Chunked, col_name),
+                    PrimitiveType::UInt32 => df_from_array!(d, to_u32, UInt32Chunked, col_name),
+                    _ => {
+                        return Err(Status::aborted(format!(
+                            "Conversion from {:?} into DataFrame not yet supported",
+                            T::PRIMITIVE
+                        )))
+                    }
+                };
+                vec_series
             }
             None => {
                 return Err(Status::aborted(
                     "Could not convert column in array to slice",
                 ));
             }
-        }
+        };
+
+        lanes.append(&mut vec_series);
     }
 
     DataFrame::new(lanes).map_err(|e| Status::aborted(format!("Could not create a dataframe: {e}")))
