@@ -548,6 +548,7 @@ class RemoteLazyFrame:
         key_loc: str = "center left",
         key_title: str = None,
         key_bbox=(1, 0, 0.5, 1),
+        **kwargs
     ) -> None:
         """Draws a pie chart based on values within single column.
         pieplot collects necessary data only and calculates percentage values before calling matplotlib pyplot's pie function to create a pie chart.
@@ -596,7 +597,7 @@ class RemoteLazyFrame:
 
         # get labels list
         if type(labels) == str:
-            labels_list = (
+            labels_list1 = (
                 tmp.select(labels)
                 .collect()
                 .fetch()
@@ -604,6 +605,7 @@ class RemoteLazyFrame:
                 .to_series(0)
                 .to_list()
             )
+            labels_list = ["null" if v is None else v for v in labels_list1]
         else:
             labels_list = labels
 
@@ -616,14 +618,14 @@ class RemoteLazyFrame:
                     fig_kwargs["figsize"] = (7, 4)
                 fig, ax = plt.subplots(**fig_kwargs)
             if pie_labels == True:
-                wedges, autotexts = plt.pie(pie_data, labels=labels_list)
+                wedges, autotexts = plt.pie(pie_data, labels=labels_list, **kwargs)
             else:
-                wedges, autotexts = plt.pie(pie_data)
+                wedges, autotexts = plt.pie(pie_data, **kwargs)
 
         elif pie_labels == True:
-            wedges, autotexts = ax.pie(pie_data, labels=labels_list)
+            wedges, autotexts = ax.pie(pie_data, labels=labels_list, **kwargs)
         else:
-            wedges, autotexts = ax.pie(pie_data)
+            wedges, autotexts = ax.pie(pie_data, **kwargs)
 
         if key == True:
             ax.legend(

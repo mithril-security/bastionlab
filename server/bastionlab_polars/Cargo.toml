@@ -76,6 +76,7 @@ features = [
   "unique_counts",
   "log",
   "asof_join",
+  "cross_join",
   "serde-lazy",
   "partition_by",
   "semi_anti_join",
