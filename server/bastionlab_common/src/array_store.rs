@@ -208,7 +208,9 @@ impl ArrayStore {
                     let v = match v.$to_fn() {
                         Some(v) => v,
                         None => {
-                            return Err(Status::internal("Failed to convert value into I64"));
+                            return Err(Status::internal(format!(
+                                "Failed to convert value into {dtype:?}"
+                            )));
                         }
                     };
                     transformed.push(v);
