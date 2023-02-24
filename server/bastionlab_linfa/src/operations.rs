@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use bastionlab_common::{array_store::ArrayStore, common_conversions::to_status_error};
+use bastionlab_common::{
+    array_store::{ArrayStore, ArrayStoreType},
+    common_conversions::to_status_error,
+};
 use linfa::{
     traits::{Fit, Predict},
     DatasetBase,
@@ -23,10 +26,11 @@ pub fn send_to_trainer(
     targets: ArrayStore,
     model_type: Models,
 ) -> Result<SupportedModels, Status> {
-    let train = get_datasets(records, targets);
+    let train = get_datasets(records.clone(), targets.clone());
 
     match model_type {
         Models::GaussianNaiveBayes { var_smoothing } => {
+            let train = train.with_targets(IArrayStore(targets.cast(ArrayStoreType::UInt64)?));
             let train = prepare_train_data! {
                 "GaussianNaiveBayes", train, (AxdynU64, Ix1)
             };
@@ -45,6 +49,8 @@ pub fn send_to_trainer(
             max_iterations,
             tolerance,
         } => {
+            let train = train.with_targets(IArrayStore(targets.cast(ArrayStoreType::Float64)?));
+
             let train = prepare_train_data! {"ElasticNet", train,  (AxdynF64, Ix1) };
             let model = elastic_net(
                 penalty.into(),
@@ -65,10 +71,11 @@ pub fn send_to_trainer(
             init_method,
             random_state,
         } => {
+            let train = train.with_targets(IArrayStore(targets.cast(ArrayStoreType::Float64)?));
             let train = prepare_train_data! {"KMeans", train,  (AxdynF64, Ix2) };
 
             /*
-               For kmeans, we will set the target to Array2's default with respect to the records lenght.
+               For kmeans, we will set the target to Array2's default with respect to the records length.
                This is because the KMeans algorithm doesn't rely on the targets.
 
                But in order for the algorithm to work correctly and keep a unified for `prepare_train_data`, we process all the targets same
@@ -90,6 +97,8 @@ pub fn send_to_trainer(
             Ok(SupportedModels::KMeans(to_status_error(model.fit(&train))?))
         }
         Models::LinearRegression { fit_intercept } => {
+            let train = train.with_targets(IArrayStore(targets.cast(ArrayStoreType::Float64)?));
+
             let train = prepare_train_data! {"LinearRegression", train,  (AxdynF64, Ix1) };
 
             let model = linear_regression(fit_intercept);
@@ -106,6 +115,8 @@ pub fn send_to_trainer(
             tol,
             power,
         } => {
+            let train = train.with_targets(IArrayStore(targets.cast(ArrayStoreType::Float64)?));
+
             let train = prepare_train_data! {"TweedieRegressor", train,  (AxdynF64, Ix1) };
 
             let model = tweedie_regression(fit_intercept, alpha, max_iter, link, tol, power);
@@ -122,6 +133,8 @@ pub fn send_to_trainer(
             max_iterations,
             initial_params,
         } => {
+            let train = train.with_targets(IArrayStore(targets.cast(ArrayStoreType::UInt64)?));
+
             let train =
                 prepare_train_data! {"BinomialLogisticRegression", train,  (AxdynU64, Ix1) };
 
@@ -144,6 +157,8 @@ pub fn send_to_trainer(
             initial_params,
             shape,
         } => {
+            let train = train.with_targets(IArrayStore(targets.cast(ArrayStoreType::UInt64)?));
+
             let train =
                 prepare_train_data! {"MultinomialLogisticRegression", train,  (AxdynU64, Ix1) };
 
@@ -167,6 +182,8 @@ pub fn send_to_trainer(
             min_weight_leaf,
             min_impurity_decrease,
         } => {
+            let train = train.with_targets(IArrayStore(targets.cast(ArrayStoreType::UInt64)?));
+
             let train = prepare_train_data! {"DecisionTree", train,  (AxdynU64, Ix1) };
 
             let train = train.map_targets(|t| LabelU64(*t));
@@ -202,7 +219,7 @@ pub fn predict(
     data: ArrayStore,
     probability: bool,
 ) -> Result<ArrayStore, Status> {
-    let sample = IArrayStore(data);
+    let sample = IArrayStore(data.cast(ArrayStoreType::Float64)?);
     let sample = get_inner_array! {AxdynF64, sample, Ix2, "Ix2", "predict", "sample"};
     let prediction = match &*model {
         SupportedModels::ElasticNet(m) => Some(PredictionTypes::Float(m.predict(sample))),

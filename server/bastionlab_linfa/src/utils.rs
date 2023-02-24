@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use bastionlab_common::array_store::ArrayStore;
+use bastionlab_common::array_store::{ArrayStore, ArrayStoreType};
 use linfa::{
     prelude::{Records, SingleTargetRegression, ToConfusionMatrix},
     DatasetBase, Label,
@@ -117,8 +117,12 @@ impl IArrayStore {
     pub fn classification_metrics(self, other: Self, scoring: &str) -> Result<DataFrame, Status> {
         let name = &format!("ClassificationMetrics: {scoring}");
 
-        let truth = get_inner_array!(AxdynU64, self, Ix2, "Ix2", name, "Prediction");
-        let pred = get_inner_array!(AxdynU64, other, Ix2, "Ix2", name, "Truth");
+        // These casts are to prevent the user from having to cast predictions and truth arrays
+        let truth = self.cast(ArrayStoreType::UInt64)?;
+        let pred = other.cast(ArrayStoreType::UInt64)?;
+
+        let truth = get_inner_array!(AxdynU64, truth, Ix2, "Ix2", name, "Prediction");
+        let pred = get_inner_array!(AxdynU64, pred, Ix2, "Ix2", name, "Truth");
 
         // Similar to what we did [`process_train_data`], we will first convert the array into Ix2 and then pick the first column
         // which is the same as reshaping but less expensive if there's only one column
@@ -138,6 +142,9 @@ impl IArrayStore {
         })?;
         let df = Series::new(scoring, [scores]).into_frame();
         Ok(df)
+    }
+    pub fn cast(&self, dtype: ArrayStoreType) -> Result<Self, Status> {
+        Ok(Self(self.0.cast(dtype)?))
     }
 }
 

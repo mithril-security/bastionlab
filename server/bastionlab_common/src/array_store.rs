@@ -1,7 +1,7 @@
 use std::fmt::{Debug, Display};
 
 use ndarray::{Array, ArrayView, Axis, Dim, IxDynImpl};
-use polars::prelude::DataFrame;
+use polars::{export::arrow::types::PrimitiveType, prelude::DataFrame};
 use tonic::Status;
 
 use crate::common_conversions::{ndarray_to_df, to_status_error};
@@ -193,49 +193,123 @@ impl ArrayStore {
             }
         }
     }
+
+    /*
+       Update:
+           - a cast method to easily cast types into another.
+            This is useful especially for ML training when we receive `AxdynI{64, 32}` and
+            the algorithm only accept the `AxdynU{64, 32}`.
+    */
+    pub fn cast(&self, dtype: ArrayStoreType) -> Result<Self, Status> {
+        macro_rules! array_creator {
+            ($slice:expr, $shape:ident, $to_fn:tt,  $res_variant:tt) => {{
+                let mut transformed = vec![];
+                for v in $slice.into_iter() {
+                    let v = match v.$to_fn() {
+                        Some(v) => v,
+                        None => {
+                            return Err(Status::internal("Failed to convert value into I64"));
+                        }
+                    };
+                    transformed.push(v);
+                }
+                let array = ArrayBase::from_shape_vec($shape.clone(), transformed)
+                    .map_err(|e| {
+                        Status::internal(format!("Could create array from {:?}: {e}", $shape))
+                    })?
+                    .into_dyn();
+                Ok(ArrayStore::$res_variant(array))
+            }};
+        }
+        macro_rules! caster {
+            ($array:expr, $prim_ty:expr) => {{
+                use ndarray::ArrayBase;
+                use polars::export::num::ToPrimitive;
+
+                let shape = $array.shape().to_vec();
+                match $array.as_slice() {
+                    Some(s) => match $prim_ty {
+                        PrimitiveType::Int64 => array_creator!(s, shape, to_i64, AxdynI64),
+                        PrimitiveType::Int32 => array_creator!(s, shape, to_i32, AxdynI32),
+                        PrimitiveType::Float32 => array_creator!(s, shape, to_f32, AxdynF32),
+                        PrimitiveType::Float64 => array_creator!(s, shape, to_f64, AxdynF64),
+                        PrimitiveType::UInt64 => array_creator!(s, shape, to_u64, AxdynU64),
+                        PrimitiveType::UInt32 => array_creator!(s, shape, to_u32, AxdynU32),
+                        PrimitiveType::Int16 => array_creator!(s, shape, to_i16, AxdynI16),
+                        _ => {
+                            return Err(Status::failed_precondition(format!(
+                                "Unsupported Primitive Type: {dtype:?}"
+                            )));
+                        }
+                    },
+                    None => {
+                        return Err(Status::aborted("Could not convert array into slice"));
+                    }
+                }
+            }};
+        }
+        let primitive_type = match dtype {
+            ArrayStoreType::Int64 => PrimitiveType::Int64,
+            ArrayStoreType::UInt64 => PrimitiveType::UInt64,
+            ArrayStoreType::Int32 => PrimitiveType::Int32,
+            ArrayStoreType::UInt32 => PrimitiveType::UInt32,
+            ArrayStoreType::Float64 => PrimitiveType::Float64,
+            ArrayStoreType::Float32 => PrimitiveType::Float32,
+            ArrayStoreType::Int16 => PrimitiveType::Int16,
+        };
+
+        match self {
+            ArrayStore::AxdynF32(a) => caster!(a, primitive_type),
+            ArrayStore::AxdynF64(a) => caster!(a, primitive_type),
+            ArrayStore::AxdynI32(a) => caster!(a, primitive_type),
+            ArrayStore::AxdynI64(a) => caster!(a, primitive_type),
+            ArrayStore::AxdynU32(a) => caster!(a, primitive_type),
+            ArrayStore::AxdynU64(a) => caster!(a, primitive_type),
+            ArrayStore::AxdynI16(a) => caster!(a, primitive_type),
+        }
+    }
+
+    pub fn formatter(&self) -> String {
+        let dtype = match self {
+            ArrayStore::AxdynI64(_) => ArrayStoreType::Int64,
+            ArrayStore::AxdynU64(_) => ArrayStoreType::UInt64,
+            ArrayStore::AxdynU32(_) => ArrayStoreType::UInt32,
+            ArrayStore::AxdynF64(_) => ArrayStoreType::Float64,
+            ArrayStore::AxdynF32(_) => ArrayStoreType::Float32,
+            ArrayStore::AxdynI32(_) => ArrayStoreType::Int32,
+            ArrayStore::AxdynI16(_) => ArrayStoreType::Int16,
+        };
+        format!(
+            "ArrayStore<shape=[{:?}, {:?}], dtype={:?}>",
+            self.height(),
+            self.width(),
+            dtype,
+        )
+    }
 }
 
 /// This impl is used as a fix to disallow leaking data through error logging
 impl Display for ArrayStore {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let dtype = match self {
-            ArrayStore::AxdynI64(_) => "Int64",
-            ArrayStore::AxdynU64(_) => "UInt64",
-            ArrayStore::AxdynU32(_) => "UInt32",
-            ArrayStore::AxdynF64(_) => "Float64",
-            ArrayStore::AxdynF32(_) => "Float32",
-            ArrayStore::AxdynI32(_) => "Int32",
-            ArrayStore::AxdynI16(_) => "Int16",
-        };
-        write!(
-            f,
-            "ArrayStore<shape=[{:?}, {:?}], dtype={}>",
-            self.height(),
-            self.width(),
-            dtype,
-        )?;
-        Ok(())
+        write!(f, "{}", self.formatter(),)
     }
 }
 
 impl Debug for ArrayStore {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let dtype = match self {
-            ArrayStore::AxdynI64(_) => "Int64",
-            ArrayStore::AxdynU64(_) => "UInt64",
-            ArrayStore::AxdynU32(_) => "UInt32",
-            ArrayStore::AxdynF64(_) => "Float64",
-            ArrayStore::AxdynF32(_) => "Float32",
-            ArrayStore::AxdynI32(_) => "Int32",
-            ArrayStore::AxdynI16(_) => "Int16",
-        };
-        write!(
-            f,
-            "ArrayStore<shape=[{:?}, {:?}], dtype={}>",
-            self.height(),
-            self.width(),
-            dtype
-        )?;
-        Ok(())
+        write!(f, "{}", self.formatter(),)
     }
+}
+
+/// ArrayStore's internal representation for Primitive Types which is used alongside num-traits PrimitiveTypes to
+/// match on types used in cast and debug and display printing.
+#[derive(Debug)]
+pub enum ArrayStoreType {
+    Float64,
+    Float32,
+    UInt64,
+    Int64,
+    UInt32,
+    Int32,
+    Int16,
 }

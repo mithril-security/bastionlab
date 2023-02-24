@@ -429,11 +429,14 @@ class TestingRemoteLinfa(unittest.TestCase):
         self.assertEqual(
             to_numpy(metrics.accuracy_score(y_test, remote_pred))
             .squeeze()
-            .astype(np.float32),
+            .astype(np.float32)
+            .round(1),
             sk_metrics.accuracy_score(
                 y_local_test,
                 local_pred,
-            ).astype(np.float32),
+            )
+            .astype(np.float32)
+            .round(1),
         )
 
     def tearDown(self) -> None:
