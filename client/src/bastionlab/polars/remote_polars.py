@@ -640,7 +640,6 @@ class RemoteLazyFrame:
         y_label: str = None,
         colors: Union[str, list[str]] = Palettes.dict["standard"],
         width: float = 0.75,
-        hue_width: float = 0.2,
         ax: mat.axes = None,
         **kwargs,
     ):
@@ -649,6 +648,7 @@ class RemoteLazyFrame:
         Args:
             x (str) = None: The name of column to be used for x axes.
             y (str) = None: The name of column to be used for y axes.
+            hue (str) = None: The name of column to be used for grouped barplot
             estimator (str) = "mean": string representation of estimator to be used in aggregated query. Options are: "mean", "median", "count", "max", "min", "std" and "sum"
             vertical (bool) = True: option for vertical (True) or horizontal barplot (False)
             title (str) = None: string title for plot
@@ -664,11 +664,20 @@ class RemoteLazyFrame:
             various exceptions: Note that exceptions may be raised from Seaborn when the barplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
-        # get columns and no do error checking
-        selects = VisTools._get_all_cols(self, x, y, hue)
+        # Set everything up
+        selects = VisTools._get_all_cols(
+            self, x, y, hue
+        )  # get columns and no do error checking
 
-        # check estimator input is valid and get correct agg function
-        allowed_fns = ["mean", "count", "max", "min", "std", "sum", "median"]
+        allowed_fns = [
+            "mean",
+            "count",
+            "max",
+            "min",
+            "std",
+            "sum",
+            "median",
+        ]  # check estimator input is valid and get correct agg function
         if estimator not in allowed_fns:
             raise ValueError(
                 "Estimator ", estimator, " not in list of accepted estimators"
@@ -676,27 +685,25 @@ class RemoteLazyFrame:
         agg = y if y != None else x
         agg_dict = VisTools._get_estimator_dict(agg)
 
-        # check color input is valid
-        if isinstance(colors, str) and colors in Palettes.dict:
+        if (
+            isinstance(colors, str) and colors in Palettes.dict
+        ):  # check color input is valid
             colors = Palettes.dict[colors]
 
-        # setup ax
-        #ax = ax if ax else plt.gca()
-        fig, ax = plt.subplots()
-        # set up labels
-        labels = VisTools._get_unique_values(self, x if x else y)
+        fig, ax = plt.subplots()  # setup ax
+
+        labels = VisTools._get_unique_values(self, x if x else y)  # set up labels
         if None in labels:
             labels.remove(None)
+        hues = (
+            VisTools._get_unique_values(self, hue) if hue else ["default"]
+        )  # set up hues
 
-        # set up hues
-        hues = VisTools._get_unique_values(self, hue) if hue else ["default"]
-
-        # iterate over hue values or enter loop once if no hue value    
+        # iterate over hue values (1 by default)
         for val, index in zip(hues, range(len(hues))):
-
             # filter data by hue if hue provided
             tmp = self.filter(pl.col(hue) == val) if hue else self
-            
+
             # X or Y only plot
             if x == None or y == None:
                 # run aggregated query for bar plot
@@ -709,20 +716,34 @@ class RemoteLazyFrame:
                 )
                 RequestRejected.check_valid_df(tmp)
                 df = tmp.to_pandas()
-                values = [1]
-                if hue:
-                    values = VisTools._bar_get_x_position(values, index, len(hues), width)
+                values = (
+                    list(map(lambda x: x - (index - len(hues) / 2 + 0.5) * width, [1]))
+                    if hue
+                    else [1]
+                )
                 height = df[(x if x else y)].to_list()
                 vertical = vertical if y else False
                 if vertical is True:
-                    print("our width is:", width)
-                    ax.bar(x=values, height=height, color=colors[index] if hue else colors, width=width, **kwargs)
+                    ax.bar(
+                        x=values,
+                        height=height,
+                        color=colors[index] if hue else colors,
+                        width=width,
+                        **kwargs,
+                        label=val,
+                    )
                     ax.tick_params(labelbottom=False)
                 else:
-                    ax.barh(y=values, width=height, color=colors[index] if hue else colors, **kwargs)
+                    ax.barh(
+                        y=values,
+                        width=height,
+                        color=colors[index] if hue else colors,
+                        height=width,
+                        **kwargs,
+                        label=val,
+                    )
                     ax.tick_params(labelleft=False)
             else:
-                tmp = self.filter(pl.col(hue) == val) if hue else self
                 tmp = (
                     tmp.select(pl.col(col) for col in selects)
                     .groupby(pl.col(x))
@@ -733,16 +754,31 @@ class RemoteLazyFrame:
                 )
                 RequestRejected.check_valid_df(tmp)
                 df = tmp.to_pandas()
-                x_values = df[x].to_list()
-                x_values = np.arange(len(x_values))
-                if hue:
-                    values = VisTools._bar_get_x_position(x_values, index, len(hues), width)
+                x_values = np.arange(len(df[x].to_list()))
+                values = (
+                    VisTools._bar_get_x_position(x_values, index, len(hues), width)
+                    if hue
+                    else x_values
+                )
                 height = df[y].to_list()
                 if vertical is True:
-                    print("our width is:", width)
-                    ax.bar(x=values if hue else values, height=height, width=width, color=colors[index] if hue else colors, label=val if hue else None, **kwargs)
+                    ax.bar(
+                        x=values if hue else values,
+                        height=height,
+                        width=width,
+                        color=colors[index] if hue else colors,
+                        label=val if hue else None,
+                        **kwargs,
+                    )
                 else:
-                    ax.barh(y=values, width=height, color=colors, **kwargs)
+                    ax.barh(
+                        y=values,
+                        width=height,
+                        height=width,
+                        color=colors[index] if hue else colors,
+                        label=val if hue else None,
+                        **kwargs,
+                    )
 
         # label axes and add title and color key
         if vertical is True:
@@ -764,9 +800,7 @@ class RemoteLazyFrame:
         if title:
             ax.set_title(title)
         if hue:
-            ax.legend(loc="best", title=hue)
-            fig.tight_layout()
-        print("WIDTH: ", width)
+            ax.legend(loc="best")
         return ax
 
     def histplot(
@@ -1393,7 +1427,6 @@ class Facet:
             for example, if kwargs keywords are not expected. See Seaborn/Matplotlib documentation for further details.
         """
         self.__bastion_map("histplot", x, y, None, bins, **kwargs)
-    
 
     def barplot(
         self: Facet,
