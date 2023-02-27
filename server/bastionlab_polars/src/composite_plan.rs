@@ -2,6 +2,7 @@ use base64;
 use bastionlab_common::common_conversions::{
     lazy_frame_from_logical_plan, series_to_tensor, tensor_to_series,
 };
+use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use polars::{lazy::dsl::Expr, prelude::*};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -11,6 +12,7 @@ use tonic::Status;
 
 use crate::{
     access_control::{Context, Policy, VerificationResult},
+    utils::*,
     visitable::{Visitable, VisitableMut},
     BastionLabPolars, DataFrameArtifact,
 };
@@ -22,12 +24,166 @@ pub struct CompositePlan {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
+pub enum StringMethod {
+    Split { pattern: String },
+    ToLowerCase,
+    ToUpperCase,
+    Replace { pattern: String, to: String },
+    ReplaceAll { pattern: String, to: String },
+    Contains { pattern: String },
+    Match { pattern: String },
+    FindAll { pattern: String },
+    Extract { pattern: String },
+    ExtractAll { pattern: String },
+    FuzzyMatch { pattern: String },
+}
+
+impl StringMethod {
+    pub fn process_series<T>(&self, series: &Utf8Chunked, operator: T) -> Result<Series, Status>
+    where
+        T: Fn(&str) -> AnyValue,
+    {
+        let mut out = Vec::with_capacity(series.len());
+        for elem in series.into_iter() {
+            let value = match elem {
+                Some(r) => operator(r),
+                None => {
+                    return Err(Status::aborted(format!("Could not apply split to null")));
+                }
+            };
+
+            out.push(value);
+        }
+        let s = vec_any_values_to_series(&out[..])?;
+        Ok(s)
+    }
+    fn execute(&self, series: &ChunkedArray<Utf8Type>) -> Result<Series, Status> {
+        let series = match self {
+            StringMethod::Split { pattern } => {
+                let pattern = pattern;
+                self.process_series(series, |s| {
+                    let s = s.split(&*pattern).collect::<Vec<_>>();
+                    let v = AnyValue::List(Utf8Chunked::from_slice("col", &s[..]).into_series());
+                    v
+                })?
+            }
+            StringMethod::ToLowerCase => series.to_lowercase().into_series(),
+            StringMethod::ToUpperCase => series.to_uppercase().into_series(),
+            StringMethod::Replace { pattern, to } => {
+                let re = create_regex_from_str(&*pattern)?;
+
+                series
+                    .replace(&re.as_str(), &to)
+                    .map_err(|e| {
+                        Status::aborted(format!("Failed to replace {pattern} with {to}: {e}"))
+                    })?
+                    .into_series()
+            }
+            StringMethod::ReplaceAll { pattern, to } => {
+                let re = create_regex_from_str(&*pattern)?;
+
+                series
+                    .replace_all(&re.as_str(), &to)
+                    .map_err(|e| {
+                        Status::aborted(format!("Failed to replace all {pattern} with {to}: {e}"))
+                    })?
+                    .into_series()
+            }
+            StringMethod::Contains { pattern } => {
+                let re = create_regex_from_str(&*pattern)?;
+
+                series
+                    .contains(&re.as_str())
+                    .map_err(|e| Status::aborted(format!("Could not find a match: {e}")))?
+                    .into_series()
+            }
+            StringMethod::Match { pattern } => {
+                let re = create_regex_from_str(&*pattern)?;
+                self.process_series(series, |s| {
+                    let s = if re.find_iter(s).last().is_none() {
+                        false
+                    } else {
+                        true
+                    };
+
+                    AnyValue::Boolean(s)
+                })?
+            }
+            StringMethod::FindAll { pattern } => {
+                let re = create_regex_from_str(&*pattern)?;
+                self.process_series(series, |r| {
+                    let s = re
+                        .find_iter(r)
+                        .map(|s| s.as_str().to_owned())
+                        .collect::<Vec<_>>();
+
+                    let s = Utf8Chunked::from_slice("", &s[..]);
+                    let s = if !s.is_empty() {
+                        s
+                    } else {
+                        let s: Vec<String> = vec![];
+                        Utf8Chunked::from_slice("", &s[..])
+                    };
+
+                    AnyValue::List(s.into_series())
+                })?
+            }
+            StringMethod::Extract { pattern } => {
+                let re = create_regex_from_str(&*pattern)?;
+                series
+                    .extract(&re.as_str(), 0)
+                    .map_err(|e| {
+                        Status::aborted(format!("Could not execute extract on Series: {e}"))
+                    })?
+                    .into_series()
+            }
+            StringMethod::ExtractAll { pattern } => {
+                let re = create_regex_from_str(&*pattern)?;
+                series
+                    .extract_all(&re.as_str())
+                    .map_err(|e| {
+                        Status::aborted(format!("Could not execute extract on Series: {e}"))
+                    })?
+                    .into_series()
+            }
+            StringMethod::FuzzyMatch { pattern } => {
+                let m = SkimMatcherV2::default();
+                let re = create_regex_from_str(&*pattern)?;
+                self.process_series(series, |r| {
+                    let v = m.fuzzy_match(r, &*re.as_str());
+                    match v {
+                        Some(_) => AnyValue::Utf8(r),
+                        None => AnyValue::Null,
+                    }
+                })?
+            }
+        };
+
+        Ok(series)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "type")]
 pub enum CompositePlanSegment {
-    PolarsPlanSegment { plan: LogicalPlan },
-    UdfPlanSegment { columns: Vec<String>, udf: String },
-    EntryPointPlanSegment { identifier: String },
+    PolarsPlanSegment {
+        plan: LogicalPlan,
+    },
+    UdfPlanSegment {
+        columns: Vec<String>,
+        udf: String,
+    },
+    EntryPointPlanSegment {
+        identifier: String,
+    },
     StackPlanSegment,
-    RowCountSegment { row: String },
+    StringUdfPlanSegment {
+        method: StringMethod,
+        columns: Vec<String>,
+    },
+    RowCountSegment {
+        row: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -50,6 +206,7 @@ impl CompositePlan {
         let plan_str = serde_json::to_string(&self.segments).map_err(|e| {
             Status::invalid_argument(format!("Could not parse composite plan: {e}"))
         })?;
+
         let mut blacklist_hashmap = HashMap::new();
 
         for seg in self.segments {
@@ -131,6 +288,29 @@ impl CompositePlan {
                     let mut stats = frame1.stats;
                     stats.merge(frame2.stats);
                     stack.push(StackFrame { df, stats });
+                }
+                CompositePlanSegment::StringUdfPlanSegment { method, columns } => {
+                    let mut frame = stack.pop().ok_or(Status::invalid_argument(
+                        "Could not apply stack: no input data frame",
+                    ))?;
+
+                    for col in columns {
+                        let idx = column_names_to_idx(&col, &frame.df)?;
+                        let series = frame.df.get_columns_mut().get_mut(idx).unwrap();
+
+                        if series.dtype().ne(&DataType::Utf8) {
+                            return Err(Status::failed_precondition(format!(
+                                "{col} is not a string column"
+                            )));
+                        }
+
+                        let array = series.utf8().map_err(|e| {
+                            Status::failed_precondition(format!("Series not Utf8: {e}"))
+                        })?;
+                        *series = method.execute(array)?;
+                        series.rename(&col);
+                    }
+                    stack.push(frame);
                 }
                 CompositePlanSegment::RowCountSegment { row: name } => {
                     let frame = stack.pop().ok_or(Status::invalid_argument(

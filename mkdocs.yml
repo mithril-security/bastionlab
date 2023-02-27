@@ -113,6 +113,7 @@ nav:
       - Data visualization: "docs/tutorials/visualization.ipynb"
       - Saving DataFrames: "docs/tutorials/saving_dataframes.ipynb"
       - Normalization: "docs/tutorials/normalization.ipynb"
+      - String Preprocessing: "docs/tutorials/string_preprocessing.ipynb"
   - 🌍 How-to-guides:
       - Data exploration:
         - Covid-19 data analysis: "docs/how-to-guides/covid_cleaning_exploration.ipynb"

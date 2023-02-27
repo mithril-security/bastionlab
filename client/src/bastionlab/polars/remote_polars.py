@@ -19,7 +19,6 @@ import matplotlib.pyplot as plt
 import matplotlib as mat
 from typing import TYPE_CHECKING
 from ..errors import RequestRejected
-import numpy as np
 from serde import serde, InternalTagging, field
 from serde.json import to_json
 
@@ -82,15 +81,22 @@ def delegate_properties(
     return inner
 
 
-class CompositePlanSegment:
-    """
-    Composite plan segment class which handles segment plans that have not been implemented
-    """
+CompositePlanSegment = Union[
+    "PolarsPlanSegment",
+    "UdfPlanSegment",
+    "EntryPointPlanSegment",
+    "StackPlanSegment",
+    "StringUdfPlanSegment",
+    "RowCountSegment",
+]
+"""
+Composite plan segment class which handles segment plans that have not been implemented
+"""
 
 
 @dataclass
 @serde
-class EntryPointPlanSegment(CompositePlanSegment):
+class EntryPointPlanSegment:
     """
     Composite plan segment class responsible for new entry points
     """
@@ -100,7 +106,7 @@ class EntryPointPlanSegment(CompositePlanSegment):
 
 @dataclass
 @serde
-class PolarsPlanSegment(CompositePlanSegment):
+class PolarsPlanSegment:
     """
     Composite plan segment class responsible for Polars queries
     """
@@ -117,7 +123,7 @@ class PolarsPlanSegment(CompositePlanSegment):
 
 @dataclass
 @serde
-class UdfPlanSegment(CompositePlanSegment):
+class UdfPlanSegment:
     """
     Composite plan segment class responsible for user defined functions
     """
@@ -131,7 +137,7 @@ class UdfPlanSegment(CompositePlanSegment):
 
 @dataclass
 @serde
-class StackPlanSegment(CompositePlanSegment):
+class StackPlanSegment:
     """
     Composite plan segment class responsible for vstack function
     """
@@ -139,7 +145,7 @@ class StackPlanSegment(CompositePlanSegment):
 
 @dataclass
 @serde
-class RowCountSegment(CompositePlanSegment):
+class RowCountSegment:
     """
     Composite plan segment class responsible for with_row_count function
     """
@@ -147,18 +153,104 @@ class RowCountSegment(CompositePlanSegment):
     row: str
 
 
+StringMethod = Union[
+    "Split",
+    "ToLowerCase",
+    "ToUpperCase",
+    "Replace",
+    "ReplaceAll",
+    "Contains",
+    "Match",
+    "FindAll",
+    "Extract",
+    "ExtractAll",
+    "FuzzyMatch",
+]
+
+
+@dataclass
+@serde
+class ToLowerCase:
+    pass
+
+
+@dataclass
+@serde
+class ToUpperCase:
+    pass
+
+
+@dataclass
+@serde
+class Split:
+    pattern: str
+
+
+@dataclass
+@serde
+class Contains:
+    pattern: str
+
+
+@dataclass
+@serde
+class Match:
+    pattern: str
+
+
+@dataclass
+@serde
+class FindAll:
+    pattern: str
+
+
+@dataclass
+@serde
+class Extract:
+    pattern: str
+
+
+@dataclass
+@serde
+class ExtractAll:
+    pattern: str
+
+
+@dataclass
+@serde
+class FuzzyMatch:
+    pattern: str
+
+
+@dataclass
+@serde
+class Replace:
+    pattern: str
+    to: str
+
+
+@dataclass
+@serde
+class ReplaceAll:
+    pattern: str
+    to: str
+
+
+@dataclass
+@serde(tagging=InternalTagging("type"))
+class StringUdfPlanSegment:
+    """
+    Composite plan segment class responsible for string-based user defined functions
+    """
+
+    method: "StringMethod"
+    columns: List[str]
+
+
 @dataclass
 @serde(tagging=InternalTagging("type"))
 class PlanSegments:
-    segments: List[
-        Union[
-            PolarsPlanSegment,
-            UdfPlanSegment,
-            EntryPointPlanSegment,
-            StackPlanSegment,
-            RowCountSegment,
-        ]
-    ]
+    segments: List[CompositePlanSegment]
 
 
 @dataclass
@@ -1202,6 +1294,258 @@ class RemoteLazyFrame:
                 if not x in self.columns:
                     raise ValueError("Column ", x, " not found in dataframe")
         return Facet(inner_rdf=self, col=col, row=row, kwargs=kwargs)
+
+    def _make_string_udf_segment(
+        self: RemoteLazyFrame,
+        method: "StringMethod",
+        cols: Optional[Union[str, List[str]]] = None,
+    ) -> "RemoteLazyFrame":
+        """
+        Support for string manipulation methods can be improved to include more string operations.
+        Currently, these methods are the only ones supported.
+
+            - `split`
+            - `contains`
+            - `replace`
+            - `replace_all`
+            - `findall`
+            - `contains`
+            - `match`
+            - `fuzzy_match`
+            - `extract`
+            - `extract_all`
+        """
+
+        cols = (
+            self.columns if cols is None else cols if isinstance(cols, list) else [cols]
+        )
+
+        return RemoteLazyFrame(
+            self._inner,
+            Metadata(
+                self._meta._polars_client,
+                [
+                    *self._meta._prev_segments,
+                    PolarsPlanSegment(self._inner),
+                    StringUdfPlanSegment(
+                        method,
+                        cols,
+                    ),
+                ],
+            ),
+        )
+
+    # String Methods
+    def split(
+        self, sep: str, cols: Optional[Union[str, List[str]]] = None
+    ) -> "RemoteLazyFrame":
+        """
+        Splits the strings in the specified cols in `cols` on the string found in `sep`.
+
+        Args:
+            sep: str
+                The separator to split the string on.
+            cols: Union[str, List[str]], default None
+                DataFrame columns to apply the splitting on.
+                If None, it applies splitting to all columns of the DataFrame.
+
+        Returns:
+            RemoteLazyFrame.
+        """
+        return self._make_string_udf_segment(Split(pattern=sep), cols=cols)
+
+    def to_lowercase(
+        self, cols: Optional[Union[str, List[str]]] = None
+    ) -> "RemoteLazyFrame":
+        """
+        Returns the lowercase equivalent of the strings in the `RemoteDataFrame`.
+
+        Args:
+            cols: Union[str, List[str]], default None
+                DataFrame columns to apply the splitting on.
+                If None, it applies splitting to all columns of the DataFrame.
+
+        Returns:
+            RemoteLazyFrame.
+        """
+        return self._make_string_udf_segment(ToLowerCase(), cols=cols)
+
+    def to_uppercase(
+        self, cols: Optional[Union[str, List[str]]] = None
+    ) -> "RemoteLazyFrame":
+        """
+        Returns the uppercase equivalent of the strings in the `RemoteDataFrame`.
+
+        Args:
+            cols: Union[str, List[str]], default None
+                DataFrame columns to apply the splitting on.
+                If None, it applies splitting to all columns of the DataFrame.
+
+        Returns:
+            RemoteLazyFrame.
+        """
+        return self._make_string_udf_segment(ToUpperCase(), cols=cols)
+
+    def replace(
+        self, pattern: str, to: str, cols: Optional[Union[str, List[str]]] = None
+    ) -> "RemoteLazyFrame":
+        """
+        Replaces the first match of a pattern with the string in `to` in the `RemoteDataFrame`.
+
+        Args:
+            pattern: str
+                Pattern or regular expression
+            to: str
+                The substitue string
+            cols: Union[str, List[str]], default None
+                DataFrame columns to apply the splitting on.
+                If None, it applies splitting to all columns of the DataFrame.
+
+        Returns:
+            RemoteLazyFrame.
+        """
+        return self._make_string_udf_segment(Replace(pattern, to), cols=cols)
+
+    def replace_all(
+        self, pattern: str, to: str, cols: Optional[Union[str, List[str]]] = None
+    ) -> "RemoteLazyFrame":
+        """
+        Replaces all matches of a pattern with the string in `to` in the `RemoteDataFrame`.
+
+        Args:
+            pattern: str
+                Pattern or regular expression
+            to: str
+                The substitue string
+            cols: Union[str, List[str]], default None
+                DataFrame columns to apply the splitting on.
+                If None, it applies splitting to all columns of the DataFrame.
+
+        Returns:
+            RemoteLazyFrame.
+        """
+        return self._make_string_udf_segment(ReplaceAll(pattern, to), cols=cols)
+
+    def contains(
+        self,
+        pattern: str,
+        cols: Optional[Union[str, List[str]]] = None,
+    ) -> "RemoteLazyFrame":
+        """
+        Returns a `RemoteDataFrame` with booleans if there was a match with the string in
+        `pattern`.
+
+        Args:
+            pattern: str
+                Pattern or regular expression.
+            cols: Union[str, List[str]], default None
+                DataFrame columns to apply the splitting on.
+                If None, it applies splitting to all columns of the DataFrame.
+
+        Returns:
+            RemoteLazyFrame.
+        """
+        return self._make_string_udf_segment(Contains(pattern=pattern), cols=cols)
+
+    def match(
+        self,
+        pattern: str,
+        cols: Optional[Union[str, List[str]]] = None,
+    ) -> "RemoteLazyFrame":
+        """
+        Returns all matches of a pattern in the `RemoteDataFrame`.
+
+        Args:
+            pattern: str
+                Pattern or regular expression
+            cols: Union[str, List[str]], default None
+                DataFrame columns to apply the splitting on.
+                If None, it applies splitting to all columns of the DataFrame.
+
+        Returns:
+            RemoteLazyFrame.
+        """
+        return self._make_string_udf_segment(Match(pattern=pattern), cols=cols)
+
+    def fuzzy_match(
+        self,
+        pattern: str,
+        cols: Optional[Union[str, List[str]]] = None,
+    ) -> "RemoteLazyFrame":
+        """
+        Applies fuzzy matching to strings in `cols` of the `RemoteDataFrame`.
+
+        Args:
+            pattern: str
+                Pattern or regular expression
+            cols: Union[str, List[str]], default None
+                DataFrame columns to apply the splitting on.
+                If None, it applies splitting to all columns of the DataFrame.
+
+        Returns:
+            RemoteLazyFrame.
+        """
+        return self._make_string_udf_segment(FuzzyMatch(pattern=pattern), cols=cols)
+
+    def findall(
+        self,
+        pattern: str,
+        cols: Optional[Union[str, List[str]]] = None,
+    ) -> "RemoteLazyFrame":
+        """
+        Find all occurrences of pattern or regular expression in the `RemoteDataFrame`.
+
+        Args:
+            pattern: str
+                Pattern or regular expression
+            cols: Union[str, List[str]], default None
+                DataFrame columns to apply the splitting on.
+                If None, it applies splitting to all columns of the DataFrame.
+
+        Returns:
+            RemoteLazyFrame.
+        """
+        return self._make_string_udf_segment(FindAll(pattern=pattern), cols=cols)
+
+    def extract(
+        self,
+        pattern: str,
+        cols: Optional[Union[str, List[str]]] = None,
+    ) -> "RemoteLazyFrame":
+        """
+        Extracts the first capture group in the regex as columns in a list.
+
+        Args:
+            pattern: str
+                Regular expression pattern with capturing groups.
+            cols: Union[str, List[str]], default None
+                DataFrame columns to apply the splitting on.
+                If None, it applies splitting to all columns of the DataFrame.
+
+        Returns:
+            RemoteLazyFrame.
+        """
+        return self._make_string_udf_segment(Extract(pattern=pattern), cols=cols)
+
+    def extract_all(
+        self,
+        pattern: str,
+        cols: Optional[Union[str, List[str]]] = None,
+    ) -> "RemoteLazyFrame":
+        """
+        Extracts all capture groups in the regex as columns in a list.
+
+        Args:
+            pattern: str
+                Regular expression pattern with capturing groups.
+            cols: Union[str, List[str]], default None
+                DataFrame columns to apply the splitting on.
+                If None, it applies splitting to all columns of the DataFrame.
+
+        Returns:
+            RemoteLazyFrame.
+        """
+        return self._make_string_udf_segment(ExtractAll(pattern=pattern), cols=cols)
 
     def minmax_scale(self: LDF, cols: Union[str, List[str]]) -> LDF:
         """Rescales data using the Min/Max or normalization method to a range of [0,1]

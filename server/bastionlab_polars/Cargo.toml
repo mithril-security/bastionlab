@@ -31,6 +31,7 @@ log = "0.4.17"
 ndarray = "0.15.6"
 ndarray-rand = "0.14.0"
 regex = "1.7.1"
+fuzzy-matcher = "0.3.7"
 bastionlab_common = { path = "../bastionlab_common" }
 
 [dependencies.polars]
@@ -93,8 +94,8 @@ features = [
 [dependencies.uuid]
 version = "1.1.2"
 features = [
-  "v4", # Lets you generate random UUIDs
-  "fast-rng", # Use a faster (but still sufficiently random) RNG
+  "v4",                # Lets you generate random UUIDs
+  "fast-rng",          # Use a faster (but still sufficiently random) RNG
   "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs,
   "serde",
 ]
