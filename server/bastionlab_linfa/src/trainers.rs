@@ -48,6 +48,7 @@ pub enum Models {
         fit_intercept: bool,
         max_iterations: u64,
         initial_params: Option<Vec<f64>>,
+        shape: Vec<u64>,
     },
     MultinomialLogisticRegression {
         alpha: f64,
@@ -55,7 +56,7 @@ pub enum Models {
         fit_intercept: bool,
         max_iterations: u64,
         initial_params: Option<Vec<f64>>,
-        shape: Option<Vec<u64>>,
+        shape: Vec<u64>,
     },
     // TODO: Not Yet covered
     DecisionTree {
@@ -96,15 +97,15 @@ pub enum Models {
 pub enum SupportedModels {
     // Covered
     GaussianNaiveBayes(GaussianNb<f64, LabelU64>),
-    KMeans(KMeans<f64, L2Dist>),
     LinearRegression(FittedLinearRegression<f64>),
     BinomialLogisticRegression(FittedLogisticRegression<f64, u64>),
     MultinomialLogisticRegression(MultiFittedLogisticRegression<f64, u64>),
+    DecisionTree(DecisionTree<f64, LabelU64>),
 
     // TODO: Not Yet Covered
+    KMeans(KMeans<f64, L2Dist>),
     ElasticNet(ElasticNet<f64>),
     TweedieRegressor(TweedieRegressor<f64>),
-    DecisionTree(DecisionTree<f64, LabelU64>),
     BallTree(BallTreeIndex<'static, f64, L2Dist>),
     Linear(LinearSearchIndex<'static, f64, L2Dist>),
     KdTree(KdTreeIndex<'static, f64, L2Dist>),
@@ -146,6 +147,7 @@ pub fn select_trainer(trainer: Trainer) -> Result<Models, Status> {
             fit_intercept: t.fit_intercept,
             max_iterations: t.max_iterations,
             initial_params,
+            shape: t.shape,
         })
     } else if let Some(t) = trainer.multinomial_logistic_regression {
         let initial_params = t
@@ -165,7 +167,7 @@ pub fn select_trainer(trainer: Trainer) -> Result<Models, Status> {
             fit_intercept: t.fit_intercept,
             max_iterations: t.max_iterations,
             initial_params,
-            shape: Some(t.shape),
+            shape: t.shape,
         })
     } else if let Some(t) = trainer.decision_tree {
         {
@@ -183,9 +185,7 @@ pub fn select_trainer(trainer: Trainer) -> Result<Models, Status> {
 
             let max_depth: Option<usize> = match t.max_depth {
                 Some(v) => Some(v as usize),
-                None => {
-                    return Err(Status::failed_precondition("max_depth not provided!"));
-                }
+                None => None,
             };
 
             let min_impurity_decrease = t.min_impurity_decrease.into();

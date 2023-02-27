@@ -9,7 +9,7 @@ use linfa_nn::{
 };
 use linfa_svm::SvmParams;
 use linfa_trees::{DecisionTreeParams, SplitQuality};
-use ndarray::{Array1, Array2, ArrayBase, Data, Ix2};
+use ndarray::{Array2, ArrayBase, Data, Ix2};
 use rand::{rngs::StdRng, SeedableRng};
 use tonic::Status;
 
@@ -21,7 +21,8 @@ pub fn binomial_logistic_regression(
     fit_intercept: bool,
     max_iterations: u64,
     initial_params: Option<Vec<f64>>,
-) -> LogisticRegression<f64> {
+    shape: Vec<u64>,
+) -> Result<LogisticRegression<f64>, Status> {
     let mut reg = LogisticRegression::new()
         .alpha(alpha)
         .with_intercept(fit_intercept)
@@ -29,11 +30,17 @@ pub fn binomial_logistic_regression(
         .max_iterations(max_iterations);
 
     if let Some(params) = initial_params {
-        let params = Array1::from_vec(params);
-        reg = reg.initial_params(params);
+        let params = Array2::from_shape_vec((shape[0] as usize, shape[1] as usize), params)
+            .map_err(|e| {
+                Status::failed_precondition(format!(
+                    "Could not construct initial_params from shape: {:?}: {e}",
+                    shape
+                ))
+            })?;
+        reg = reg.initial_params(params.column(0).to_owned());
     }
 
-    reg
+    Ok(reg)
 }
 
 pub fn multinomial_logistic_regression(
@@ -42,7 +49,7 @@ pub fn multinomial_logistic_regression(
     fit_intercept: bool,
     max_iterations: u64,
     initial_params: Option<Vec<f64>>,
-    shape: Option<Vec<u64>>,
+    shape: Vec<u64>,
 ) -> Result<MultiLogisticRegression<f64>, Status> {
     let mut reg = MultiLogisticRegression::new()
         .alpha(alpha)
@@ -51,16 +58,14 @@ pub fn multinomial_logistic_regression(
         .max_iterations(max_iterations);
 
     if let Some(params) = initial_params {
-        if let Some(shape) = shape {
-            let params = Array2::from_shape_vec((shape[0] as usize, shape[1] as usize), params)
-                .map_err(|e| {
-                    Status::failed_precondition(format!(
-                        "Could not construct initial_params from shape: {:?}: {e}",
-                        shape
-                    ))
-                })?;
-            reg = reg.initial_params(params);
-        }
+        let params = Array2::from_shape_vec((shape[0] as usize, shape[1] as usize), params)
+            .map_err(|e| {
+                Status::failed_precondition(format!(
+                    "Could not construct initial_params from shape: {:?}: {e}",
+                    shape
+                ))
+            })?;
+        reg = reg.initial_params(params);
     }
 
     Ok(reg)

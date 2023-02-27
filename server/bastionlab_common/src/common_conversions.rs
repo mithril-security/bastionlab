@@ -83,25 +83,6 @@ pub fn series_to_tensor(series: &Series) -> Result<Tensor, Status> {
     })
 }
 
-pub fn vec_series_to_tensor(
-    v_series: Vec<&Series>,
-) -> Result<(Vec<Tensor>, Vec<i64>, Vec<String>, i32), Status> {
-    let mut ts = Vec::new();
-    let mut shapes = Vec::new();
-    let mut dtypes = Vec::new();
-    let nb_samples = match v_series.first() {
-        Some(v) => v.len(),
-        None => 0,
-    };
-    for s in v_series {
-        let t = series_to_tensor(s)?;
-        shapes.push(t.size()[1]);
-        dtypes.push(format!("{:?}", t.kind()));
-        ts.push(t);
-    }
-    Ok((ts, shapes, dtypes, nb_samples.try_into().unwrap()))
-}
-
 pub fn ndarray_to_tensor<T: RawData, D: Dimension>(
     data: ArrayBase<T, D>,
 ) -> Result<tch::Tensor, Status>

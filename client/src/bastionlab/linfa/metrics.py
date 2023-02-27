@@ -1,6 +1,4 @@
 from ..polars.remote_polars import RemoteArray
-import numpy as np
-from typing import Union
 
 from ..polars.remote_polars import FetchableLazyFrame
 from ..pb.bastionlab_linfa_pb2 import SimpleValidationRequest

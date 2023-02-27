@@ -80,6 +80,8 @@ message BinomialLogisticRegression {
     bool fit_intercept = 3;
     uint64 max_iterations = 4;
     repeated float initial_params = 7;
+    repeated uint64 shape = 8;
+
 }
 
 message MultinomialLogisticRegression {

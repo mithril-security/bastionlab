@@ -1,22 +1,10 @@
-from .client import BastionLabLinfa
 from .client import cross_validate
-from .remote_linfa import (
-    LinearRegression,
-    LogisticRegression,
-    KMeans,
-    GaussianNB,
-    DecisionTreeClassifier,
-    SVC,
-)
 from . import metrics
+from . import models
+from .client import BastionLabLinfa
 
 __all__ = [
     "cross_validate",
-    "LinearRegression",
-    "LogisticRegression",
-    "GaussianNB",
-    "KMeans",
-    "DecisionTreeClassifier",
-    "SVC",
     "metrics",
+    "models",
 ]

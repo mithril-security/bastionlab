@@ -132,6 +132,7 @@ pub fn send_to_trainer(
             fit_intercept,
             max_iterations,
             initial_params,
+            shape,
         } => {
             let train = train.with_targets(IArrayStore(targets.cast(ArrayStoreType::UInt64)?));
 
@@ -144,7 +145,8 @@ pub fn send_to_trainer(
                 fit_intercept,
                 max_iterations,
                 initial_params,
-            );
+                shape,
+            )?;
             Ok(SupportedModels::BinomialLogisticRegression(
                 to_status_error(model.fit(&train))?,
             ))
@@ -306,6 +308,7 @@ pub fn inner_cross_validate(
             fit_intercept,
             max_iterations,
             initial_params,
+            shape,
         } => {
             let m = binomial_logistic_regression(
                 alpha,
@@ -313,11 +316,13 @@ pub fn inner_cross_validate(
                 fit_intercept,
                 max_iterations,
                 initial_params,
-            );
+                shape,
+            )?;
 
-            let mut train = prepare_train_data! {"LosgisticRegression", train,  (AxdynU64, Ix1) };
+            let mut train = prepare_train_data! {"LogisticRegression", train,  (AxdynU64, Ix1) };
 
             let mut train = train.map_targets(|t| LabelU64(*t));
+
             let arr = to_status_error(train.cross_validate_single(
                 cv,
                 &vec![m][..],
@@ -335,15 +340,16 @@ pub fn inner_cross_validate(
             initial_params,
             shape,
         } => {
-            let m = binomial_logistic_regression(
+            let m = multinomial_logistic_regression(
                 alpha,
                 gradient_tolerance,
                 fit_intercept,
                 max_iterations,
                 initial_params,
-            );
+                shape,
+            )?;
 
-            let mut train = prepare_train_data! {"LosgisticRegression", train,  (AxdynU64, Ix1) };
+            let mut train = prepare_train_data! {"LogisticRegression", train,  (AxdynU64, Ix1) };
 
             let mut train = train.map_targets(|t| LabelU64(*t));
 

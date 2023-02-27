@@ -1,5 +1,3 @@
-import grpc
-import polars as pl
 from ..pb.bastionlab_linfa_pb2_grpc import LinfaServiceStub
 from ..pb.bastionlab_linfa_pb2 import (
     TrainingRequest,
@@ -7,9 +5,7 @@ from ..pb.bastionlab_linfa_pb2 import (
     ValidationRequest,
     Trainer as LinfaTrainer,
 )
-from ..pb.bastionlab_polars_pb2 import ReferenceResponse
-from typing import TYPE_CHECKING, Optional
-from ..config import CONFIG
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..polars.remote_polars import RemoteArray, FetchableLazyFrame
@@ -37,7 +33,7 @@ class BastionLabLinfa:
             TrainingRequest(
                 records=records.identifier,
                 target=target.identifier,
-                trainer=LinfaTrainer(**trainer.to_msg_dict()),
+                trainer=LinfaTrainer(**trainer._to_msg_dict()),
             )
         )
         return FittedModel._from_reference(res, trainer._name)
