@@ -869,37 +869,40 @@ class RemoteLazyFrame:
         return ax
 
     def histplot(
-        self: LDF, x: str = "count", y: str = "count", bins: int = 10, **kwargs
+        self: LDF,
+        x: str = "count",
+        y: str = "count",
+        bins: int = 10,
+        colors: Union[str, list[str]] = ["lightblue"],
+        ax: mat.axes = None,
+        **kwargs,
     ):
         """Histplot plots a univariate histogram, where one x or y axes is provided or a bivariate histogram, where both x and y axes values are supplied.
 
         Histplot filters down a RemoteLazyFrame to necessary columns only, groups x axes into bins
-        and performs aggregated queries before calling either Seaborn's barplot (for univaritate histograms) or heatmap function (for bivariate histograms),
+        and performs aggregated queries before calling either matplotlib.pyplot's bar (for univaritate histograms) or imshow function (for bivariate histograms),
         which helps us to limit data retrieved from the server to a minimum.
         Args:
             x (str): The name of column to be used for x axes. Default value is "count", which trigger pl.count() to be used on this axes.
             y (str): The name of column to be used for y axes. Default value is "count", which trigger pl.count() to be used on this axes.
             bins (int): An integer bin value which x axes will be grouped by. Default value is 10.
-            **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function, in the case of one column being supplied, or heatmap function, where both x and y columns are supplied.
+            **kwargs: Other keyword arguments that will be passed to Matplotlib's bar function, in the case of one column being supplied, or imshow function, where both x and y columns are supplied.
 
         Raises:
             ValueError: Incorrect column name given
             RequestRejected: Could not continue in function as data owner rejected a required access request
-            various exceptions: Note that exceptions may be raised from Seaborn when the barplot or heatmap function is called,
-            for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
+            various exceptions: Note that exceptions may be raised from Matplotlib when the bar or imshow function is called. See Matplotlib's documentation for further details.
         """
 
-        col_x = x if x != None else "count"
-        col_y = y if y != None else "count"
-
-        if col_x == "count" and col_y == "count":
-            print("Please provide an 'x' or 'y' value")
-            return
+        if x == "count" and y == "count":
+            raise ValueError("Column name not found in dataframe")
 
         model = ApplyBins(bins)
 
         # if we have only X or Y
-        if col_x == "count" or col_y == "count":
+        if x == "count" or y == "count":
+            col_x = x if x != "count" else y
+            col_y = "count"
             q_x = pl.col(col_x) if col_x != "count" else pl.col(col_y)
             q_y = pl.count()
 
@@ -913,55 +916,69 @@ class RemoteLazyFrame:
                 .groupby(q_x)
                 .agg(q_y)
                 .sort(q_x)
-                .collect()
-                .fetch()
             )
             RequestRejected.check_valid_df(tmp)
-            df = tmp.to_pandas()
-
             # horizontal barplot where x axis is count
-            if "color" not in kwargs:
-                kwargs["color"] = "lightblue"
             if "edgecolor" not in kwargs:
                 kwargs["edgecolor"] = "black"
-            if "width" not in kwargs:
-                kwargs["width"] = 1
 
-            if col_x == "count" and not "orient" in kwargs:
-                sns.barplot(
-                    data=df,
-                    x=df[col_x],
-                    y=df[col_y],
-                    orient="h",
+            if x == "count" and not "orient" in kwargs:
+                return tmp.barplot(
+                    x=col_x,
+                    y=col_y,
+                    vertical=False,
+                    colors=colors,
+                    width=1,
+                    ax=ax,
                     **kwargs,
                 )
             else:
-                sns.barplot(data=df, x=df[col_x], y=df[col_y], **kwargs)
+                return tmp.barplot(
+                    x=col_x,
+                    y=col_y,
+                    vertical=True,
+                    colors=colors,
+                    width=1,
+                    ax=ax,
+                    **kwargs,
+                )
 
         # If we have X and Y
         else:
-            for col in [col_x, col_y]:
+            for col in [x, y]:
                 if not col in self.columns:
-                    raise ValueError("Column name not found in dataframe")
+                    raise ValueError("Column {col} not found in dataframe")
             tmp = (
-                self.filter(pl.col(col_x) != None)
-                .filter(pl.col(col_y) != None)
-                .select([pl.col(col_y), pl.col(col_x)])
-                .apply_udf([col_x], model)
-                .groupby([pl.col(col_x), pl.col(col_y)])
+                self.filter(pl.col(x) != None)
+                .filter(pl.col(y) != None)
+                .select([pl.col(y), pl.col(x)])
+                .apply_udf([x], model)
+                .groupby([pl.col(x), pl.col(y)])
                 .agg(pl.count())
-                .sort(pl.col(col_x))
+                .sort(pl.col(x))
                 .collect()
                 .fetch()
             )
             RequestRejected.check_valid_df(tmp)
             df = tmp.to_pandas()
             my_cmap = sns.color_palette("Blues", as_cmap=True)
-            pivot = df.pivot(index=col_y, columns=col_x, values="count")
+            pivot = df.pivot(index=y, columns=x, values="count")
             if "cmap" not in kwargs:
                 kwargs["cmap"] = my_cmap
-            ax = sns.heatmap(pivot, **kwargs)
+            if ax == None:
+                ax = plt.gca()
+            cbar_kw = {}
+            im = ax.imshow(pivot, **kwargs)
+            cbar = ax.figure.colorbar(im, ax=ax, **cbar_kw)
+            x_labels = df[x].unique().tolist()
+            y_labels = df[y].unique().tolist()
+            ax.set_xticks(np.arange(len(x_labels)), labels=x_labels)
+            ax.set_yticks(np.arange(len(y_labels)), labels=y_labels)
+            ax.set_ylabel(y)
+            ax.set_xlabel(x)
             ax.invert_yaxis()
+
+        return ax
 
     def lineplot(
         self: LDF,
@@ -1484,9 +1501,10 @@ class Facet:
 
     def histplot(
         self: Facet,
-        x: str = None,
-        y: str = None,
+        x: str = "count",
+        y: str = "count",
         bins: int = 10,
+        colors: Union[str, list[str]] = ["lightblue"],
         **kwargs,
     ) -> None:
         """Draws a histplot for each subset in row/column facet grid.
@@ -1504,7 +1522,7 @@ class Facet:
             various exceptions: Note that exceptions may be raised from internal Seaborn (scatterplot) or Matplotlib.pyplot functions (subplots, set_title),
             for example, if kwargs keywords are not expected. See Seaborn/Matplotlib documentation for further details.
         """
-        self.__bastion_map("histplot", x, y, None, bins, **kwargs)
+        return self.__bastion_map("histplot", x, y, None, bins, colors, **kwargs)
 
     def barplot(
         self: Facet,
@@ -1521,7 +1539,7 @@ class Facet:
         width: float = 0.75,
         ax: mat.axes = None,
         **kwargs,
-    ) -> None:
+    ) -> mat.axes:
         """Draws a bar chart for each subset in row/column facet grid.
 
         barplot filters data down to necessary columns only and then calls Seaborn's barplot function.
@@ -1562,11 +1580,11 @@ class Facet:
         y: str,
         axes: mat.axes,
         *args,
-    ):
+    ) -> mat.axes:
         #    create list of all columns needed for query
         selects = []
         for to_add in [x, y, self.col, self.row]:
-            if to_add != None:
+            if to_add != None and to_add != "count":
                 selects.append(to_add)
                 if to_add not in self.inner_rdf.columns:
                     raise ValueError("Column ", to_add, " not found in dataframe")
@@ -1625,6 +1643,7 @@ class Facet:
                         x, y, *args, ax=axes[count]
                     )
                 axes[count].set_title(t1)
+        return axes
 
     def __map(self: LDF, func, **kwargs) -> None:
         # create list of all columns needed for query

@@ -152,23 +152,6 @@ class VisTools:
     def _bar_get_x_position(points, index, total, width):
         scale = lambda x: x - (index - total / 2 + 0.5) * width
         return scale(points)
-        # even = total % 2 == 0
-        # half = total / 2
-        # if (index + 1) == statistics.median(list(range(1, total + 1))):
-        #     print("mid")
-        #     print(points)
-        #     return points
-        # if index <= half and not even:
-        #     print("less 1")
-        #     print(points)
-        #     return points - width / total
-        # elif index < half and even:
-        #     print("less 2")
-        #     print(points)
-        #     return points - width / total
-        # print("big")
-        # print(points)
-        # return points + width / total
 
     def _get_all_cols(
         rdf,
