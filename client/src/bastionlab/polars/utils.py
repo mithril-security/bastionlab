@@ -2,10 +2,11 @@ from typing import Iterator, Tuple, List
 import torch
 import polars as pl
 import io
+import json
 from ..pb.bastionlab_polars_pb2 import SendChunk, FetchChunk
 from .policy import Policy
 from ..errors import RequestRejected
-import statistics
+from serde.json import to_json
 
 
 CHUNK_SIZE = 32 * 1024
@@ -45,7 +46,7 @@ def serialize_dataframe(
         if first:
             chunk = SendChunk(
                 data=data,
-                policy=policy.serialize(),
+                policy=to_json(policy),
                 sanitized_columns=sanitized_columns,
             )
             first = False

@@ -9,6 +9,13 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "pb"))
 
 from .client import Connection
 from .keys import SigningKey, PublicKey, Identity
+from .errors import RequestRejected, GRPCException
 
-from . import polars
-from . import torch
+__all__ = [
+    "Connection",
+    "SigningKey",
+    "PublicKey",
+    "Identity",
+    "RequestRejected",
+    "GRPCException",
+]
