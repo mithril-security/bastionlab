@@ -754,7 +754,8 @@ class RemoteLazyFrame:
         ):  # check color input is valid
             colors = Palettes.dict[colors]
 
-        fig, ax = plt.subplots()  # setup ax
+        if ax == None:
+            fig, ax = plt.subplots()  # setup ax
 
         labels = VisTools._get_unique_values(self, x if x else y)  # set up labels
         if None in labels:
@@ -1509,6 +1510,7 @@ class Facet:
         self: Facet,
         x: str = None,
         y: str = None,
+        hue: str = None,
         estimator: str = "mean",
         vertical: bool = True,
         title: str = None,
@@ -1516,6 +1518,7 @@ class Facet:
         x_label: str = None,
         y_label: str = None,
         colors: Union[str, list[str]] = Palettes.dict["standard"],
+        width: float = 0.75,
         ax: mat.axes = None,
         **kwargs,
     ) -> None:
@@ -1540,6 +1543,7 @@ class Facet:
             x,
             y,
             ax,
+            hue,
             estimator,
             vertical,
             title,
@@ -1547,6 +1551,7 @@ class Facet:
             x_label,
             y_label,
             colors,
+            width,
             **kwargs,
         )
 
@@ -1568,7 +1573,7 @@ class Facet:
 
         #    get unique row and col values
         cols = VisTools._get_unique_values(self.inner_rdf, self.col) if self.col else []
-        rows = VisTools._get_unique_values(self.inner_rdf, self.row) if self.col else []
+        rows = VisTools._get_unique_values(self.inner_rdf, self.row) if self.row else []
 
         # mapping
         r_len = len(rows) if len(rows) != 0 else 1
@@ -1620,7 +1625,6 @@ class Facet:
                         x, y, *args, ax=axes[count]
                     )
                 axes[count].set_title(t1)
-        return axes
 
     def __map(self: LDF, func, **kwargs) -> None:
         # create list of all columns needed for query
