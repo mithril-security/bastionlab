@@ -46,17 +46,20 @@ pub async fn unserialize_dataframe(
         .finish()
         .map_err(|err| Status::invalid_argument(format!("Polars error: {err}")))?;
 
-    Ok((DataFrameArtifact::new(df, policy, sanitized_columns), hash))
+    Ok((
+        DataFrameArtifact::new(Arc::new(df), policy, sanitized_columns),
+        hash,
+    ))
 }
 
 // so, to hash a dataset, this does a full serialization; that's kinda bad
-pub fn hash_dataset(df: &mut DataFrame) -> Result<String, PolarsError> {
+pub fn hash_dataset(df: Arc<DataFrame>) -> Result<String, PolarsError> {
     let buf = dataframe_ser_helper(df)?;
     Ok(hex::encode(digest::digest(&digest::SHA256, &buf).as_ref()))
 }
 
-// This requires &mut because polars is kinda weird about that, but it's not mutated..
-fn dataframe_ser_helper(df: &mut DataFrame) -> Result<Vec<u8>, PolarsError> {
+fn dataframe_ser_helper(mut df: Arc<DataFrame>) -> Result<Vec<u8>, PolarsError> {
+    let df = Arc::make_mut(&mut df); // This requires &mut because polars is kinda weird about that, but it's not mutated..
     let mut buf = Vec::new();
 
     // PERF: this can be replaced by manually using arrow IPC methods, to avoid this copy
@@ -93,7 +96,7 @@ pub async fn serialize_delayed_dataframe(
         // - send() returns an error when the receiver has been dropped / .close() has been called on it
         //   this means that send() will return Err only when the client has "lost interest", has dropped the connection / call
 
-        let mut df: DataFrame = match df.future.await {
+        let df: Arc<DataFrame> = match df.future.await {
             Ok(df) => df,
             Err(e) => {
                 // ignore send() error: error means the channel has been closed, ie, client dropped the request.
@@ -102,7 +105,7 @@ pub async fn serialize_delayed_dataframe(
             }
         };
 
-        let res = dataframe_ser_helper(&mut df)
+        let res = dataframe_ser_helper(df)
             .map_err(|err| Status::internal(format!("Polars error: {err}"))); // this is an internal error
 
         let buf = match res {

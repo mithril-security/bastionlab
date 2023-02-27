@@ -11,6 +11,7 @@ members = [
   "bastionlab_learning",
   "bastionlab_conversion",
   "bastionlab_polars",
+  "bastionlab_plan",
 ]
 resolver = "2"
 

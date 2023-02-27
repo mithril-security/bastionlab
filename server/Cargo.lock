@@ -314,12 +314,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "bastionlab_plan"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "bastionlab_common",
+ "env_logger",
+ "log",
+ "polars",
+ "serde",
+ "serde_derive",
+ "tch",
+ "thiserror",
+ "tokio-stream",
+]
+
+[[package]]
 name = "bastionlab_polars"
 version = "0.3.7"
 dependencies = [
  "anyhow",
  "base64",
  "bastionlab_common",
+ "bastionlab_plan",
  "bytes",
  "hex",
  "http",

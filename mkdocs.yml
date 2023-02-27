@@ -123,6 +123,31 @@ nav:
       - Remote data science: "docs/concepts-guides/remote_data_science.md"
   - 🛠️ API Reference:
       - Sub-modules:
+          - "docs/resources/bastionlab/index.md"
+          - bastionlab.client: "docs/resources/bastionlab/client.md"
+          - bastionlab.errors: "docs/resources/bastionlab/errors.md"
+          - bastionlab.keys: "docs/resources/bastionlab/keys.md"
+          - bastionlab.polars:
+              - "docs/resources/bastionlab/polars/index.md"
+              - bastionlab.polars.client: "docs/resources/bastionlab/polars/client.md"
+              - bastionlab.polars.frame: "docs/resources/bastionlab/polars/frame.md"
+              - bastionlab.polars.policy: "docs/resources/bastionlab/polars/policy.md"
+              - bastionlab.polars.utils: "docs/resources/bastionlab/polars/utils.md"
+          - bastionlab.tokenizers:
+              - "docs/resources/bastionlab/tokenizers/index.md"
+              - bastionlab.tokenizers.client: "docs/resources/bastionlab/tokenizers/client.md"
+              - bastionlab.tokenizers.remote_tokenizers: "docs/resources/bastionlab/tokenizers/remote_tokenizers.md"
+          - bastionlab.torch:
+              - "docs/resources/bastionlab/torch/index.md"
+              - bastionlab.torch.client: "docs/resources/bastionlab/torch/client.md"
+              - bastionlab.torch.data: "docs/resources/bastionlab/torch/data.md"
+              - bastionlab.torch.learner: "docs/resources/bastionlab/torch/learner.md"
+              - bastionlab.torch.optimizer: "docs/resources/bastionlab/torch/optimizer.md"
+              - bastionlab.torch.psg:
+                  - "docs/resources/bastionlab/torch/psg/index.md"
+                  - bastionlab.torch.psg.convert: "docs/resources/bastionlab/torch/psg/convert.md"
+                  - bastionlab.torch.psg.nn: "docs/resources/bastionlab/torch/psg/nn.md"
+              - bastionlab.torch.utils: "docs/resources/bastionlab/torch/utils.md"
   - 🔒 Security:
       - Threat model: "docs/security/threat_model_data_owner_owns_infrastructure.md"
       - Authentication specifications: "docs/security/authenticated_sessions.md"

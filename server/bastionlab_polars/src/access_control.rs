@@ -1,7 +1,6 @@
+use bastionlab_plan::aggregation::factor::AggregationFactor;
 use serde::{Deserialize, Serialize};
 use tonic::Status;
-
-use crate::composite_plan::StatsEntry;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Policy {
@@ -11,6 +10,10 @@ pub struct Policy {
 }
 
 impl Policy {
+    pub fn needs_aggregation_analysis(&self) -> bool {
+        self.safe_zone.needs_aggregation_analysis()
+    }
+
     pub fn verify(&self, ctx: &Context) -> Result<VerificationResult, Status> {
         Ok(match self.safe_zone.verify(ctx)? {
             RuleMatch::Match => VerificationResult::Safe,
@@ -56,13 +59,25 @@ pub enum Rule {
 }
 
 #[derive(Debug, Clone)]
-pub struct Context {
-    pub stats: StatsEntry,
-    pub user_id: String,
-    pub df_identifier: String,
+pub struct Context<'a> {
+    pub agg_factor: Option<AggregationFactor>,
+    pub user_id: &'a str,
+    pub df_identifier: &'a str,
 }
 
 impl Rule {
+    fn needs_aggregation_analysis(&self) -> bool {
+        match self {
+            Self::AtLeastNOf { of: sub_rules, .. } => {
+                sub_rules.iter().any(Self::needs_aggregation_analysis)
+            }
+            Self::Aggregation { .. } => true,
+            Self::UserId { .. } => false,
+            Self::TrueRule => false,
+            Self::FalseRule => false,
+        }
+    }
+
     fn verify(&self, ctx: &Context) -> Result<RuleMatch, Status> {
         match self {
             Rule::AtLeastNOf { n, of: sub_rules } => {
@@ -91,16 +106,17 @@ impl Rule {
             } else {
                 RuleMatch::Mismatch(String::from("UserId mismatch"))
             }),
-            Rule::Aggregation {
-                min_agg_size: min_allowed_agg_size,
-            } => {
-                let min_allowed_agg_size = *min_allowed_agg_size * ctx.stats.join_scaling;
-                Ok(if ctx.stats.agg_size >= min_allowed_agg_size {
+            Rule::Aggregation { min_agg_size } => {
+                let Some(stats) = ctx.agg_factor else {
+                    return Err(Status::internal("aggregation analysis was not done (this is a bug)"))
+                };
+                log::trace!("Resulting agg size is {stats:?}; min_agg_size is {min_agg_size}");
+                Ok(if stats.k() >= *min_agg_size {
                     RuleMatch::Match
                 } else {
                     RuleMatch::Mismatch(format!(
-                        "Cannot fetch a result DataFrame that does not aggregate at least {} rows of DataFrame {}.",
-                        min_allowed_agg_size,
+                        "Cannot fetch a result DataFrame that does not aggregate at least {} rows of DataFrame {} - the query only aggregated {stats:?} rows.",
+                        min_agg_size,
                         ctx.df_identifier,
                     ))
                 })

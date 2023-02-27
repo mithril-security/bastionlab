@@ -6,6 +6,7 @@ use bastionlab_common::{
     telemetry::{self, TelemetryEventProps},
 };
 
+use bastionlab_plan::composite_plan::{self, AnalysisMode, CompositePlan};
 use polars::prelude::*;
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
@@ -32,9 +33,6 @@ use polars_proto::{
 mod serialization;
 use serialization::*;
 
-mod composite_plan;
-use composite_plan::*;
-
 mod visitable;
 
 pub mod access_control;
@@ -55,21 +53,22 @@ pub enum FetchStatus {
 /// This a DataFrame intended to be streamed to the client.
 /// It can be delayed when the data owner's approval is required.
 pub struct DelayedDataFrame {
-    future: Pin<Box<dyn Future<Output = Result<DataFrame, Status>> + Send>>,
+    future: Pin<Box<dyn Future<Output = Result<Arc<DataFrame>, Status>> + Send>>,
     fetch_status: FetchStatus,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataFrameArtifact {
-    dataframe: DataFrame,
+    dataframe: Arc<DataFrame>,
     policy: Policy,
     fetchable: VerificationResult,
+    /// sanitized_columns
     blacklist: Vec<String>,
     query_details: String,
 }
 
 impl DataFrameArtifact {
-    pub fn new(df: DataFrame, policy: Policy, blacklist: Vec<String>) -> Self {
+    pub fn new(df: Arc<DataFrame>, policy: Policy, blacklist: Vec<String>) -> Self {
         DataFrameArtifact {
             dataframe: df,
             policy,
@@ -87,7 +86,7 @@ impl DataFrameArtifact {
         self
     }
 
-    pub fn inherit(&self, df: DataFrame) -> Self {
+    pub fn inherit(&self, df: Arc<DataFrame>) -> Self {
         Self {
             dataframe: df,
             policy: self.policy.clone(),
@@ -257,7 +256,7 @@ Reason: {}",
         })
     }
 
-    pub fn get_df_unchecked(&self, identifier: &str) -> Result<DataFrame, Status> {
+    pub fn get_df_unchecked(&self, identifier: &str) -> Result<Arc<DataFrame>, Status> {
         let dfs = self.dataframes.read().unwrap();
         Ok(dfs
             .get(identifier)
@@ -418,25 +417,96 @@ impl PolarsService for BastionLabPolars {
     ) -> Result<Response<ReferenceResponse>, Status> {
         let token = self.sess_manager.get_token(&request)?;
 
-        let composite_plan: CompositePlan = serde_json::from_str(&request.get_ref().composite_plan)
-            .map_err(|e| {
+        let inner = request.into_inner();
+
+        let composite_plan: CompositePlan =
+            serde_json::from_str(&inner.composite_plan).map_err(|e| {
                 Status::invalid_argument(format!(
                     "Could not deserialize composite plan: {}{}",
-                    e,
-                    &request.get_ref().composite_plan
+                    e, &inner.composite_plan
                 ))
             })?;
         let user_id = self.sess_manager.get_user_id(token.clone())?;
 
         let start_time = Instant::now();
 
-        let mut res = composite_plan.run(self, &user_id)?;
-        // TODO: this isn't really great.. this does a full serialization under the hood
-        let hash = hash_dataset(&mut res.dataframe)
-            .map_err(|e| Status::internal(format!("Polars error: {e}")))?;
+        let mut state_map = HashMap::new();
+        let mut input_ids = Vec::new();
+        let mut need_agg_analysis = false;
+        {
+            let df_lock = self.dataframes.read().expect("poisoned lock");
+            for el in composite_plan.get_input_df_ids() {
+                let artifact = df_lock.get(el).ok_or_else(|| {
+                    Status::not_found(format!("Dataframe with id {el} not found."))
+                })?;
 
-        let header = get_df_header(&res.dataframe)?;
-        let identifier = self.insert_df(res);
+                if !need_agg_analysis && artifact.policy.needs_aggregation_analysis() {
+                    need_agg_analysis = true;
+                }
+                state_map.insert(el.to_string(), artifact.dataframe.clone());
+                input_ids.push(el.to_string())
+            }
+        }
+
+        let state = composite_plan::State(state_map);
+
+        let aggregation_mode = match need_agg_analysis {
+            true => AnalysisMode::AggregationCheck,
+            false => AnalysisMode::NoAnalysis,
+        };
+
+        let (df, stats) = composite_plan
+            .run(state, aggregation_mode)
+            .map_err(|e| Status::invalid_argument(format!("{e}")))?;
+        // TODO: this isn't really great.. this does a full serialization under the hood
+        let hash =
+            hash_dataset(df.clone()).map_err(|e| Status::internal(format!("Polars error: {e}")))?;
+
+        let mut policy = Policy::allow_by_default();
+        let blacklist = Vec::new();
+        let mut fetchable = VerificationResult::Safe;
+
+        for id in input_ids {
+            let agg_factor = if let Some(stats) = &stats.agg_stats {
+                Some(stats.agg_factor().get(&id).ok_or_else(|| {
+                    Status::internal(format!("Cannot find agg_factor for dataframe {id}"))
+                })?)
+            } else {
+                None
+            };
+            self.with_df_artifact_ref(&id, |artifact| -> Result<(), Status> {
+                let check = artifact.policy.verify(&access_control::Context {
+                    agg_factor: agg_factor.copied(),
+                    user_id: &user_id,
+                    df_identifier: &id,
+                })?;
+
+                if let VerificationResult::Unsafe { .. } = check {
+                    policy = policy.merge(&artifact.policy);
+                }
+                fetchable.merge(check);
+
+                // for (key, val) in blacklist_hashmap.iter() {
+                //     if artifact.blacklist[..].contains(&key.to_string()) {
+                //         blacklist.push(val.to_string());
+                //     }
+                // }
+                // blacklist.extend_from_slice(&artifact.blacklist[..]);
+
+                Ok(())
+            })??;
+        }
+
+        let artifact = DataFrameArtifact {
+            dataframe: df.clone(),
+            fetchable,
+            policy,
+            blacklist,
+            query_details: inner.composite_plan,
+        };
+
+        let header = get_df_header(&df)?;
+        let identifier = self.insert_df(artifact);
 
         let elapsed = start_time.elapsed();
 
