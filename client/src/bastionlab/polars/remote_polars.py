@@ -430,61 +430,6 @@ class RemoteLazyFrame:
         # because if not this leads to panics etc. when we follow this with other operations that use the new column before next using collect()
         return ret.collect()
 
-    def describe(self: LDF) -> pl.DataFrame:
-        """
-        Provides the following summary statistics for our RemoteLazyFrame:
-        - count
-        - null count
-        - mean
-        - std
-        - min
-        - max
-        - median
-         Raises:
-            Exception: Where necessary queries to get statistical information for the operation are rejected by the data owner
-        Returns:
-            A Polars DataFrame containing statistical information
-        """
-        ret = self.select(
-            [
-                pl.col("*").count().suffix("_count"),
-                pl.col("*").null_count().suffix("_null_count"),
-                pl.col("*").mean().suffix("_mean"),
-                pl.col("*").std().suffix("_std"),
-                pl.col("*").min().suffix("_min"),
-                pl.col("*").max().suffix("_max"),
-                pl.col("*").median().suffix("_median"),
-            ]
-        )
-        stats = ret.collect().fetch()
-        RequestRejected.check_valid_df(stats)
-        description = pl.DataFrame(
-            {
-                "describe": [
-                    "count",
-                    "null_count",
-                    "mean",
-                    "std",
-                    "min",
-                    "max",
-                    "median",
-                ],
-                **{
-                    x: [
-                        stats.select(f"{x}_count")[0, 0],
-                        stats.select(f"{x}_null_count")[0, 0],
-                        stats.select(f"{x}_mean")[0, 0],
-                        stats.select(f"{x}_std")[0, 0],
-                        stats.select(f"{x}_min")[0, 0],
-                        stats.select(f"{x}_max")[0, 0],
-                        stats.select(f"{x}_median")[0, 0],
-                    ]
-                    for x in self.columns
-                },
-            }
-        )
-        return description
-
     def join(
         self: LDF,
         other: LDF,
@@ -603,6 +548,7 @@ class RemoteLazyFrame:
         key_loc: str = "center left",
         key_title: str = None,
         key_bbox=(1, 0, 0.5, 1),
+        **kwargs,
     ) -> None:
         """Draws a pie chart based on values within single column.
         pieplot collects necessary data only and calculates percentage values before calling matplotlib pyplot's pie function to create a pie chart.
@@ -672,14 +618,14 @@ class RemoteLazyFrame:
                     fig_kwargs["figsize"] = (7, 4)
                 fig, ax = plt.subplots(**fig_kwargs)
             if pie_labels == True:
-                wedges, autotexts = plt.pie(pie_data, labels=labels_list)
+                wedges, autotexts = plt.pie(pie_data, labels=labels_list, **kwargs)
             else:
-                wedges, autotexts = plt.pie(pie_data)
+                wedges, autotexts = plt.pie(pie_data, **kwargs)
 
         elif pie_labels == True:
-            wedges, autotexts = ax.pie(pie_data, labels=labels_list)
+            wedges, autotexts = ax.pie(pie_data, labels=labels_list, **kwargs)
         else:
-            wedges, autotexts = ax.pie(pie_data)
+            wedges, autotexts = ax.pie(pie_data, **kwargs)
 
         if key == True:
             ax.legend(
