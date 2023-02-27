@@ -1,7 +1,21 @@
 from ..polars.remote_polars import RemoteArray
 
 from ..polars.remote_polars import FetchableLazyFrame
-from ..pb.bastionlab_linfa_pb2 import SimpleValidationRequest
+from ..pb.bastionlab_linfa_pb2 import (
+    SimpleValidationRequest,
+    R2Score,
+    MeanAbsoluteError,
+    MeanSquaredError,
+    MeanSquaredLogError,
+    MedianAbsoluteError,
+    MaxError,
+    ExplainedVariance,
+    Accuracy,
+    F1Score,
+    Mcc,
+    ClassificationMetric,
+    RegressionMetric,
+)
 
 
 def mean_squared_error(
@@ -13,8 +27,9 @@ def mean_squared_error(
         SimpleValidationRequest(
             truth=y_true.identifier,
             prediction=y_pred.identifier,
-            scoring="mean_squared_error",
-            metric_type="regression",
+            regression_metric=RegressionMetric(
+                mean_squared_error=MeanSquaredError(),
+            ),
         )
     )
 
@@ -30,8 +45,9 @@ def mean_squared_log_error(
         SimpleValidationRequest(
             truth=y_true.identifier,
             prediction=y_pred.identifier,
-            scoring="mean_squared_log_error",
-            metric_type="regression",
+            regression_metric=RegressionMetric(
+                mean_squared_log_error=MeanSquaredLogError()
+            ),
         )
     )
 
@@ -45,8 +61,7 @@ def r2_score(y_true: "RemoteArray", y_pred: "RemoteArray") -> "FetchableLazyFram
         SimpleValidationRequest(
             truth=y_true.identifier,
             prediction=y_pred.identifier,
-            scoring="r2_score",
-            metric_type="regression",
+            regression_metric=RegressionMetric(r2_score=R2Score()),
         )
     )
 
@@ -62,8 +77,7 @@ def mean_absolute_error(
         SimpleValidationRequest(
             truth=y_true.identifier,
             prediction=y_pred.identifier,
-            scoring="mean_absolute_error",
-            metric_type="regression",
+            regression_metric=RegressionMetric(mean_absolute_error=MeanAbsoluteError()),
         )
     )
 
@@ -79,8 +93,9 @@ def median_absolute_error(
         SimpleValidationRequest(
             truth=y_true.identifier,
             prediction=y_pred.identifier,
-            scoring="median_absolute_error",
-            metric_type="regression",
+            regression_metric=RegressionMetric(
+                median_absolute_error=MedianAbsoluteError()
+            ),
         )
     )
 
@@ -94,8 +109,9 @@ def max_error(y_true: "RemoteArray", y_pred: "RemoteArray") -> "FetchableLazyFra
         SimpleValidationRequest(
             truth=y_true.identifier,
             prediction=y_pred.identifier,
-            scoring="max_error",
-            metric_type="regression",
+            regression_metric=RegressionMetric(
+                max_error=MaxError(),
+            ),
         )
     )
 
@@ -111,8 +127,9 @@ def explained_variance(
         SimpleValidationRequest(
             truth=y_true.identifier,
             prediction=y_pred.identifier,
-            scoring="explained_variance",
-            metric_type="regression",
+            regression_metric=RegressionMetric(
+                explained_variance=ExplainedVariance(),
+            ),
         )
     )
 
@@ -128,8 +145,7 @@ def accuracy_score(
         SimpleValidationRequest(
             truth=y_true.identifier,
             prediction=y_pred.identifier,
-            scoring="accuracy",
-            metric_type="classification",
+            classification_metric=ClassificationMetric(accuracy=Accuracy()),
         )
     )
 
@@ -143,8 +159,21 @@ def f1_score(y_true: "RemoteArray", y_pred: "RemoteArray") -> "FetchableLazyFram
         SimpleValidationRequest(
             truth=y_true.identifier,
             prediction=y_pred.identifier,
-            scoring="f1_score",
-            metric_type="classification",
+            classification_metric=ClassificationMetric(f1_score=F1Score()),
+        )
+    )
+
+    return FetchableLazyFrame._from_reference(y_true._client.polars, res)
+
+
+def mcc(y_true: "RemoteArray", y_pred: "RemoteArray") -> "FetchableLazyFrame":
+    from ..polars.remote_polars import FetchableLazyFrame
+
+    res = y_true._client.linfa.stub.Validate(
+        SimpleValidationRequest(
+            truth=y_true.identifier,
+            prediction=y_pred.identifier,
+            classification_metric=ClassificationMetric(mcc=Mcc()),
         )
     )
 

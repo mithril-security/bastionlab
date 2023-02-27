@@ -14,9 +14,11 @@ use tonic::Status;
 
 use crate::{
     algorithms::*,
-    get_inner_array, prepare_train_data,
+    get_inner_array,
+    linfa_proto::validation_request::Scoring,
+    prepare_train_data,
     trainers::{Models, PredictionTypes, SupportedModels},
-    utils::{classification_metrics, get_datasets, regression_metrics, IArrayStore, LabelU64},
+    utils::{get_datasets, IArrayStore, LabelU64},
 };
 
 #[allow(unused)]
@@ -274,32 +276,27 @@ pub fn inner_cross_validate(
     model: Models,
     records: ArrayStore,
     targets: ArrayStore,
-    scoring: &str,
+    scoring: &Scoring,
     cv: usize,
 ) -> Result<ArrayStore, Status> {
     let mut train = get_datasets(records, targets);
-
+    let get_score = |scoring, prediction, truth| match scoring {
+        Scoring::RegressionMetric(metric) => metric
+            .regression_metric
+            .clone()
+            .unwrap()
+            .compute(prediction, truth),
+        Scoring::ClassificationMetric(metric) => metric
+            .classification_metric
+            .clone()
+            .unwrap()
+            .compute(prediction, truth),
+    };
     let result = match model {
         Models::LinearRegression { fit_intercept } => {
             let m = linear_regression(fit_intercept);
             let mut train = prepare_train_data! {"LinearRegression", train,  (AxdynF64, Ix1) };
-            let arr =
-                to_status_error(
-                    train.cross_validate_single(cv, &vec![m][..], |pred, truth| {
-                        let res = regression_metrics(pred, truth, scoring);
-
-                        match res {
-                            Ok(res) => {
-                                return Ok(res);
-                            }
-                            Err(e) => {
-                                return Err(linfa::Error::Priors(format!("{e}")));
-                            }
-                        }
-                    }),
-                )?;
-
-            ArrayStore::AxdynF64(arr.into_dyn())
+            todo!()
         }
 
         Models::BinomialLogisticRegression {
@@ -319,17 +316,18 @@ pub fn inner_cross_validate(
                 shape,
             )?;
 
-            let mut train = prepare_train_data! {"LogisticRegression", train,  (AxdynU64, Ix1) };
+            todo!()
+            // let mut train = prepare_train_data! {"LogisticRegression", train,  (AxdynU64, Ix1) };
 
-            let mut train = train.map_targets(|t| LabelU64(*t));
+            // let mut train = train.map_targets(|t| LabelU64(*t));
 
-            let arr = to_status_error(train.cross_validate_single(
-                cv,
-                &vec![m][..],
-                |pred, truth| classification_metrics(pred, truth, scoring),
-            ))?;
+            // let arr = to_status_error(train.cross_validate_single(
+            //     cv,
+            //     &vec![m][..],
+            //     |pred, truth| classification_metrics(pred, truth, scoring),
+            // ))?;
 
-            ArrayStore::AxdynF32(arr.into_dyn())
+            // ArrayStore::AxdynF32(arr.into_dyn())
         }
 
         Models::MultinomialLogisticRegression {
@@ -348,18 +346,7 @@ pub fn inner_cross_validate(
                 initial_params,
                 shape,
             )?;
-
-            let mut train = prepare_train_data! {"LogisticRegression", train,  (AxdynU64, Ix1) };
-
-            let mut train = train.map_targets(|t| LabelU64(*t));
-
-            let arr = to_status_error(train.cross_validate_single(
-                cv,
-                &vec![m][..],
-                |pred, truth| classification_metrics(pred, truth, scoring),
-            ))?;
-
-            ArrayStore::AxdynF32(arr.into_dyn())
+            todo!()
         }
 
         _ => {

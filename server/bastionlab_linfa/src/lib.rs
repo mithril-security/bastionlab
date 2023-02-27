@@ -21,7 +21,7 @@ mod operations;
 use operations::*;
 
 mod utils;
-use utils::{process_trainer_req, IArrayStore};
+use utils::{get_score, process_trainer_req, IArrayStore};
 
 use uuid::Uuid;
 
@@ -132,54 +132,19 @@ impl LinfaService for BastionLabLinfa {
 
     async fn cross_validate(
         &self,
-        request: Request<ValidationRequest>,
+        _request: Request<ValidationRequest>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        let (trainer, records, targets, cv, scoring) = (
-            request.get_ref().trainer.clone(),
-            &request.get_ref().records,
-            &request.get_ref().targets,
-            request.get_ref().cv,
-            &request.get_ref().scoring,
-        );
-
-        let records = self.polars.get_array(records)?;
-        let targets = self.polars.get_array(targets)?;
-        let trainer = trainer.ok_or(Status::aborted("Invalid Trainer!"))?;
-        let trainer = select_trainer(trainer)?;
-
-        let df = to_status_error(inner_cross_validate(
-            trainer,
-            records,
-            targets,
-            &scoring,
-            cv as usize,
-        ))?
-        .to_dataframe(vec![scoring.to_string()])?;
-
-        // FIXME: Currently, everyone can fetch predictions.
-        // Ideally, we would want policies to trickly down here too
-        // TODO: Figure out how to pass policies to the `ndarray` -> `DataFrame` problem
-        //       where there wasn't any policy to inherit from in the first place.
-        //       Possible solution:
-        //         - Add a `policy` field to `ArrayStore` and this will inherit the policy of the
-        //           DataFrame, from which it was converted.
-        let identifier = self.insert_df(
-            DataFrameArtifact::new(df, Policy::allow_by_default(), vec![String::default()])
-                .with_fetchable(VerificationResult::Safe),
-        );
-        let header = self.get_header(&identifier)?;
-        Ok(Response::new(ReferenceResponse { identifier, header }))
+        unimplemented!()
     }
 
     async fn validate(
         &self,
         request: Request<SimpleValidationRequest>,
     ) -> Result<Response<ReferenceResponse>, Status> {
-        let (truth, prediction, scoring, metric_type) = (
+        let (truth, prediction, scoring) = (
             &request.get_ref().truth,
             &request.get_ref().prediction,
-            &request.get_ref().scoring,
-            &request.get_ref().metric_type,
+            request.get_ref().scoring.clone(),
         );
 
         let truth = self.polars.get_array(truth)?;
@@ -187,17 +152,11 @@ impl LinfaService for BastionLabLinfa {
 
         let truth = IArrayStore(truth);
         let prediction = IArrayStore(prediction);
+        let scoring = scoring.ok_or(Status::failed_precondition(
+            "Please provide a scoring metric",
+        ))?;
 
-        let df = match metric_type.as_str() {
-            "regression" => truth.regression_metrics(prediction, scoring),
-            "classification" => truth.classification_metrics(prediction, scoring),
-            &_ => {
-                return Err(Status::failed_precondition(format!(
-                    "Unsupported metric type: {metric_type}"
-                )));
-            }
-        }?;
-
+        let df = get_score(&scoring, prediction, truth)?;
         let identifier = self.insert_df(
             DataFrameArtifact::new(df, Policy::allow_by_default(), vec![String::default()])
                 .with_fetchable(VerificationResult::Safe),

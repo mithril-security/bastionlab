@@ -182,14 +182,52 @@ message ValidationRequest {
     string records = 2;
     string targets = 3;
     uint64 cv = 4;
-    string scoring = 5;
+    oneof scoring {
+        RegressionMetric regression_metric = 5;
+        ClassificationMetric classification_metric = 6;
+    }
 }
 
+// Scoring Types
+message R2Score{}
+message MaxError {}
+message MeanAbsoluteError {}
+message ExplainedVariance {}
+message MeanSquaredLogError {}
+message MeanSquaredError {}
+message MedianAbsoluteError {}
+message Accuracy {}
+message F1Score {}
+message Mcc {}
+
+// Kinds of Scoring/Metrics
+message RegressionMetric {
+    oneof regression_metric {
+        R2Score r2_score = 1;
+        MaxError max_error =2;
+        MeanAbsoluteError mean_absolute_error = 3;
+        MeanSquaredLogError mean_squared_log_error = 4;
+        MeanSquaredError mean_squared_error = 5;
+        ExplainedVariance explained_variance = 6;
+        MedianAbsoluteError median_absolute_error = 7;
+    }
+}
+
+message ClassificationMetric {
+    oneof classification_metric {
+        Accuracy accuracy = 1;
+        F1Score f1_score = 2;
+        Mcc mcc =3;
+    }
+}
 message SimpleValidationRequest {
+
     string truth = 1;
     string prediction = 2;
-    string scoring = 3;
-    string metric_type = 4;
+    oneof scoring {
+        RegressionMetric regression_metric = 3;
+        ClassificationMetric classification_metric = 4;
+    }
 }
 
 message ValidationResponse {
