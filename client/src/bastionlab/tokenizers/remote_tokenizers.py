@@ -1,14 +1,16 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Tuple, Union, Optional, Dict
-import polars as pl
+from typing import TYPE_CHECKING, Tuple, Optional, Dict
 import json
 from tokenizers import Tokenizer
-from ..polars.remote_polars import RemoteArray, Metadata, delegate, delegate_properties
+from .._utils import delegate, delegate_properties
 from ..pb.bastionlab_conversion_pb2 import ToTokenizedArrays
 
 if TYPE_CHECKING:
-    from ..polars.remote_polars import RemoteLazyFrame, RemoteArray, Metadata
+    import bastionlab.polars
+    from ..polars import RemoteLazyFrame, RemoteArray
     from ..client import Client
+
+__pdoc__ = {}
 
 
 @delegate_properties(
@@ -35,6 +37,8 @@ if TYPE_CHECKING:
 )
 @dataclass
 class RemoteTokenizer:
+    """Represents a tokenizer on the server."""
+
     _client: "Client"
     _tokenizer: Optional["Tokenizer"] = None
     _model_name: Optional[str] = None
@@ -69,7 +73,7 @@ class RemoteTokenizer:
         self,
         rdf: "RemoteLazyFrame",
         add_special_tokens: bool = True,
-    ) -> Tuple[RemoteArray, RemoteArray]:
+    ) -> "Tuple[bastionlab.polars.RemoteArray, bastionlab.polars.RemoteArray]":
         """
         Encodes a RemoteLazyFrame as tokenized RemoteArray.
 
@@ -93,6 +97,8 @@ class RemoteTokenizer:
                 auth_token=self._auth_token,
             )
         ).list
+
+        from ..polars import RemoteArray
 
         ids = RemoteArray(self._client, ids.identifier)
         masks = RemoteArray(self._client, masks.identifier)
@@ -123,6 +129,9 @@ class RemoteTokenizer:
         )
 
 
+__pdoc__["RemoteTokenizer.__init__"] = False
+
+
 def from_snake_case_to_camel_case(snake_string: str):
     return snake_string.title().replace("_", "")
 
@@ -147,3 +156,6 @@ def _proccess_truncation(truncation: Optional[Dict] = None):
             strategy=from_snake_case_to_camel_case(truncation.get("strategy"))
         )
     return truncation
+
+
+__all__ = ["RemoteTokenizer"]
