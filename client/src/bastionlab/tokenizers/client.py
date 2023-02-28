@@ -2,7 +2,9 @@ from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from bastionlab.client import Client
-    from .remote_tokenizers import RemoteTokenizer
+    import bastionlab.tokenizers.remote_tokenizers
+
+__pdoc__ = {}
 
 
 class BastionLabTokenizers:
@@ -14,7 +16,7 @@ class BastionLabTokenizers:
         model_name: str,
         revision: Optional[str] = "main",
         auth_token: Optional[str] = None,
-    ) -> "RemoteTokenizer":
+    ) -> "bastionlab.tokenizers.remote_tokenizers.RemoteTokenizer":
         """
         Loads a Hugging Face tokenizer model with the checkpoint name.
 
@@ -31,3 +33,8 @@ class BastionLabTokenizers:
         return RemoteTokenizer._from_hugging_face_pretrained(
             self.client, model_name, revision, auth_token
         )
+
+
+__pdoc__["BastionLabTokenizers.__init__"] = False
+
+__all__ = ["BastionLabTokenizers"]

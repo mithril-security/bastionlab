@@ -1,14 +1,11 @@
 import torch
-import hashlib
-import io
-from typing import Iterator, TYPE_CHECKING, List, Optional, Any
+from typing import TYPE_CHECKING, List, Optional, Any
 from dataclasses import dataclass
-from .utils import DataWrapper, Chunk, TensorDataset, send_tensor
+from ._utils import send_tensor
 from ..pb.bastionlab_torch_pb2 import UpdateTensor, RemoteDatasetReference
 from ..pb.bastionlab_pb2 import Reference
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 from ..pb.bastionlab_pb2 import Reference, TensorMetaData
-import logging
 
 if TYPE_CHECKING:
     from .client import BastionLabTorch
@@ -140,12 +137,12 @@ class RemoteDataset:
 
     @property
     def nb_samples(self) -> int:
-        """Returns the number of samples in the RemoteDataset"""
+        """The number of samples in the RemoteDataset"""
         return self.labels.shape[0]
 
     @property
     def input_dtype(self) -> torch.dtype:
-        """Returns the input dtype of the tensors stored"""
+        """The input dtype of the tensors stored"""
         return self.labels.dtype
 
     @staticmethod
@@ -218,3 +215,9 @@ class RemoteDataset:
 
     def __str__(self) -> str:
         return f"RemoteDataset(identifier={self.identifier}, name={self.name}, privacy_limit={self.privacy_limit}, inputs={str(self.inputs)}, label={str(self.labels)})"
+
+
+__pdoc__ = {}
+__pdoc__["RemoteTensor.__init__"] = False
+__pdoc__["RemoteDataset.__init__"] = False
+__all__ = ["RemoteTensor", "RemoteDataset"]
