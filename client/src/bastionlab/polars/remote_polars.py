@@ -727,6 +727,8 @@ class RemoteLazyFrame:
             RequestRejected: Could not continue in function as data owner rejected a required access request
             various exceptions: Note that exceptions may be raised from Seaborn when the barplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
+        Returns:
+            Returns the Matplotlib Axes object with the plot drawn onto it.
         """
         # Set everything up
         selects = VisTools._get_all_cols(
@@ -886,16 +888,24 @@ class RemoteLazyFrame:
             x (str): The name of column to be used for x axes. Default value is "count", which trigger pl.count() to be used on this axes.
             y (str): The name of column to be used for y axes. Default value is "count", which trigger pl.count() to be used on this axes.
             bins (int): An integer bin value which x axes will be grouped by. Default value is 10.
+            colors (Union[str, list[str]]) = ["lightblue"]: colors to be used for barplot
+            ax (matplotlib.axes) = None: matplotlib axes to be used for plot- a new axes is generated if not supplied
             **kwargs: Other keyword arguments that will be passed to Matplotlib's bar function, in the case of one column being supplied, or imshow function, where both x and y columns are supplied.
 
         Raises:
             ValueError: Incorrect column name given
             RequestRejected: Could not continue in function as data owner rejected a required access request
             various exceptions: Note that exceptions may be raised from Matplotlib when the bar or imshow function is called. See Matplotlib's documentation for further details.
+        Returns:
+            Returns the Matplotlib Axes object with the plot drawn onto it.
         """
-
         if x == "count" and y == "count":
-            raise ValueError("Column name not found in dataframe")
+            raise ValueError("Please provide an at least an x or y value")
+
+        if x != "count" and x not in self.columns:
+            raise ValueError("X column not found in dataframe")
+        if y != "count" and y not in self.columns:
+            raise ValueError("Y column not found in dataframe")
 
         model = ApplyBins(bins)
 
@@ -1526,21 +1536,25 @@ class Facet:
         bins: int = 10,
         colors: Union[str, list[str]] = ["lightblue"],
         **kwargs,
-    ) -> None:
+    ) -> mat.axes:
         """Draws a histplot for each subset in row/column facet grid.
 
         Facet's histplot iterates over each possible combination of row/column values in the dataset, filters the dataset to rows where the values match this
         combination of row/column values and applies histplot to this dataset.
 
         Args:
-            x (str) = None: The name of column to be used for x axes.
-            y (str) = None: The name of column to be used for y axes.
-            bins (int) = 10: An integer bin value which x axes will be grouped by.
-            **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function, in the case of one column being supplied, or heatmap function, where both x and y columns are supplied.
+            x (str): The name of column to be used for x axes. Default value is "count", which trigger pl.count() to be used on this axes.
+            y (str): The name of column to be used for y axes. Default value is "count", which trigger pl.count() to be used on this axes.
+            bins (int): An integer bin value which x axes will be grouped by. Default value is 10.
+            colors (Union[str, list[str]]) = ["lightblue"]: colors to be used for barplot
+            **kwargs: Other keyword arguments that will be passed to Matplotlib's bar function, in the case of one column being supplied, or imshow function, where both x and y columns are supplied.
+
         Raises:
             ValueError: Incorrect column name given
-            various exceptions: Note that exceptions may be raised from internal Seaborn (scatterplot) or Matplotlib.pyplot functions (subplots, set_title),
-            for example, if kwargs keywords are not expected. See Seaborn/Matplotlib documentation for further details.
+            RequestRejected: Could not continue in function as data owner rejected a required access request
+            various exceptions: Note that exceptions may be raised from Matplotlib when the bar or imshow function is called. See Matplotlib's documentation for further details.
+        Returns:
+            Returns the Matplotlib Axes object with the plot drawn onto it.
         """
         return self.__bastion_map("histplot", x, y, None, bins, colors, **kwargs)
 
@@ -1563,18 +1577,26 @@ class Facet:
         """Draws a bar chart for each subset in row/column facet grid.
 
         barplot filters data down to necessary columns only and then calls Seaborn's barplot function.
-        Args:
+         Args:
             x (str) = None: The name of column to be used for x axes.
             y (str) = None: The name of column to be used for y axes.
-            estimator (str) = "mean": string represenation of estimator to be used in aggregated query. Options are: "mean", "median", "count", "max", "min", "std" and "sum"
-            hue (str) = None: The name of column to be used for colour encoding.
-            **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function.
+            hue (str) = None: The name of column to be used for grouped barplot
+            estimator (str) = "mean": string representation of estimator to be used in aggregated query. Options are: "mean", "median", "count", "max", "min", "std" and "sum"
+            vertical (bool) = True: option for vertical (True) or horizontal barplot (False)
+            title (str) = None: string title for plot
+            auto_label (bool) = True: If True, labels for axes will be derived from x/y columns automatically. If false, x_label and y_label arguments used
+            x_label (str) = None: label for x axes if auto_label set to false
+            y_label (str) = None: label for y axes if auto_label set to false
+            colors (Union[str, list[str]]) = Palettes.dict["standard"]: colors for bars
+            ax (matplotlib.axes) = None: matplotlib axes to be used for plot- a new axes is generated if not supplied
+            **kwargs: Other keyword arguments that will be passed to Matplotlib's bar/barh() function.
         Raises:
-            ValueError: Incorrect column name given, no x or y values provided, estimator function not recognised
+            ValueError: Incorrect column name given, no x or y values provided, estimator function not recognized
             RequestRejected: Could not continue in function as data owner rejected a required access request
             various exceptions: Note that exceptions may be raised from Seaborn when the barplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
-
+        Returns:
+            Returns the Matplotlib Axes object with the plot drawn onto it.
         """
         return self.__bastion_map(
             "barplot",
