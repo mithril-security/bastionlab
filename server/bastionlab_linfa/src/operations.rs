@@ -17,7 +17,7 @@ use crate::{
     get_inner_array,
     linfa_proto::validation_request::Scoring,
     prepare_train_data,
-    trainers::{Models, PredictionTypes, SupportedModels},
+    trainers::{Models, SupportedModels},
     utils::{get_datasets, IArrayStore, LabelU64},
 };
 
@@ -216,8 +216,6 @@ pub fn send_to_trainer(
 }
 
 /// This method is used to run a prediction on an already fitted model, based on the model selection type.
-/// We use two different types for prediction
-/// [f64] and [usize] --> [PredictionTypes::Float] and [PredictionTypes::U64] respectively.
 pub fn predict(
     model: Arc<SupportedModels>,
     data: ArrayStore,
@@ -226,46 +224,53 @@ pub fn predict(
     let sample = IArrayStore(data.cast(ArrayStoreType::Float64)?);
     let sample = get_inner_array! {AxdynF64, sample, Ix2, "Ix2", "predict", "sample"};
     let prediction = match &*model {
-        SupportedModels::ElasticNet(m) => Some(PredictionTypes::Float(m.predict(sample))),
-        SupportedModels::GaussianNaiveBayes(m) => {
-            Some(PredictionTypes::U64(m.predict(sample).map_targets(|t| t.0)))
+        SupportedModels::ElasticNet(m) => {
+            let results = m.predict(sample).targets.into_dyn();
+            ArrayStore::AxdynF64(results)
         }
-        SupportedModels::KMeans(m) => Some(PredictionTypes::U64(
-            m.predict(sample).map_targets(|t| *t as u64),
-        )),
-        SupportedModels::LinearRegression(m) => Some(PredictionTypes::Float(m.predict(sample))),
+        SupportedModels::GaussianNaiveBayes(m) => {
+            let results = m.predict(sample).map_targets(|t| t.0).targets.into_dyn();
+            ArrayStore::AxdynU64(results)
+        }
+        SupportedModels::KMeans(m) => {
+            let results = m
+                .predict(sample)
+                .map_targets(|t| *t as u64)
+                .targets
+                .into_dyn();
+            ArrayStore::AxdynU64(results)
+        }
+        SupportedModels::LinearRegression(m) => {
+            let results = m.predict(sample).targets.into_dyn();
+            ArrayStore::AxdynF64(results)
+        }
         SupportedModels::BinomialLogisticRegression(m) => {
-            if probability {
-                Some(PredictionTypes::SingleProbability(
-                    m.predict_probabilities(&sample),
-                ))
+            let result = if probability {
+                let result = m.predict_probabilities(&sample).into_dyn();
+                ArrayStore::AxdynF64(result)
             } else {
-                Some(PredictionTypes::U64(m.predict(sample)))
-            }
+                let result = m.predict(sample).targets.into_dyn();
+                ArrayStore::AxdynU64(result)
+            };
+
+            result
         }
         SupportedModels::MultinomialLogisticRegression(m) => {
-            if probability {
-                Some(PredictionTypes::MultiProbability(
-                    m.predict_probabilities(&sample),
-                ))
+            let result = if probability {
+                let result = m.predict_probabilities(&sample).into_dyn();
+                ArrayStore::AxdynF64(result)
             } else {
-                Some(PredictionTypes::U64(m.predict(sample)))
-            }
+                let result = m.predict(sample).targets.into_dyn();
+                ArrayStore::AxdynU64(result)
+            };
+
+            result
         }
         SupportedModels::DecisionTree(m) => {
-            Some(PredictionTypes::U64(m.predict(sample).map_targets(|t| t.0)))
+            let results = m.predict(sample).map_targets(|t| t.0).targets.into_dyn();
+            ArrayStore::AxdynU64(results)
         }
         _ => return Err(Status::failed_precondition("Unsupported Model")),
-    };
-
-    let prediction = match prediction {
-        Some(v) => match v {
-            PredictionTypes::U64(pred) => ArrayStore::AxdynU64(pred.targets.into_dyn()),
-            PredictionTypes::Float(pred) => ArrayStore::AxdynF64(pred.targets.into_dyn()),
-            PredictionTypes::SingleProbability(pred) => ArrayStore::AxdynF64(pred.into_dyn()),
-            PredictionTypes::MultiProbability(pred) => ArrayStore::AxdynF64(pred.into_dyn()),
-        },
-        None => return Err(Status::aborted("Failed to predict")),
     };
 
     Ok(prediction)

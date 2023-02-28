@@ -1,5 +1,5 @@
 use bastionlab_common::common_conversions::to_status_error;
-use linfa::{DatasetBase, PlattParams};
+use linfa::PlattParams;
 use linfa_bayes::GaussianNb;
 use linfa_clustering::{KMeans, KMeansInit};
 use linfa_elasticnet::ElasticNet;
@@ -11,7 +11,7 @@ use linfa_nn::{
 };
 use linfa_svm::Svm;
 use linfa_trees::{DecisionTree, SplitQuality};
-use ndarray::{Array2, ArrayBase, Ix1, Ix2, OwnedRepr};
+use ndarray::Array2;
 
 use tonic::Status;
 
@@ -110,14 +110,6 @@ pub enum SupportedModels {
     Linear(LinearSearchIndex<'static, f64, L2Dist>),
     KdTree(KdTreeIndex<'static, f64, L2Dist>),
     SVM(Svm<f64, f64>),
-}
-
-#[derive(Debug)]
-pub enum PredictionTypes {
-    U64(DatasetBase<ArrayBase<OwnedRepr<f64>, Ix2>, ArrayBase<OwnedRepr<u64>, Ix1>>),
-    Float(DatasetBase<ArrayBase<OwnedRepr<f64>, Ix2>, ArrayBase<OwnedRepr<f64>, Ix1>>),
-    SingleProbability(ArrayBase<OwnedRepr<f64>, Ix1>),
-    MultiProbability(ArrayBase<OwnedRepr<f64>, Ix2>),
 }
 
 pub fn select_trainer(trainer: Trainer) -> Result<Models, Status> {
