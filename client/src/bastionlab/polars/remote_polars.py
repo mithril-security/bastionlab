@@ -706,7 +706,7 @@ class RemoteLazyFrame:
         width: float = 0.75,
         ax: mat.axes = None,
         **kwargs,
-    ):
+    ) -> mat.axes:
         """Draws a barchart
         barplot calculates bar's data using aggregated queries and then plots using Matplotlib's bar()/barh() function.
         Args:
@@ -876,7 +876,7 @@ class RemoteLazyFrame:
         colors: Union[str, list[str]] = ["lightblue"],
         ax: mat.axes = None,
         **kwargs,
-    ):
+    ) -> mat.axes:
         """Histplot plots a univariate histogram, where one x or y axes is provided or a bivariate histogram, where both x and y axes values are supplied.
 
         Histplot filters down a RemoteLazyFrame to necessary columns only, groups x axes into bins
@@ -1035,38 +1035,58 @@ class RemoteLazyFrame:
         df = tmp.to_pandas()
         sns.lineplot(data=df, x=x, y=y, **kwargs)
 
-    def scatterplot(self: LDF, x: str, y: str, **kwargs):
+    def scatterplot(
+        self: LDF,
+        x: str,
+        y: str,
+        hue: str = None,
+        ax: mat.axes = None,
+        colors: Union[str, list[str]] = Palettes.dict["standard"],
+        **kwargs,
+    ) -> mat.axes:
         """Draws a scatter plot
         Scatterplot filters data down to necessary columns only and then calls Seaborn's scatterplot function.
         Args:
             x (str): The name of column to be used for x axes.
             y (str): The name of column to be used for y axes.
-            **kwargs: Other keyword arguments that will be passed to Seaborn's scatterplot function.
+            **kwargs: Other keyword arguments that will be passed to Matplotlib.pyplot's scatter function.
         Raises:
             ValueError: Incorrect column name given
             RequestRejected: Could not continue in function as data owner rejected a required access request
-            various exceptions: Note that exceptions may be raised from Seaborn when the scatterplot function is called,
-            for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
+            various exceptions: Note that exceptions may be raised from Matplotlib.pyplot when the scatter function is called. See Matplotlib's documentation for further details.
         """
         # if there is a hue or style argument add them to cols
-        cols = [x, y]
-        if "hue" in kwargs:
-            if not kwargs["hue"] in cols:
-                cols.append(kwargs["hue"])
-        if "style" in kwargs:
-            if not kwargs["style"] in cols:
-                cols.append(kwargs["style"])
+        # Set everything up
+        selects = VisTools._get_all_cols(
+            self, x, y, hue
+        )  # get columns and no do error checking
 
-        for col in cols:
-            if not col in self.columns:
-                raise ValueError("Column ", col, " not found in dataframe")
+        hues = (
+            VisTools._get_unique_values(self, hue) if hue else ["default"]
+        )  # set up hues
 
-        # get df with necessary columns
-        tmp = self.select([pl.col(x) for x in cols]).collect().fetch()
-        RequestRejected.check_valid_df(tmp)
-        df = tmp.to_pandas()
-        # run query
-        sns.scatterplot(data=df, x=x, y=y, **kwargs)
+        if ax == None:
+            ax = plt.gca()
+        # iterate over hue values (1 by default)
+        for val, index in zip(hues, range(len(hues))):
+            # filter data by hue if hue provided
+            tmp = self.filter(pl.col(hue) == val) if hue else self
+            tmp = tmp.select([pl.col(x) for x in selects]).collect().fetch()
+            RequestRejected.check_valid_df(tmp)
+            x_vals = tmp.select(x).to_numpy()
+            y_vals = tmp.select(y).to_numpy()
+            ax.scatter(
+                x=x_vals,
+                y=y_vals,
+                color=colors[index % len(colors)],
+                label=val,
+                **kwargs,
+            )
+        if hue:
+            ax.legend(loc="best")
+        ax.set_ylabel(y)
+        ax.set_xlabel(x)
+        return ax
 
     def _calculate_boxes(
         self: LDF,
