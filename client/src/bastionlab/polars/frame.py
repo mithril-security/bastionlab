@@ -944,7 +944,7 @@ class RemoteLazyFrame:
             # filter data by hue if hue provided
             tmp = self.filter(pl.col(hue) == val) if hue else self
             tmp = tmp.select([pl.col(x) for x in selects]).collect().fetch()
-            RequestRejected.check_valid_df(tmp)
+            RequestRejected._check_valid_df(tmp)
             x_vals = tmp.select(x).to_numpy()
             y_vals = tmp.select(y).to_numpy()
             ax.scatter(
