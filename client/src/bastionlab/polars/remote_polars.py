@@ -706,7 +706,7 @@ class RemoteLazyFrame:
         width: float = 0.75,
         ax: mat.axes = None,
         **kwargs,
-    ):
+    ) -> mat.axes:
         """Draws a barchart
         barplot calculates bar's data using aggregated queries and then plots using Matplotlib's bar()/barh() function.
         Args:
@@ -727,6 +727,8 @@ class RemoteLazyFrame:
             RequestRejected: Could not continue in function as data owner rejected a required access request
             various exceptions: Note that exceptions may be raised from Seaborn when the barplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
+        Returns:
+            Returns the Matplotlib Axes object with the plot drawn onto it.
         """
         # Set everything up
         selects = VisTools._get_all_cols(
@@ -1521,22 +1523,30 @@ class Facet:
         width: float = 0.75,
         ax: mat.axes = None,
         **kwargs,
-    ) -> None:
+    ) -> mat.axes:
         """Draws a bar chart for each subset in row/column facet grid.
 
         barplot filters data down to necessary columns only and then calls Seaborn's barplot function.
-        Args:
+         Args:
             x (str) = None: The name of column to be used for x axes.
             y (str) = None: The name of column to be used for y axes.
-            estimator (str) = "mean": string represenation of estimator to be used in aggregated query. Options are: "mean", "median", "count", "max", "min", "std" and "sum"
-            hue (str) = None: The name of column to be used for colour encoding.
-            **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function.
+            hue (str) = None: The name of column to be used for grouped barplot
+            estimator (str) = "mean": string representation of estimator to be used in aggregated query. Options are: "mean", "median", "count", "max", "min", "std" and "sum"
+            vertical (bool) = True: option for vertical (True) or horizontal barplot (False)
+            title (str) = None: string title for plot
+            auto_label (bool) = True: If True, labels for axes will be derived from x/y columns automatically. If false, x_label and y_label arguments used
+            x_label (str) = None: label for x axes if auto_label set to false
+            y_label (str) = None: label for y axes if auto_label set to false
+            colors (Union[str, list[str]]) = Palettes.dict["standard"]: colors for bars
+            ax (matplotlib.axes) = None: matplotlib axes to be used for plot- a new axes is generated if not supplied
+            **kwargs: Other keyword arguments that will be passed to Matplotlib's bar/barh() function.
         Raises:
-            ValueError: Incorrect column name given, no x or y values provided, estimator function not recognised
+            ValueError: Incorrect column name given, no x or y values provided, estimator function not recognized
             RequestRejected: Could not continue in function as data owner rejected a required access request
             various exceptions: Note that exceptions may be raised from Seaborn when the barplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
-
+        Returns:
+            Returns the Matplotlib Axes object with the plot drawn onto it.
         """
         return self.__bastion_map(
             "barplot",
