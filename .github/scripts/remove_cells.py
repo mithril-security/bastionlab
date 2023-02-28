@@ -23,8 +23,8 @@ def remove_no_execute_cells(nb):
 
 
 # create the output directory if it does not exist
-if not os.path.exists("converted"):
-    os.makedirs("converted")
+if not os.path.exists("tmp"):
+    os.makedirs("tmp")
 
 # traverse all subdirectories and find all .ipynb files
 for root, dirs, files in os.walk("."):
@@ -36,5 +36,5 @@ for root, dirs, files in os.walk("."):
             # remove cells with the no_execute tag
             remove_no_execute_cells(nb)
 
-            # save modified notebook to the converted directory
-            nbformat.write(nb, os.path.join("converted", filename))
+            # save modified notebook to the tmp directory
+            nbformat.write(nb, os.path.join("tmp", filename))

@@ -20,7 +20,7 @@ class OptimizerConfig:
 
 @dataclass
 class SGD(OptimizerConfig):
-    """SGD optimizer configuration.
+    """SGD (Standard Gradient Descent) optimizer configuration.
 
     Parameters are the same as in Pytorch: https://pytorch.org/docs/stable/generated/torch.optim.SGD.html#torch.optim.SGD
     """
@@ -68,3 +68,6 @@ class Adam(OptimizerConfig):
                 amsgrad=self.amsgrad,
             )
         }
+
+
+__all__ = ["OptimizerConfig", "SGD", "Adam"]
