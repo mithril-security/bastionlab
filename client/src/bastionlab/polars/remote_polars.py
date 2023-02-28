@@ -901,7 +901,7 @@ class RemoteLazyFrame:
         """
         if x == "count" and y == "count":
             raise ValueError("Please provide an at least an x or y value")
-        
+
         if x != "count" and x not in self.columns:
             raise ValueError("X column not found in dataframe")
         if y != "count" and y not in self.columns:
