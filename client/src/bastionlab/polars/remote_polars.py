@@ -878,7 +878,7 @@ class RemoteLazyFrame:
         colors: Union[str, list[str]] = ["lightblue"],
         ax: mat.axes = None,
         **kwargs,
-    ):
+    ) -> mat.axes:
         """Histplot plots a univariate histogram, where one x or y axes is provided or a bivariate histogram, where both x and y axes values are supplied.
 
         Histplot filters down a RemoteLazyFrame to necessary columns only, groups x axes into bins
@@ -888,16 +888,24 @@ class RemoteLazyFrame:
             x (str): The name of column to be used for x axes. Default value is "count", which trigger pl.count() to be used on this axes.
             y (str): The name of column to be used for y axes. Default value is "count", which trigger pl.count() to be used on this axes.
             bins (int): An integer bin value which x axes will be grouped by. Default value is 10.
+            colors (Union[str, list[str]]) = ["lightblue"]: colors to be used for barplot
+            ax (matplotlib.axes) = None: matplotlib axes to be used for plot- a new axes is generated if not supplied
             **kwargs: Other keyword arguments that will be passed to Matplotlib's bar function, in the case of one column being supplied, or imshow function, where both x and y columns are supplied.
 
         Raises:
             ValueError: Incorrect column name given
             RequestRejected: Could not continue in function as data owner rejected a required access request
             various exceptions: Note that exceptions may be raised from Matplotlib when the bar or imshow function is called. See Matplotlib's documentation for further details.
+        Returns:
+            Returns the Matplotlib Axes object with the plot drawn onto it.
         """
-
         if x == "count" and y == "count":
-            raise ValueError("Column name not found in dataframe")
+            raise ValueError("Please provide an at least an x or y value")
+        
+        if x != "count" and x not in self.columns:
+            raise ValueError("X column not found in dataframe")
+        if y != "count" and y not in self.columns:
+            raise ValueError("Y column not found in dataframe")
 
         model = ApplyBins(bins)
 
@@ -1508,21 +1516,25 @@ class Facet:
         bins: int = 10,
         colors: Union[str, list[str]] = ["lightblue"],
         **kwargs,
-    ) -> None:
+    ) -> mat.axes:
         """Draws a histplot for each subset in row/column facet grid.
 
         Facet's histplot iterates over each possible combination of row/column values in the dataset, filters the dataset to rows where the values match this
         combination of row/column values and applies histplot to this dataset.
 
         Args:
-            x (str) = None: The name of column to be used for x axes.
-            y (str) = None: The name of column to be used for y axes.
-            bins (int) = 10: An integer bin value which x axes will be grouped by.
-            **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function, in the case of one column being supplied, or heatmap function, where both x and y columns are supplied.
+            x (str): The name of column to be used for x axes. Default value is "count", which trigger pl.count() to be used on this axes.
+            y (str): The name of column to be used for y axes. Default value is "count", which trigger pl.count() to be used on this axes.
+            bins (int): An integer bin value which x axes will be grouped by. Default value is 10.
+            colors (Union[str, list[str]]) = ["lightblue"]: colors to be used for barplot
+            **kwargs: Other keyword arguments that will be passed to Matplotlib's bar function, in the case of one column being supplied, or imshow function, where both x and y columns are supplied.
+
         Raises:
             ValueError: Incorrect column name given
-            various exceptions: Note that exceptions may be raised from internal Seaborn (scatterplot) or Matplotlib.pyplot functions (subplots, set_title),
-            for example, if kwargs keywords are not expected. See Seaborn/Matplotlib documentation for further details.
+            RequestRejected: Could not continue in function as data owner rejected a required access request
+            various exceptions: Note that exceptions may be raised from Matplotlib when the bar or imshow function is called. See Matplotlib's documentation for further details.
+        Returns:
+            Returns the Matplotlib Axes object with the plot drawn onto it.
         """
         return self.__bastion_map("histplot", x, y, None, bins, colors, **kwargs)
 
