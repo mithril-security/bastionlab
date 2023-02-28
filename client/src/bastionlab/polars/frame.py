@@ -13,6 +13,7 @@ from ..pb.bastionlab_polars_pb2 import ReferenceResponse, SplitRequest, Referenc
 from .client import BastionLabPolars
 from .utils import ApplyBins, Palettes, ApplyAbs, VisTools
 import matplotlib.pyplot as plt
+import seaborn as sns
 from typing import TYPE_CHECKING
 from ..errors import RequestRejected
 import numpy as np
@@ -876,8 +877,6 @@ class RemoteLazyFrame:
             various exceptions: Note that exceptions may be raised from Seaborn when the lineplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
-        import seaborn as sns
-
         selects = [x, y] if x != y else [x]
 
         for op in [hue, size, style, units]:
@@ -916,8 +915,6 @@ class RemoteLazyFrame:
             various exceptions: Note that exceptions may be raised from Seaborn when the scatterplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
-        import seaborn as sns
-
         # if there is a hue or style argument add them to cols
         cols = [x, y]
         if "hue" in kwargs:
@@ -1348,8 +1345,6 @@ class Facet:
             various exceptions: Note that exceptions may be raised from internal Seaborn (scatterplot) or Matplotlib.pyplot functions (subplots, set_title),
             for example, if kwargs keywords are not expected. See Seaborn/Matplotlib documentation for further details.
         """
-        import seaborn as sns
-
         self.__map(sns.scatterplot, *args, **kwargs)
 
     def lineplot(
@@ -1371,8 +1366,6 @@ class Facet:
             various exceptions: Note that exceptions may be raised from Seaborn when the lineplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
-        import seaborn as sns
-
         self.__map(sns.lineplot, x=x, y=y, **kwargs)
 
     def histplot(
