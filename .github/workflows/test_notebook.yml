@@ -59,19 +59,4 @@ jobs:
         run: |
           pip install ./client
           pip install jupyter nbconvert
-          python .github/scripts/remove_cells.py
-          wget 'https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv'
-          cp titanic.csv converted/train.csv
-          cp titanic.csv converted/titanic.csv
-          rm ./converted/resnet_example_notebook.ipynb
-          rm ./converted/distilbert_example_notebook.ipynb
-          rm ./converted/nbagg_uat.ipynb
-          rm ./converted/quick-tour.ipynb
-          rm ./converted/fraud_detection.ipynb
-          rm ./converted/authentication.ipynb
-          for file in ./converted/*.ipynb; do 
-            sed -i 's/"!pip install bastionlab"/""/g' $file
-            sed -i 's/"srv = bastionlab_server.start()"/""/g' $file
-            sed -i 's/"bastionlab_server.stop(srv)"/""/g' $file
-            jupyter nbconvert --execute --to notebook --inplace --ExecutePreprocessor.timeout=600 --output-dir=./converted $file
-          done
+          bash .github/scripts/test_notebooks.sh
