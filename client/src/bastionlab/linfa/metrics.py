@@ -1,6 +1,6 @@
-from ..polars.remote_polars import RemoteArray
+from ..polars import RemoteArray
 
-from ..polars.remote_polars import FetchableLazyFrame
+from ..polars import FetchableLazyFrame
 from ..pb.bastionlab_linfa_pb2 import (
     SimpleValidationRequest,
     R2Score,
@@ -21,7 +21,7 @@ from ..pb.bastionlab_linfa_pb2 import (
 def mean_squared_error(
     y_true: "RemoteArray", y_pred: "RemoteArray"
 ) -> "FetchableLazyFrame":
-    from ..polars.remote_polars import FetchableLazyFrame
+    from ..polars import FetchableLazyFrame
 
     res = y_true._client.linfa.stub.Validate(
         SimpleValidationRequest(
@@ -39,7 +39,7 @@ def mean_squared_error(
 def mean_squared_log_error(
     y_true: "RemoteArray", y_pred: "RemoteArray"
 ) -> "FetchableLazyFrame":
-    from ..polars.remote_polars import FetchableLazyFrame
+    from ..polars import FetchableLazyFrame
 
     res = y_true._client.linfa.stub.Validate(
         SimpleValidationRequest(
@@ -55,7 +55,7 @@ def mean_squared_log_error(
 
 
 def r2_score(y_true: "RemoteArray", y_pred: "RemoteArray") -> "FetchableLazyFrame":
-    from ..polars.remote_polars import FetchableLazyFrame
+    from ..polars import FetchableLazyFrame
 
     res = y_true._client.linfa.stub.Validate(
         SimpleValidationRequest(
@@ -71,7 +71,7 @@ def r2_score(y_true: "RemoteArray", y_pred: "RemoteArray") -> "FetchableLazyFram
 def mean_absolute_error(
     y_true: "RemoteArray", y_pred: "RemoteArray"
 ) -> "FetchableLazyFrame":
-    from ..polars.remote_polars import FetchableLazyFrame
+    from ..polars import FetchableLazyFrame
 
     res = y_true._client.linfa.stub.Validate(
         SimpleValidationRequest(
@@ -87,7 +87,7 @@ def mean_absolute_error(
 def median_absolute_error(
     y_true: "RemoteArray", y_pred: "RemoteArray"
 ) -> "FetchableLazyFrame":
-    from ..polars.remote_polars import FetchableLazyFrame
+    from ..polars import FetchableLazyFrame
 
     res = y_true._client.linfa.stub.Validate(
         SimpleValidationRequest(
@@ -103,7 +103,7 @@ def median_absolute_error(
 
 
 def max_error(y_true: "RemoteArray", y_pred: "RemoteArray") -> "FetchableLazyFrame":
-    from ..polars.remote_polars import FetchableLazyFrame
+    from ..polars import FetchableLazyFrame
 
     res = y_true._client.linfa.stub.Validate(
         SimpleValidationRequest(
@@ -121,7 +121,7 @@ def max_error(y_true: "RemoteArray", y_pred: "RemoteArray") -> "FetchableLazyFra
 def explained_variance(
     y_true: "RemoteArray", y_pred: "RemoteArray"
 ) -> "FetchableLazyFrame":
-    from ..polars.remote_polars import FetchableLazyFrame
+    from ..polars import FetchableLazyFrame
 
     res = y_true._client.linfa.stub.Validate(
         SimpleValidationRequest(
@@ -139,7 +139,7 @@ def explained_variance(
 def accuracy_score(
     y_true: "RemoteArray", y_pred: "RemoteArray"
 ) -> "FetchableLazyFrame":
-    from ..polars.remote_polars import FetchableLazyFrame
+    from ..polars import FetchableLazyFrame
 
     res = y_true._client.linfa.stub.Validate(
         SimpleValidationRequest(
@@ -153,7 +153,7 @@ def accuracy_score(
 
 
 def f1_score(y_true: "RemoteArray", y_pred: "RemoteArray") -> "FetchableLazyFrame":
-    from ..polars.remote_polars import FetchableLazyFrame
+    from ..polars import FetchableLazyFrame
 
     res = y_true._client.linfa.stub.Validate(
         SimpleValidationRequest(
@@ -167,7 +167,7 @@ def f1_score(y_true: "RemoteArray", y_pred: "RemoteArray") -> "FetchableLazyFram
 
 
 def mcc(y_true: "RemoteArray", y_pred: "RemoteArray") -> "FetchableLazyFrame":
-    from ..polars.remote_polars import FetchableLazyFrame
+    from ..polars import FetchableLazyFrame
 
     res = y_true._client.linfa.stub.Validate(
         SimpleValidationRequest(

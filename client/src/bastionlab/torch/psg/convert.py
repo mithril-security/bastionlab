@@ -141,3 +141,6 @@ def expand_weights(module: torch.nn.Module, max_batch_size: int) -> None:
         if expanded_layer is not None:
             _set_weight_and_bias(expanded_layer, layer)
             setattr(*parent_layer(module, name), expanded_layer)
+
+
+__all__ = ["parent_layer", "expand_layer", "expand_weights"]

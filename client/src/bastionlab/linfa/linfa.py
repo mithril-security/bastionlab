@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from ..pb.bastionlab_linfa_pb2 import ModelResponse
-from ..polars.remote_polars import RemoteArray
+from ..polars import RemoteArray
 
 
 @dataclass

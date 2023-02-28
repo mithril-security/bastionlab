@@ -156,7 +156,7 @@ Sending CIFAR100 (test): 100%|████████████████�
 
 ```py
 >>> from torchvision.models import efficientnet_b0
->>> from bastionai.client import Connection
+>>> from bastionlab.client import Connection
 
 # Define the model
 >>> model = efficientnet_b0()
