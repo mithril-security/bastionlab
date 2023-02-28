@@ -87,5 +87,6 @@ setup(
         "tokenizers==0.13.2",
         "matplotlib==3.6.3",
         "pyserde~=0.9",
+        "scikit-learn==1.2.1",
     ],
 )
