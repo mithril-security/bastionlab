@@ -6,7 +6,7 @@ echo "Removing cells..."
 python3 .github/scripts/remove_cells.py
 echo "Downloading datasets..."
 wget 'https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv' -O tmp/titanic.csv
-wget 'https://archive.ics.uci.edu/ml/machine-learning-databases/00228/smsspamcollection.zip' -0 tmp/smsspamcollection.zip
+wget 'https://archive.ics.uci.edu/ml/machine-learning-databases/00228/smsspamcollection.zip' -O tmp/smsspamcollection.zip
 unzip tmp/smsspamcollection.zip -d tmp
 # wget 'https://raw.githubusercontent.com/rinbaruah/COVID_preconditions_Kaggle/master/Data/covid.csv' -O tmp/covid.csv 
 cp tmp/titanic.csv tmp/train.csv
