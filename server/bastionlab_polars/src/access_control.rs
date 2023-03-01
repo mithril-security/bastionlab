@@ -1,13 +1,15 @@
 use serde::{Deserialize, Serialize};
 use tonic::Status;
-
-use crate::composite_plan::StatsEntry;
+use crate::{composite_plan::StatsEntry};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Policy {
     safe_zone: Rule,
     unsafe_handling: UnsafeAction,
     savable: bool,
+    overall_budget: PrivacyBudget,
+    per_query_budget: PrivacyBudget,
+    enforce_dp: bool,
 }
 
 impl Policy {
@@ -29,6 +31,17 @@ impl Policy {
             },
             unsafe_handling: self.unsafe_handling.merge(other.unsafe_handling),
             savable: self.savable && other.savable,
+            overall_budget : match (self.overall_budget,other.overall_budget) {
+                (PrivacyBudget::NotPrivate,PrivacyBudget::NotPrivate) => PrivacyBudget::NotPrivate,
+                (PrivacyBudget::NotPrivate,PrivacyBudget::Private{budget:val})|(PrivacyBudget::Private{budget:val},PrivacyBudget::NotPrivate) => PrivacyBudget::Private{budget:val},
+                (PrivacyBudget::Private{budget:val1},PrivacyBudget::Private{budget:val2}) => PrivacyBudget::Private{budget:val1.min(val2)},
+            },
+            per_query_budget: match (self.per_query_budget,other.per_query_budget) {
+                (PrivacyBudget::NotPrivate,PrivacyBudget::NotPrivate) => PrivacyBudget::NotPrivate,
+                (PrivacyBudget::NotPrivate,PrivacyBudget::Private{budget:val})|(PrivacyBudget::Private{budget:val},PrivacyBudget::NotPrivate) => PrivacyBudget::Private{budget:val},
+                (PrivacyBudget::Private{budget:val1},PrivacyBudget::Private{budget:val2}) => PrivacyBudget::Private{budget:val1.min(val2)},
+            },
+            enforce_dp: self.enforce_dp || other.enforce_dp,
         }
     }
 
@@ -37,12 +50,22 @@ impl Policy {
             safe_zone: Rule::TrueRule,
             unsafe_handling: UnsafeAction::Log,
             savable: true,
+            overall_budget: PrivacyBudget::NotPrivate,
+            per_query_budget: PrivacyBudget::NotPrivate,
+            enforce_dp: false,
         }
     }
 
     pub fn check_savable(&self) -> bool {
         return self.savable;
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy)]
+#[serde(tag = "type")]
+enum PrivacyBudget {
+    Private{budget: f64},
+    NotPrivate,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

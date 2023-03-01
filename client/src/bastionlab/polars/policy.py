@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from typing import List, Union
 from serde import serde, InternalTagging
 
-
 Rule = Union["AtLeastNOf", "Aggregation", "TrueRule", "FalseRule", "UserId"]
 """A Policy Rule."""
 
@@ -95,6 +94,23 @@ class Reject:
     Instructs the BastionLab server to reject the request.
     """
 
+PrivacyBudget = Union["Private", "NotPrivate"]
+
+@dataclass
+@serde
+class Private:
+    """
+    The privacy budget for a dataframe
+    """
+    budget: float
+
+@dataclass
+@serde
+class NotPrivate:
+    """
+    The lack of a privacy budget for a dataframe
+    """
+
 
 serde(AtLeastNOf)
 
@@ -117,10 +133,13 @@ class Policy:
     safe_zone: Rule
     unsafe_handling: UnsafeAction
     savable: bool
+    overall_budget: PrivacyBudget
+    per_query_budget: PrivacyBudget
+    enforce_dp: bool
 
 
 DEFAULT_POLICY = Policy(
-    safe_zone=Aggregation(10), unsafe_handling=Review(), savable=True
+    safe_zone=Aggregation(10), unsafe_handling=Review(), savable=True, overall_budget=Private(1.0), per_query_budget=Private(2.0), enforce_dp=False
 )
 """
 Default BastionLab Client Policy `Policy(safe_zone=Aggregation(10), unsafe_handling=Review(), savable=True)`
@@ -137,6 +156,8 @@ __all__ = [
     "Log",
     "Review",
     "Reject",
+    "Private",
+    "NotPrivate",
     "Policy",
     "DEFAULT_POLICY",
 ]
