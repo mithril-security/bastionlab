@@ -9,10 +9,7 @@ T = TypeVar("T")
 
 @dataclass
 class RequestRejected(Exception):
-    """Exception raised when function tries to use datorama returned after a rejected access request.
-    Attributes:
-        message -- explanation of the error
-    """
+    """Exception raised when function tries to use datorama returned after a rejected access request."""
 
     def __init__(
         self,
@@ -22,7 +19,7 @@ class RequestRejected(Exception):
         super().__init__(self.message)
 
     @staticmethod
-    def check_valid_df(df) -> T:
+    def _check_valid_df(df) -> T:
         if df is None:
             raise RequestRejected()
 
@@ -43,10 +40,7 @@ class GRPCException(Exception):
     @property
     def code(self) -> grpc.StatusCode:
         """
-        Get the status code of the gRPC error.
-
-        Returns:
-            The status code of the gRPC error.
+        The status code of the gRPC error.
         """
         return self.err._state.code
 
@@ -73,7 +67,7 @@ class GRPCException(Exception):
         return f"{prefix}: code={self.code} message={self.err.details()}"
 
     @staticmethod
-    def map_error(f: Callable[[], T]) -> T:
+    def _map_error(f: Callable[[], T]) -> T:
         """
         Map gRPC errors to `GRPCException` exceptions.
 

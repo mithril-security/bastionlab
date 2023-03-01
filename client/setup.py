@@ -22,10 +22,12 @@ PKG_NAME = "bastionlab"
 
 
 def find_version():
-    version_file = read(f"src/{PKG_NAME}/version.py")
-    version_re = r"__version__ = \"(?P<version>.+)\""
-    version = re.match(version_re, version_file).group("version")
-    return version
+    for line in read(f"src/{PKG_NAME}/version.py").splitlines():
+        if line.startswith("__version__"):
+            delim = '"' if '"' in line else "'"
+            version = line.split(delim)[1]
+            return version
+    raise RuntimeError("Unable to find version string.")
 
 
 def generate_stub():
