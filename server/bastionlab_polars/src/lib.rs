@@ -404,27 +404,36 @@ Reason: {}",
 
         //Removes the memory occupied by this df from memory quota
         let mut memory_quota = self.tracking.memory_quota.write().unwrap();
+        let mut dataframe_user = self.tracking.dataframe_user.write().unwrap();
 
-        'outer: for (user_id_iter, (mut consumed_size, id_sizes)) in memory_quota.clone().iter() {
-            for (id, size) in id_sizes.clone() {
-                if id == identifier && (&user_id == user_id_iter || owner_check) {
-                    {
-                        let mut dfs = self.dataframes.write().unwrap();
-                        dfs.remove(identifier);
-                    }
-
-                    let path = "data_frames/".to_owned() + identifier + ".json";
-                    std::fs::remove_file(path).unwrap_or(());
-
-                    consumed_size = consumed_size - size;
-                    let mut id_sizes = id_sizes.to_owned();
-                    id_sizes.remove(&id);
-
-                    memory_quota.insert(user_id, (consumed_size, id_sizes));
-                    break 'outer;
-                }
+        let dataframe_owner = if owner_check {
+            dataframe_user.get(identifier).unwrap()
+        } else {
+            let dataframe_owner = dataframe_user.get(identifier).unwrap();
+            if dataframe_owner == &user_id {
+                dataframe_owner
+            } else {
+                return Err(Status::invalid_argument(
+                    "This dataframe does not belong to you.",
+                ));
             }
-        }
+        };
+
+        let mut dfs = self.dataframes.write().unwrap();
+        dfs.remove(identifier);
+
+        let path = "data_frames/".to_owned() + identifier + ".json";
+        std::fs::remove_file(path).unwrap_or(());
+
+        let (mut consumption, id_sizes) = memory_quota.get(dataframe_owner).unwrap();
+        let df_size = id_sizes.get(identifier).unwrap();
+        consumption = consumption - df_size;
+
+        let mut id_sizes = id_sizes.to_owned();
+        id_sizes.remove(identifier);
+        memory_quota.insert(user_id, (consumption, id_sizes));
+
+        dataframe_user.remove(identifier);
 
         Ok(())
     }

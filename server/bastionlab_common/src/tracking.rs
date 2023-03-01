@@ -6,8 +6,10 @@ use tonic::Status;
 #[derive(Debug)]
 pub struct Tracking {
     sess_manager: Arc<SessionManager>,
+    //Maps users to their total consumption and a hashmap of their dfs and their sizes
     pub memory_quota: Arc<RwLock<HashMap<String, (usize, HashMap<String, usize>)>>>,
     max_memory: Mutex<usize>,
+    pub dataframe_user: Arc<RwLock<HashMap<String, String>>>, //Maps dataframe identifiers to users
 }
 
 impl Tracking {
@@ -16,6 +18,7 @@ impl Tracking {
             sess_manager,
             memory_quota: Arc::new(RwLock::new(HashMap::new())),
             max_memory: Mutex::new(max_memory),
+            dataframe_user: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -40,16 +43,18 @@ impl Tracking {
                     ));
                 }
                 let mut identifiers = identifiers.to_owned();
-                identifiers.insert(identifier, size);
+                identifiers.insert(identifier.clone(), size);
                 (consumption + size, identifiers)
             }
             None => {
                 let mut hash_map = HashMap::new();
-                hash_map.insert(identifier, size);
+                hash_map.insert(identifier.clone(), size);
                 (size, hash_map)
             }
         };
-        memory_quota.insert(user_id, resulting_consumption);
+        memory_quota.insert(user_id.clone(), resulting_consumption);
+        let mut dataframe_user = self.dataframe_user.write().unwrap();
+        dataframe_user.insert(identifier, user_id);
         Ok(())
     }
 }
