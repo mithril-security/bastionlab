@@ -1,4 +1,6 @@
 import torch
+import polars as pl
+from ..errors import RequestRejected
 
 
 class ApplyBins(torch.nn.Module):
@@ -48,4 +50,54 @@ class ApplyAbs(torch.nn.Module):
         return torch.abs(x)
 
 
-__all__ = ["ApplyBins", "Palettes", "ApplyAbs"]
+class VisTools:
+    def _get_estimator_dict(agg: str):
+        return {
+            "mean": pl.col(agg).mean(),
+            "count": pl.col(agg).count(),
+            "max": pl.col(agg).max(),
+            "min": pl.col(agg).min(),
+            "std": pl.col(agg).std(),
+            "sum": pl.col(agg).sum(),
+            "median": pl.col(agg).median(),
+        }
+
+    def _get_unique_values(
+        self,
+        col: str,
+    ):
+        tmp = (
+            self.groupby(pl.col(col))
+            .agg(pl.count())
+            .sort(pl.col(col))
+            .collect()
+            .fetch()
+        )
+        RequestRejected._check_valid_df(tmp)
+        return tmp.to_pandas()[col].tolist()
+
+    def _bar_get_x_position(points, index, total, width):
+        scale = lambda x: x - (index - total / 2 + 0.5) * width
+        return scale(points)
+
+    def _get_all_cols(
+        rdf,
+        x: str,
+        y: str,
+        hue: str = None,
+    ):
+        if x == None and y == None:
+            raise ValueError("Please provide a x or y column name")
+        if x != None and y != None:
+            selects = [x, y] if x != y else [x]
+        else:
+            selects = [x] if x != None else [y]
+        if hue:
+            selects.append(hue)
+        for col in selects:
+            if not col in rdf.columns:
+                raise ValueError("Column ", col, " not found in dataframe")
+        return selects
+
+
+all = ["ApplyBins", "Palettes", "ApplyAbs"]
