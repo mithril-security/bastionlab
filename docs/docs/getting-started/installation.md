@@ -12,8 +12,7 @@ To install **BastionLab Client and BastionLab Server**, ensure the following are
 
 - Python3.7 or greater
     - You can get the official latest version of Python at [python.org](https://www.python.org/downloads/) or with your operating system's package manager.
-- [Python Pip](https://pypi.org/project/pip/) (PyPi)
-    - The package manager
+- [Python Pip](https://pypi.org/project/pip/) (PyPi), the package manager
 
 To install **BastionLab Server**, you'll also need:
 
@@ -98,6 +97,7 @@ git clone https://github.com/mithril-security/bastionlab.git
 cd ./bastionlab
 docker build -t bastionlab:0.1.0 -t bastionlab:latest .
 ```
+
 Then run a container based on the image:
 ```bash
 docker run -p 50056:50056 -d bastionlab
@@ -106,7 +106,7 @@ docker run -p 50056:50056 -d bastionlab
 ### Building the Docker image with GPU access
 
 #### Prerequisites
-Visit the ![NVIDIA drivers page](https://www.nvidia.com/Download/index.aspx) for downloading and installing the appropriate drivers.
+Visit the [NVIDIA drivers page](https://www.nvidia.com/Download/index.aspx) for downloading and installing the appropriate drivers.
 Reboot your system and make sure your GPU is running and accessible.
 
 #### Install nvidia-container-runtime
@@ -125,6 +125,7 @@ curl -s -L https://nvidia.github.io/nvidia-container-runtime/$distribution/nvidi
 
 sudo apt update
 ```
+
 Install *nvidia-container-runtime* and restart docker service:
 ```bash
 sudo apt install nvidia-container-runtime
@@ -137,6 +138,7 @@ git clone https://github.com/mithril-security/bastionlab.git
 cd ./bastionlab/server
 docker build -t bastionlab:0.3.7-gpu -f Dockerfile.gpu.sev .
 ```
+
 Then run a container based on the image, exposing the GPUs for use and with NVIDIA recommended flags:
 ```bash
 docker run --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 -p 50056:50056 bastionlab:0.3.7-gpu
@@ -156,14 +158,17 @@ cd bastionlab/server/
 ##### Environmental variables
 - `LIBTORCH`
   - If the LIBTORCH envar is already set, the script will use this path to build the server.
+
 - `CUDA`
   - If the CUDA envar is already set, the script will use this path to build the server.
+
 - `INSTALL_RUST_OPT`
   - It is to set the options for **rustup** installation (To choose the default host, **toolchain**, profile, ...).
   ```bash
   export INSTALL_RUST_OPT='--profile minimal --default-toolchain nightly'
   ./build.sh
   ```
+
 - `BASTIONLAB_BUILD_AS_ROOT`
   - If it is necessary to build the project as the **root user**, you need to set this variable before running the script.
   - If the variable is not set when running as root, the **dependencies will be installed** but the project will not be built.
@@ -174,6 +179,7 @@ cd bastionlab/server/
   export BASTIONLAB_BUILD_AS_ROOT=1
   ./build.sh # Running this as root and with the flag set will install AND build the server
   ```
+
 - `BASTIONLAB_CPP11`
   - If it is necessary to build the project using C++11, you need to set this variable before running the script. 
   - It will install and setup C++11 before building. 
@@ -218,12 +224,14 @@ Then, clone our repository:
 ```bash
 git clone https://github.com/mithril-security/bastionlab.git
 ```
+
 Download and unzip libtorch (Pytorch's C++ backend) from [Pytorch's website](https://pytorch.org/) (you can chose the right build according to your cuda version):
 ```bash
 cd ./bastionlab
 curl -o libtorch.zip $(. ./.env.vars && echo "${TORCH_CXX11_URL}")
 unzip libtorch.zip
 ```
+
 Libtorch binaries are now available under the libtorch folder. You can now turn to building the server crates:
 ```bash
 cd server

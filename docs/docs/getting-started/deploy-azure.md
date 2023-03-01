@@ -3,6 +3,8 @@ ____________________________________________
 
 Get started and **Deploy BastionLab Server**
 
+***# NEED QUICK INTRO OF 1 OR 2 SENTENCES***
+
 ## Pre-requisites
 ___________________________________________
 
@@ -17,12 +19,14 @@ If deploying with **Azure CLI** in your local environment, then you will need to
 
 - [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/)
     - To get the latest version of Azure CLI for your system, you can go to: [https://www.python.org/downloads/](https://www.python.org/downloads/)
-    - or use a one line command for **debian-based** distros:
-  ```bash
-  curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
-  ```
+    - Or use a one line command for **debian-based** distros:
+		```bash
+		curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+		```
 
-> Be mindful when creating and deleting resources as some of the samples presented in this article may result in charges, especially if certain deployment settings are chosen or if your application is left running for an extended period. To avoid incurring any unexpected costs, please be sure to review the documentation and billing pages closely prior to any deployments.
+!!! note
+
+	Be mindful when creating and deleting resources because some of the samples presented in this article could result in changes. Especially if certain deployment settings are chosen, or if your application is left running for an extended period. To avoid any unexpected costs, please make sure to review the documentation and billing pages prior to any deployments.
 
 ## Deploying with Azure Portal
 _____________________________________________
@@ -184,5 +188,3 @@ bastionlab-docker-30195.francecentral.azurecontainer.io  Succeeded
 You can also manage your BastionLab Server instance in your portal.
 
 <img src="../../assets/az-container-instance-cli.png" alt="resource group" width="90%" />
-
-
