@@ -329,9 +329,13 @@ impl ConversionService for Converter {
                 identifier: self.polars.insert_array(array),
             }
         } else {
-            return Err(
-                Status::aborted("DataFrame with str columns cannot be converted directly to RemoteArray. Please tokenize strings first"));
+            return Err(Status::aborted(format!(
+                "DataFrame with {dtypes:?} cannot be converted directly to RemoteArray"
+            )));
         };
+
+        // In order to not waste memory, we delete the dataframe after the eager `to_array` conversion
+        self.polars.delete_dfs(&identifier)?;
 
         Ok(Response::new(arr))
     }
@@ -388,6 +392,9 @@ impl ConversionService for Converter {
 
             identifiers.append(&mut vec![ids, masks]);
         }
+
+        // In order to not waste memory, we delete the dataframe after the eager `to_array` conversion
+        self.polars.delete_dfs(&identifier)?;
 
         Ok(Response::new(RemoteArrays { list: identifiers }))
     }

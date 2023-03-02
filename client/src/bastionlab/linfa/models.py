@@ -9,13 +9,13 @@ from ..pb.bastionlab_linfa_pb2 import (
     ElasticNet as ProtoElas,
     GaussianNb as ProtoGaussian,
 )
-from ..polars.remote_polars import RemoteArray
+from ..polars import RemoteArray
 from typing import Dict, Optional, TYPE_CHECKING
 import numpy as np
-from .remote_linfa import Trainer
+from .linfa import Trainer
 
 if TYPE_CHECKING:
-    from .remote_linfa import Trainer
+    from .linfa import Trainer
 
 
 @dataclass

@@ -218,6 +218,26 @@ class TestingRemoteLinfa(unittest.TestCase):
 
         self.assertEqual(remote_r2_score, local_r2_score)
 
+        # We will use the linear regression test to also test all the regression metric APIs
+        self.assertIsNotNone(
+            metrics.mean_absolute_error(self.diabetes_test_Y, remote_pred).fetch()
+        )
+        self.assertIsNotNone(
+            metrics.mean_squared_log_error(self.diabetes_test_Y, remote_pred).fetch()
+        )
+        self.assertIsNotNone(
+            metrics.median_absolute_error(self.diabetes_test_Y, remote_pred).fetch()
+        )
+        self.assertIsNotNone(
+            metrics.mean_squared_error(self.diabetes_test_Y, remote_pred).fetch()
+        )
+        self.assertIsNotNone(
+            metrics.max_error(self.diabetes_test_Y, remote_pred).fetch()
+        )
+        self.assertIsNotNone(
+            metrics.explained_variance(self.diabetes_test_Y, remote_pred).fetch()
+        )
+
     def test_multinomial_logistic_regression(self):
         from sklearn.linear_model import LogisticRegression as SkLogisticRegression
 
@@ -307,6 +327,10 @@ class TestingRemoteLinfa(unittest.TestCase):
         local_prob_pred = sk_log_reg.predict_proba(local_iris_test_X)[:, 1]
 
         self.assertAlmostEqual(remote_prob_pred.var(), local_prob_pred.var(), 4)
+
+        # We will use the binomial test to check for all the classification metrics APIs
+        self.assertIsNotNone(metrics.f1_score(iris_test_Y, remote_pred).fetch())
+        self.assertIsNotNone(metrics.mcc(iris_test_Y, remote_pred).fetch())
 
     def test_kmeans(self):
         X, y = make_blobs(n_samples=500, centers=3, n_features=2)

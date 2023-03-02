@@ -1,11 +1,8 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Generic, List, Optional, TypeVar, Sequence, Union, Dict
-import seaborn as sns
 import polars as pl
 from polars.internals.sql.context import SQLContext
-from torch.jit import ScriptFunction
-import base64
 import json
 import torch
 from ..pb.bastionlab_conversion_pb2 import (
@@ -15,173 +12,27 @@ from ..pb.bastionlab_conversion_pb2 import (
 from ..pb.bastionlab_polars_pb2 import ReferenceResponse, SplitRequest, ReferenceRequest
 from .client import BastionLabPolars
 from .utils import ApplyBins, Palettes, ApplyAbs
-import matplotlib.pyplot as plt
-import matplotlib as mat
 from typing import TYPE_CHECKING
 from ..errors import RequestRejected
-import numpy as np
-from serde import serde, InternalTagging, field
 from serde.json import to_json
+from ._utils import (
+    Metadata,
+    PolarsPlanSegment,
+    EntryPointPlanSegment,
+    UdfPlanSegment,
+    StackPlanSegment,
+    PlanSegments,
+    RowCountSegment,
+)
+from .._utils import delegate, delegate_properties
 
 
 LDF = TypeVar("LDF", bound="pl.LazyFrame")
 
 if TYPE_CHECKING:
-    from ..torch.remote_torch import RemoteTensor
     from ..client import Client
-
-
-def delegate(
-    target_cls: Callable,
-    target_attr: str,
-    f_names: List[str],
-    wrap: bool = False,
-    wrap_fn: Optional[Callable] = None,
-) -> Callable[[Callable], Callable]:
-    def inner(cls: Callable) -> Callable:
-        delegates = {f_name: getattr(target_cls, f_name) for f_name in f_names}
-
-        def delegated_fn(f_name: str) -> Callable:
-            def f(_self, *args, **kwargs):
-                res = (delegates[f_name])(getattr(_self, target_attr), *args, **kwargs)
-                if wrap:
-                    if wrap_fn is not None:
-                        return wrap_fn(_self, res)
-                    else:
-                        wrapped_res = _self.clone()
-                        setattr(wrapped_res, target_attr, res)
-                        return wrapped_res
-                else:
-                    return res
-
-            return f
-
-        for f_name in f_names:
-            setattr(cls, f_name, delegated_fn(f_name))
-
-        return cls
-
-    return inner
-
-
-def delegate_properties(
-    *names: str, target_attr: str
-) -> Callable[[Callable], Callable]:
-    def inner(cls: Callable) -> Callable:
-        def prop(name):
-            def f(_self):
-                return getattr(getattr(_self, target_attr), name)
-
-            return property(f)
-
-        for name in names:
-            setattr(cls, name, prop(name))
-
-        return cls
-
-    return inner
-
-
-class CompositePlanSegment:
-    """
-    Composite plan segment class which handles segment plans that have not been implemented
-    """
-
-
-@dataclass
-@serde
-class EntryPointPlanSegment(CompositePlanSegment):
-    """
-    Composite plan segment class responsible for new entry points
-    """
-
-    identifier: str
-
-
-@dataclass
-@serde
-class PolarsPlanSegment(CompositePlanSegment):
-    """
-    Composite plan segment class responsible for Polars queries
-    """
-
-    # HACK: when getting using the schema attribute, polars returns
-    #  the proper error messages (polars.NotFoundError etc) when it is invalid.
-    #  This is not the case for write_json(), which returns a confusing error
-    #  message. So, we get the schema beforehand :)
-    plan: LDF = field(
-        serializer=lambda val: val.schema and json.loads(val.write_json()),
-        deserializer=lambda _: None,
-    )
-
-
-@dataclass
-@serde
-class UdfPlanSegment(CompositePlanSegment):
-    """
-    Composite plan segment class responsible for user defined functions
-    """
-
-    columns: List[str]
-    udf: ScriptFunction = field(
-        serializer=lambda val: base64.b64encode(val.save_to_buffer()).decode("ascii"),
-        deserializer=lambda _: None,
-    )
-
-
-@dataclass
-@serde
-class StackPlanSegment(CompositePlanSegment):
-    """
-    Composite plan segment class responsible for vstack function
-    """
-
-
-@dataclass
-@serde
-class RowCountSegment(CompositePlanSegment):
-    """
-    Composite plan segment class responsible for with_row_count function
-    """
-
-    row: str
-
-
-@dataclass
-@serde(tagging=InternalTagging("type"))
-class PlanSegments:
-    segments: List[
-        Union[
-            PolarsPlanSegment,
-            UdfPlanSegment,
-            EntryPointPlanSegment,
-            StackPlanSegment,
-            RowCountSegment,
-        ]
-    ]
-
-
-@dataclass
-class UdfTransformerPlanSegment(CompositePlanSegment):
-    """
-    Accepts a UDF for row-wise DataFrame transformation.
-    """
-
-    _name: str
-    _columns: List[str]
-
-    def serialize(self) -> str:
-        pass
-
-
-@dataclass
-class Metadata:
-    """
-    A class containing metadata related to your dataframe
-    """
-
-    _polars_client: BastionLabPolars
-    _prev_segments: List[CompositePlanSegment] = field(default_factory=list)
+    from ..torch import RemoteTensor
+    import matplotlib as mat
 
 
 # TODO
@@ -242,6 +93,10 @@ class Metadata:
         "unnest",
     ],
     wrap=True,
+    make_docstring=lambda fname: f"""
+        See the polars documentation for
+        [pl.LazyFrame.{fname}](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.{fname}.html).
+    """,
 )
 @delegate(
     target_cls=pl.LazyFrame,
@@ -253,25 +108,22 @@ class Metadata:
     ],
     wrap=True,
     wrap_fn=lambda rlf, res: RemoteLazyGroupBy(res, rlf._meta),
+    make_docstring=lambda fname: f"""
+        See the polars documentation for
+        [pl.LazyFrame.{fname}](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.{fname}.html).
+    """,
 )
 @dataclass
 class RemoteLazyFrame:
     """
     A class to represent a RemoteLazyFrame.
 
-    Delegate attributes:
-        dtypes: Get dtypes of columns in LazyFrame.
-        schema (dict[column name, DataType]): Get dataframe's schema
-
-    Delegate methods:
-    As well as the methods that will be later described, we also support the following Polars methods which are defined in detail
-    in Polar's documentation:
-
-    "sort", "cache", "filter", "select", "with_columns", "with_context", "with_column", "drop", "rename", "reverse",
-    "shift", "shift_and_fill", "slice", "limit", "head", "tail", "last", "first", "take_every", "fill_null",
-    "fill_nan", "std", "var", "max", "min", "sum", "mean", "median", "quantile", "explode", "unique", "drop_nulls", "melt",
-    "interpolate", "unnest",
-    """
+    Delegated attributes
+    --------------------
+    dtypes : dict[str, pl.DataType]
+        Get dtypes of columns in LazyFrame.<br>
+    schema : dict[str, pl.DataType]
+        The dataframe's schema."""
 
     _inner: pl.LazyFrame
     _meta: Metadata
@@ -361,7 +213,7 @@ class RemoteLazyFrame:
         """Applied user-defined function to selected columns of RemoteLazyFrame and returns result
         Args:
             columns (List[str]): List of columns that user-defined function should be applied to
-            udf (Callable): user-defined function to be applied to columns, must be a compatible input for torch.jit.script() function.
+            udf (Callable): user-defined function to be applied to columns, must be a compatible input for the `torch.jit.script` function.
         Returns:
             RemoteLazyFrame: An updated RemoteLazyFrame after udf applied
         """
@@ -502,8 +354,8 @@ class RemoteLazyFrame:
             left_on (Union[str, pl.Expr, Sequence[Union[str, pl.Expr]], None] = None): Name(s) of the left join column(s).
             right_on (Union[str, pl.Expr, Sequence[Union[str, pl.Expr]], None] = None): Name(s) of the right join column(s).
             on (Union[str, pl.Expr, Sequence[Union[str, pl.Expr]], None] = None): Name(s) of the join columns in both DataFrames.
-            how (pl.internals.type_aliases.JoinStrategy = "inner"): Join strategy {'inner', 'left', 'outer', 'semi', 'anti', 'cross'}
-            suffix (str = "_right"): Suffix to append to columns with a duplicate name.
+            how (str = 'inner'): Join strategy, which can be either `'inner'`, `'left'`, `'outer'`, `'semi'`, `'anti'` or `'cross'`.
+            suffix (str = '_right'): Suffix to append to columns with a duplicate name.
             allow_parallel (bool = True): Boolean value for allowing the physical plan to evaluate the computation of both RemoteLazyFrames up to the join in parallel.
             force_parallel (bool = False): Boolean value for forcing parallel the physical plan to evaluate the computation of both RemoteLazyFrames up to the join in parallel.
         Raises:
@@ -556,8 +408,8 @@ class RemoteLazyFrame:
             by_left (Union[str, Sequence[str], None] = None): Join on these columns before doing asof join
             by_right (Union[str, Sequence[str], None] = None): Join on these columns before doing asof join
             by (Union[str, Sequence[str], None] = None): Join on these columns before doing asof join
-            strategy (pl.internals.type_aliases.AsofJoinStrategy = "backward"): Join strategy: {'backward', 'forward'}.
-            suffix (str  = "_right"): Suffix to append to columns with a duplicate name.
+            strategy (str = "backward"): Join strategy: can be either `'backward'` or `'forward'`.
+            suffix (str = "_right"): Suffix to append to columns with a duplicate name.
             tolerance (Union[str, int, float, None] = None): Numeric tolerance. By setting this the join will only be done if the near keys are within this distance.
             suffix (str): Suffix to append to columns with a duplicate name.
             allow_parallel (bool = True): Boolean value for allowing the physical plan to evaluate the computation of both RemoteLazyFrames up to the join in parallel.
@@ -601,7 +453,7 @@ class RemoteLazyFrame:
         pie_labels: bool = True,
         key: bool = True,
         key_loc: str = "center left",
-        key_title: str = None,
+        key_title: Optional[str] = None,
         key_bbox=(1, 0, 0.5, 1),
     ) -> None:
         """Draws a pie chart based on values within single column.
@@ -609,15 +461,15 @@ class RemoteLazyFrame:
         Args:
             parts (str): The name of the column containing bar chart segment values.
             title (str = None): Title to be displayed with the bar chart.
-            labels (Union[str, list[str]] = None) = The labels of segments in pie charts. Either a list of string labels following the same order as the values
-            in your `parts` column or the name of a column containing the labels.
-            ax (List(str)): Here you can send your own matplotlib axis if required. Note- if you do this, the fig_kwargs arguments will not be used.
+            labels (Union[str, list[str]] = None): The labels of segments in pie charts. Either a list of string labels following the same order as the values
+                in your `parts` column or the name of a column containing the labels.
+            ax (List[str]): Here you can send your own matplotlib axis if required. Note- if you do this, the fig_kwargs arguments will not be used.
             fig_kwargs (dict = None): A dictionary argument where you can add any kwargs you wish to be forwarded onto matplotlib.pyplot.subplots()
-            when creating the figure that the pie chart will be displayed on.
+                when creating the figure that the pie chart will be displayed on.
             pie_labels (bool = True): You can modify this boolean value if you do not with to label the segments of your pie chart.
             key (bool = True): This key value specifies whether you want a color map key placed to the side of your pie chart.
             key_loc (str = "center left"): A string argument where you can modify the location of your segment color key on your pie chart to be forward to matplotlib's legend function.
-            key_title (str = None): A string argument where you can specify a title for this segment color key to be forward to matplotlib's legend function.
+            key_title (Optional[str] = None): A string argument where you can specify a title for this segment color key to be forward to matplotlib's legend function.
             key_bbox (tuple = 1, 0, 0.5, 1): bbox_to_anchor argument to be forward to matplotlib's legend function.
         Raises:
             ValueError: Incorrect column name given as parts or labels argument.
@@ -625,6 +477,8 @@ class RemoteLazyFrame:
         """
 
         tmp = self
+        import matplotlib.pyplot as plt
+
         if parts not in self.columns:
             raise ValueError("Parts column not found in dataframe")
         if type(labels) == str and labels not in self.columns:
@@ -700,12 +554,12 @@ class RemoteLazyFrame:
         **kwargs,
     ):
         """Draws a barchart
-        barplot filters data down to necessary columns only and then calls Seaborn's barplot function.
+        Barplot filters data down to necessary columns only and then calls Seaborn's barplot function.
         Args:
-            x (str) = None: The name of column to be used for x axes.
-            y (str) = None: The name of column to be used for y axes.
-            estimator (str) = "mean": string represenation of estimator to be used in aggregated query. Options are: "mean", "median", "count", "max", "min", "std" and "sum"
-            hue (str) = None: The name of column to be used for colour encoding.
+            x (str, optional): The name of column to be used for x axes.
+            y (str, optional): The name of column to be used for y axes.
+            estimator (str, optional): string represenation of estimator to be used in aggregated query. Options are: "mean", "median", "count", "max", "min", "std" and "sum"
+            hue (str, optional): The name of column to be used for colour encoding.
             **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function.
         Raises:
             ValueError: Incorrect column name given, no x or y values provided, estimator function not recognised
@@ -713,6 +567,8 @@ class RemoteLazyFrame:
             various exceptions: Note that exceptions may be raised from Seaborn when the barplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
+        import seaborn as sns
+
         # if there is a hue argument add them to cols and no duplicates
         if x == None and y == None:
             raise ValueError("Please provide a x or y column name")
@@ -720,7 +576,7 @@ class RemoteLazyFrame:
         allowed_fns = ["mean", "count", "max", "min", "std", "sum", "median"]
 
         if estimator not in allowed_fns:
-            raise ValueError("Column ", col, " not found in dataframe")
+            raise ValueError(f"Column `{col}` not found in dataframe")
         if x != None and y != None:
             selects = [x, y] if x != y else [x]
         else:
@@ -735,7 +591,7 @@ class RemoteLazyFrame:
 
         for col in selects:
             if not col in self.columns:
-                raise ValueError("Column ", col, " not found in dataframe")
+                raise ValueError(f"Column `{col}` not found in dataframe")
 
         agg = y if y != None else x
         agg_dict = {
@@ -755,7 +611,7 @@ class RemoteLazyFrame:
                 .collect()
                 .fetch()
             )
-            RequestRejected.check_valid_df(tmp)
+            RequestRejected._check_valid_df(tmp)
             df = tmp.to_pandas()
         else:
             agg_fn = pl.col(y).mean()
@@ -768,7 +624,7 @@ class RemoteLazyFrame:
                 .collect()
                 .fetch()
             )
-            RequestRejected.check_valid_df(tmp)
+            RequestRejected._check_valid_df(tmp)
             df = tmp.to_pandas()
         # run query
         if x == None:
@@ -778,9 +634,7 @@ class RemoteLazyFrame:
         else:
             sns.barplot(data=df, x=x, y=y, **kwargs)
 
-    def histplot(
-        self: LDF, x: str = "count", y: str = "count", bins: int = 10, **kwargs
-    ):
+    def histplot(self: LDF, x: str = None, y: str = None, bins: int = 10, **kwargs):
         """Histplot plots a univariate histogram, where one x or y axes is provided or a bivariate histogram, where both x and y axes values are supplied.
 
         Histplot filters down a RemoteLazyFrame to necessary columns only, groups x axes into bins
@@ -798,6 +652,7 @@ class RemoteLazyFrame:
             various exceptions: Note that exceptions may be raised from Seaborn when the barplot or heatmap function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
+        import seaborn as sns
 
         col_x = x if x != None else "count"
         col_y = y if y != None else "count"
@@ -826,7 +681,7 @@ class RemoteLazyFrame:
                 .collect()
                 .fetch()
             )
-            RequestRejected.check_valid_df(tmp)
+            RequestRejected._check_valid_df(tmp)
             df = tmp.to_pandas()
 
             # horizontal barplot where x axis is count
@@ -864,7 +719,7 @@ class RemoteLazyFrame:
                 .collect()
                 .fetch()
             )
-            RequestRejected.check_valid_df(tmp)
+            RequestRejected._check_valid_df(tmp)
             df = tmp.to_pandas()
             my_cmap = sns.color_palette("Blues", as_cmap=True)
             pivot = df.pivot(index=col_y, columns=col_x, values="count")
@@ -903,6 +758,8 @@ class RemoteLazyFrame:
             various exceptions: Note that exceptions may be raised from Seaborn when the lineplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
+        import seaborn as sns
+
         selects = [x, y] if x != y else [x]
 
         for op in [hue, size, style, units]:
@@ -920,11 +777,11 @@ class RemoteLazyFrame:
 
         for col in selects:
             if not col in self.columns:
-                raise ValueError("Column ", col, " not found in dataframe")
+                raise ValueError(f"Column `{col}` not found in dataframe")
 
         # get df with necessary columns
         tmp = self.select([pl.col(x) for x in selects]).collect().fetch()
-        RequestRejected.check_valid_df(tmp)
+        RequestRejected._check_valid_df(tmp)
         df = tmp.to_pandas()
         sns.lineplot(data=df, x=x, y=y, **kwargs)
 
@@ -941,6 +798,8 @@ class RemoteLazyFrame:
             various exceptions: Note that exceptions may be raised from Seaborn when the scatterplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
+        import seaborn as sns
+
         # if there is a hue or style argument add them to cols
         cols = [x, y]
         if "hue" in kwargs:
@@ -952,11 +811,11 @@ class RemoteLazyFrame:
 
         for col in cols:
             if not col in self.columns:
-                raise ValueError("Column ", col, " not found in dataframe")
+                raise ValueError(f"Column `{col}` not found in dataframe")
 
         # get df with necessary columns
         tmp = self.select([pl.col(x) for x in cols]).collect().fetch()
-        RequestRejected.check_valid_df(tmp)
+        RequestRejected._check_valid_df(tmp)
         df = tmp.to_pandas()
         # run query
         sns.scatterplot(data=df, x=x, y=y, **kwargs)
@@ -972,10 +831,10 @@ class RemoteLazyFrame:
         """Draws a barchart
         barplot filters data down to necessary columns only and then calls Seaborn's barplot function.
         Args:
-            x (str) = None: The name of column to be used for x axes.
-            y (str) = None: The name of column to be used for y axes.
-            estimator (str) = "mean": string represenation of estimator to be used in aggregated query. Options are: "mean", "median", "count", "max", "min", "std" and "sum"
-            hue (str) = None: The name of column to be used for colour encoding.
+            x (str, optional): The name of column to be used for x axes.
+            y (str, optional): The name of column to be used for y axes.
+            estimator (str, optional): string represenation of estimator to be used in aggregated query. Options are: "mean", "median", "count", "max", "min", "std" and "sum"
+            hue (str, optional): The name of column to be used for colour encoding.
             **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function.
         Raises:
             ValueError: Incorrect column name given, no x or y values provided, estimator function not recognised
@@ -983,6 +842,8 @@ class RemoteLazyFrame:
             various exceptions: Note that exceptions may be raised from Seaborn when the barplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
+        import seaborn as sns
+
         # if there is a hue argument add them to cols and no duplicates
         if x == None and y == None:
             raise ValueError("Please provide a x or y column name")
@@ -990,7 +851,7 @@ class RemoteLazyFrame:
         allowed_fns = ["mean", "count", "max", "min", "std", "sum", "median"]
 
         if estimator not in allowed_fns:
-            raise ValueError("Column ", col, " not found in dataframe")
+            raise ValueError(f"Column `{col}` not found in dataframe")
         if x != None and y != None:
             selects = [x, y] if x != y else [x]
         else:
@@ -1005,7 +866,7 @@ class RemoteLazyFrame:
 
         for col in selects:
             if not col in self.columns:
-                raise ValueError("Column ", col, " not found in dataframe")
+                raise ValueError(f"Column `{col}` not found in dataframe")
 
         agg = y if y != None else x
         agg_dict = {
@@ -1025,7 +886,7 @@ class RemoteLazyFrame:
                 .collect()
                 .fetch()
             )
-            RequestRejected.check_valid_df(tmp)
+            RequestRejected._check_valid_df(tmp)
             df = tmp.to_pandas()
         else:
             agg_fn = pl.col(y).mean()
@@ -1038,7 +899,7 @@ class RemoteLazyFrame:
                 .collect()
                 .fetch()
             )
-            RequestRejected.check_valid_df(tmp)
+            RequestRejected._check_valid_df(tmp)
             df = tmp.to_pandas()
         # run query
         if x == None:
@@ -1109,7 +970,7 @@ class RemoteLazyFrame:
         y: str = None,
         colors: Union[str, list[str]] = Palettes.dict["standard"],
         vertical: bool = True,
-        ax: mat.axes = None,
+        ax: "mat.axes" = None,
         widths: float = 0.75,
         median_linestyle: str = "-",
         median_color: str = "black",
@@ -1138,6 +999,8 @@ class RemoteLazyFrame:
             various exceptions: Note that exceptions may be raised from Seaborn when the lineplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
+        import matplotlib.pyplot as plt
+        import matplotlib as mat
 
         if isinstance(colors, str):
             c = colors
@@ -1153,7 +1016,7 @@ class RemoteLazyFrame:
         for col in [x, y]:
             if col != None:
                 if col not in self.columns:
-                    raise ValueError("Column ", col, " not found in dataframe")
+                    raise ValueError(f"Column `{col}` not found in dataframe")
                 else:
                     selects.append(col)
         if selects == []:
@@ -1200,7 +1063,7 @@ class RemoteLazyFrame:
         for x in [col, row]:
             if x != None:
                 if not x in self.columns:
-                    raise ValueError("Column ", x, " not found in dataframe")
+                    raise ValueError(f"Column `{x}` not found in dataframe")
         return Facet(inner_rdf=self, col=col, row=row, kwargs=kwargs)
 
     def minmax_scale(self: LDF, cols: Union[str, List[str]]) -> LDF:
@@ -1218,12 +1081,12 @@ class RemoteLazyFrame:
         # set up columns for single string argument
         if isinstance(cols, str):
             if cols not in self.columns:
-                raise ValueError("Column ", cols, " not found in dataframe")
+                raise ValueError(f"Column `{cols}` not found in dataframe")
             columns.append(cols)
         else:  # set up columns for list
             for x in cols:
                 if x not in self.columns:
-                    raise ValueError("Column ", x, " not found in dataframe")
+                    raise ValueError(f"Column `{x}` not found in dataframe")
                 columns.append(x)
         rdf = self.with_columns(
             [
@@ -1248,12 +1111,12 @@ class RemoteLazyFrame:
         # set up columns for single string argument
         if isinstance(cols, str):
             if cols not in self.columns:
-                raise ValueError("Column ", cols, " not found in dataframe")
+                raise ValueError(f"Column `{cols}` not found in dataframe")
             columns.append(cols)
         else:  # set up columns for list
             for x in cols:
                 if x not in self.columns:
-                    raise ValueError("Column ", x, " not found in dataframe")
+                    raise ValueError(f"Column `{x}` not found in dataframe")
                 columns.append(x)
         rdf = self.with_columns(
             [
@@ -1279,12 +1142,12 @@ class RemoteLazyFrame:
         # set up columns for single string argument
         if isinstance(cols, str):
             if cols not in self.columns:
-                raise ValueError("Column ", cols, " not found in dataframe")
+                raise ValueError(f"Column `{cols}` not found in dataframe")
             columns.append(cols)
         else:  # set up columns for list
             for x in cols:
                 if x not in self.columns:
-                    raise ValueError("Column ", x, " not found in dataframe")
+                    raise ValueError(f"Column `{x}` not found in dataframe")
                 columns.append(x)
         rdf = self.select([pl.col(x) for x in self.columns]).apply_udf(
             [x for x in columns], model
@@ -1308,12 +1171,12 @@ class RemoteLazyFrame:
         # set up columns for single string argument
         if isinstance(cols, str):
             if cols not in self.columns:
-                raise ValueError("Column ", cols, " not found in dataframe")
+                raise ValueError(f"Column `{cols}` not found in dataframe")
             columns.append(cols)
         else:  # set up columns for list
             for x in cols:
                 if x not in self.columns:
-                    raise ValueError("Column ", x, " not found in dataframe")
+                    raise ValueError(f"Column `{x}` not found in dataframe")
                 columns.append(x)
         rdf = self.with_columns(
             [(pl.col(x) - pl.col(x).mean()) / pl.col(x).std().alias(x) for x in columns]
@@ -1334,12 +1197,12 @@ class RemoteLazyFrame:
         # set up columns for single string argument
         if isinstance(cols, str):
             if cols not in self.columns:
-                raise ValueError("Column ", cols, " not found in dataframe")
+                raise ValueError(f"Column `{cols}` not found in dataframe")
             columns.append(cols)
         else:  # set up columns for list
             for x in cols:
                 if x not in self.columns:
-                    raise ValueError("Column ", x, " not found in dataframe")
+                    raise ValueError(f"Column `{x}` not found in dataframe")
                 columns.append(x)
         rdf = self.with_columns(
             [
@@ -1428,6 +1291,8 @@ class FetchableLazyFrame(RemoteLazyFrame):
 
 @dataclass
 class Facet:
+    """Namespace for matplotlib functions"""
+
     inner_rdf: RemoteLazyFrame
     col: Optional[str] = None
     row: Optional[str] = None
@@ -1456,6 +1321,8 @@ class Facet:
             various exceptions: Note that exceptions may be raised from internal Seaborn (scatterplot) or Matplotlib.pyplot functions (subplots, set_title),
             for example, if kwargs keywords are not expected. See Seaborn/Matplotlib documentation for further details.
         """
+        import seaborn as sns
+
         self.__map(sns.scatterplot, *args, **kwargs)
 
     def lineplot(
@@ -1477,12 +1344,14 @@ class Facet:
             various exceptions: Note that exceptions may be raised from Seaborn when the lineplot function is called,
             for example, where kwargs keywords are not expected. See Seaborn documentation for further details.
         """
+        import seaborn as sns
+
         self.__map(sns.lineplot, x=x, y=y, **kwargs)
 
     def histplot(
         self: LDF,
-        x: str = None,
-        y: str = None,
+        x: Optional[str] = None,
+        y: Optional[str] = None,
         bins: int = 10,
         **kwargs,
     ) -> None:
@@ -1492,9 +1361,9 @@ class Facet:
         combination of row/column values and applies histplot to this dataset.
 
         Args:
-            x (str) = None: The name of column to be used for x axes.
-            y (str) = None: The name of column to be used for y axes.
-            bins (int) = 10: An integer bin value which x axes will be grouped by.
+            x (str): The name of column to be used for x axes.
+            y (str): The name of column to be used for y axes.
+            bins (int): An integer bin value which x axes will be grouped by.
             **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function, in the case of one column being supplied, or heatmap function, where both x and y columns are supplied.
         Raises:
             ValueError: Incorrect column name given
@@ -1506,20 +1375,20 @@ class Facet:
 
     def barplot(
         self: LDF,
-        x: str = None,
-        y: str = None,
-        hue: str = None,
+        x: Optional[str] = None,
+        y: Optional[str] = None,
+        hue: Optional[str] = None,
         estimator: str = "mean",
         **kwargs,
     ) -> None:
         """Draws a bar chart for each subset in row/column facet grid.
 
-         barplot filters data down to necessary columns only and then calls Seaborn's barplot function.
+        Barplot filters data down to necessary columns only and then calls Seaborn's barplot function.
         Args:
-            x (str) = None: The name of column to be used for x axes.
-            y (str) = None: The name of column to be used for y axes.
-            estimator (str) = "mean": string represenation of estimator to be used in aggregated query. Options are: "mean", "median", "count", "max", "min", "std" and "sum"
-            hue (str) = None: The name of column to be used for colour encoding.
+            x (str, optional): The name of column to be used for x axes.
+            y (str, optional): The name of column to be used for y axes.
+            estimator (str, optional): string represenation of estimator to be used in aggregated query. Options are: "mean", "median", "count", "max", "min", "std" and "sum"
+            hue (str, optional): The name of column to be used for colour encoding.
             **kwargs: Other keyword arguments that will be passed to Seaborn's barplot function.
         Raises:
             ValueError: Incorrect column name given, no x or y values provided, estimator function not recognised
@@ -1533,6 +1402,8 @@ class Facet:
         self.__bastion_map("barplot", x=x, y=y, **kwargs)
 
     def __bastion_map(self, fn: str, x: str = None, y: str = None, **kwargs):
+        import matplotlib.pyplot as plt
+
         # create list of all columns needed for query
         hue = kwargs["hue"] if "hue" in kwargs else None
         selects = []
@@ -1542,7 +1413,7 @@ class Facet:
 
         for col in selects:
             if col not in self.inner_rdf.columns:
-                raise ValueError("Column ", col, " not found in dataframe")
+                raise ValueError(f"Column `{col}` not found in dataframe")
 
         # get unique row and col values
         cols = []
@@ -1555,7 +1426,7 @@ class Facet:
                 .collect()
                 .fetch()
             )
-            RequestRejected.check_valid_df(tmp)
+            RequestRejected._check_valid_df(tmp)
             cols = tmp.to_pandas()[self.col].tolist()
         if self.row != None:
             tmp = (
@@ -1565,7 +1436,7 @@ class Facet:
                 .collect()
                 .fetch()
             )
-            RequestRejected.check_valid_df(tmp)
+            RequestRejected._check_valid_df(tmp)
             rows = tmp.to_pandas()[self.row].tolist()
 
         if fn == "histplot":
@@ -1637,6 +1508,8 @@ class Facet:
                 axes[count].set_title(t1)
 
     def __map(self: LDF, func, **kwargs) -> None:
+        import matplotlib.pyplot as plt
+
         # create list of all columns needed for query
         selects = [self.col, self.row]
         if "x" in kwargs and not kwargs["x"] in selects:
@@ -1646,7 +1519,7 @@ class Facet:
 
         for col in selects:
             if col not in self.inner_rdf.columns:
-                raise ValueError("Column ", col, " not found in dataframe")
+                raise ValueError(f"Column `{col}` not found in dataframe")
 
         # get unique row and col values
         cols = []
@@ -1659,7 +1532,7 @@ class Facet:
                 .collect()
                 .fetch()
             )
-            RequestRejected.check_valid_df(tmp)
+            RequestRejected._check_valid_df(tmp)
             cols = tmp.to_pandas()[self.col].tolist()
 
         if self.row != None:
@@ -1670,7 +1543,7 @@ class Facet:
                 .collect()
                 .fetch()
             )
-            RequestRejected.check_valid_df(tmp)
+            RequestRejected._check_valid_df(tmp)
             rows = tmp.to_pandas()[self.row].tolist()
 
         # mapping
@@ -1701,7 +1574,7 @@ class Facet:
                         + str(cols[col_count])
                     )
                     tmp = df.select([pl.col(x) for x in selects]).collect().fetch()
-                    RequestRejected.check_valid_df(tmp)
+                    RequestRejected._check_valid_df(tmp)
                     sea_df = tmp.to_pandas()
                     func(data=sea_df, ax=axes[row_count, col_count], **kwargs)
                     axes[row_count, col_count].set_title(t1)
@@ -1714,7 +1587,7 @@ class Facet:
                 df = self.inner_rdf.clone().filter((pl.col(t) == my_list[count]))
                 t1 = t + ": " + str(my_list[count])
                 tmp = df.select([pl.col(x) for x in selects]).collect().fetch()
-                RequestRejected.check_valid_df(tmp)
+                RequestRejected._check_valid_df(tmp)
                 sea_df = tmp.to_pandas()
                 func(data=sea_df, ax=axes[row_count, col_count], **kwargs)
                 axes[count].set_title(t1)
@@ -1730,6 +1603,8 @@ class Facet:
 )
 @dataclass
 class RemoteLazyGroupBy(Generic[LDF]):
+    """Builder for a GroupBy operation on a `RemoteLazyFrame`."""
+
     _inner: pl.internals.lazyframe.groupby.LazyGroupBy[LDF]
     _meta: Metadata
 
@@ -1745,17 +1620,17 @@ def train_test_split(
     Split RemoteArrays into train and test subsets.
 
     Args:
-        train_size (Optional[float] = None):
-            It should be between 0.0 and 1.0 and represent the proportion of the dataset to include in the train split.
+        train_size (Optional[float], optional): It should
+            be between 0.0 and 1.0 and represent the proportion of the dataset to include in the train split.
             If None, the value is automatically set to the complement of the test size.
-        test_size (Optional[float] =0.25):
-            It should be between 0.0 and 1.0 and represent the proportion of the dataset to include in the test split.
+        test_size (Optional[float], optional): It should
+            be between 0.0 and 1.0 and represent the proportion of the dataset to include in the test split.
             If None, the value is set to the complement of the train size.
-            If train_size is also None, it will be set to 0.25.
-        shuffle (Optional[bool] = False):
-            Whether or not to shuffle the data before splitting.
-        random_state (Optional[int] = -1):
-            Controls the shuffling applied to the data before applying the split.
+            If train_size is also None, it will be set to 0.25. Defaults to 0.25.
+        shuffle (Optional[bool], optional): Whether or
+            not to shuffle the data before splitting.
+        random_state (Optional[int], optional): Controls the
+            shuffling applied to the data before applying the split.
             Pass an int for reproducible output across multiple function calls.
     """
 
@@ -1788,6 +1663,8 @@ def train_test_split(
 
 
 class RemoteArray(RemoteLazyFrame):
+    """Intermediate representation for conversion between Tensor and Dataframes."""
+
     def __init__(self, client: "Client", identifier: str) -> None:
         self._client = client
         self.identifier = identifier
@@ -1803,7 +1680,7 @@ class RemoteArray(RemoteLazyFrame):
         Returns:
             RemoteTensor
         """
-        from ..torch.remote_torch import RemoteTensor
+        from ..torch.data import RemoteTensor
 
         res = self._client._converter._stub.ConvToTensor(
             PbRemoteArray(identifier=self.identifier)
@@ -1812,3 +1689,19 @@ class RemoteArray(RemoteLazyFrame):
 
     def __str__(self) -> str:
         return f"RemoteArray(identifier={self.identifier})"
+
+
+__pdoc__ = {}
+__all__ = [
+    "RemoteLazyFrame",
+    "RemoteLazyGroupBy",
+    "FetchableLazyFrame",
+    "train_test_split",
+    "Facet",
+    "RemoteArray",
+]
+__pdoc__["RemoteLazyFrame.__init__"] = False
+__pdoc__["RemoteLazyGroupBy.__init__"] = False
+__pdoc__["FetchableLazyFrame.__init__"] = False
+__pdoc__["Facet.__init__"] = False
+__pdoc__["RemoteArray.__init__"] = False

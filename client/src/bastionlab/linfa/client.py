@@ -8,8 +8,8 @@ from ..pb.bastionlab_linfa_pb2 import (
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..polars.remote_polars import RemoteArray, FetchableLazyFrame
-    from .remote_linfa import FittedModel, Trainer
+    from ..polars import RemoteArray, FetchableLazyFrame
+    from .linfa import FittedModel, Trainer
     from ..client import Client
 
 
@@ -27,7 +27,7 @@ class BastionLabLinfa:
         target: "RemoteArray",
         trainer: "Trainer",
     ) -> "FittedModel":
-        from .remote_linfa import FittedModel
+        from .linfa import FittedModel
 
         res = self.stub.Train(
             TrainingRequest(
@@ -41,7 +41,7 @@ class BastionLabLinfa:
     def _predict(
         self, model: "FittedModel", pred_input: "RemoteArray"
     ) -> "FetchableLazyFrame":
-        from ..polars.remote_polars import FetchableLazyFrame
+        from ..polars import FetchableLazyFrame
 
         res = self.stub.Predict(
             PredictionRequest(
@@ -53,7 +53,7 @@ class BastionLabLinfa:
     def _predict_proba(
         self, model: "FittedModel", pred_input: "RemoteArray"
     ) -> "FetchableLazyFrame":
-        from ..polars.remote_polars import FetchableLazyFrame
+        from ..polars import FetchableLazyFrame
 
         res = self.stub.Predict(
             PredictionRequest(
@@ -66,7 +66,7 @@ class BastionLabLinfa:
 def cross_validate(
     trainer: "Trainer", X: "RemoteArray", y: "RemoteArray", cv: int, scoring: str = "r2"
 ) -> "FetchableLazyFrame":
-    from ..polars.remote_polars import FetchableLazyFrame
+    from ..polars import FetchableLazyFrame
 
     res = X._client.linfa.stub.CrossValidate(
         ValidationRequest(
