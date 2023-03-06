@@ -20,7 +20,7 @@ theme:
     - content.tabs.link
     - navigation.sections
     - navigation.indexes
-    # - navigation.expand
+    - navigation.expand
   logo: assets/logo.png
   favicon: assets/logo.png
   palette:
@@ -49,10 +49,6 @@ theme:
 plugins:
   - search
   - mkdocs-jupyter
-  # - gen-files:
-  #   scripts:
-  #     - docs/gen_ref_pages.py
-  # - mkdocstrings
 
 # Customization
 extra:
@@ -72,7 +68,6 @@ extra_css:
 
 extra_javascript:
   - "https://code.jquery.com/jquery-3.3.1.min.js"
-  - javascripts/navbar.js
 
 # Extensions
 markdown_extensions:
@@ -100,7 +95,6 @@ markdown_extensions:
 
 # Documentation tree
 nav:
-
 - 🏠 Home: "index.md"
 - 🚀 Getting started:
   - Quick tour: "docs/quick-tour/quick-tour.ipynb"
