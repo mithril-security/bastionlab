@@ -52,7 +52,7 @@ plugins:
   # - gen-files:
   #   scripts:
   #     - docs/gen_ref_pages.py
-  # - mkdocstrings
+  - mkdocstrings
 
 # Customization
 extra:
@@ -100,7 +100,6 @@ markdown_extensions:
 
 # Documentation tree
 nav:
-
 - 🏠 Home: "index.md"
 - 🚀 Getting started:
   - Quick tour: "docs/quick-tour/quick-tour.ipynb"
