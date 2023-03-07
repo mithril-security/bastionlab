@@ -1,24 +1,16 @@
 # Deploy on Azure
 ____________________________________________
 
-Get started and **Deploy BastionLab Server**
+To use BastionLab server **remotely**, you'll need to **deploy it on the Cloud**. 
 
-Let's say a hospital wants to allow external data scientists, such as an AI startup,
-to perform statistics, visualizations, and predictions on their data.
-However, the data contains sensitive information that needs to be protected. 
-
-By deploying BastionLab on the cloud, uploading their data and setting up a policy,
-the hospital can securely give restricted access to the data scientists 
-that must comply with the policy, but still can perform their duties interactively.
-This way, the hospital can leverage the expertise of external 
-data scientists without compromising the security and privacy of their patients' data.
+Here's our tutorial showing how to to so on **Azure**.
 
 ## Pre-requisites
 ___________________________________________
 
 ### Requirements
 
-To deploy **BastionLab Server**, ensure the following requirements are satisfied:
+Before getting started, make sure you have the following requirements:
 
 - [Azure account](https://portal.azure.com/)
     - If you would like to follow along but don't have an [Azure account](https://docs.microsoft.com/en-us/azure/guides/developer/azure-developer-guide#understanding-accounts-subscriptions-and-billing), make sure to create a [free](https://azure.microsoft.com/free/?ref=microsoft.com&utm_source=microsoft.com&utm_medium=docs&utm_campaign=visualstudio) one before you start.
@@ -40,12 +32,16 @@ If deploying with **Azure CLI** in your local environment, then you will need to
 _____________________________________________
 
 First you will need to login to your [Azure Portal](https://portal.azure.com/) and create a **resource group**.
+
 ### Create a Resource Group
 <img src="../../assets/az-resource-group.png" alt="resource group" width="90%" />
 
 ### Create a Container Instance
+
 Now go to the **Container instances** section in your azure portal.
+
 #### Basic configuration
+
 Choose your *resource group*, *container name* and *region*.
 Then to select the bastionlab docker image, choose the **other registry** option and then **public**.
 
@@ -58,6 +54,7 @@ mithrilsecuritysas/bastionlab:latest
 <img src="../../assets/az-container-instance.png" alt="resource group" width="90%" />
 
 #### Networking
+
 Let the **public type networking** option, set your DNS label and set the port to **50056**.
 
 <img src="../../assets/az-container-instance-net.png" alt="resource group" width="90%" />
@@ -65,6 +62,7 @@ Let the **public type networking** option, set your DNS label and set the port t
 Leave all other settings as their defaults, then select Review + create.
 
 #### Advanced Section
+
 Here you will define the keys used for authenticating on the server.
 It is important that the **values** of the **keys** have their break lines replaced by the literal value "\n".
 
@@ -83,27 +81,29 @@ And it is also important to create one key named `owners`, that contains the nam
 
 Last step, but as important as the others, set the **command override** as:
 
-##### Command override
-```bash
-["/bin/bash", "-c", "k(){ mkdir -p keys/$1;for o in ${!1};do echo -e ${!o} > keys/$1/${o,,}.pub;done; };k owners;k users;./bastionlab"]
-```
-##### Equivalent
-```bash
-k()
-{
-	mkdir -p keys/$1
-	for o in ${!1}
-	do
-		echo -e ${!o} > keys/$1/${o,,}.pub
-	done
-}
-k owners
-k users
-./bastionlab
-```
-<img src="../../assets/az-container-instance-keys.png" alt="resource group" width="90%" />
+* Command override
+	```bash
+	["/bin/bash", "-c", "k(){ mkdir -p keys/$1;for o in ${!1};do echo -e ${!o} > keys/$1/${o,,}.pub;done; };k owners;k users;./bastionlab"]
+	```
+
+* Equivalent
+	```bash
+	k()
+	{
+		mkdir -p keys/$1
+		for o in ${!1}
+		do
+			echo -e ${!o} > keys/$1/${o,,}.pub
+		done
+	}
+	k owners
+	k users
+	./bastionlab
+	```
+	<img src="../../assets/az-container-instance-keys.png" alt="resource group" width="90%" />
 
 #### Review + Create
+
 Review the settings and create the container instance.
 
 <img src="../../assets/az-container-instance-create.png" alt="resource group" width="90%" />
@@ -120,15 +120,17 @@ Or connect to the instance terminal in the same page.
 <img src="../../assets/az-container-instance-bash.png" alt="resource group" width="90%" />
 
 ### Quick Reference
-##### Replace break lines by \n in your public key
+
+#### Replace break lines by \n in your public key
+
 ```bash
 cat your_key.pub | sed ':a;N;$!ba;s/\n/\\n/g'
 ```
-##### Command override
+#### Command override
 ```bash
 ["/bin/bash", "-c", "k(){ mkdir -p keys/$1;for o in ${!1};do echo -e ${!o} > keys/$1/${o,,}.pub;done; };k owners;k users;./bastionlab"]
 ```
-##### BastionLab server image
+#### BastionLab server image
 ```
 mithrilsecuritysas/bastionlab:latest
 ```
@@ -141,9 +143,11 @@ First you will need to login with the command:
 az login
 ```
 ### Basic Configuration Setup
+
 Make sure to set *resource group name*, *app name*, *location* and the *docker image* variables according to your needs.
 
 #### Set Variables (with example values)
+
 ```bash
 resourceGroupName="bastionlab-docker"
 appName="bastionlab-docker-$RANDOM"
@@ -155,12 +159,15 @@ owners="owner1 owner2"
 user1=$(cat user1_key.pub | sed ':a;N;$!ba;s/\n/\\n/g')
 users="user1"
 ```
+
 ### Create a Resource Group
+
 ```bash
 az group create --name $resourceGroupName --location $location
 ```
 
 ### Deploy BastionLab Server as a Container App
+
 ```bash
 az container create \
         --name $appName \
