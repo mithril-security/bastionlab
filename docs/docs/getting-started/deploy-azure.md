@@ -3,7 +3,15 @@ ____________________________________________
 
 Get started and **Deploy BastionLab Server**
 
-***# NEED QUICK INTRO OF 1 OR 2 SENTENCES***
+Let's say a hospital wants to allow external data scientists, such as an AI startup,
+to perform statistics, visualizations, and predictions on their data.
+However, the data contains sensitive information that needs to be protected. 
+
+By deploying BastionLab on the cloud, uploading their data and setting up a policy,
+the hospital can securely give restricted access to the data scientists 
+that must comply with the policy, but still can perform their duties interactively.
+This way, the hospital can leverage the expertise of external 
+data scientists without compromising the security and privacy of their patients' data.
 
 ## Pre-requisites
 ___________________________________________
