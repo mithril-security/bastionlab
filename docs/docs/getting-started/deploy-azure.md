@@ -1,7 +1,7 @@
 # Deploy on Azure
 ____________________________________________
 
-To use BastionLab server **remotely**, you'll need to **deploy it on the Cloud**. 
+To use BastionLab server **remotely**, a good option would be to **deploy it on the Cloud**. 
 
 Here's our tutorial showing how to to so on **Azure**.
 
