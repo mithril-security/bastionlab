@@ -44,12 +44,11 @@ You can find more information about the **roadmap** of the project [here](https:
 ### 📚 Useful resources
 We highly encourage you to take a look at this resources for further information about BastionLab ⚙️🔒. 
 
-It is also recommeneded to see the [examples](https://github.com/mithril-security/bastionLab/tree/master/examples) that demonstrate how BastionLab works before submitting your first contribution. 
+It is also recommended to look at some of our examples that demonstrate how BastionLab works before submitting your first contribution. 
 
 * [Documentation - BastionLab official documentation](https://bastionLab.readthedocs.io)
 * [Blog - Mithril Security blog](https://blog.mithrilsecurity.io/)
 * [Article - Mithril Security roadmap](https://blog.mithrilsecurity.io/our-roadmap-to-build-a-unified-framework-for-privacy-friendly-data-science-collaboration/)
-* [Notebooks and Python code - BastionLab examples](https://github.com/mithril-security/bastionLab/tree/master/examples)
 
 ## 💻 Contributing code
 ____________________________

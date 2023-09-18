@@ -97,8 +97,7 @@ if TYPE_CHECKING:
     ],
     wrap=True,
     make_docstring=lambda fname: f"""
-        See the polars documentation for
-        [pl.LazyFrame.{fname}](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.{fname}.html).
+        See official [Polars documentation](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/index.html#)
     """,
 )
 @delegate(
@@ -112,8 +111,7 @@ if TYPE_CHECKING:
     wrap=True,
     wrap_fn=lambda rlf, res: RemoteLazyGroupBy(res, rlf._meta),
     make_docstring=lambda fname: f"""
-        See the polars documentation for
-        [pl.LazyFrame.{fname}](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/api/polars.LazyFrame.{fname}.html).
+        See official [Polars documentation](https://pola-rs.github.io/polars/py-polars/html/reference/lazyframe/index.html#)
     """,
 )
 @dataclass
