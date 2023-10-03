@@ -119,6 +119,8 @@ nav:
         - Fraud detection data analysis: "docs/how-to-guides/fraud_detection.ipynb"
       - Deep learning:
           - Fine Tuning DistilBERT: "docs/how-to-guides/distilbert_example_notebook.ipynb"
+      - Machine learning:
+          - Introduction to Machine Learning with BastionLab: "docs/how-to-guides/introduction_to_ml_algorithms_with_bastionlab.ipynb"
   - 💡 Concepts:
       - Remote data science: "docs/concepts-guides/remote_data_science.md"
   - 🛠️ API Reference:

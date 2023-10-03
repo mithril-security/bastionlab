@@ -14,6 +14,7 @@ PROTO_FILES = [
     "bastionlab.proto",
     "bastionlab_polars.proto",
     "bastionlab_torch.proto",
+    "bastionlab_linfa.proto",
     "bastionlab_conversion.proto",
 ]
 PROTO_PATH = os.path.join(os.path.dirname(DIR), "protos")
@@ -86,5 +87,6 @@ setup(
         "tokenizers==0.13.2",
         "matplotlib==3.6.3",
         "pyserde~=0.9",
+        "scikit-learn==1.2.1",
     ],
 )

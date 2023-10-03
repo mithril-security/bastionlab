@@ -1,26 +1,31 @@
 [package]
-name = "bastionlab_conversion"
+name = "bastionlab_linfa"
 version = "0.3.7"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 tonic = { version = "0.5.2", features = ["tls", "transport"] }
 prost = { version = "0.8", default-features = false, features = [
-    "prost-derive",
+  "prost-derive",
 ] }
-
-bastionlab_polars = { path = "../bastionlab_polars" }
-bastionlab_torch = { path = "../bastionlab_torch" }
+tokio = { version = "1.19.2", features = ["macros", "rt-multi-thread", "net"] }
+tokio-stream = "0.1"
+linfa = "0.6.1"
+linfa-elasticnet = "0.6.1"
+linfa-bayes = "0.6.1"
+linfa-clustering = "0.6.1"
+linfa-nn = "0.6.1"
+linfa-linear = "0.6.1"
+linfa-logistic = "0.6.1"
+linfa-trees = "0.6.1"
+linfa-svm = "0.6.1"
+linfa-kernel = "0.6.1"
+ndarray = "0.15.6"
+polars = { version = "0.25.1", default-features = true, features = ["object"] }
 bastionlab_common = { path = "../bastionlab_common" }
-bastionlab_learning = { path = "../bastionlab_learning" }
+bastionlab_polars = { path = "../bastionlab_polars" }
+rand = "0.8.5"
 ring = "0.16.20"
-polars = "0.25.1"
-ndarray ="0.15.6"
-tokenizers = "0.13.2"
-tch = "0.10.1"
-
 [dependencies.uuid]
 version = "1.1.2"
 features = [

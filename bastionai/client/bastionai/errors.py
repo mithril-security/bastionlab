@@ -1,5 +1,5 @@
 import grpc  # type: ignore [import]
-from grpc._channel import _InactiveRpcError # type: ignore [import]
+from grpc._channel import _InactiveRpcError  # type: ignore [import]
 from dataclasses import dataclass
 from typing import Callable, TypeVar
 
@@ -10,6 +10,7 @@ T = TypeVar("T")
 @dataclass
 class GRPCException(Exception):
     """A NewType arround gRPC errors to get nicer display."""
+
     err: grpc._channel._InactiveRpcError
 
     @property
@@ -35,7 +36,7 @@ class GRPCException(Exception):
             prefix = "Attestation is not available. Running in Simulation Mode"
         else:
             prefix = f"Received gRPC error"
-        
+
         return f"{prefix}: code={self.code} message={self.err.details()}"
 
     @staticmethod
@@ -44,6 +45,7 @@ class GRPCException(Exception):
             return f()
         except _InactiveRpcError as e:
             raise GRPCException(e)
+
 
 # def check_socket_exception(socket_error):
 #     """Nicely displays a socket error."""

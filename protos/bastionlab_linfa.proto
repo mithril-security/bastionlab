@@ -1,0 +1,250 @@
+syntax = "proto3";
+package bastionlab_linfa;
+
+message ReferenceResponse {
+    string identifier = 1;
+    string header = 2;
+}
+
+message ModelResponse {
+    string identifier = 1;
+}
+
+message PredictionRequest{
+    string model = 1;
+    string input = 2;
+    bool probability = 3;
+}
+
+
+message GaussianNb {
+    float var_smoothing = 1;
+}
+
+message ElasticNet {
+    float penalty = 1;
+    float l1_ratio = 2;
+    bool with_intercept = 3;
+    uint32 max_iterations = 4;
+    float tolerance = 5;
+}
+
+message KMeans {
+    uint64 n_runs = 1;
+    uint64 n_clusters = 2;
+    float tolerance = 3;
+    uint64 max_n_iterations = 4;
+    uint64 random_state = 9;
+
+    oneof init_method {
+        Random random = 5;
+        Precomputed pre_computed = 6;
+        KMeansPlusPlus kmeans_plus_plus = 7;
+        KMeansPara kmeans_para = 8;
+    }
+
+    message Random {}
+    message Precomputed {
+        repeated float list = 1;
+        int32 n_centroids = 2;
+        int32 n_features = 3;
+    }
+    message KMeansPlusPlus {}
+    message KMeansPara {}
+}
+
+message LinearRegression {
+    bool fit_intercept = 1;
+}
+
+message TweedieRegressor {
+    bool fit_intercept = 1;
+    float alpha = 2;
+    uint64 max_iter = 3;
+    float tol = 4;
+    float power = 5;
+    
+    message Identity {}
+    message Log {}
+    message Logit {}
+    oneof link {
+        Identity identity = 6;
+        Log log = 7;
+        Logit logit = 8;
+    }
+}
+
+message BinomialLogisticRegression {
+    float alpha = 1;
+    float gradient_tolerance = 2;
+    bool fit_intercept = 3;
+    uint64 max_iterations = 4;
+    repeated float initial_params = 7;
+    repeated uint64 shape = 8;
+
+}
+
+message MultinomialLogisticRegression {
+    float alpha = 1;
+    float gradient_tolerance = 2;
+    bool fit_intercept = 3;
+    uint64 max_iterations = 4;
+    repeated float initial_params = 7;
+    repeated uint64 shape = 8;
+}
+
+message DecisionTree {
+    
+    message Gini {}
+    message Entropy {}
+    oneof  split_quality{
+        Gini gini = 1;
+        Entropy entropy = 2;
+    };
+    optional uint64 max_depth = 3;
+    float min_weight_split = 4;
+    float min_weight_leaf = 5;
+    float min_impurity_decrease= 6;
+}
+
+message Trainer {
+    optional GaussianNb gaussian_nb = 1;
+    optional ElasticNet elastic_net = 2;
+    optional KMeans kmeans = 3;
+    optional LinearRegression linear_regression = 4;
+    optional BinomialLogisticRegression binomial_logistic_regression = 5;
+    optional MultinomialLogisticRegression multinomial_logistic_regression = 6;
+    optional DecisionTree decision_tree = 7;
+    optional SVM svm = 8;
+    optional TweedieRegressor tweedie = 9;
+}
+
+message SVM {
+    repeated float c = 1;
+    optional float eps = 2;
+    optional float nu = 3;
+    bool shrinking = 4;
+    PlattParams platt_params = 5;
+    KernelParams kernel_params = 6;
+
+    message PlattParams {
+        int64 maxiter = 1;
+        float ministep = 2;
+        float sigma = 3;
+    }
+
+    message KernelParams {
+
+        /// Gaussian(eps): exp(-norm(x - x')/eps)
+        message Gaussian {
+            float eps = 1;
+        }
+        /// Euclidean inner product
+        message Linear {}
+        /// Polynomial(constant, degree):  ` (<x, x'> + costant)^(degree)`
+        message Polynomial {
+            float constant = 1;
+            float degree = 2;
+        }
+
+        message Dense {}
+        message Sparse {
+            uint64 sparsity = 1;
+        }
+
+        enum N {
+            /// Linear search
+            LinearSearch = 0;
+            /// KD Tree
+            KdTree = 1;
+            /// Ball Tree
+            BallTree = 2;
+        }
+
+        oneof kernel_type {
+            Dense dense = 7;
+            Sparse sparse = 8;
+        }
+
+        oneof kernel_method {
+            Gaussian guassian = 9;
+            Linear linear = 10;
+            Polynomial poly = 11;
+        }
+
+        N n = 12;
+    }
+
+}
+
+message ValidationRequest {
+    Trainer trainer = 1;
+    string records = 2;
+    string targets = 3;
+    uint64 cv = 4;
+    oneof scoring {
+        RegressionMetric regression_metric = 5;
+        ClassificationMetric classification_metric = 6;
+    }
+}
+
+// Scoring Types
+message R2Score{}
+message MaxError {}
+message MeanAbsoluteError {}
+message ExplainedVariance {}
+message MeanSquaredLogError {}
+message MeanSquaredError {}
+message MedianAbsoluteError {}
+message Accuracy {}
+message F1Score {}
+message Mcc {}
+
+// Kinds of Scoring/Metrics
+message RegressionMetric {
+    oneof regression_metric {
+        R2Score r2_score = 1;
+        MaxError max_error =2;
+        MeanAbsoluteError mean_absolute_error = 3;
+        MeanSquaredLogError mean_squared_log_error = 4;
+        MeanSquaredError mean_squared_error = 5;
+        ExplainedVariance explained_variance = 6;
+        MedianAbsoluteError median_absolute_error = 7;
+    }
+}
+
+message ClassificationMetric {
+    oneof classification_metric {
+        Accuracy accuracy = 1;
+        F1Score f1_score = 2;
+        Mcc mcc =3;
+    }
+}
+message SimpleValidationRequest {
+
+    string truth = 1;
+    string prediction = 2;
+    oneof scoring {
+        RegressionMetric regression_metric = 3;
+        ClassificationMetric classification_metric = 4;
+    }
+}
+
+message ValidationResponse {
+    repeated float response = 1;
+}
+
+
+message TrainingRequest {
+    string records = 1;
+    string target = 2;
+    Trainer trainer = 3;
+
+}
+
+service LinfaService {
+    rpc Train(TrainingRequest) returns (ModelResponse) {}
+    rpc Predict(PredictionRequest) returns (ReferenceResponse) {}
+    rpc CrossValidate(ValidationRequest) returns (ReferenceResponse) {}
+    rpc Validate(SimpleValidationRequest) returns (ReferenceResponse) {}
+}

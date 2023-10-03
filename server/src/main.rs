@@ -164,6 +164,18 @@ async fn main() -> Result<()> {
         ))
     };
 
+    // Linfa
+    let builder = {
+        use bastionlab_linfa::{
+            linfa_proto::linfa_service_server::LinfaServiceServer, BastionLabLinfa,
+        };
+        let svc = BastionLabLinfa::new(polars_svc.clone());
+        builder.add_service(LinfaServiceServer::with_interceptor(
+            svc,
+            token_validator.clone(),
+        ))
+    };
+
     // Conversion
     let builder = {
         use bastionlab_conversion::{

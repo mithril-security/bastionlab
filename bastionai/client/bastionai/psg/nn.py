@@ -113,7 +113,11 @@ class _ConvNd(conv._ConvNd):
         s = super().extra_repr()
         s_params = s.split(", ")
         return ", ".join(
-            [*s_params[:2 + self.kernel_dim], f"max_batch_size={self.max_batch_size}", *s_params[2 + self.kernel_dim:]]
+            [
+                *s_params[: 2 + self.kernel_dim],
+                f"max_batch_size={self.max_batch_size}",
+                *s_params[2 + self.kernel_dim :],
+            ]
         )
 
 
@@ -141,11 +145,12 @@ def expanded_convolution(
         with a number of groups equal to the number of samples: the convolution operator uses one kernel group per sample
         (which makes sample computations independent) and the weights of these are shared thanks to the expansion.
 
-        Refer to the Pytorch documentation for more on how to use the various parameters: 
+        Refer to the Pytorch documentation for more on how to use the various parameters:
             1D: https://pytorch.org/docs/stable/generated/torch.nn.Conv1d.html#torch.nn.Conv1d
             2D: https://pytorch.org/docs/stable/generated/torch.nn.Conv2d.html#torch.nn.Conv2d
             3D: https://pytorch.org/docs/stable/generated/torch.nn.Conv3d.html#torch.nn.Conv3d
         """
+
         def __init__(
             self,
             in_channels: int,
@@ -233,10 +238,11 @@ Conv3d = expanded_convolution(F.conv3d, _triple)
 
 class ConvLinear(nn.Module):
     """Linear layer with expanded weights that internally uses an expanded 1D convolution.
-    
+
     Refer to the documentation of convolutions for more about the internals and Pytorch's Linear
     Layer documentation for more about the parameters and their usage.
     """
+
     def __init__(
         self,
         in_features: int,
@@ -278,6 +284,7 @@ class Linear(nn.Linear):
     Refer to the Pytorch documentation for more on how to use the various parameters:
     https://pytorch.org/docs/stable/generated/torch.nn.Linear.html#torch.nn.Linear.
     """
+
     def __init__(
         self,
         in_features: int,
@@ -350,6 +357,7 @@ class Embedding(nn.Embedding):
     Refer to the Pytorch documentation for more on how to use the various parameters:
     https://pytorch.org/docs/stable/generated/torch.nn.Embedding.html#torch.nn.Embedding.
     """
+
     def __init__(
         self,
         num_embeddings: int,
@@ -427,6 +435,7 @@ class LayerNorm(nn.LayerNorm):
     Refer to the Pytorch documentation for more on how to use the various parameters:
     https://pytorch.org/docs/stable/generated/torch.nn.LayerNorm.html#torch.nn.LayerNorm.
     """
+
     def __init__(
         self,
         normalized_shape: Union[int, List[int], Size],

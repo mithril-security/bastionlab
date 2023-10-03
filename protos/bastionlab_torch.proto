@@ -17,6 +17,21 @@ package bastionlab_torch;
 
 import "bastionlab.proto";
 
+message UpdateMeta {
+    string identifier = 1;
+    optional string name = 2;
+    optional string description = 3;
+    optional Meta meta = 4;
+
+}
+
+message Meta {
+    repeated int64 input_shape = 1;
+    repeated string input_dtype = 2;
+    int32 nb_samples = 3;
+    float privacy_limit = 4;
+    optional bastionlab.Reference train_dataset = 5;
+}
 message Chunk {
     // Chunk of data sent from and to the BastionAI server.
     bytes data = 1;

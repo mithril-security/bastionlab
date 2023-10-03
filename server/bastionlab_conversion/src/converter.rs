@@ -29,6 +29,12 @@ impl Converter {
             ArrayStore::AxdynF32(a) => ndarray_to_tensor::<OwnedRepr<f32>, Dim<IxDynImpl>>(a),
             ArrayStore::AxdynI32(a) => ndarray_to_tensor::<OwnedRepr<i32>, Dim<IxDynImpl>>(a),
             ArrayStore::AxdynI16(a) => ndarray_to_tensor::<OwnedRepr<i16>, Dim<IxDynImpl>>(a),
+            _ => {
+                return Err(Status::aborted(format!(
+                    "Cannot convert {:?} into Tensor",
+                    arr
+                )))
+            }
         };
 
         tensor
@@ -89,6 +95,28 @@ impl Converter {
                     .to_owned()
                     .into_dyn();
                 ArrayStore::AxdynI32(arr)
+            }
+            DataType::UInt32 => {
+                let arr = df
+                    .to_ndarray::<UInt32Type>()
+                    .map_err(|e| {
+                        Status::aborted(format!("Cound not convert DataFrame to ndarray: {}", e))
+                    })?
+                    .as_standard_layout()
+                    .to_owned()
+                    .into_dyn();
+                ArrayStore::AxdynU32(arr)
+            }
+            DataType::UInt64 => {
+                let arr = df
+                    .to_ndarray::<UInt64Type>()
+                    .map_err(|e| {
+                        Status::aborted(format!("Cound not convert DataFrame to ndarray: {}", e))
+                    })?
+                    .as_standard_layout()
+                    .to_owned()
+                    .into_dyn();
+                ArrayStore::AxdynU64(arr)
             }
             _ => {
                 return Err(Status::aborted(format!("{:?} not support ", dtype)));
@@ -189,6 +217,30 @@ where {
                             shape,
                         ))?)
                     }
+                    DataType::UInt64 => {
+                        let shape = get_shape(series).ok_or(Status::aborted(
+                            "Only List Series are supported in get_shape",
+                        ))?;
+                        let exploded = to_status_error(series.explode())?;
+                        let arr = to_status_error(exploded.u64())?;
+                        let slice = to_status_error(arr.cont_slice())?;
+                        ArrayStore::AxdynU64(to_status_error(list_to_ndarray(
+                            slice.to_vec(),
+                            shape,
+                        ))?)
+                    }
+                    DataType::UInt32 => {
+                        let shape = get_shape(series).ok_or(Status::aborted(
+                            "Only List Series are supported in get_shape",
+                        ))?;
+                        let exploded = to_status_error(series.explode())?;
+                        let arr = to_status_error(exploded.u32())?;
+                        let slice = to_status_error(arr.cont_slice())?;
+                        ArrayStore::AxdynU32(to_status_error(list_to_ndarray(
+                            slice.to_vec(),
+                            shape,
+                        ))?)
+                    }
                     _ => {
                         return Err(Status::aborted(format!("{inner:?} not supported")));
                     }
@@ -277,9 +329,13 @@ impl ConversionService for Converter {
                 identifier: self.polars.insert_array(array),
             }
         } else {
-            return Err(
-                Status::aborted("DataFrame with str columns cannot be converted directly to RemoteArray. Please tokenize strings first"));
+            return Err(Status::aborted(format!(
+                "DataFrame with {dtypes:?} cannot be converted directly to RemoteArray"
+            )));
         };
+
+        // In order to not waste memory, we delete the dataframe after the eager `to_array` conversion
+        self.polars.delete_dfs(&identifier)?;
 
         Ok(Response::new(arr))
     }
@@ -336,6 +392,9 @@ impl ConversionService for Converter {
 
             identifiers.append(&mut vec![ids, masks]);
         }
+
+        // In order to not waste memory, we delete the dataframe after the eager `to_array` conversion
+        self.polars.delete_dfs(&identifier)?;
 
         Ok(Response::new(RemoteArrays { list: identifiers }))
     }

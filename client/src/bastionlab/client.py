@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     import bastionlab.torch
     import bastionlab.polars
     import bastionlab.tokenizers
+    import bastionlab.linfa
 
 __pdoc__ = {}
 
@@ -64,6 +65,10 @@ class Client:
 
     _bastionlab_tokenizers: "bastionlab.tokenizers.BastionLabTokenizers" = (
         None  #: The BastionLabTokenizers object used for integrating tokenizers.
+    )
+
+    _bastionlab_linfa: "bastionlab.linfa.BastionLabLinfa" = (
+        None  #: The BastionLabLinfa object used for integration ML Library Linfa
     )
 
     _channel: grpc.Channel  #: The underlying gRPC channel used to communicate with the server.
@@ -158,6 +163,17 @@ class Client:
 
             self._bastionlab_tokenizers = BastionLabTokenizers(self)
         return self._bastionlab_tokenizers
+
+    @property
+    def linfa(self) -> "bastionlab.linfa.BastionLabLinfa":
+        """
+        Returns the BastionLabLinfa instance used by this client.
+        """
+        if self._bastionlab_linfa is None:
+            from bastionlab.linfa import BastionLabLinfa
+
+            self._bastionlab_linfa = BastionLabLinfa(self)
+        return self._bastionlab_linfa
 
 
 class Connection:

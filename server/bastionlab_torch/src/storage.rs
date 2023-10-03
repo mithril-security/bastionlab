@@ -6,7 +6,7 @@ use std::sync::{Arc, RwLock};
 use tch::TchError;
 
 /// Stored object with name, description and owner key
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Artifact<T> {
     pub data: Arc<RwLock<T>>,
     pub name: String,
