@@ -104,6 +104,7 @@ nav:
   - 🚀 Getting started:
       - Quick tour: "docs/quick-tour/quick-tour.ipynb"
       - Installation: "docs/getting-started/installation.md"
+      - Deploy on Azure: "docs/getting-started/deploy-azure.md"
   - 📙 Tutorials:
       - Authentication: "docs/tutorials/authentication.ipynb"
       - Defining a privacy policy: "docs/tutorials/defining_policy_privacy.ipynb"
