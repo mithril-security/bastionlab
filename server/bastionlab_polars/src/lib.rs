@@ -4,6 +4,7 @@ use bastionlab_common::{
     session::SessionManager,
     session_proto::ClientInfo,
     telemetry::{self, TelemetryEventProps},
+    tracking::Tracking,
 };
 
 use polars::prelude::*;
@@ -103,14 +104,16 @@ pub struct BastionLabPolars {
     dataframes: Arc<RwLock<HashMap<String, DataFrameArtifact>>>,
     arrays: Arc<RwLock<HashMap<String, ArrayStore>>>,
     sess_manager: Arc<SessionManager>,
+    tracking: Arc<Tracking>,
 }
 
 impl BastionLabPolars {
-    pub fn new(sess_manager: Arc<SessionManager>) -> Self {
+    pub fn new(sess_manager: Arc<SessionManager>, tracking: Arc<Tracking>) -> Self {
         Self {
             dataframes: Arc::new(RwLock::new(HashMap::new())),
             arrays: Arc::new(RwLock::new(HashMap::new())),
             sess_manager,
+            tracking,
         }
     }
 
@@ -312,11 +315,14 @@ Reason: {}",
         Ok(res)
     }
 
-    pub fn insert_df(&self, df: DataFrameArtifact) -> String {
-        let mut dfs = self.dataframes.write().unwrap();
+    pub fn insert_df(&self, df: DataFrameArtifact, user_id: String) -> Result<String, Status> {
         let identifier = format!("{}", Uuid::new_v4());
+        let size = df.dataframe.estimated_size();
+        self.tracking
+            .memory_quota_check(size, user_id, identifier.clone())?;
+        let mut dfs = self.dataframes.write().unwrap();
         dfs.insert(identifier.clone(), df);
-        identifier
+        Ok(identifier)
     }
 
     pub fn insert_array(&self, array: ArrayStore) -> String {
@@ -393,12 +399,42 @@ Reason: {}",
         Ok(())
     }
 
-    pub fn delete_dfs(&self, identifier: &str) -> Result<(), Error> {
+    pub fn delete_dfs(&self, identifier: &str, user_id: String) -> Result<(), Status> {
+        let owner_check = self.sess_manager.verify_if_owner(&user_id)?;
+
+        //Removes the memory occupied by this df from memory quota
+        let mut memory_quota = self.tracking.memory_quota.write().unwrap();
+        let mut dataframe_user = self.tracking.dataframe_user.write().unwrap();
+
+        let dataframe_owner = if owner_check {
+            dataframe_user.get(identifier).unwrap()
+        } else {
+            let dataframe_owner = dataframe_user.get(identifier).unwrap();
+            if dataframe_owner == &user_id {
+                dataframe_owner
+            } else {
+                return Err(Status::invalid_argument(
+                    "This dataframe does not belong to you.",
+                ));
+            }
+        };
+
         let mut dfs = self.dataframes.write().unwrap();
         dfs.remove(identifier);
 
         let path = "data_frames/".to_owned() + identifier + ".json";
         std::fs::remove_file(path).unwrap_or(());
+
+        let (mut consumption, id_sizes) = memory_quota.get(dataframe_owner).unwrap();
+        let df_size = id_sizes.get(identifier).unwrap();
+        consumption = consumption - df_size;
+
+        let mut id_sizes = id_sizes.to_owned();
+        id_sizes.remove(identifier);
+        memory_quota.insert(user_id, (consumption, id_sizes));
+
+        dataframe_user.remove(identifier);
+
         Ok(())
     }
 }
@@ -436,7 +472,7 @@ impl PolarsService for BastionLabPolars {
             .map_err(|e| Status::internal(format!("Polars error: {e}")))?;
 
         let header = get_df_header(&res.dataframe)?;
-        let identifier = self.insert_df(res);
+        let identifier = self.insert_df(res, user_id)?;
 
         let elapsed = start_time.elapsed();
 
@@ -461,10 +497,12 @@ impl PolarsService for BastionLabPolars {
         let start_time = Instant::now();
 
         let token = self.sess_manager.get_token(&request)?;
+        let user_id = self.sess_manager.get_user_id(token.clone())?;
+
         let client_info = self.sess_manager.get_client_info(token)?;
         let (df, hash) = unserialize_dataframe(request.into_inner()).await?;
         let header = get_df_header(&df.dataframe)?;
-        let identifier = self.insert_df(df);
+        let identifier = self.insert_df(df, user_id)?;
 
         let elapsed = start_time.elapsed();
         telemetry::add_event(
@@ -560,20 +598,22 @@ impl PolarsService for BastionLabPolars {
 
         let identifier = &request.get_ref().identifier;
         let user_id = self.sess_manager.get_user_id(token.clone())?;
-        let owner_check = self.sess_manager.verify_if_owner(&user_id)?;
-        if owner_check {
-            self.delete_dfs(identifier)?;
-        } else {
-            return Err(Status::internal("Only data owners can delete dataframes."));
-        }
+        self.delete_dfs(identifier, user_id)?;
         telemetry::add_event(
             TelemetryEventProps::DeleteDataframe {
                 dataset_name: Some(identifier.clone()),
             },
             Some(self.sess_manager.get_client_info(token)?),
         );
+
+        info!(
+            "Succesfully deleted dataframe {} from the server",
+            identifier.clone()
+        );
+
         Ok(Response::new(Empty {}))
     }
+
     async fn split(
         &self,
         request: Request<SplitRequest>,

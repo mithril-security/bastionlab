@@ -69,11 +69,28 @@ def tls_certificates():
         print("TLS certificates already generated")
 
 
-def start_server(bastionlab_path: str, libtorch_path: str) -> BastionLabServer:
+def start_server(
+    bastionlab_path: str, libtorch_path: str, auth_flag: bool, mem_quota: int
+) -> BastionLabServer:
+    import shutil
+
     os.chmod(bastionlab_path, 0o755)
     os.chdir(os.getcwd() + "/bin")
     os.environ["LD_LIBRARY_PATH"] = libtorch_path + "/lib"
-    os.environ["DISABLE_AUTHENTICATION"] = "1"
+    if mem_quota != 0:
+        with open("config.toml", "w") as outfile:
+            outfile.write(
+                'client_to_enclave_untrusted_url = "https://0.0.0.0:50056" \n public_keys_directory = "keys/" \n session_expiry_in_secs = 1500 \n max_memory_consumption = {} \n '.format(
+                    mem_quota
+                )
+            )
+    if auth_flag == False:
+        os.environ["DISABLE_AUTHENTICATION"] = "1"
+    else:
+        os.makedirs(os.getcwd() + "/keys/owners", mode=0o777, exist_ok=True)
+        os.makedirs(os.getcwd() + "/keys/users", mode=0o777, exist_ok=True)
+        shutil.copy("../data_owner.pub", os.getcwd() + "/keys/owners")
+        shutil.copy("../data_scientist.pub", os.getcwd() + "/keys/users")
     process = subprocess.Popen([bastionlab_path], env=os.environ)
     os.chdir("..")
     print("Bastionlab server is now running on port 50056")
@@ -108,7 +125,7 @@ def stop(srv: BastionLabServer) -> bool:
         return False
 
 
-def start() -> BastionLabServer:
+def start(auth_flag: bool = False, mem_quota: int = 0) -> BastionLabServer:
     """Start BastionLab server.
     The method will download BastionLab's server binary, then download a specific version of libtorch.
     The server will then run, as a subprocess, allowing to run the rest of your Google Colab/Jupyter Notebook environment.
@@ -140,5 +157,5 @@ def start() -> BastionLabServer:
         "Unable to download Libtorch",
     )
     tls_certificates()
-    process = start_server(bastionlab_path, libtorch_path)
+    process = start_server(bastionlab_path, libtorch_path, auth_flag, mem_quota)
     return process
